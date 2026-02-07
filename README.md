@@ -4,6 +4,11 @@ A comprehensive, single-file PowerShell security audit tool with a full WPF GUI.
 
 One script. No dependencies to pre-install. Works on any Windows machine from standalone workstations to enterprise domain controllers.
 
+<img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
+
+<img width="2119" height="1196" alt="image" src="https://github.com/user-attachments/assets/7c4c7c64-6e6f-4a38-9a2d-29d50edb5448" />
+
+
 ---
 
 ## Why This Exists
