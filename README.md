@@ -1,6 +1,6 @@
 # Network Security Auditor
 
-A comprehensive, single-file PowerShell security audit tool with a full WPF GUI. Runs 67 automated checks across 8 security domains, maps findings to 7 compliance frameworks and MITRE ATT&CK, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
+A single-file PowerShell security audit tool. Runs 67 automated checks across 8 security domains, maps findings to 7 compliance frameworks and MITRE ATT&CK, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
 
 One script. No dependencies to pre-install. Works on any Windows machine from standalone workstations to enterprise domain controllers.
 
