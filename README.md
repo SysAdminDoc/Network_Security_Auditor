@@ -4,6 +4,11 @@ A single-file PowerShell security audit tool. Runs 67 automated checks across 8 
 
 One script. No dependencies to pre-install. Works on any Windows machine from standalone workstations to enterprise domain controllers.
 
+![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
+![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
+![Version](https://img.shields.io/badge/Version-3.0.0-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
 
 <img width="2119" height="1196" alt="image" src="https://github.com/user-attachments/assets/7c4c7c64-6e6f-4a38-9a2d-29d50edb5448" />
@@ -21,11 +26,20 @@ This tool fills that gap. It auto-detects the environment, runs every check it c
 
 ## Quick Start
 
+### Download
+
+**[Download NetworkSecurityAudit.ps1](https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1)**
+
+Or via PowerShell (run as Administrator):
+```powershell
+irm https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1 | iex
+```
+
 ### Interactive (GUI)
 
 ```powershell
 # Right-click → Run with PowerShell, or:
-.\NetworkSecurityAudit_v3.ps1
+.\NetworkSecurityAudit.ps1
 ```
 
 The tool auto-elevates to admin, detects your environment (domain/workgroup/hybrid), and launches the GUI. Click **Scan All** to run every applicable check.
@@ -34,16 +48,16 @@ The tool auto-elevates to admin, detects your environment (domain/workgroup/hybr
 
 ```powershell
 # Full scan, all exports, silent
-.\NetworkSecurityAudit_v3.ps1 -Silent -ScanProfile Full
+.\NetworkSecurityAudit.ps1 -Silent -ScanProfile Full
 
 # Quick triage, executive report only
-.\NetworkSecurityAudit_v3.ps1 -Silent -ScanProfile Quick -ReportTier Executive
+.\NetworkSecurityAudit.ps1 -Silent -ScanProfile Quick -ReportTier Executive
 
 # HIPAA compliance scan with custom output path
-.\NetworkSecurityAudit_v3.ps1 -Silent -ScanProfile HIPAA -OutputPath "C:\Reports\audit.html"
+.\NetworkSecurityAudit.ps1 -Silent -ScanProfile HIPAA -OutputPath "C:\Reports\audit.html"
 
 # Full scan with all export formats
-.\NetworkSecurityAudit_v3.ps1 -Silent -ExportJSON -ExportCSV -ExportJSONL
+.\NetworkSecurityAudit.ps1 -Silent -ExportJSON -ExportCSV -ExportJSONL
 ```
 
 ---
@@ -55,7 +69,7 @@ The tool auto-elevates to admin, detects your environment (domain/workgroup/hybr
 Every check runs in an isolated runspace with timeout protection. Results include findings text, evidence collection, severity rating, and compliance mapping.
 
 <details>
-<summary><strong>Identity & Access (10 checks)</strong></summary>
+<summary><strong>Identity &amp; Access (10 checks)</strong></summary>
 
 | ID | Check | Severity |
 |----|-------|----------|
@@ -109,7 +123,7 @@ Every check runs in an isolated runspace with timeout protection. Results includ
 </details>
 
 <details>
-<summary><strong>Backup & Recovery (8 checks)</strong></summary>
+<summary><strong>Backup &amp; Recovery (8 checks)</strong></summary>
 
 | ID | Check | Severity |
 |----|-------|----------|
@@ -125,7 +139,7 @@ Every check runs in an isolated runspace with timeout protection. Results includ
 </details>
 
 <details>
-<summary><strong>Logging & Monitoring (8 checks)</strong></summary>
+<summary><strong>Logging &amp; Monitoring (8 checks)</strong></summary>
 
 | ID | Check | Severity |
 |----|-------|----------|
@@ -351,27 +365,27 @@ Optional for full coverage:
 ### NinjaRMM
 ```powershell
 # Add as a scripted condition or scheduled automation
-powershell.exe -ExecutionPolicy Bypass -File "C:\Tools\NetworkSecurityAudit_v3.ps1" -Silent -ScanProfile Standard
+powershell.exe -ExecutionPolicy Bypass -File "C:\Tools\NetworkSecurityAudit.ps1" -Silent -ScanProfile Standard
 # Results appear in device custom fields automatically
 ```
 
 ### Datto RMM
 ```powershell
 # Component script — results write to UDF Custom1-5
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Tools\NetworkSecurityAudit_v3.ps1" -Silent -ScanProfile Quick -ReportTier Executive
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Tools\NetworkSecurityAudit.ps1" -Silent -ScanProfile Quick -ReportTier Executive
 ```
 
 ### ConnectWise Automate
 ```powershell
 # Script — results write to EDF registry keys
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Tools\NetworkSecurityAudit_v3.ps1" -Silent -ExportJSON -ExportCSV
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Tools\NetworkSecurityAudit.ps1" -Silent -ExportJSON -ExportCSV
 # Monitor exit codes: 0=green, 1=critical, 2=warning, 3=compliance-fail
 ```
 
 ### Scheduled Task (any environment)
 ```powershell
 # Weekly security posture check
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File C:\Tools\NetworkSecurityAudit_v3.ps1 -Silent -ScanProfile Standard -OutputPath C:\Reports"
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File C:\Tools\NetworkSecurityAudit.ps1 -Silent -ScanProfile Standard -OutputPath C:\Reports"
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 6am
 Register-ScheduledTask -TaskName "WeeklySecurityAudit" -Action $action -Trigger $trigger -RunLevel Highest -User "SYSTEM"
 ```
@@ -416,9 +430,8 @@ Audit state (all check statuses, findings, evidence, notes, remediation tracking
 This is a single-file tool by design. One `.ps1` file, no modules, no config files, no build process. Download it and run it.
 
 ```
-NetworkSecurityAudit_v3.ps1    # The entire tool (~8,700 lines)
-README.md                      # This file
-ROADMAP.md                     # Development roadmap and changelog
+NetworkSecurityAudit.ps1    # The entire tool (~8,700 lines)
+README.md                   # This file
 ```
 
 ---
