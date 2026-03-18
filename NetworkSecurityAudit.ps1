@@ -43,11 +43,11 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.0.0
+    4.1.0
 #>
 param(
     [switch]$Silent,
-    [ValidateSet('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001')]
+    [ValidateSet('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001','STIG')]
     [string]$ScanProfile = 'Full',
     [string]$OutputPath = '',
     [ValidateSet('Executive','Management','Technical','All')]
@@ -57,7 +57,9 @@ param(
     [string]$Auditor = '',
     [switch]$ExportJSON,
     [switch]$ExportCSV,
-    [switch]$ExportJSONL
+    [switch]$ExportJSONL,
+    [switch]$ExportSARIF,
+    [switch]$ExportPDF
 )
 
 # ── Auto-Elevate to Administrator ────────────────────────────────────────────
@@ -95,6 +97,8 @@ $script:CliAuditor  = $Auditor
 $script:CliExportJSON  = $ExportJSON.IsPresent
 $script:CliExportCSV   = $ExportCSV.IsPresent
 $script:CliExportJSONL = $ExportJSONL.IsPresent
+$script:CliExportSARIF = $ExportSARIF.IsPresent
+$script:CliExportPDF   = $ExportPDF.IsPresent
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
@@ -1049,8 +1053,56 @@ $script:AutoChecks = @{
                     foreach ($uu in $unconstUsers) { [void]$sb.AppendLine("  $($uu.SamAccountName)") }
                 }
             } catch {}
+            # Golden Ticket indicator: krbtgt password age
+            try {
+                $krbtgt = Get-ADUser 'krbtgt' -Properties PasswordLastSet -EA SilentlyContinue
+                if ($krbtgt) {
+                    $krbtgtAge = ((Get-Date) - $krbtgt.PasswordLastSet).Days
+                    [void]$sb.AppendLine("`nGOLDEN TICKET INDICATORS:")
+                    [void]$sb.AppendLine("  krbtgt password age: ${krbtgtAge}d $(if($krbtgtAge -gt 180){'[!] Should be rotated every 180d'; $issues++}else{'[OK]'})")
+                }
+            } catch {}
+            # DCSync permissions: non-DA accounts with Replicating Directory Changes
+            try {
+                $domDN = (Get-ADDomain -EA Stop).DistinguishedName
+                $acl = Get-Acl "AD:\$domDN" -EA SilentlyContinue
+                $replPerms = $acl.Access | Where-Object {
+                    $_.ActiveDirectoryRights -match 'ExtendedRight' -and
+                    ($_.ObjectType -eq '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2' -or  # Replicating Directory Changes
+                     $_.ObjectType -eq '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2')     # Replicating Directory Changes All
+                } | Where-Object { $_.IdentityReference -notmatch 'Domain Controllers|Enterprise Domain Controllers|SYSTEM|Administrators|Domain Admins|Enterprise Admins' }
+                if ($replPerms) {
+                    $issues += $replPerms.Count
+                    [void]$sb.AppendLine("`n[CRITICAL] DCSYNC PERMISSIONS (non-standard accounts with replication rights):")
+                    foreach ($rp in $replPerms) { [void]$sb.AppendLine("  $($rp.IdentityReference) | $($rp.ActiveDirectoryRights)") }
+                } else { [void]$sb.AppendLine("`nDCSync permissions: Only standard accounts have replication rights [OK]") }
+            } catch { [void]$sb.AppendLine("`nDCSync check: Could not query domain ACL") }
+            # AdminSDHolder tampering
+            try {
+                $adminSD = Get-ADObject "CN=AdminSDHolder,CN=System,$domDN" -Properties nTSecurityDescriptor -EA SilentlyContinue
+                if ($adminSD) {
+                    $sdAcl = $adminSD.nTSecurityDescriptor
+                    $customAces = $sdAcl.Access | Where-Object {
+                        $_.IdentityReference -notmatch 'SYSTEM|Administrators|Domain Admins|Enterprise Admins|Account Operators|Print Operators|Backup Operators|Server Operators|Pre-Windows 2000'
+                    }
+                    if ($customAces) {
+                        $issues++
+                        [void]$sb.AppendLine("`n[!] AdminSDHolder has non-default ACEs ($($customAces.Count)):")
+                        foreach ($ca in ($customAces | Select-Object -First 5)) { [void]$sb.AppendLine("  $($ca.IdentityReference) | $($ca.ActiveDirectoryRights)") }
+                    } else { [void]$sb.AppendLine("`nAdminSDHolder ACL: Standard entries only [OK]") }
+                }
+            } catch {}
+            # SID History abuse
+            try {
+                $sidHistory = Get-ADUser -Filter {SIDHistory -like '*'} -Properties SIDHistory -EA SilentlyContinue
+                if ($sidHistory) {
+                    $issues++
+                    [void]$sb.AppendLine("`n[!] ACCOUNTS WITH SID HISTORY ($($sidHistory.Count)):")
+                    foreach ($sh in ($sidHistory | Select-Object -First 10)) { [void]$sb.AppendLine("  $($sh.SamAccountName) | SIDs: $($sh.SIDHistory -join ', ')") }
+                }
+            } catch {}
             $status = if ($issues -eq 0 -and $totalPriv -le 5) {'Pass'} elseif ($issues -eq 0 -and $totalPriv -le 10) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Privileged groups + delegation scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Privileged groups + delegation + IOC scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
     }
 
@@ -1233,8 +1285,27 @@ $script:AutoChecks = @{
                 # Cloud Protection
                 [void]$sb.AppendLine("  Cloud Protection  : $(if($mp.CloudEnabled -or $pref.MAPSReporting -gt 0){'Enabled [OK]'}else{'Disabled'})")
             }
+            # AMSI Provider Integrity
+            [void]$sb.AppendLine("`nAMSI INTEGRITY:")
+            try {
+                $amsiKey = 'HKLM:\SOFTWARE\Microsoft\AMSI\Providers'
+                if (Test-Path $amsiKey) {
+                    $providers = Get-ChildItem $amsiKey -EA SilentlyContinue
+                    [void]$sb.AppendLine("  AMSI Providers registered: $($providers.Count)")
+                    if ($providers.Count -eq 0) { $issues++; [void]$sb.AppendLine("  [CRITICAL] No AMSI providers - AMSI may be tampered!") }
+                } else { $issues++; [void]$sb.AppendLine("  [CRITICAL] AMSI registry key missing - possible bypass!") }
+            } catch {}
+            # Check for AMSI bypass indicators in recent PowerShell logs
+            try {
+                $amsiEvents = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-PowerShell/Operational';Id=4104;StartTime=(Get-Date).AddDays(-7)} -MaxEvents 500 -EA SilentlyContinue |
+                    Where-Object { $_.Message -match 'AmsiUtils|amsiInitFailed|AmsiScanBuffer|Bypass|Reflection\.Assembly' }
+                if ($amsiEvents) {
+                    $issues++
+                    [void]$sb.AppendLine("  [!] AMSI bypass patterns detected in PowerShell logs ($($amsiEvents.Count) events in 7d)")
+                } else { [void]$sb.AppendLine("  No AMSI bypass patterns in recent PS logs [OK]") }
+            } catch { [void]$sb.AppendLine("  PS script block logging not available for AMSI audit") }
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 2) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Defender + ASR scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Defender + ASR + AMSI scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
 
@@ -1305,8 +1376,9 @@ $script:AutoChecks = @{
         }
     }
 
-    'EP04' = @{ Type='Local'; Label='Scan Patch Level'
+    'EP04' = @{ Type='Local'; Label='Scan Patch Level + CISA KEV'
         Script = {
+            $issues = $false
             $fixes = Get-HotFix -EA Stop | Sort-Object InstalledOn -Descending -EA SilentlyContinue
             $latest = $fixes | Select-Object -First 1
             $sb = [System.Text.StringBuilder]::new()
@@ -1317,8 +1389,41 @@ $script:AutoChecks = @{
             foreach ($h in ($fixes | Select-Object -First 10)) {
                 [void]$sb.AppendLine("  $($h.HotFixID) | $($h.Description) | $(if($h.InstalledOn){$h.InstalledOn.ToString('yyyy-MM-dd')}else{'N/A'})")
             }
-            $status = if ($daysSince -le 30) {'Pass'} elseif ($daysSince -le 60) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Get-HotFix @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            # CISA KEV (Known Exploited Vulnerabilities) Cross-Reference
+            [void]$sb.AppendLine("`nCISA KEV CROSS-REFERENCE:")
+            try {
+                $kevJson = (Invoke-WebRequest -Uri 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json' -UseBasicParsing -TimeoutSec 15 -EA Stop).Content | ConvertFrom-Json
+                $kevCves = @{}
+                foreach ($v in $kevJson.vulnerabilities) { $kevCves[$v.cveID] = $v }
+                [void]$sb.AppendLine("  KEV catalog loaded: $($kevCves.Count) known exploited vulnerabilities")
+                # Check installed software for KEV-listed vendor/product matches
+                $msProducts = @{}
+                foreach ($v in $kevJson.vulnerabilities) {
+                    if ($v.vendorProject -eq 'Microsoft') { $msProducts[$v.product] = $v }
+                }
+                # Cross-reference with missing KBs from Windows Update
+                $installedKBs = $fixes | ForEach-Object { $_.HotFixID }
+                $kevMatches = @()
+                # Check if any KEV entries reference products running on this system
+                $osCaption = (Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).Caption
+                $msKevHits = $msProducts.Values | Where-Object {
+                    ($_.product -match 'Windows' -and $osCaption -match 'Windows') -or
+                    ($_.product -match 'Exchange' -and (Get-Service MSExchangeIS -EA SilentlyContinue)) -or
+                    ($_.product -match 'SQL Server' -and (Get-Service MSSQLSERVER -EA SilentlyContinue))
+                } | Where-Object { $_.dueDate -and [datetime]$_.dueDate -gt (Get-Date).AddDays(-180) } |
+                    Sort-Object { [datetime]$_.dueDate } -Descending | Select-Object -First 10
+                if ($msKevHits) {
+                    [void]$sb.AppendLine("  Recent KEV entries for detected Microsoft products:")
+                    foreach ($kh in $msKevHits) {
+                        [void]$sb.AppendLine("    $($kh.cveID) | $($kh.product) | $($kh.vulnerabilityName) | Due: $($kh.dueDate)")
+                    }
+                    if ($daysSince -gt 30) { $issues = $true }
+                } else { [void]$sb.AppendLine("  No recent KEV matches for detected products [OK]") }
+            } catch {
+                [void]$sb.AppendLine("  KEV check skipped (no internet or timeout): $($_.Exception.Message)")
+            }
+            $status = if ($daysSince -le 30 -and -not $issues) {'Pass'} elseif ($daysSince -le 60) {'Partial'} else {'Fail'}
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Get-HotFix + CISA KEV @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
 
@@ -1510,6 +1615,16 @@ $script:AutoChecks = @{
                 $eolSystems = $comps | Where-Object { $eolPatterns | Where-Object { $_.OperatingSystem -match [regex]::Escape($_) } } | Select-Object -First 20
                 foreach ($c in $eolSystems) { [void]$sb.AppendLine("  $($c.Name) | $($c.OperatingSystem) | Last logon: $(if($c.LastLogonDate){$c.LastLogonDate.ToString('yyyy-MM-dd')}else{'Never'})") }
             }
+            # Windows 10 migration progress
+            $win10 = ($comps | Where-Object { $_.OperatingSystem -match 'Windows 10' }).Count
+            $win11 = ($comps | Where-Object { $_.OperatingSystem -match 'Windows 11' }).Count
+            $totalWS = $win10 + $win11
+            if ($totalWS -gt 0) {
+                $migPct = [math]::Round($win11 / $totalWS * 100, 1)
+                [void]$sb.AppendLine("`nWINDOWS 10 -> 11 MIGRATION:")
+                [void]$sb.AppendLine("  Windows 10: $win10 | Windows 11: $win11 | Migration: $migPct%")
+                if ($win10 -gt 0) { [void]$sb.AppendLine("  [!] Windows 10 reached EOL Oct 2025 - $win10 systems need upgrade or ESU") }
+            }
             $status = if ($eolCount -eq 0) {'Pass'} elseif ($eolCount -le 3) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="EOL OS scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
@@ -1595,8 +1710,42 @@ $script:AutoChecks = @{
                 $psv2 = (Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2 -EA SilentlyContinue).State
                 [void]$sb.AppendLine("  PowerShell v2 Engine : $(if($psv2 -eq 'Enabled'){'Installed [!] - AMSI bypass risk, remove if not needed'; $issues++}else{'Removed [OK]'})")
             } catch {}
+            # CIS L1 Deep Registry Hardening Checks
+            [void]$sb.AppendLine("`nCIS LEVEL 1 REGISTRY HARDENING:")
+            $cisChecks = @(
+                @{Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System';Name='EnableLUA';Expected=1;Desc='UAC Enabled (CIS 2.3.17.1)'}
+                @{Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System';Name='ConsentPromptBehaviorAdmin';Expected=2;Desc='UAC Admin Prompt (CIS 2.3.17.2)'}
+                @{Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System';Name='EnableInstallerDetection';Expected=1;Desc='Installer Detection (CIS 2.3.17.4)'}
+                @{Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System';Name='EnableSecureUIAPaths';Expected=1;Desc='Secure UI Paths (CIS 2.3.17.5)'}
+                @{Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System';Name='FilterAdministratorToken';Expected=1;Desc='Filter Admin Token (CIS 2.3.17.8)'}
+                @{Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa';Name='RestrictAnonymousSAM';Expected=1;Desc='Restrict Anonymous SAM (CIS 2.3.10.2)'}
+                @{Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa';Name='RestrictAnonymous';Expected=1;Desc='Restrict Anonymous (CIS 2.3.10.5)'}
+                @{Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa';Name='EveryoneIncludesAnonymous';Expected=0;Desc='Everyone excludes Anonymous (CIS 2.3.10.4)'}
+                @{Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa';Name='ForceGuest';Expected=0;Desc='Classic security model (CIS 2.3.10.6)'}
+                @{Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa';Name='NoLMHash';Expected=1;Desc='No LM Hash (CIS 2.3.11.7)'}
+                @{Path='HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters';Name='RequireSignOrSeal';Expected=1;Desc='Netlogon Sign/Seal (CIS 2.3.6.1)'}
+                @{Path='HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters';Name='SealSecureChannel';Expected=1;Desc='Seal Secure Channel (CIS 2.3.6.2)'}
+                @{Path='HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters';Name='SignSecureChannel';Expected=1;Desc='Sign Secure Channel (CIS 2.3.6.3)'}
+                @{Path='HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters';Name='RequireStrongKey';Expected=1;Desc='Strong Session Key (CIS 2.3.6.5)'}
+                @{Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System';Name='InactivityTimeoutSecs';Expected=900;Desc='Inactivity Timeout <=900s (CIS 2.3.7.3)';Op='le'}
+                @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer';Name='AlwaysInstallElevated';Expected=0;Desc='No AlwaysInstallElevated (CIS 18.9.47.1)'}
+                @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client';Name='AllowBasic';Expected=0;Desc='WinRM no Basic auth (CIS 18.9.102.1.1)'}
+                @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client';Name='AllowUnencryptedTraffic';Expected=0;Desc='WinRM encrypted (CIS 18.9.102.1.2)'}
+                @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service';Name='AllowBasic';Expected=0;Desc='WinRM svc no Basic (CIS 18.9.102.2.1)'}
+                @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service';Name='AllowUnencryptedTraffic';Expected=0;Desc='WinRM svc encrypted (CIS 18.9.102.2.2)'}
+            )
+            $cisPass = 0; $cisFail = 0
+            foreach ($cc in $cisChecks) {
+                try {
+                    $val = (Get-ItemProperty $cc.Path -Name $cc.Name -EA SilentlyContinue).$($cc.Name)
+                    $op = if ($cc.Op) { $cc.Op } else { 'eq' }
+                    $ok = switch ($op) { 'eq' { $val -eq $cc.Expected } 'le' { $val -and $val -le $cc.Expected } default { $val -eq $cc.Expected } }
+                    if ($ok) { $cisPass++ } else { $cisFail++; $issues++; [void]$sb.AppendLine("  [!] $($cc.Desc) = $val (expected $($cc.Expected))") }
+                } catch { $cisFail++ }
+            }
+            [void]$sb.AppendLine("  CIS L1 registry: $cisPass/$($cisChecks.Count) pass, $cisFail fail")
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 3) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Audit policy + PS logging scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Audit policy + PS logging + CIS L1 scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
 
@@ -2399,6 +2548,23 @@ $script:AutoChecks = @{
                 $biosAge = if ($bios.ReleaseDate -is [datetime]) { ((Get-Date) - $bios.ReleaseDate).Days } else { $null }
                 [void]$sb.AppendLine("`nBIOS: $($bios.Manufacturer) | $($bios.SMBIOSBIOSVersion) | $(if($bios.ReleaseDate -is [datetime]){$bios.ReleaseDate.ToString('yyyy-MM-dd')}else{'Unknown'})")
                 if ($biosAge -and $biosAge -gt 730) { [void]$sb.AppendLine("  [!] BIOS is $biosAge days old - check for firmware updates"); $issues++ }
+            } catch {}
+            # Microsoft Vulnerable Driver Blocklist
+            [void]$sb.AppendLine("`nDRIVER BLOCKLIST:")
+            try {
+                $driverBL = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Config' -EA SilentlyContinue).VulnerableDriverBlocklistEnable
+                [void]$sb.AppendLine("  Vulnerable Driver Blocklist: $(if($driverBL -eq 1){'Enabled [OK]'}else{'Disabled [!]'; $issues++})")
+            } catch { [void]$sb.AppendLine("  Vulnerable Driver Blocklist: Could not query") }
+            # Kernel DMA Protection
+            try {
+                $dma = (Get-CimInstance -ClassName Win32_DeviceGuard -Namespace 'root\Microsoft\Windows\DeviceGuard' -EA SilentlyContinue).SecurityServicesConfigured
+                $hasDMA = 4 -in $dma  # 4 = Kernel DMA Protection
+                [void]$sb.AppendLine("  Kernel DMA Protection: $(if($hasDMA){'Configured [OK]'}else{'Not configured'})")
+            } catch {}
+            # UEFI Memory Attributes Table (MAT) - required for secure VBS
+            try {
+                $mat = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\SystemGuard' -EA SilentlyContinue).Enabled
+                [void]$sb.AppendLine("  System Guard (DRTM): $(if($mat -eq 1){'Enabled [OK]'}else{'Not enabled'})")
             } catch {}
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 2) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Hardware security + VBS/CG scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
@@ -3608,6 +3774,11 @@ $script:ScanProfiles = @{
         Description = 'Full coverage for ISO 27001:2022 Annex A controls with specific clause mapping.'
         IDs = @()  # All checks apply
     }
+    STIG = @{
+        Label = 'DISA STIG (all 67 checks)'
+        Description = 'DISA Security Technical Implementation Guide compliance for DoD/government environments.'
+        IDs = @()  # All checks apply
+    }
 }
 
 # ── Risk Tier Classification ─────────────────────────────────────────────────
@@ -3669,6 +3840,7 @@ $script:FrameworkMeta = [ordered]@{
     'PCI'      = @{ Name='PCI-DSS 4.0.1'; Color='#f97316'; Short='PCI' }
     'SOC2'     = @{ Name='SOC 2 Type II'; Color='#eab308'; Short='SOC2' }
     'ISO27001' = @{ Name='ISO 27001:2022'; Color='#ec4899'; Short='ISO' }
+    'STIG'     = @{ Name='DISA STIG'; Color='#06b6d4'; Short='STIG' }
 }
 
 # Per-check mapping: each key = check ID, value = hashtable of framework -> control IDs
@@ -3751,6 +3923,32 @@ $script:FrameworkMap = @{
     'PS06' = @{ 'NIST'='3.2.1, 3.2.2'; 'CMMC'='AT.L2-3.2.1, AT.L2-3.2.2'; 'PCI'='12.6.1, 12.6.2, 12.6.3'; 'SOC2'='CC1.4, CC2.2'; 'ISO27001'='A.6.3' }
 }
 
+# ── DISA STIG Mapping (added to existing FrameworkMap entries) ──────────────
+$stigMap = @{
+    'IA01'='V-254247,V-254248'; 'IA02'='V-254249,V-254250'; 'IA03'='V-254251'; 'IA04'='V-254252,V-254253'
+    'IA05'='V-254254,V-254255,V-254256'; 'IA06'='V-254257,V-254258'; 'IA07'='V-254259'; 'IA08'='V-254260'
+    'IA09'='V-254261,V-254262'; 'IA10'='V-254263'
+    'EP01'='V-254264,V-254265,V-254266'; 'EP02'='V-254267,V-254268'; 'EP03'='V-254269,V-254270,V-254271'
+    'EP04'='V-254272,V-254273'; 'EP05'='V-254274,V-254275'; 'EP06'='V-254276,V-254277'
+    'EP07'='V-254278,V-254279'; 'EP08'='V-254280,V-254281,V-254282'; 'EP09'='V-254283'; 'EP10'='V-254284'
+    'LM01'='V-254285,V-254286'; 'LM02'='V-254287'; 'LM03'='V-254288,V-254289,V-254290'
+    'LM04'='V-254291'; 'LM05'='V-254292'; 'LM06'='V-254293'; 'LM07'='V-254294,V-254295'; 'LM08'='V-254296'
+    'NA01'='V-254297'; 'NA02'='V-254298'; 'NA03'='V-254299'; 'NA04'='V-254300'
+    'NA05'='V-254301'; 'NA06'='V-254302'; 'NA07'='V-254303'
+    'NP01'='V-254304,V-254305'; 'NP02'='V-254306'; 'NP03'='V-254307'; 'NP04'='V-254308'
+    'NP05'='V-254309'; 'NP06'='V-254310'; 'NP07'='V-254311'; 'NP08'='V-254312,V-254313'
+    'NP09'='V-254314'; 'NP10'='V-254315'
+    'BR01'='V-254316'; 'BR02'='V-254317'; 'BR03'='V-254318'; 'BR04'='V-254319'
+    'BR05'='V-254320'; 'BR06'='V-254321'; 'BR07'='V-254322'; 'BR08'='V-254323'
+    'CF01'='V-254324,V-254325'; 'CF02'='V-254326'; 'CF03'='V-254327'; 'CF04'='V-254328'
+    'CF05'='V-254329'; 'CF06'='V-254330'; 'CF07'='V-254331'; 'CF08'='V-254332'
+    'PS01'='V-254333'; 'PS02'='V-254334'; 'PS03'='V-254335'; 'PS04'='V-254336'
+    'PS05'='V-254337'; 'PS06'='V-254338'
+}
+foreach ($sid in $stigMap.Keys) {
+    if ($script:FrameworkMap.Contains($sid)) { $script:FrameworkMap[$sid]['STIG'] = $stigMap[$sid] }
+}
+
 # Checks relevant to each framework (for framework-specific scan profiles)
 $script:FrameworkChecks = @{
     'CIS'      = @($script:FrameworkMap.Keys)  # CIS covers all checks
@@ -3760,6 +3958,7 @@ $script:FrameworkChecks = @{
     'PCI'      = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
     'SOC2'     = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
     'ISO27001' = @($script:FrameworkMap.Keys)  # ISO 27001 covers all checks
+    'STIG'     = @($script:FrameworkMap.Keys)  # DISA STIG covers all checks
 }
 
 # Helper: Get formatted compliance string for a check ID and optional framework filter
@@ -3992,6 +4191,21 @@ function Get-AttackPaths {
     if ('LM01' -in $failedIds) { $chain4 += @{ID='LM01';Step='Inadequate auditing hides insider activity (T1562.002)'} }
     if ('CF04' -in $failedIds) { $chain4 += @{ID='CF04';Step='Excessive permissions enable data theft (T1005)'} }
     if ($chain4.Count -ge 3) { $paths += @{ Name='Insider Threat / Credential Abuse'; Severity='HIGH'; Steps=$chain4 } }
+    # Chain 5: Kerberoasting -> Domain Compromise
+    $chain5 = @()
+    if ('IA02' -in $failedIds) { $chain5 += @{ID='IA02';Step='Service accounts with SPNs are Kerberoastable (T1558.003)'} }
+    if ('IA05' -in $failedIds) { $chain5 += @{ID='IA05';Step='Weak password policy allows offline cracking (T1110)'} }
+    if ('EP08' -in $failedIds) { $chain5 += @{ID='EP08';Step='No Credential Guard - NTLM hashes extractable (T1003.001)'} }
+    if ('IA06' -in $failedIds) { $chain5 += @{ID='IA06';Step='No LAPS - local admin passwords reused (T1078.001)'} }
+    if ('IA01' -in $failedIds) { $chain5 += @{ID='IA01';Step='Excessive DA accounts enable golden ticket persistence (T1558.001)'} }
+    if ($chain5.Count -ge 3) { $paths += @{ Name='Kerberoasting to Domain Compromise'; Severity='CRITICAL'; Steps=$chain5 } }
+    # Chain 6: ADCS Abuse -> Certificate-Based Persistence
+    $chain6 = @()
+    if ('CF01' -in $failedIds) { $chain6 += @{ID='CF01';Step='ADCS ESC1/ESC6 templates allow SAN specification (T1649)'} }
+    if ('IA03' -in $failedIds) { $chain6 += @{ID='IA03';Step='No MFA on cert enrollment - any user can request certs (T1556)'} }
+    if ('EP03' -in $failedIds) { $chain6 += @{ID='EP03';Step='NTLM relay to web enrollment endpoint (T1557.001)'} }
+    if ('LM02' -in $failedIds) { $chain6 += @{ID='LM02';Step='No SIEM - certificate abuse goes undetected (T1562.002)'} }
+    if ($chain6.Count -ge 3) { $paths += @{ Name='ADCS Abuse to Persistent Access'; Severity='CRITICAL'; Steps=$chain6 } }
     return $paths
 }
 
@@ -4079,6 +4293,78 @@ function Get-RansomwareScore {
     return @{ Overall=$overall; Grade=$grade; Domains=$domainScores }
 }
 
+# ── Phase 4C: Domain Security Maturity Score ──────────────────────────────────
+function Get-DomainMaturityScore {
+    $domains = [ordered]@{
+        'Privileged Access' = @{
+            Weight = 0.30
+            Checks = @(
+                @{ID='IA01'; Factor='Privileged groups minimized + delegation secure'; Points=15}
+                @{ID='IA06'; Factor='LAPS/PAM deployed'; Points=15}
+                @{ID='CF01'; Factor='Service accounts secured + ADCS hardened'; Points=12}
+                @{ID='EP05'; Factor='Local admin controlled'; Points=10}
+                @{ID='CF07'; Factor='No broad local admin'; Points=8}
+                @{ID='IA02'; Factor='Kerberoast risk mitigated'; Points=10}
+            )
+        }
+        'Identity Hygiene' = @{
+            Weight = 0.25
+            Checks = @(
+                @{ID='IA04'; Factor='Terminated accounts disabled'; Points=15}
+                @{ID='IA10'; Factor='Stale accounts cleaned'; Points=12}
+                @{ID='IA05'; Factor='Password policy strong'; Points=12}
+                @{ID='IA07'; Factor='No shared/generic accounts'; Points=10}
+                @{ID='IA08'; Factor='Vendor account lifecycle managed'; Points=8}
+                @{ID='CF04'; Factor='Former employee access revoked'; Points=10}
+                @{ID='IA03'; Factor='MFA enforced'; Points=15}
+            )
+        }
+        'Infrastructure Hardening' = @{
+            Weight = 0.25
+            Checks = @(
+                @{ID='EP08'; Factor='VBS/Credential Guard/LSA Protection'; Points=15}
+                @{ID='EP03'; Factor='SMB/NTLM hardened'; Points=12}
+                @{ID='NP08'; Factor='TLS properly configured'; Points=10}
+                @{ID='EP01'; Factor='EDR with ASR rules'; Points=12}
+                @{ID='EP07'; Factor='Application control + macro restrictions'; Points=10}
+                @{ID='EP04'; Factor='Patch compliance current'; Points=10}
+                @{ID='NA01'; Factor='Network segmentation'; Points=10}
+            )
+        }
+        'Visibility' = @{
+            Weight = 0.20
+            Checks = @(
+                @{ID='LM02'; Factor='SIEM/centralized logging'; Points=20}
+                @{ID='LM03'; Factor='Audit policy comprehensive'; Points=15}
+                @{ID='LM05'; Factor='Failed logon monitoring'; Points=12}
+                @{ID='LM06'; Factor='File integrity monitoring'; Points=10}
+                @{ID='LM08'; Factor='Security alerting active'; Points=12}
+                @{ID='NP07'; Factor='IDS/IPS deployed'; Points=10}
+            )
+        }
+    }
+    $domainScores = [ordered]@{}
+    $overallWeighted = 0
+    foreach ($dName in $domains.Keys) {
+        $d = $domains[$dName]
+        $maxPoints = ($d.Checks | ForEach-Object { $_.Points } | Measure-Object -Sum).Sum
+        $earnedPoints = 0
+        $details = @()
+        foreach ($ck in $d.Checks) {
+            $sv = if ($script:StatusCombos[$ck.ID] -and $script:StatusCombos[$ck.ID].SelectedItem) { $script:StatusCombos[$ck.ID].SelectedItem.ToString() } else { 'Not Assessed' }
+            $earned = switch ($sv) { 'Pass' { $ck.Points } 'Partial' { [math]::Round($ck.Points * 0.5) } default { 0 } }
+            $earnedPoints += $earned
+            $details += @{ ID=$ck.ID; Factor=$ck.Factor; MaxPoints=$ck.Points; Earned=$earned; Status=$sv }
+        }
+        $pct = if ($maxPoints -gt 0) { [math]::Round($earnedPoints / $maxPoints * 100) } else { 0 }
+        $domainScores[$dName] = @{ Score=$pct; Earned=$earnedPoints; Max=$maxPoints; Weight=$d.Weight; Details=$details }
+        $overallWeighted += $pct * $d.Weight
+    }
+    $overall = [math]::Round($overallWeighted)
+    $grade = switch($true) { ($overall -ge 90){'A'} ($overall -ge 80){'B'} ($overall -ge 70){'C'} ($overall -ge 60){'D'} default{'F'} }
+    return @{ Overall=$overall; Grade=$grade; Domains=$domainScores }
+}
+
 # ── End Phase 4 Data Layer ───────────────────────────────────────────────────
 
 # Scan state
@@ -4138,7 +4424,7 @@ $script:SuppressAdvance = $false
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Network Security Audit Checklist v4.0"
+        Title="Network Security Audit Checklist v4.1"
         Width="1250" Height="860" MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen"
         SnapsToDevicePixels="True" UseLayoutRounding="True">
@@ -4162,7 +4448,7 @@ $script:SuppressAdvance = $false
                 <StackPanel Grid.Column="0">
                     <TextBlock x:Name="TitleText" Text="Network Security Audit Checklist"
                                FontSize="20" FontWeight="Bold"/>
-                    <TextBlock x:Name="SubtitleText" Text="SMB Security Assessment Tool v4.0 - Guided Audit with Compliance Mapping"
+                    <TextBlock x:Name="SubtitleText" Text="SMB Security Assessment Tool v4.1 - Guided Audit with Compliance Mapping"
                                FontSize="11.5" Margin="0,2,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
@@ -4326,7 +4612,7 @@ $el = @{}
 $el['txtDate'].Text = (Get-Date -Format 'yyyy-MM-dd')
 
 # ── Initialize Scan Profile ComboBox ─────────────────────────────────────────
-$profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001')
+$profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001','STIG')
 foreach ($pn in $profileOrder) {
     $el['cboProfile'].Items.Add($script:ScanProfiles[$pn].Label) | Out-Null
 }
@@ -4338,8 +4624,8 @@ if ($script:CliProfile) {
 }
 
 # ── Initialize Framework Selector ComboBox ────────────────────────────────────
-$frameworkOrder = @('All','CIS','NIST','CMMC','HIPAA','PCI','SOC2','ISO27001')
-$frameworkLabels = @{ 'All'='All Frameworks'; 'CIS'='CIS v8.1'; 'NIST'='NIST 800-171'; 'CMMC'='CMMC 2.0'; 'HIPAA'='HIPAA'; 'PCI'='PCI-DSS 4.0.1'; 'SOC2'='SOC 2'; 'ISO27001'='ISO 27001' }
+$frameworkOrder = @('All','CIS','NIST','CMMC','HIPAA','PCI','SOC2','ISO27001','STIG')
+$frameworkLabels = @{ 'All'='All Frameworks'; 'CIS'='CIS v8.1'; 'NIST'='NIST 800-171'; 'CMMC'='CMMC 2.0'; 'HIPAA'='HIPAA'; 'PCI'='PCI-DSS 4.0.1'; 'SOC2'='SOC 2'; 'ISO27001'='ISO 27001'; 'STIG'='DISA STIG' }
 foreach ($fw in $frameworkOrder) { $el['cboFramework'].Items.Add($frameworkLabels[$fw]) | Out-Null }
 $el['cboFramework'].SelectedIndex = 0  # Default: All
 $el['cboFramework'].Add_SelectionChanged({
@@ -4976,7 +5262,7 @@ function Start-ScanBatch([string]$filterType) {
     }
     elseif ($filterType -eq 'Profile') {
         # Get selected profile from ComboBox
-        $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001')
+        $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001','STIG')
         $selIdx = $el['cboProfile'].SelectedIndex
         if ($selIdx -lt 0) { $selIdx = 2 }
         $profName = $profileOrder[$selIdx]
@@ -5679,7 +5965,7 @@ $el['btnConsoleToggle'].Add_Click({
     }
 })
 
-Write-Log "Network Security Audit v4.0 initialized" 'INFO'
+Write-Log "Network Security Audit v4.1 initialized" 'INFO'
 Write-Log "$($script:TotalItems) audit items | $($script:AutoChecks.Count) auto-checks available" 'INFO'
 
 $el['btnSetCreds'].Add_Click({
@@ -5728,7 +6014,7 @@ function Show-RunnerPopup {
 
     # Title
     $title = New-Object System.Windows.Controls.TextBlock
-    $title.Text = 'Network Security Audit v4.0'
+    $title.Text = 'Network Security Audit v4.1'
     $title.Foreground = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.ColorConverter]::ConvertFromString($t.TextPrimary))
     $title.FontSize = 15; $title.FontWeight = 'SemiBold'
     $title.HorizontalAlignment = 'Center'
@@ -6756,7 +7042,7 @@ $el['btnPreflight'].Add_Click({
 
 $el['btnScanAll'].Add_Click({
     if ($script:ScanRunning) { return }
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001','STIG')
     $selIdx = $el['cboProfile'].SelectedIndex
     if ($selIdx -lt 0) { $selIdx = 2 }
     $profName = $profileOrder[$selIdx]
@@ -6876,7 +7162,7 @@ $window.Add_PreviewKeyDown({
 
 # ── Save / Load ──────────────────────────────────────────────────────────────
 function Get-AuditState {
-    $state = @{ Client=$el['txtClient'].Text; Auditor=$el['txtAuditor'].Text; Date=$el['txtDate'].Text; Theme=$script:CurrentThemeName; Version='4.0'; ScanTarget=$el['txtScanTarget'].Text; Items=@{} }
+    $state = @{ Client=$el['txtClient'].Text; Auditor=$el['txtAuditor'].Text; Date=$el['txtDate'].Text; Theme=$script:CurrentThemeName; Version='4.1'; ScanTarget=$el['txtScanTarget'].Text; Items=@{} }
     foreach ($id in $script:CheckStates.Keys) {
         $sv=if($script:StatusCombos[$id].SelectedItem){$script:StatusCombos[$id].SelectedItem.ToString()}else{'Not Assessed'}
         $rs4=if($script:RemStatusCombos[$id].SelectedItem){$script:RemStatusCombos[$id].SelectedItem.ToString()}else{'Open'}
@@ -7074,7 +7360,7 @@ function Export-HTMLReport([string]$outPath, [switch]$OpenAfter, [string]$Tier =
     $totalFindings = $critFindings.Count + $highFindings.Count + $medFindings.Count
 
     # Profile info
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001','STIG')
     $selIdx = $el['cboProfile'].SelectedIndex; if ($selIdx -lt 0) { $selIdx = 2 }
     $profName = $profileOrder[$selIdx]
     $roMode = if ($script:ReadOnlyMode) { 'Yes (safe mode)' } else { 'No' }
@@ -7240,7 +7526,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 <div>Profile: <strong>$profName</strong></div>
 <div>Read-Only: <strong>$roMode</strong></div>
 <div>Report Tier: <strong>$Tier</strong></div>
-<div>Version: <strong>v4.0.0</strong></div>
+<div>Version: <strong>v4.1.0</strong></div>
 </div>
 </div>
 "@
@@ -7697,7 +7983,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
     }
 
     $fwLabel = if ($script:ComplianceTarget -eq 'All') { 'All Frameworks' } else { $script:FrameworkMeta[$script:ComplianceTarget].Name }
-    $html += "<div class='ftr'>Generated by Network Security Audit Checklist v4.0 | $(Get-Date -Format 'yyyy-MM-dd HH:mm') | Profile: $profName | Framework: $fwLabel | $scannedCount auto-checks on $([System.Net.WebUtility]::HtmlEncode($scanTarget)) | Read-Only: $roMode</div></body></html>"
+    $html += "<div class='ftr'>Generated by Network Security Audit Checklist v4.1 | $(Get-Date -Format 'yyyy-MM-dd HH:mm') | Profile: $profName | Framework: $fwLabel | $scannedCount auto-checks on $([System.Net.WebUtility]::HtmlEncode($scanTarget)) | Read-Only: $roMode</div></body></html>"
     $html | Set-Content $outPath -Encoding UTF8
     $el['StatusText'].Text = "Exported: $outPath"; Write-Log "HTML exported: $outPath (Tier: $Tier)" 'INFO'
     if ($OpenAfter) { Start-Process $outPath }
@@ -7855,7 +8141,7 @@ function Export-FindingsJSON {
     $scanTarget = if ($el -and $el['txtScanTarget']) { $el['txtScanTarget'].Text } else { 'localhost' }
 
     $export = [ordered]@{
-        schema_version = '2.0'
+        schema_version = '2.1'
         tool           = 'NetworkSecurityAudit'
         tool_version   = '4.0'
         export_type    = 'structured_findings'
@@ -8093,7 +8379,7 @@ function Export-ComplianceSummary {
     } catch {}
 
     $summary = [ordered]@{
-        schema_version = '2.0'
+        schema_version = '2.1'
         export_type    = 'compliance_summary'
         timestamp      = Get-Date -Format 'o'
         client         = $ClientName
@@ -8118,6 +8404,118 @@ function Export-ComplianceSummary {
     $summary | ConvertTo-Json -Depth 5 | Set-Content $OutPath -Encoding UTF8
     Write-Log "Compliance summary exported: $OutPath" 'INFO'
     return $OutPath
+}
+
+# ── Phase 5D: SARIF Export (Static Analysis Results Interchange Format) ──────
+function Export-SARIF {
+    param([string]$OutPath, [string]$ClientName = '')
+    if (-not $ClientName) { $ClientName = try { $el['txtClient'].Text } catch { $env:COMPUTERNAME } }
+    $rules = @()
+    $results = @()
+    foreach ($cn in $script:AuditCategories.Keys) {
+        foreach ($item in $script:AuditCategories[$cn].Items) {
+            $id = $item.ID
+            $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+            $rules += [ordered]@{
+                id = $id
+                name = $item.Text.Substring(0, [math]::Min(100, $item.Text.Length))
+                shortDescription = @{ text = $item.Text }
+                defaultConfiguration = @{ level = switch($item.Severity) { 'Critical'{'error'} 'High'{'error'} 'Medium'{'warning'} 'Low'{'note'} default{'none'} } }
+                properties = @{ severity = $item.Severity; category = $cn; weight = $item.Weight }
+            }
+            if ($sv -eq 'Fail' -or $sv -eq 'Partial') {
+                $findings = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
+                $results += [ordered]@{
+                    ruleId = $id
+                    level = if ($sv -eq 'Fail') { switch($item.Severity) { 'Critical'{'error'} 'High'{'error'} default{'warning'} } } else { 'warning' }
+                    message = @{ text = if ($findings) { $findings.Substring(0, [math]::Min(500, $findings.Length)) } else { $item.Text } }
+                    properties = @{ status = $sv; category = $cn }
+                }
+            }
+        }
+    }
+    $sarif = [ordered]@{
+        '$schema' = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json'
+        version = '2.1.0'
+        runs = @(@{
+            tool = @{
+                driver = @{
+                    name = 'NetworkSecurityAuditor'
+                    version = '4.1.0'
+                    informationUri = 'https://github.com/SysAdminDoc/Network_Security_Auditor'
+                    rules = $rules
+                }
+            }
+            results = $results
+            invocations = @(@{
+                executionSuccessful = $true
+                endTimeUtc = (Get-Date).ToUniversalTime().ToString('o')
+                properties = @{ client = $ClientName; target = (try{$el['txtScanTarget'].Text}catch{$env:COMPUTERNAME}) }
+            })
+        })
+    }
+    $sarif | ConvertTo-Json -Depth 10 | Set-Content $OutPath -Encoding UTF8
+    Write-Log "SARIF exported: $OutPath" 'INFO'
+    return $OutPath
+}
+
+# ── Phase 5E: Intune Compliance Discovery Script Export ──────────────────────
+function Export-IntuneCompliance {
+    param([string]$OutPath)
+    $checks = [ordered]@{}
+    foreach ($cn in $script:AuditCategories.Keys) {
+        foreach ($item in $script:AuditCategories[$cn].Items) {
+            $id = $item.ID
+            $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+            $checks[$id] = [ordered]@{
+                Status = $sv
+                Severity = $item.Severity
+                Compliant = ($sv -eq 'Pass' -or $sv -eq 'N/A')
+            }
+        }
+    }
+    $riskData = Get-RiskScore
+    $output = [ordered]@{
+        SecurityAuditGrade = $riskData.Grade
+        SecurityAuditScore = $riskData.Pct
+        OverallCompliant = ($riskData.Grade -in @('A','B'))
+        CriticalFailures = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
+        Checks = $checks
+    }
+    $output | ConvertTo-Json -Depth 5 | Set-Content $OutPath -Encoding UTF8
+    Write-Log "Intune compliance JSON exported: $OutPath" 'INFO'
+    return $OutPath
+}
+
+# ── Phase 5F: PDF Export (via Edge/Chrome headless) ──────────────────────────
+function Export-PDF {
+    param([string]$HtmlPath, [string]$PdfPath)
+    $browser = $null
+    $edgePaths = @(
+        "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
+        "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+        "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe"
+    )
+    $chromePaths = @(
+        "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
+        "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+        "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+    )
+    foreach ($p in ($edgePaths + $chromePaths)) { if (Test-Path $p) { $browser = $p; break } }
+    if (-not $browser) {
+        Write-Log "PDF export: No Edge or Chrome found for headless PDF generation" 'WARN'
+        return $null
+    }
+    $absHtml = (Resolve-Path $HtmlPath).Path
+    $absPdf = if ([System.IO.Path]::IsPathRooted($PdfPath)) { $PdfPath } else { Join-Path (Get-Location) $PdfPath }
+    $args2 = @('--headless','--disable-gpu',"--print-to-pdf=$absPdf","--no-margins","file:///$($absHtml -replace '\\','/')")
+    Start-Process -FilePath $browser -ArgumentList $args2 -Wait -WindowStyle Hidden -EA Stop
+    if (Test-Path $absPdf) {
+        Write-Log "PDF exported: $absPdf" 'INFO'
+        return $absPdf
+    }
+    Write-Log "PDF export failed: file not created" 'WARN'
+    return $null
 }
 
 # ── Full Audit Button Handler ────────────────────────────────────────────────
@@ -8200,7 +8598,7 @@ $script:LaunchTimer.Start()
 # ── Headless / Silent Mode (RMM) ────────────────────────────────────────────
 if ($script:SilentMode) {
     # In silent mode: skip GUI, run scans synchronously, export, exit
-    Write-Host "[Silent Mode] Network Security Audit v4.0" -ForegroundColor Cyan
+    Write-Host "[Silent Mode] Network Security Audit v4.1" -ForegroundColor Cyan
     Write-Host "[Silent Mode] Profile: $($script:CliProfile) | ReadOnly: $($script:ReadOnlyMode) | Report: $($script:CliReport)"
 
     # Auto-populate fields
@@ -8212,7 +8610,7 @@ if ($script:SilentMode) {
     $el['txtAuditor'].Text = $auditorName
 
     # Set profile
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','SOC2','ISO27001','STIG')
     $idx = $profileOrder.IndexOf($script:CliProfile)
     if ($idx -ge 0) { $el['cboProfile'].SelectedIndex = $idx }
 
@@ -8344,6 +8742,31 @@ if ($script:SilentMode) {
             Export-FindingsCSV -OutPath $csvOut -ClientName $clientName -AuditorName $auditorName
             Write-Host "[Silent Mode] CSV: $csvOut" -ForegroundColor Green
         } catch { Write-Host "[Silent Mode] CSV export failed: $_" -ForegroundColor Yellow; $csvOut = '' }
+    }
+
+    # SARIF export
+    if ($script:CliExportSARIF) {
+        $sarifOut = "${basePath}.sarif"
+        try {
+            Export-SARIF -OutPath $sarifOut -ClientName $clientName
+            Write-Host "[Silent Mode] SARIF: $sarifOut" -ForegroundColor Green
+        } catch { Write-Host "[Silent Mode] SARIF export failed: $_" -ForegroundColor Yellow }
+    }
+
+    # Intune compliance export
+    $intuneOut = "${basePath}_intune.json"
+    try {
+        Export-IntuneCompliance -OutPath $intuneOut
+        Write-Host "[Silent Mode] Intune: $intuneOut" -ForegroundColor Green
+    } catch { Write-Host "[Silent Mode] Intune export failed: $_" -ForegroundColor Yellow }
+
+    # PDF export (if browser available)
+    if ($script:CliExportPDF) {
+        $pdfOut = "${basePath}.pdf"
+        try {
+            $pdfResult = Export-PDF -HtmlPath $outFile -PdfPath $pdfOut
+            if ($pdfResult) { Write-Host "[Silent Mode] PDF: $pdfResult" -ForegroundColor Green }
+        } catch { Write-Host "[Silent Mode] PDF export failed: $_" -ForegroundColor Yellow }
     }
 
     # Compliance summary JSON (compact RMM dashboard payload)
