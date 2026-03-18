@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-3.0.0-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.0.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -256,11 +256,10 @@ Every HTML report can include up to three tiers, each targeting a different audi
 
 Full WPF interface with:
 
-- **8 themes** — Midnight, Slate, Nord, Dracula, Monokai, Light, Solarized Dark, Catppuccin Mocha (auto-detects system light/dark preference)
+- **7 dark themes** — Midnight, Slate, Nord, Dracula, Monokai, Solarized Dark, Catppuccin Mocha (auto-detects system preference)
 - **Categorized tab navigation** with scan progress per category
 - **Per-check controls** — status dropdown, findings, evidence, notes, remediation assignment/due date/status
 - **Live risk score dashboard** updated as checks complete
-- **Keyboard navigation** — Ctrl+1-8 for categories, Ctrl+S save, Ctrl+E export, arrow keys between checks
 - **Pre-flight connectivity check** before scanning (ping, WinRM, AD module, SMB, DNS, elevation, Defender)
 - **Turnkey environment setup** — auto-installs RSAT, configures WinRM, sets audit policies
 
@@ -432,7 +431,7 @@ Audit state (all check statuses, findings, evidence, notes, remediation tracking
 This is a single-file tool by design. One `.ps1` file, no modules, no config files, no build process. Download it and run it.
 
 ```
-NetworkSecurityAudit.ps1    # The entire tool (~8,700 lines)
+NetworkSecurityAudit.ps1    # The entire tool (~8,800 lines)
 README.md                   # This file
 ```
 

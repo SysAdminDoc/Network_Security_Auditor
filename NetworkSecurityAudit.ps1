@@ -4,7 +4,7 @@
     Network Security Audit Checklist v4.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for SMB environments.
-    Features: auto system theme detection, 8 themes, categorized checks,
+    Features: auto system theme detection, 7 dark themes, categorized checks,
     context hints for junior auditors, compliance mapping (NIST/CIS/HIPAA),
     per-item findings/notes/evidence/remediation tracking, severity ratings,
     weighted risk scoring, auto-discovery scripts, executive summary,
@@ -32,13 +32,13 @@
 .PARAMETER Auditor
     Auditor name for the report header. Default: current username.
 .EXAMPLE
-    .\NetworkSecurityAudit_v3.ps1
+    .\NetworkSecurityAudit.ps1
     # Normal GUI mode
 .EXAMPLE
-    .\NetworkSecurityAudit_v3.ps1 -Silent -ScanProfile Standard -OutputPath "C:\Reports\audit.html"
+    .\NetworkSecurityAudit.ps1 -Silent -ScanProfile Standard -OutputPath "C:\Reports\audit.html"
     # Headless mode for RMM: scan, export, exit
 .EXAMPLE
-    .\NetworkSecurityAudit_v3.ps1 -Silent -ScanProfile Quick -ReportTier Executive
+    .\NetworkSecurityAudit.ps1 -Silent -ScanProfile Quick -ReportTier Executive
     # Quick assessment with executive summary only
 .AUTHOR
     SysAdminDoc
@@ -291,7 +291,6 @@ function Enable-AuditWinRM {
         try {
             if (-not $script:Env.WinRMRunning) {
                 Enable-PSRemoting -Force -SkipNetworkProfileCheck -EA Stop | Out-Null
-                Set-Item WSMan:\localhost\Client\TrustedHosts -Value '*' -Force -EA SilentlyContinue
                 $script:Env.WinRMRunning = $true
                 return @{ Success=$true; Message='WinRM enabled on local machine' }
             }
@@ -518,14 +517,6 @@ $script:Themes = @{
         HoverBg='#49483e';SelectedBg='#a6e22e';CheckedBorder='#a6e22e';CheckedBg='#2e3a22'
         HeaderGrad1='#3e3d32';HeaderGrad2='#272822';HintBg='#272822';HintBorder='#49483e'
     }
-    'Light' = @{
-        WindowBg='#f8fafc';PanelBg='#ffffff';CardBg='#ffffff';SurfaceBg='#e2e8f0'
-        InputBg='#f1f5f9';BorderDim='#cbd5e1';TextPrimary='#1e293b';TextSecondary='#64748b'
-        Accent='#2563eb';AccentHover='#3b82f6';AccentPress='#1d4ed8';BarBg='#e2e8f0'
-        ProgressGood='#16a34a';ProgressMid='#ca8a04';ThumbBg='#94a3b8'
-        HoverBg='#e2e8f0';SelectedBg='#2563eb';CheckedBorder='#16a34a';CheckedBg='#dcfce7'
-        HeaderGrad1='#e2e8f0';HeaderGrad2='#f1f5f9';HintBg='#eff6ff';HintBorder='#bfdbfe'
-    }
     'Solarized Dark' = @{
         WindowBg='#002b36';PanelBg='#073642';CardBg='#073642';SurfaceBg='#586e75'
         InputBg='#002b36';BorderDim='#586e75';TextPrimary='#fdf6e3';TextSecondary='#93a1a1'
@@ -552,7 +543,7 @@ function Get-SystemTheme {
     } catch { 'Dark' }
 }
 
-$script:CurrentThemeName = if ((Get-SystemTheme) -eq 'Light') { 'Light' } else { 'Midnight' }
+$script:CurrentThemeName = 'Midnight'
 function Get-T { $script:Themes[$script:CurrentThemeName] }
 function New-Brush([string]$hex) { New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString($hex)) }
 
@@ -1108,19 +1099,31 @@ $script:AutoChecks = @{
         }
     }
 
-    'IA04' = @{ Type='AD'; Label='Scan Terminated Accounts'
+    'IA04' = @{ Type='AD'; Label='Scan Terminated Employee Indicators'
         Script = {
-            $users = Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonDate,WhenCreated,Description -EA Stop
-            $stale90 = $users | Where-Object { $_.LastLogonDate -and $_.LastLogonDate -lt (Get-Date).AddDays(-90) } | Sort-Object LastLogonDate
-            $neverLogon = $users | Where-Object { -not $_.LastLogonDate } | Sort-Object WhenCreated
-            $sb = [System.Text.StringBuilder]::new()
-            [void]$sb.AppendLine("ENABLED accounts with NO logon in 90+ days: $($stale90.Count)")
-            foreach ($u in ($stale90 | Select-Object -First 20)) { [void]$sb.AppendLine("  $($u.SamAccountName) | Last: $($u.LastLogonDate.ToString('yyyy-MM-dd')) | Created: $($u.WhenCreated.ToString('yyyy-MM-dd'))") }
-            if ($stale90.Count -gt 20) { [void]$sb.AppendLine("  ... and $($stale90.Count - 20) more") }
-            [void]$sb.AppendLine("`nENABLED accounts that have NEVER logged in: $($neverLogon.Count)")
+            $sb = [System.Text.StringBuilder]::new(); $issues = 0
+            # Find accounts with terminated/disabled indicators that are still enabled
+            $users = Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonDate,WhenCreated,Description,Manager,MemberOf -EA Stop
+            # Accounts with termination keywords in description
+            $termPatterns = 'terminat|disabled|departed|left|former|inactive|offboard|separated|resigned'
+            $termDesc = $users | Where-Object { $_.Description -match $termPatterns }
+            if ($termDesc.Count -gt 0) {
+                $issues += $termDesc.Count
+                [void]$sb.AppendLine("ENABLED accounts with TERMINATION keywords in description ($($termDesc.Count)):")
+                foreach ($u in ($termDesc | Select-Object -First 15)) { [void]$sb.AppendLine("  $($u.SamAccountName) | Desc: $($u.Description) | Last: $(if($u.LastLogonDate){$u.LastLogonDate.ToString('yyyy-MM-dd')}else{'Never'})") }
+            } else { [void]$sb.AppendLine("No enabled accounts with termination keywords in description [OK]") }
+            # Accounts with no manager AND no logon in 90+ days (orphaned)
+            $orphaned = $users | Where-Object { -not $_.Manager -and $_.LastLogonDate -and $_.LastLogonDate -lt (Get-Date).AddDays(-90) }
+            [void]$sb.AppendLine("`nORPHANED (no manager + 90d inactive): $($orphaned.Count)")
+            foreach ($u in ($orphaned | Select-Object -First 15)) { [void]$sb.AppendLine("  $($u.SamAccountName) | Last: $($u.LastLogonDate.ToString('yyyy-MM-dd'))") }
+            if ($orphaned.Count -gt 5) { $issues += $orphaned.Count }
+            # Accounts that have NEVER logged in (created but never used)
+            $neverLogon = $users | Where-Object { -not $_.LastLogonDate -and $_.WhenCreated -lt (Get-Date).AddDays(-30) } | Sort-Object WhenCreated
+            [void]$sb.AppendLine("`nNEVER LOGGED IN (created 30+ days ago): $($neverLogon.Count)")
             foreach ($u in ($neverLogon | Select-Object -First 10)) { [void]$sb.AppendLine("  $($u.SamAccountName) | Created: $($u.WhenCreated.ToString('yyyy-MM-dd'))") }
-            $status = if ($stale90.Count -eq 0 -and $neverLogon.Count -eq 0) {'Pass'} elseif ($stale90.Count -le 5) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="AD stale account scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+            if ($neverLogon.Count -gt 3) { $issues++ }
+            $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 3) {'Partial'} else {'Fail'}
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Terminated employee indicator scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
     }
 
@@ -2090,20 +2093,24 @@ $script:AutoChecks = @{
                 @{Port=4444; Desc='Metasploit default'}
                 @{Port=8080; Desc='Alt HTTP/Proxy'}
             )
-            [void]$sb.AppendLine("EGRESS PORT TEST (outbound to 1.1.1.1):")
+            $egressTargets = @('1.1.1.1','8.8.8.8','9.9.9.9')
+            [void]$sb.AppendLine("EGRESS PORT TEST (outbound to $($egressTargets -join ', ')):")
             foreach ($tp in $testPorts) {
-                try {
-                    $tcp = New-Object System.Net.Sockets.TcpClient
-                    $connect = $tcp.BeginConnect('1.1.1.1', $tp.Port, $null, $null)
-                    $wait = $connect.AsyncWaitHandle.WaitOne(2000, $false)
-                    if ($wait -and $tcp.Connected) {
-                        $openPorts++; [void]$sb.AppendLine("  Port $($tp.Port) ($($tp.Desc)): OPEN [!]")
-                    } else {
-                        [void]$sb.AppendLine("  Port $($tp.Port) ($($tp.Desc)): Blocked [OK]")
-                    }
-                    $tcp.Close()
-                } catch {
-                    [void]$sb.AppendLine("  Port $($tp.Port) ($($tp.Desc)): Blocked/Error [OK]")
+                $portOpen = $false
+                foreach ($target in $egressTargets) {
+                    try {
+                        $tcp = New-Object System.Net.Sockets.TcpClient
+                        $connect = $tcp.BeginConnect($target, $tp.Port, $null, $null)
+                        $wait = $connect.AsyncWaitHandle.WaitOne(2000, $false)
+                        if ($wait -and $tcp.Connected) { $portOpen = $true }
+                        $tcp.Close()
+                    } catch {}
+                    if ($portOpen) { break }
+                }
+                if ($portOpen) {
+                    $openPorts++; [void]$sb.AppendLine("  Port $($tp.Port) ($($tp.Desc)): OPEN [!]")
+                } else {
+                    [void]$sb.AppendLine("  Port $($tp.Port) ($($tp.Desc)): Blocked [OK]")
                 }
             }
             [void]$sb.AppendLine("`n$openPorts of $($testPorts.Count) non-standard ports reachable outbound")
@@ -2302,9 +2309,10 @@ $script:AutoChecks = @{
                     if ($vc.SplitTunneling) { $issues++ }
                 }
             } else { [void]$sb.AppendLine("`nNo built-in VPN connections configured") }
-            # Check for VPN software
-            $vpnSoft = Get-CimInstance Win32_Product -EA SilentlyContinue | Where-Object { $_.Name -match 'VPN|AnyConnect|GlobalProtect|FortiClient|Pulse|WireGuard|OpenVPN' }
-            if ($vpnSoft) { foreach ($vs in $vpnSoft) { [void]$sb.AppendLine("VPN Software: $($vs.Name) v$($vs.Version)") } }
+            # Check for VPN software (registry - avoids slow Win32_Product)
+            $vpnRegPaths = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
+            $vpnSoft = Get-ItemProperty $vpnRegPaths -EA SilentlyContinue | Where-Object { $_.DisplayName -match 'VPN|AnyConnect|GlobalProtect|FortiClient|Pulse|WireGuard|OpenVPN' }
+            if ($vpnSoft) { foreach ($vs in $vpnSoft) { [void]$sb.AppendLine("VPN Software: $($vs.DisplayName) v$($vs.DisplayVersion)") } }
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 1) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Remote access scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
@@ -2574,10 +2582,12 @@ $script:AutoChecks = @{
                 $eap = Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Eaphost\Methods' -EA SilentlyContinue -Recurse
                 [void]$sb.AppendLine("EAP Methods configured: $(if($eap){$eap.Count}else{0})")
             } catch {}
-            # Check for NAC agents
+            # Check for NAC agents (registry - avoids slow Win32_Product)
             $nacAgents = @('Cisco ISE','ForeScout','Aruba ClearPass','Portnox','PacketFence','Bradford','Forescout')
-            $foundNAC = Get-CimInstance Win32_Product -EA SilentlyContinue | Where-Object { $n=$_.Name; $nacAgents | Where-Object { $n -match $_ } }
-            if ($foundNAC) { foreach ($na in $foundNAC) { [void]$sb.AppendLine("NAC Agent: $($na.Name)") } }
+            $nacRegPaths = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
+            $nacApps = Get-ItemProperty $nacRegPaths -EA SilentlyContinue | Where-Object { $_.DisplayName }
+            $foundNAC = @($nacApps | Where-Object { $n=$_.DisplayName; ($nacAgents | Where-Object { $n -match $_ }).Count -gt 0 })
+            if ($foundNAC.Count -gt 0) { foreach ($na in $foundNAC) { [void]$sb.AppendLine("NAC Agent: $($na.DisplayName)") } }
             else { [void]$sb.AppendLine("No NAC agent software detected"); $issues++ }
             # Check for certificate-based auth
             $certs = Get-ChildItem Cert:\LocalMachine\My -EA SilentlyContinue | Where-Object { $_.EnhancedKeyUsageList.FriendlyName -match 'Client Authentication' }
@@ -5024,7 +5034,7 @@ $el['ThemeSelector'].SelectedIndex = 0
 $el['ThemeSelector'].Add_SelectionChanged({
     $s = $el['ThemeSelector'].SelectedItem
     if (-not $s) { return }
-    if ($s -eq 'Auto (System)') { $script:CurrentThemeName = if ((Get-SystemTheme) -eq 'Light') { 'Light' } else { 'Midnight' } }
+    if ($s -eq 'Auto (System)') { $script:CurrentThemeName = 'Midnight' }
     else { $script:CurrentThemeName = $s }
     Apply-Theme; Update-Progress
     Write-Log "Theme changed: $script:CurrentThemeName"
@@ -6266,7 +6276,6 @@ function Start-AsyncTurnkey {
                 Log "Configuring WinRM (Enable-PSRemoting)..." 'INFO'
                 try {
                     Enable-PSRemoting -Force -SkipNetworkProfileCheck -EA Stop | Out-Null
-                    Set-Item WSMan:\localhost\Client\TrustedHosts -Value '*' -Force -EA SilentlyContinue
                     $results.WinRM = @{ Success=$true; Message='WinRM enabled and configured' }
                     Log "WinRM enabled successfully" 'INFO'
                 }
@@ -6278,7 +6287,6 @@ function Start-AsyncTurnkey {
             elseif ($Env.WinRMRunning) {
                 $results.WinRM = @{ Success=$true; Message='WinRM already running' }
                 Log "WinRM already running" 'INFO'
-                try { Set-Item WSMan:\localhost\Client\TrustedHosts -Value '*' -Force -EA SilentlyContinue } catch {}
             }
             else {
                 $results.WinRM = @{ Success=$false; Message='WinRM not running, admin required' }
@@ -6823,7 +6831,6 @@ $window.Add_PreviewKeyDown({
     $key = $_.Key
     $mods = [System.Windows.Input.Keyboard]::Modifiers
     $ctrl = $mods -band [System.Windows.Input.ModifierKeys]::Control
-    $shift = $mods -band [System.Windows.Input.ModifierKeys]::Shift
 
     # Ctrl+0: Zoom reset
     if ($ctrl -and ($key -eq [System.Windows.Input.Key]::D0 -or $key -eq [System.Windows.Input.Key]::NumPad0)) {
@@ -6831,277 +6838,12 @@ $window.Add_PreviewKeyDown({
         $el['StatusText'].Text = "Zoom reset to 100%"; $_.Handled = $true; return
     }
 
-    # Don't intercept keyboard when a text input is focused
-    $focused = [System.Windows.Input.Keyboard]::FocusedElement
-    if ($focused -is [System.Windows.Controls.TextBox] -or $focused -is [System.Windows.Controls.ComboBox]) {
-        # Allow Escape to defocus text inputs
-        if ($key -eq [System.Windows.Input.Key]::Escape) {
+    # Escape: defocus text inputs
+    if ($key -eq [System.Windows.Input.Key]::Escape) {
+        $focused = [System.Windows.Input.Keyboard]::FocusedElement
+        if ($focused -is [System.Windows.Controls.TextBox] -or $focused -is [System.Windows.Controls.ComboBox]) {
             [System.Windows.Input.Keyboard]::ClearFocus()
             $_.Handled = $true
-        }
-        return
-    }
-
-    # Helper: get ordered IDs for current tab
-    $tabIdx = $el['MainTabs'].SelectedIndex
-    if ($tabIdx -lt 0 -or -not $script:TabItemIDs.Contains($tabIdx)) { return }
-    $ids = $script:TabItemIDs[$tabIdx]
-    if ($ids.Count -eq 0) { return }
-
-    # Helper: find current position
-    $curPos = -1
-    if ($script:HighlightedCard) {
-        $curPos = $ids.IndexOf($script:HighlightedCard)
-    }
-
-    switch ($key) {
-
-        # ── Arrow Down / J: Next item ───────────────────────────────
-        { $_ -eq [System.Windows.Input.Key]::Down -or $_ -eq [System.Windows.Input.Key]::J } {
-            $_.Handled = $true
-            if ($ctrl) {
-                # Ctrl+Down: next tab
-                $nextTab = ($tabIdx + 1) % $script:TabIndex
-                $el['MainTabs'].SelectedIndex = $nextTab
-                $nIds = $script:TabItemIDs[$nextTab]
-                if ($nIds -and $nIds.Count -gt 0) {
-                    $timer = New-Object System.Windows.Threading.DispatcherTimer
-                    $timer.Interval = [TimeSpan]::FromMilliseconds(80)
-                    $timer.Tag = $nIds[0]
-                    $timer.Add_Tick({ $this.Stop(); Highlight-ItemCard $this.Tag; Expand-ItemCard $this.Tag })
-                    $timer.Start()
-                }
-                $el['StatusText'].Text = "Tab: $($el['MainTabs'].Items[$nextTab].Header)"
-            } else {
-                # Find next visible item
-                $found = $false
-                for ($i = $curPos + 1; $i -lt $ids.Count; $i++) {
-                    $nid = $ids[$i]
-                    $nCard = $script:ItemCards[$nid]
-                    if ($nCard -and $nCard.Visibility -eq [System.Windows.Visibility]::Visible) {
-                        Highlight-ItemCard $nid; Expand-ItemCard $nid; $found = $true; break
-                    }
-                }
-                if (-not $found -and $curPos -ne 0) {
-                    # Wrap to first visible
-                    for ($i = 0; $i -lt $ids.Count; $i++) {
-                        $nid = $ids[$i]
-                        $nCard = $script:ItemCards[$nid]
-                        if ($nCard -and $nCard.Visibility -eq [System.Windows.Visibility]::Visible) {
-                            Highlight-ItemCard $nid; Expand-ItemCard $nid; break
-                        }
-                    }
-                }
-            }
-        }
-
-        # ── Arrow Up / K: Previous item ─────────────────────────────
-        { $_ -eq [System.Windows.Input.Key]::Up -or $_ -eq [System.Windows.Input.Key]::K } {
-            $_.Handled = $true
-            if ($ctrl) {
-                # Ctrl+Up: previous tab
-                $prevTab = ($tabIdx - 1 + $script:TabIndex) % $script:TabIndex
-                $el['MainTabs'].SelectedIndex = $prevTab
-                $pIds = $script:TabItemIDs[$prevTab]
-                if ($pIds -and $pIds.Count -gt 0) {
-                    $timer = New-Object System.Windows.Threading.DispatcherTimer
-                    $timer.Interval = [TimeSpan]::FromMilliseconds(80)
-                    $timer.Tag = $pIds[$pIds.Count - 1]
-                    $timer.Add_Tick({ $this.Stop(); Highlight-ItemCard $this.Tag; Expand-ItemCard $this.Tag })
-                    $timer.Start()
-                }
-                $el['StatusText'].Text = "Tab: $($el['MainTabs'].Items[$prevTab].Header)"
-            } else {
-                # Find previous visible item
-                $found = $false
-                $start = if ($curPos -gt 0) { $curPos - 1 } else { $ids.Count - 1 }
-                for ($i = $start; $i -ge 0; $i--) {
-                    $nid = $ids[$i]
-                    $nCard = $script:ItemCards[$nid]
-                    if ($nCard -and $nCard.Visibility -eq [System.Windows.Visibility]::Visible) {
-                        Highlight-ItemCard $nid; Expand-ItemCard $nid; $found = $true; break
-                    }
-                }
-                if (-not $found) {
-                    # Wrap to last visible
-                    for ($i = $ids.Count - 1; $i -ge 0; $i--) {
-                        $nid = $ids[$i]
-                        $nCard = $script:ItemCards[$nid]
-                        if ($nCard -and $nCard.Visibility -eq [System.Windows.Visibility]::Visible) {
-                            Highlight-ItemCard $nid; Expand-ItemCard $nid; break
-                        }
-                    }
-                }
-            }
-        }
-
-        # ── Space: Toggle checkbox ──────────────────────────────────
-        ([System.Windows.Input.Key]::Space) {
-            if ($script:HighlightedCard -and $script:CheckBoxes.Contains($script:HighlightedCard)) {
-                $_.Handled = $true
-                $cb = $script:CheckBoxes[$script:HighlightedCard]
-                $cb.IsChecked = -not $cb.IsChecked
-            }
-        }
-
-        # ── Enter: Expand/Collapse ──────────────────────────────────
-        ([System.Windows.Input.Key]::Return) {
-            if ($script:HighlightedCard) {
-                $_.Handled = $true
-                $panel = $script:ItemPanels[$script:HighlightedCard]
-                if ($panel -and $panel.Children.Count -gt 1) {
-                    $isCollapsed = $panel.Children[1].Visibility -eq [System.Windows.Visibility]::Collapsed
-                    if ($isCollapsed) { Expand-ItemCard $script:HighlightedCard }
-                    else { Collapse-ItemCard $script:HighlightedCard }
-                }
-            }
-        }
-
-        # ── Tab: Jump to next unchecked / Shift+Tab: previous unchecked
-        ([System.Windows.Input.Key]::Tab) {
-            $_.Handled = $true
-            if ($shift) {
-                # Previous unchecked
-                $start = if ($curPos -gt 0) { $curPos - 1 } else { $ids.Count - 1 }
-                $found = $false
-                for ($i = $start; $i -ge 0; $i--) {
-                    $nid = $ids[$i]
-                    $nCard = $script:ItemCards[$nid]
-                    if (-not $script:CheckStates[$nid] -and $nCard -and $nCard.Visibility -eq [System.Windows.Visibility]::Visible) {
-                        Highlight-ItemCard $nid; Expand-ItemCard $nid; $found = $true; break
-                    }
-                }
-                if (-not $found) {
-                    # Wrap search from end
-                    for ($i = $ids.Count - 1; $i -gt $curPos; $i--) {
-                        $nid = $ids[$i]
-                        $nCard = $script:ItemCards[$nid]
-                        if (-not $script:CheckStates[$nid] -and $nCard -and $nCard.Visibility -eq [System.Windows.Visibility]::Visible) {
-                            Highlight-ItemCard $nid; Expand-ItemCard $nid; $found = $true; break
-                        }
-                    }
-                }
-                if (-not $found) { $el['StatusText'].Text = "All items in this tab are checked" }
-            } else {
-                # Forward: next unchecked in current tab, then cross-tab
-                $found = $false
-                $start = if ($curPos -ge 0) { $curPos + 1 } else { 0 }
-                for ($i = $start; $i -lt $ids.Count; $i++) {
-                    $nid = $ids[$i]
-                    $nCard = $script:ItemCards[$nid]
-                    if (-not $script:CheckStates[$nid] -and $nCard -and $nCard.Visibility -eq [System.Windows.Visibility]::Visible) {
-                        Highlight-ItemCard $nid; Expand-ItemCard $nid; $found = $true; break
-                    }
-                }
-                if (-not $found) {
-                    # Cross-tab advance
-                    Advance-ToNext $(if($script:HighlightedCard){$script:HighlightedCard}else{$ids[$ids.Count-1]})
-                }
-            }
-        }
-
-        # ── Escape: Clear selection ─────────────────────────────────
-        ([System.Windows.Input.Key]::Escape) {
-            if ($script:HighlightedCard) {
-                $_.Handled = $true
-                $t = Get-T
-                $script:ItemCards[$script:HighlightedCard].BorderBrush = New-Brush $t.BorderDim
-                $script:ItemCards[$script:HighlightedCard].BorderThickness = [System.Windows.Thickness]::new(1)
-                $script:HighlightedCard = $null
-                $el['StatusText'].Text = "Selection cleared"
-            }
-        }
-
-        # ── 1-4: Set status combo ───────────────────────────────────
-        { $_ -in @([System.Windows.Input.Key]::D1,[System.Windows.Input.Key]::D2,[System.Windows.Input.Key]::D3,[System.Windows.Input.Key]::D4) } {
-            if ($script:HighlightedCard -and -not $ctrl -and $script:StatusCombos.Contains($script:HighlightedCard)) {
-                $_.Handled = $true
-                $idx = switch ($_) {
-                    ([System.Windows.Input.Key]::D1) { 1 }  # Compliant
-                    ([System.Windows.Input.Key]::D2) { 2 }  # Non-Compliant
-                    ([System.Windows.Input.Key]::D3) { 3 }  # Partial
-                    ([System.Windows.Input.Key]::D4) { 4 }  # N/A
-                }
-                $combo = $script:StatusCombos[$script:HighlightedCard]
-                if ($idx -lt $combo.Items.Count) {
-                    $combo.SelectedIndex = $idx
-                    $el['StatusText'].Text = "$script:HighlightedCard -> $($combo.SelectedItem)"
-                }
-            }
-        }
-
-        # ── S: Run scan on highlighted item ─────────────────────────
-        ([System.Windows.Input.Key]::S) {
-            if ($script:HighlightedCard -and $script:AutoCheckIDs.Contains($script:HighlightedCard) -and -not $script:ScanRunning) {
-                $_.Handled = $true
-                Start-SingleCheck $script:HighlightedCard
-            }
-        }
-
-        # ── H: Toggle hint ─────────────────────────────────────────
-        ([System.Windows.Input.Key]::H) {
-            if ($script:HighlightedCard -and $script:HintBlocks.Contains($script:HighlightedCard)) {
-                $_.Handled = $true
-                $hb = $script:HintBlocks[$script:HighlightedCard]
-                if ($hb.Visibility -eq [System.Windows.Visibility]::Visible) {
-                    $hb.Visibility = [System.Windows.Visibility]::Collapsed
-                } else {
-                    $hb.Visibility = [System.Windows.Visibility]::Visible
-                }
-            }
-        }
-
-        # ── F: Focus findings box ──────────────────────────────────
-        ([System.Windows.Input.Key]::F) {
-            if ($script:HighlightedCard -and $script:FindingsBoxes.Contains($script:HighlightedCard)) {
-                $_.Handled = $true
-                Expand-ItemCard $script:HighlightedCard
-                $script:FindingsBoxes[$script:HighlightedCard].Focus() | Out-Null
-            }
-        }
-
-        # ── N: Focus notes box ─────────────────────────────────────
-        ([System.Windows.Input.Key]::N) {
-            if ($script:HighlightedCard -and $script:NotesBoxes.Contains($script:HighlightedCard)) {
-                $_.Handled = $true
-                Expand-ItemCard $script:HighlightedCard
-                $script:NotesBoxes[$script:HighlightedCard].Focus() | Out-Null
-            }
-        }
-
-        # ── ?: Show keyboard shortcuts ──────────────────────────────
-        ([System.Windows.Input.Key]::OemQuestion) {
-            if ($shift) {
-                $_.Handled = $true
-                $helpText = @"
-KEYBOARD SHORTCUTS
-
-Navigation:
-  Up / K          Previous item
-  Down / J        Next item
-  Ctrl+Up         Previous tab
-  Ctrl+Down       Next tab
-  Tab             Next unchecked item (cross-tab)
-  Shift+Tab       Previous unchecked item
-
-Actions:
-  Space           Toggle checkbox
-  Enter           Expand / collapse item
-  1               Set Compliant
-  2               Set Non-Compliant
-  3               Set Partial
-  4               Set N/A
-  S               Run auto-scan (if available)
-  H               Toggle hint text
-  F               Focus findings field
-  N               Focus notes field
-  Escape          Clear selection / defocus text
-  Ctrl+0          Reset zoom to 100%
-  Ctrl+Wheel      Zoom in/out
-  ?               Show this help
-"@
-                [System.Windows.MessageBox]::Show($helpText, 'Keyboard Shortcuts', 'OK', 'Information')
-            }
         }
     }
 })
@@ -8481,11 +8223,25 @@ if ($script:SilentMode) {
     Write-Host "[Silent Mode] Scanning $($idList.Count) checks..."
 
     $completed = 0; $failed = 0
+    $silentTimeoutMs = 120000  # 2 minute timeout per check
     foreach ($id in $idList) {
         $check = $script:AutoChecks[$id]
         if (-not $check) { continue }
         try {
-            $result = & $check.Script
+            # Run each check in an isolated runspace with timeout protection
+            $checkPS = [PowerShell]::Create()
+            $checkPS.AddScript($check.Script) | Out-Null
+            $checkHandle = $checkPS.BeginInvoke()
+            if (-not $checkHandle.AsyncWaitHandle.WaitOne($silentTimeoutMs)) {
+                $checkPS.Stop(); $checkPS.Dispose()
+                $failed++
+                Write-Host "  [!] $id - $($check.Label): TIMEOUT (>${silentTimeoutMs}ms)" -ForegroundColor Red
+                if ($script:FindingsBoxes.Contains($id)) { $script:FindingsBoxes[$id].Text = "Auto-check timed out after $($silentTimeoutMs/1000)s" }
+                continue
+            }
+            $checkOutput = $checkPS.EndInvoke($checkHandle)
+            $checkPS.Dispose()
+            $result = if ($checkOutput -and $checkOutput.Count -gt 0) { $checkOutput[0] } else { $null }
             if ($result -and $result.Status) {
                 # Apply result to UI state (for export) - values match combo: Pass/Fail/Partial
                 $mappedStatus = if ($result.Status -eq 'Pass' -or $result.Status -eq 'Fail' -or $result.Status -eq 'Partial') { $result.Status } else { 'Not Assessed' }
