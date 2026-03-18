@@ -256,7 +256,7 @@ Every HTML report can include up to three tiers, each targeting a different audi
 
 Full WPF interface with:
 
-- **7 dark themes** — Midnight, Slate, Nord, Dracula, Monokai, Solarized Dark, Catppuccin Mocha (auto-detects system preference)
+- **7 dark themes** — Midnight (default), Slate, Nord, Dracula, Monokai, Solarized Dark, Catppuccin Mocha
 - **Categorized tab navigation** with scan progress per category
 - **Per-check controls** — status dropdown, findings, evidence, notes, remediation assignment/due date/status
 - **Live risk score dashboard** updated as checks complete
@@ -431,7 +431,7 @@ Audit state (all check statuses, findings, evidence, notes, remediation tracking
 This is a single-file tool by design. One `.ps1` file, no modules, no config files, no build process. Download it and run it.
 
 ```
-NetworkSecurityAudit.ps1    # The entire tool (~8,800 lines)
+NetworkSecurityAudit.ps1    # The entire tool (~8,500 lines)
 README.md                   # This file
 ```
 

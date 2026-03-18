@@ -227,7 +227,7 @@ $script:Env['HasLegacyLAPS'] = $false
 try { if (Get-Command Get-LapsADPassword -EA SilentlyContinue) { $script:Env['HasWindowsLAPS'] = $true } } catch {}
 try {
     $lapsGPO = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS' -EA SilentlyContinue
-    $lapsCSE = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\GPExtensions\{D76B9641-3288-4f75-942D-087DE603E3EA}' -EA SilentlyContinue
+    $lapsCSE = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\GPExtensions\{D76B9641-3288-4f75-942D-087DE603E3EA}' -EA SilentlyContinue
     if ($lapsGPO -or $lapsCSE) { $script:Env['HasLegacyLAPS'] = $true }
 } catch {}
 
@@ -536,13 +536,6 @@ $script:Themes = @{
 }
 
 # ── System Theme Detection ───────────────────────────────────────────────────
-function Get-SystemTheme {
-    try {
-        $v = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name 'AppsUseLightTheme' -EA Stop).AppsUseLightTheme
-        if ($v -eq 0) { 'Dark' } else { 'Light' }
-    } catch { 'Dark' }
-}
-
 $script:CurrentThemeName = 'Midnight'
 function Get-T { $script:Themes[$script:CurrentThemeName] }
 function New-Brush([string]$hex) { New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString($hex)) }
@@ -1492,11 +1485,21 @@ $script:AutoChecks = @{
 
     'EP10' = @{ Type='AD'; Label='Scan EOL Operating Systems'
         Script = {
-            $comps = Get-ADComputer -Filter {Enabled -eq $true} -Properties OperatingSystem,OperatingSystemVersion,LastLogonDate -EA Stop
-            $eolPatterns = @('Windows XP','Windows Vista','Windows 7','Windows 8','Server 2003','Server 2008','Server 2012')
             $sb = [System.Text.StringBuilder]::new(); $eolCount = 0
+            $eolPatterns = @('Windows XP','Windows Vista','Windows 7','Windows 8','Windows 10','Server 2003','Server 2008','Server 2012')
+            # Check local machine first
+            $localOS = (Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).Caption
+            $localEOL = $eolPatterns | Where-Object { $localOS -match [regex]::Escape($_) }
+            if ($localEOL) {
+                $eolCount++
+                [void]$sb.AppendLine("[!] LOCAL MACHINE IS END OF LIFE: $localOS")
+            } else {
+                [void]$sb.AppendLine("Local OS: $localOS [OK]")
+            }
+            # Scan AD computers
+            $comps = Get-ADComputer -Filter {Enabled -eq $true} -Properties OperatingSystem,OperatingSystemVersion,LastLogonDate -EA Stop
             $grouped = $comps | Group-Object OperatingSystem | Sort-Object Count -Descending
-            [void]$sb.AppendLine("OS DISTRIBUTION ($($comps.Count) total computers):")
+            [void]$sb.AppendLine("`nAD OS DISTRIBUTION ($($comps.Count) total computers):")
             foreach ($g in $grouped) {
                 $isEOL = $eolPatterns | Where-Object { $g.Name -match [regex]::Escape($_) }
                 if ($isEOL) { $eolCount += $g.Count }
@@ -1508,7 +1511,7 @@ $script:AutoChecks = @{
                 foreach ($c in $eolSystems) { [void]$sb.AppendLine("  $($c.Name) | $($c.OperatingSystem) | Last logon: $(if($c.LastLogonDate){$c.LastLogonDate.ToString('yyyy-MM-dd')}else{'Never'})") }
             }
             $status = if ($eolCount -eq 0) {'Pass'} elseif ($eolCount -le 3) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="AD computer OS scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="EOL OS scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
     }
 
@@ -2119,21 +2122,41 @@ $script:AutoChecks = @{
         }
     }
 
-    'CF04' = @{ Type='AD'; Label='Scan Former Employee Accounts'
+    'CF04' = @{ Type='AD'; Label='Scan Former Employee Access Permissions'
         Script = {
+            $sb = [System.Text.StringBuilder]::new(); $issues = 0
             $threshold = (Get-Date).AddDays(-90)
-            $users = Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonDate,WhenCreated,Description,Manager -EA Stop
-            $stale = $users | Where-Object { $_.LastLogonDate -and $_.LastLogonDate -lt $threshold } | Sort-Object LastLogonDate
-            $noManager = $users | Where-Object { -not $_.Manager -and $_.LastLogonDate -and $_.LastLogonDate -lt (Get-Date).AddDays(-60) }
-            $sb = [System.Text.StringBuilder]::new()
-            [void]$sb.AppendLine("POTENTIALLY ORPHANED ACCOUNTS (enabled, no logon 90+ days): $($stale.Count)")
-            foreach ($u in ($stale | Select-Object -First 25)) {
-                [void]$sb.AppendLine("  $($u.SamAccountName) | Last: $($u.LastLogonDate.ToString('yyyy-MM-dd')) | Created: $($u.WhenCreated.ToString('yyyy-MM-dd'))")
+            # Find stale accounts that STILL have privileged group membership
+            $stale = Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonDate,MemberOf,Description -EA Stop |
+                Where-Object { $_.LastLogonDate -and $_.LastLogonDate -lt $threshold }
+            $privGroups = @('Domain Admins','Enterprise Admins','Schema Admins','Administrators','Account Operators','Server Operators','Backup Operators')
+            $stalePriv = @()
+            foreach ($u in $stale) {
+                $groups = $u.MemberOf | ForEach-Object { ($_ -split ',')[0] -replace '^CN=' }
+                $inPriv = $groups | Where-Object { $_ -in $privGroups }
+                if ($inPriv) {
+                    $stalePriv += @{ User=$u.SamAccountName; Last=$u.LastLogonDate; Groups=($inPriv -join ', ') }
+                    $issues++
+                }
             }
-            if ($stale.Count -gt 25) { [void]$sb.AppendLine("  ... +$($stale.Count - 25) more") }
-            [void]$sb.AppendLine("`nACCOUNTS WITH NO MANAGER + 60d INACTIVE: $($noManager.Count)")
-            $status = if ($stale.Count -eq 0) {'Pass'} elseif ($stale.Count -le 5) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Former employee account scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+            [void]$sb.AppendLine("STALE ACCOUNTS WITH PRIVILEGED GROUP MEMBERSHIP ($($stalePriv.Count)):")
+            if ($stalePriv.Count -gt 0) {
+                foreach ($sp in ($stalePriv | Select-Object -First 20)) {
+                    [void]$sb.AppendLine("  [!] $($sp.User) | Last: $($sp.Last.ToString('yyyy-MM-dd')) | Groups: $($sp.Groups)")
+                }
+            } else { [void]$sb.AppendLine("  None found [OK]") }
+            # Find stale accounts with mailbox / VPN / remote access indicators
+            $staleRemote = $stale | Where-Object { $_.MemberOf -match 'VPN|Remote|RAS|DirectAccess' }
+            if ($staleRemote) {
+                $issues += $staleRemote.Count
+                [void]$sb.AppendLine("`nSTALE ACCOUNTS WITH REMOTE ACCESS ($($staleRemote.Count)):")
+                foreach ($sr in ($staleRemote | Select-Object -First 10)) {
+                    [void]$sb.AppendLine("  [!] $($sr.SamAccountName) | Last: $($sr.LastLogonDate.ToString('yyyy-MM-dd'))")
+                }
+            }
+            [void]$sb.AppendLine("`nTOTAL STALE ACCOUNTS (90d+): $($stale.Count)")
+            $status = if ($issues -eq 0 -and $stale.Count -le 5) {'Pass'} elseif ($issues -eq 0) {'Partial'} else {'Fail'}
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Former employee permission scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
     }
 
@@ -2182,7 +2205,7 @@ $script:AutoChecks = @{
                 }
             }
             # Check if using known filtering DNS
-            $knownFilters = @('208.67.222.222','208.67.220.220','9.9.9.9','149.112.112.112')
+            $knownFilters = @('208.67.222.222','208.67.220.220','9.9.9.9','149.112.112.112','45.90.28.0','45.90.30.0','185.228.168.168','185.228.169.168')
             $usingFilter = ($dns.ServerAddresses | Where-Object { $_ -in $knownFilters }).Count -gt 0
             if ($usingFilter) { [void]$sb.AppendLine("`nUsing known filtering DNS resolver. Good."); $filtered = $true }
             $status = if ($filtered) {'Pass'} else {'Fail'}
@@ -2727,14 +2750,15 @@ $script:AutoChecks = @{
                 '9.9.9.9'='Quad9'; '149.112.112.112'='Quad9'
                 '185.228.168.168'='CleanBrowsing'; '185.228.169.168'='CleanBrowsing'
                 '76.76.2.0'='ControlD'; '76.76.10.0'='ControlD'
+                '45.90.28.0'='NextDNS'; '45.90.30.0'='NextDNS'
             }
             $allDNS = $dnsConfig.ServerAddresses | Select-Object -Unique
             foreach ($d in $allDNS) {
                 if ($filterDNS.Contains($d)) { [void]$sb.AppendLine("  [OK] $d = $($filterDNS[$d]) (filtering DNS)"); $filtered = $true }
             }
             # Check for Umbrella/DNS proxy agents
-            $umbrellaAgent = Get-Service 'Umbrella*','csc_*' -EA SilentlyContinue
-            if ($umbrellaAgent) { [void]$sb.AppendLine("`nCisco Umbrella agent: $($umbrellaAgent.DisplayName) ($($umbrellaAgent.Status))"); $filtered = $true }
+            $dnsAgents = Get-Service 'Umbrella*','csc_*','NextDNS*' -EA SilentlyContinue
+            foreach ($da in $dnsAgents) { [void]$sb.AppendLine("`nDNS Agent: $($da.DisplayName) ($($da.Status))"); $filtered = $true }
             # Test known bad domains
             [void]$sb.AppendLine("`nDNS FILTER TEST:")
             $testDomains = @('examplemalwaredomain.com','internetbadguys.com')
@@ -3612,8 +3636,8 @@ $script:RiskTiers = @{
     'BR01' = 0; 'BR02' = 0; 'BR03' = 0; 'BR04' = 0
     'BR05' = 0; 'BR06' = 0; 'BR07' = 0; 'BR08' = 0
     # ── Common Findings (Tier 0: SMB/config reads) ──
-    'CF01' = 0; 'CF02' = 0; 'CF03' = 0; 'CF04' = 0
-    'CF05' = 0; 'CF06' = 0; 'CF07' = 0; 'CF08' = 0
+    'CF01' = 0; 'CF02' = 2; 'CF03' = 0; 'CF04' = 0
+    'CF05' = 0; 'CF06' = 0; 'CF07' = 0; 'CF08' = 2
     # ── Policies & Standards (Tier 0: policy reads) ──
     'PS01' = 0; 'PS02' = 0; 'PS03' = 0; 'PS04' = 0; 'PS05' = 0; 'PS06' = 0
 }
@@ -5027,15 +5051,17 @@ function Start-SingleCheck([string]$id) {
 }
 
 # ── Theme Selector ───────────────────────────────────────────────────────────
-$themeNames = @('Auto (System)') + ($script:Themes.Keys | Sort-Object)
+$themeNames = $script:Themes.Keys | Sort-Object
 foreach ($n in $themeNames) { $el['ThemeSelector'].Items.Add($n) | Out-Null }
-$el['ThemeSelector'].SelectedIndex = 0
+# Default to Midnight
+for ($i = 0; $i -lt $el['ThemeSelector'].Items.Count; $i++) {
+    if ($el['ThemeSelector'].Items[$i] -eq 'Midnight') { $el['ThemeSelector'].SelectedIndex = $i; break }
+}
 
 $el['ThemeSelector'].Add_SelectionChanged({
     $s = $el['ThemeSelector'].SelectedItem
     if (-not $s) { return }
-    if ($s -eq 'Auto (System)') { $script:CurrentThemeName = 'Midnight' }
-    else { $script:CurrentThemeName = $s }
+    $script:CurrentThemeName = $s
     Apply-Theme; Update-Progress
     Write-Log "Theme changed: $script:CurrentThemeName"
 })
@@ -5593,8 +5619,8 @@ $script:ScanTimer.Add_Tick({
         # Heartbeat: show elapsed time for long-running checks
         $secs = [int]$script:CurrentScanStopwatch.Elapsed.TotalSeconds
 
-        # Timeout: force-stop checks running longer than 60 seconds
-        if ($secs -ge 60 -and $script:CurrentPS) {
+        # Timeout: force-stop checks running longer than 90 seconds
+        if ($secs -ge 90 -and $script:CurrentPS) {
             $id = $script:CurrentScanId
             Write-Log "[$id] TIMEOUT after ${secs}s - force stopping" 'ERROR'
             try { $script:CurrentPS.Stop() } catch {}
@@ -7172,7 +7198,7 @@ tr:nth-child(even) td{background:rgba(15,23,42,0.3)}
 .b-critical{background:#ef4444}.b-high{background:#f97316}.b-medium{background:#eab308;color:#000}.b-low{background:#22c55e}
 .s-pass{color:#22c55e;font-weight:600}.s-fail{color:#ef4444;font-weight:600}.s-partial{color:#eab308;font-weight:600}.s-na{color:#94a3b8}.s-not{color:#64748b}
 .ck-y{color:#22c55e}.ck-n{color:#475569}
-.find{background:#1a1307;border:1px solid #78350f;border-radius:6px;padding:8px;margin-top:6px;font-size:11px;color:#fbbf24;white-space:pre-wrap;font-family:'Cascadia Code',Consolas,monospace;max-height:200px;overflow:auto;line-height:1.4}
+.find{background:#1a1307;border:1px solid #78350f;border-radius:6px;padding:8px;margin:6px 0 0 0;font-size:11px;color:#fbbf24;white-space:pre-wrap;font-family:'Cascadia Code',Consolas,monospace;max-height:200px;overflow:auto;line-height:1.4}
 .ev{color:#60a5fa;font-size:11px;margin-top:4px}.rem{color:#a78bfa;font-size:11px;margin-top:2px}
 .comp{color:#94a3b8;font-size:10px;font-style:italic;margin-top:3px}
 .scan-ts{display:inline-block;background:#0c4a6e;color:#38bdf8;padding:0 6px;border-radius:4px;font-size:9px;font-weight:600;margin-left:4px}
@@ -7629,10 +7655,10 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                 if ($notes) { $detHtml += [System.Net.WebUtility]::HtmlEncode($notes) -replace "`r`n","<br>" -replace "`n","<br>" }
                 if ($finds) {
                     $findsEnc = [System.Net.WebUtility]::HtmlEncode($finds)
-                    $detHtml += "<div class='find'>$findsEnc</div>"
+                    $detHtml += "<pre class='find'>$findsEnc</pre>"
                 }
                 if ($evid) {
-                    $evidEnc = [System.Net.WebUtility]::HtmlEncode($evid) -replace "`r`n","<br>" -replace "`n","<br>"
+                    $evidEnc = [System.Net.WebUtility]::HtmlEncode($evid)
                     $detHtml += "<div class='ev'>Evidence: $evidEnc</div>"
                 }
                 # Enhanced compliance display: built-in + extended framework data
