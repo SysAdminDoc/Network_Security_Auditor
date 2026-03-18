@@ -16,6 +16,9 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ---
 
+
+![Screenshot](screenshot.png)
+
 ## Why This Exists
 
 Most security audit tools are either expensive commercial platforms that require agents and infrastructure, or basic scripts that check a handful of settings and dump text to a console. There's nothing in between for the IT professional who needs to walk into any environment — a 5-person office, a healthcare clinic, a 500-seat enterprise — and produce a professional, evidence-backed security assessment in under an hour.
