@@ -17,7 +17,6 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 ---
 
 
-![Screenshot](screenshot.png)
 
 ## Why This Exists
 
