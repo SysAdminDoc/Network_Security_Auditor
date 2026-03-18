@@ -83,8 +83,10 @@ if (-not $script:IsAdmin) {
     }
     catch {
         # User declined UAC or elevation failed - continue without admin
+        $script:ElevationFailed = $true
     }
 }
+if (-not (Test-Path variable:script:ElevationFailed)) { $script:ElevationFailed = $false }
 
 # ── Store CLI config in script scope ─────────────────────────────────────────
 $script:SilentMode  = $Silent.IsPresent
@@ -4421,7 +4423,7 @@ $script:SuppressAdvance = $false
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Network Security Audit Checklist v4.1"
-        Width="1250" Height="860" MinWidth="900" MinHeight="600"
+        Width="1250" Height="860" MinWidth="1000" MinHeight="650"
         WindowStartupLocation="CenterScreen"
         SnapsToDevicePixels="True" UseLayoutRounding="True">
     <Grid x:Name="RootGrid">
@@ -4897,7 +4899,7 @@ function Write-Log([string]$msg, [string]$level = 'VERBOSE') {
     $ts = Get-Date -Format 'HH:mm:ss'
     $line = "[$ts] $level`: $msg"
     $el['txtConsole'].AppendText("$line`r`n")
-    $el['txtConsole'].ScrollToEnd()
+    if ($script:ConsoleVisible) { $el['txtConsole'].ScrollToEnd() }
     $script:ConsoleLineCount++
     $el['lblConsoleCount'].Text = "$($script:ConsoleLineCount) lines"
 }
@@ -5072,6 +5074,8 @@ function Apply-ScanResult([string]$id, [hashtable]$result) {
 function Apply-ScanError([string]$id, [string]$errMsg) {
     if ($script:FindingsBoxes.Contains($id)) { $script:FindingsBoxes[$id].Text = "SCAN ERROR: $errMsg" }
     if ($script:EvidenceBoxes.Contains($id)) { $script:EvidenceBoxes[$id].Text = "Error during auto-check @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+    # Mark as reviewed so it shows in reports (not left as "Not Assessed")
+    if ($script:CheckStates.Contains($id)) { $script:CheckStates[$id] = $true }
     $script:ScanTimestamps[$id] = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     if ($script:ScanButtons.Contains($id)) {
         $script:ScanButtons[$id].Content = "ERR"
@@ -5085,10 +5089,19 @@ function Apply-ScanError([string]$id, [string]$errMsg) {
     Write-Log "[$id] ERROR: $errMsg${elapsed}" 'ERROR'
 }
 
+function Reset-ScanButtons {
+    $script:ScanRunning = $false
+    $el['btnFullAudit'].IsEnabled = $true
+    $el['btnScanAll'].IsEnabled = $true; $el['btnScanAD'].IsEnabled = $true; $el['btnScanLocal'].IsEnabled = $true
+    $el['btnPreflight'].IsEnabled = $true
+    foreach ($sbtn in $script:ScanButtons.Values) { $sbtn.IsEnabled = $true }
+}
+
 function Start-AsyncCheck([string]$id) {
     if (-not $script:AutoChecks.Contains($id)) { return }
     $check = $script:AutoChecks[$id]
     $target = $el['txtScanTarget'].Text
+    if (-not $target) { $target = 'localhost' }
     $isLocal = ($target -eq 'localhost' -or $target -eq '127.0.0.1' -or $target -eq $env:COMPUTERNAME)
 
     $script:CurrentScanId = $id
@@ -5142,7 +5155,16 @@ function Start-AsyncCheck([string]$id) {
     }).AddArgument($checkScriptText).AddArgument($check.Type).AddArgument($target).AddArgument($isLocal).AddArgument($script:ScanCredential) | Out-Null
 
     $script:CurrentPS = $ps
-    $script:CurrentAsyncResult = $ps.BeginInvoke()
+    try {
+        $script:CurrentAsyncResult = $ps.BeginInvoke()
+    } catch {
+        Apply-ScanError $id "Failed to start check: $($_.Exception.Message)"
+        try { $ps.Dispose() } catch {}
+        $script:CurrentPS = $null
+        $script:CurrentAsyncResult = $null
+        $script:CurrentScanId = $null
+        Process-ScanQueue
+    }
 }
 
 function Complete-CurrentScan {
@@ -5198,11 +5220,7 @@ function Process-ScanQueue {
     }
     else {
         # Queue empty - batch complete
-        $script:ScanRunning = $false
-        $el['btnFullAudit'].IsEnabled = $true
-        $el['btnScanAll'].IsEnabled = $true; $el['btnScanAD'].IsEnabled = $true; $el['btnScanLocal'].IsEnabled = $true
-        $el['btnPreflight'].IsEnabled = $true
-        foreach ($sbtn in $script:ScanButtons.Values) { $sbtn.IsEnabled = $true }
+        Reset-ScanButtons
 
         if ($script:ScanBatchMode -eq 'Batch') {
             $batchElapsed = ''
@@ -5344,7 +5362,7 @@ $el['ThemeSelector'].Add_SelectionChanged({
     $s = $el['ThemeSelector'].SelectedItem
     if (-not $s) { return }
     $script:CurrentThemeName = $s
-    Apply-Theme; Update-Progress
+    Apply-Theme; Update-Progress; Reset-TabScanBadges
     Write-Log "Theme changed: $script:CurrentThemeName"
 })
 
@@ -5733,7 +5751,7 @@ function Get-RiskScore {
             switch ($st) { 'Pass'{$earn+=$it.Weight} 'Partial'{$earn+=[math]::Floor($it.Weight*0.5)} 'N/A'{$maxS-=$it.Weight} }
         }
     }
-    if ($maxS -le 0) { return @{Score=0;Max=0;Pct=0;Grade='N/A'} }
+    if ($maxS -le 0) { return @{Score=0;Max=0;Pct=0;Grade='N/A';AllNA=$true} }
     $p=[math]::Round(($earn/$maxS)*100)
     $g = switch($true) { ($p -ge 90){'A'} ($p -ge 80){'B'} ($p -ge 70){'C'} ($p -ge 60){'D'} default{'F'} }
     @{Score=$earn;Max=$maxS;Pct=$p;Grade=$g}
@@ -5887,6 +5905,14 @@ $script:ScanTimer.Add_Tick({
         return
     }
 
+    # ── Safety: detect stuck scan state ──
+    if ($script:ScanRunning -and -not $script:CurrentAsyncResult -and $script:ScanQueue.Count -eq 0) {
+        Write-Log "Scan state recovery: ScanRunning was true but no active scan or queue items" 'WARN'
+        Reset-ScanButtons
+        $script:ScanTimer.Stop()
+        return
+    }
+
     # ── Scan async ──
     if ($script:CurrentAsyncResult.IsCompleted) {
         Complete-CurrentScan
@@ -5967,14 +5993,20 @@ Write-Log "$($script:TotalItems) audit items | $($script:AutoChecks.Count) auto-
 $el['btnSetCreds'].Add_Click({
     try {
         $cred = Get-Credential -Message "Enter domain credentials for remote scans"
-        if ($cred) {
+        if ($cred -and $cred.UserName) {
             $script:ScanCredential = $cred
+            $script:CredentialSetTime = Get-Date
             $el['lblCredStatus'].Text = "[$($cred.UserName)]"
+            $el['lblCredStatus'].ToolTip = "Set at $(Get-Date -Format 'HH:mm:ss') - click Credentials to refresh"
             $el['StatusText'].Text = "Credentials set for $($cred.UserName)"
             Write-Log "Credentials set: $($cred.UserName)" 'INFO'
+        } else {
+            $el['StatusText'].Text = "Credential prompt cancelled"
+            Write-Log "Credential prompt cancelled by user" 'INFO'
         }
     } catch {
         $el['StatusText'].Text = "Credential prompt cancelled"
+        Write-Log "Credential prompt: $($_.Exception.Message)" 'WARN'
     }
 })
 
@@ -7565,6 +7597,11 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 </div>
 "@
 
+    # ── NO DATA WARNING ──
+    if ($pass2 + $fail2 + $part2 -eq 0 -and $scannedCount -eq 0) {
+        $html += "<div class='scan-info' style='border-left:3px solid #ef4444;margin-bottom:14px'><strong style='color:#ef4444'>No checks have been assessed.</strong> Run a scan profile or manually set check statuses before exporting.</div>`n"
+    }
+
     # ── CATEGORY SCORE BARS (all tiers) ──────────────────────────────────────
     $html += "<div class='cat-grid'>`n"
     foreach($cn in ($catScores.Keys | Sort-Object)){
@@ -7936,7 +7973,8 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                 $detHtml = ''
                 if ($notes) { $detHtml += [System.Net.WebUtility]::HtmlEncode($notes) -replace "`r`n","<br>" -replace "`n","<br>" }
                 if ($finds) {
-                    $findsEnc = [System.Net.WebUtility]::HtmlEncode($finds)
+                    $findsTrunc = if ($finds.Length -gt 8000) { $finds.Substring(0, 8000) + "`n... [truncated - $($finds.Length) chars total]" } else { $finds }
+                    $findsEnc = [System.Net.WebUtility]::HtmlEncode($findsTrunc)
                     $detHtml += "<pre class='find'>$findsEnc</pre>"
                 }
                 if ($evid) {
@@ -7987,6 +8025,19 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 
 function Invoke-AutoExport {
     $desktop = [Environment]::GetFolderPath('Desktop')
+    # Fallback if Desktop path is empty (roaming profiles, OneDrive redirection)
+    if (-not $desktop -or -not (Test-Path $desktop)) {
+        $desktop = Join-Path $env:USERPROFILE 'Desktop'
+        if (-not (Test-Path $desktop)) { $desktop = $env:TEMP }
+    }
+    # Check available disk space (warn if < 50MB)
+    try {
+        $drive = (Get-Item $desktop -EA SilentlyContinue).PSDrive
+        if ($drive -and $drive.Free -and $drive.Free -lt 50MB) {
+            Write-Log "LOW DISK SPACE: $([math]::Round($drive.Free/1MB))MB free on $($drive.Root) - export may fail" 'WARN'
+            $el['StatusText'].Text = "Warning: Low disk space for export"
+        }
+    } catch {}
     $client = $el['txtClient'].Text -replace '[^\w\-]','_'
     if (-not $client) { $client = $env:COMPUTERNAME }
     $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
@@ -8169,7 +8220,7 @@ function Export-FindingsJSON {
         findings       = $findings
     }
 
-    $export | ConvertTo-Json -Depth 8 | Set-Content $OutPath -Encoding UTF8
+    $export | ConvertTo-Json -Depth 10 | Set-Content $OutPath -Encoding UTF8
     Write-Log "Structured JSON exported: $OutPath" 'INFO'
     return $OutPath
 }
@@ -8196,10 +8247,10 @@ function Export-FindingsJSONL {
 
             # Flat event record - one line per finding
             $evt = [ordered]@{
-                timestamp       = if ($script:ScanTimestamps.Contains($id)) { $script:ScanTimestamps[$id] } else { $scanTs }
+                timestamp       = if ($script:ScanTimestamps.Contains($id)) { try { [datetime]::ParseExact($script:ScanTimestamps[$id],'yyyy-MM-dd HH:mm:ss',$null).ToString('o') } catch { $scanTs } } else { $scanTs }
                 event_type      = 'security_audit_finding'
                 source          = 'NetworkSecurityAudit'
-                source_version  = '4.0'
+                source_version  = '4.1'
                 client          = $ClientName
                 auditor         = $AuditorName
                 host            = $scanTarget
@@ -8213,8 +8264,8 @@ function Export-FindingsJSONL {
                 weight          = $item.Weight
                 status          = $sv
                 description     = $item.Text
-                findings        = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
-                evidence        = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
+                findings        = if ($script:FindingsBoxes[$id]) { $f=$script:FindingsBoxes[$id].Text; if($f.Length -gt 4000){$f.Substring(0,4000)+'...[truncated]'}else{$f} } else { '' }
+                evidence        = if ($script:EvidenceBoxes[$id]) { $e2=$script:EvidenceBoxes[$id].Text; if($e2.Length -gt 2000){$e2.Substring(0,2000)+'...[truncated]'}else{$e2} } else { '' }
                 remediation_status = $rs
                 remediation_assigned = if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' }
                 remediation_due = if ($script:RemDueBoxes[$id]) { $script:RemDueBoxes[$id].Text } else { '' }
@@ -8298,9 +8349,9 @@ function Export-FindingsCSV {
                 RiskPriority     = $riskPriority
                 Status           = $sv
                 Description      = $item.Text
-                Findings         = if ($script:FindingsBoxes[$id]) { ($script:FindingsBoxes[$id].Text -replace "`r?`n",' | ') } else { '' }
-                Evidence         = if ($script:EvidenceBoxes[$id]) { ($script:EvidenceBoxes[$id].Text -replace "`r?`n",' | ') } else { '' }
-                Notes            = if ($script:NotesBoxes[$id]) { ($script:NotesBoxes[$id].Text -replace "`r?`n",' | ') } else { '' }
+                Findings         = if ($script:FindingsBoxes[$id]) { ($script:FindingsBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }
+                Evidence         = if ($script:EvidenceBoxes[$id]) { ($script:EvidenceBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }
+                Notes            = if ($script:NotesBoxes[$id]) { ($script:NotesBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }
                 RemStatus        = $rs
                 RemAssigned      = if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' }
                 RemDue           = if ($script:RemDueBoxes[$id]) { $script:RemDueBoxes[$id].Text } else { '' }
@@ -8622,10 +8673,22 @@ if ($script:SilentMode) {
 
     Write-Host "[Silent Mode] Client: $clientName | Auditor: $auditorName"
     Write-Host "[Silent Mode] Environment: $($script:Env.OSCaption) | Domain: $($script:Env.IsDomainJoined) | Admin: $($script:Env.IsAdmin)"
+    if ($script:ElevationFailed) {
+        Write-Host "[Silent Mode] WARNING: UAC elevation was declined - running without admin privileges" -ForegroundColor Yellow
+        Write-Host "[Silent Mode] AD checks and some local checks will fail or return incomplete results" -ForegroundColor Yellow
+    }
+    if (-not $script:Env.IsAdmin) {
+        Write-Host "[Silent Mode] WARNING: Not running as Administrator - results may be incomplete" -ForegroundColor Yellow
+    }
     Write-Host "[Silent Mode] Running scan..."
 
     # Run checks synchronously (no async, no GUI updates needed)
     $profName = $script:CliProfile
+    if (-not $script:ScanProfiles.Contains($profName)) {
+        Write-Host "[Silent Mode] ERROR: Unknown scan profile '$profName'" -ForegroundColor Red
+        Write-Host "[Silent Mode] Valid profiles: $($script:ScanProfiles.Keys -join ', ')" -ForegroundColor Yellow
+        exit 1
+    }
     $prof = $script:ScanProfiles[$profName]
     $ids = $script:AutoChecks.Keys | Sort-Object
 
@@ -8653,7 +8716,8 @@ if ($script:SilentMode) {
     Write-Host "[Silent Mode] Scanning $($idList.Count) checks..."
 
     $completed = 0; $failed = 0
-    $silentTimeoutMs = 120000  # 2 minute timeout per check
+    $silentTimeoutMs = 90000  # 90 second timeout per check (matches GUI)
+    $silentBatchStart = [System.Diagnostics.Stopwatch]::StartNew()
     foreach ($id in $idList) {
         $check = $script:AutoChecks[$id]
         if (-not $check) { continue }
@@ -8904,6 +8968,18 @@ if ($script:SilentMode) {
 
     exit $exitCode
 }
+
+# ── Window Close Handler ──────────────────────────────────────────────────────
+$window.Add_Closing({
+    if ($script:ScanRunning) {
+        $result = [System.Windows.MessageBox]::Show('A scan is currently running. Close anyway?', 'Scan In Progress', 'YesNo', 'Warning')
+        if ($result -eq 'No') { $_.Cancel = $true; return }
+    }
+    # Clean up async resources
+    if ($script:CurrentPS) { try { $script:CurrentPS.Stop(); $script:CurrentPS.Dispose() } catch {} }
+    if ($script:TurnkeyPS) { try { $script:TurnkeyPS.Stop(); $script:TurnkeyPS.Dispose() } catch {} }
+    if ($script:ScanTimer) { $script:ScanTimer.Stop() }
+})
 
 # ── Normal GUI Mode ──────────────────────────────────────────────────────────
 $window.ShowDialog() | Out-Null
