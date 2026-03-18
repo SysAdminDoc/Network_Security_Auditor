@@ -221,8 +221,11 @@ try {
 # ── OS Build / Version for Feature Gating ─────────────────────────────────────
 try {
     $ntCur = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -EA SilentlyContinue
-    $script:Env['OSBuild'] = [int]($ntCur.CurrentBuildNumber)
-    $script:Env['OSVersion'] = $ntCur.DisplayVersion  # e.g. 22H2, 23H2, 24H2
+    $buildNum = 0
+    if ($ntCur.CurrentBuildNumber -and [int]::TryParse($ntCur.CurrentBuildNumber, [ref]$buildNum)) {
+        $script:Env['OSBuild'] = $buildNum
+    }
+    $script:Env['OSVersion'] = if ($ntCur.DisplayVersion) { $ntCur.DisplayVersion } else { '' }
 } catch { $script:Env['OSBuild'] = 0; $script:Env['OSVersion'] = '' }
 
 # ── LAPS Module Detection ─────────────────────────────────────────────────────
@@ -336,8 +339,8 @@ function Find-DomainControllers {
 
     # Method 1: DNS SRV records (fastest, works without AD module)
     try {
-        $domain = if ($script:Env.IsDomainJoined) { $script:Env.DomainName } else { $null }
-        if ($domain) {
+        $domain = if ($script:Env.IsDomainJoined -and $script:Env.DomainName) { $script:Env.DomainName } else { $null }
+        if ($domain -and $domain.Length -gt 0) {
             $srv = Resolve-DnsName "_ldap._tcp.dc._msdcs.$domain" -Type SRV -EA Stop
             foreach ($r in ($srv | Where-Object { $_.Type -eq 'SRV' } | Sort-Object Priority, Weight)) {
                 $name = $r.NameTarget -replace '\.$',''
@@ -1378,7 +1381,7 @@ $script:AutoChecks = @{
 
     'EP04' = @{ Type='Local'; Label='Scan Patch Level + CISA KEV'
         Script = {
-            $issues = $false
+            $kevRisk = $false
             $fixes = Get-HotFix -EA Stop | Sort-Object InstalledOn -Descending -EA SilentlyContinue
             $latest = $fixes | Select-Object -First 1
             $sb = [System.Text.StringBuilder]::new()
@@ -1392,21 +1395,14 @@ $script:AutoChecks = @{
             # CISA KEV (Known Exploited Vulnerabilities) Cross-Reference
             [void]$sb.AppendLine("`nCISA KEV CROSS-REFERENCE:")
             try {
-                $kevJson = (Invoke-WebRequest -Uri 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json' -UseBasicParsing -TimeoutSec 15 -EA Stop).Content | ConvertFrom-Json
-                $kevCves = @{}
-                foreach ($v in $kevJson.vulnerabilities) { $kevCves[$v.cveID] = $v }
-                [void]$sb.AppendLine("  KEV catalog loaded: $($kevCves.Count) known exploited vulnerabilities")
-                # Check installed software for KEV-listed vendor/product matches
-                $msProducts = @{}
-                foreach ($v in $kevJson.vulnerabilities) {
-                    if ($v.vendorProject -eq 'Microsoft') { $msProducts[$v.product] = $v }
-                }
-                # Cross-reference with missing KBs from Windows Update
-                $installedKBs = $fixes | ForEach-Object { $_.HotFixID }
-                $kevMatches = @()
+                $kevJson = (Invoke-WebRequest -Uri 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json' -UseBasicParsing -TimeoutSec 30 -EA Stop).Content | ConvertFrom-Json
+                $kevTotal = ($kevJson.vulnerabilities | Measure-Object).Count
+                [void]$sb.AppendLine("  KEV catalog loaded: $kevTotal known exploited vulnerabilities")
+                # Filter to Microsoft KEV entries
+                $msKevEntries = @($kevJson.vulnerabilities | Where-Object { $_.vendorProject -eq 'Microsoft' })
                 # Check if any KEV entries reference products running on this system
                 $osCaption = (Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).Caption
-                $msKevHits = $msProducts.Values | Where-Object {
+                $msKevHits = $msKevEntries | Where-Object {
                     ($_.product -match 'Windows' -and $osCaption -match 'Windows') -or
                     ($_.product -match 'Exchange' -and (Get-Service MSExchangeIS -EA SilentlyContinue)) -or
                     ($_.product -match 'SQL Server' -and (Get-Service MSSQLSERVER -EA SilentlyContinue))
@@ -1417,12 +1413,12 @@ $script:AutoChecks = @{
                     foreach ($kh in $msKevHits) {
                         [void]$sb.AppendLine("    $($kh.cveID) | $($kh.product) | $($kh.vulnerabilityName) | Due: $($kh.dueDate)")
                     }
-                    if ($daysSince -gt 30) { $issues = $true }
+                    if ($daysSince -gt 30) { $kevRisk = $true }
                 } else { [void]$sb.AppendLine("  No recent KEV matches for detected products [OK]") }
             } catch {
                 [void]$sb.AppendLine("  KEV check skipped (no internet or timeout): $($_.Exception.Message)")
             }
-            $status = if ($daysSince -le 30 -and -not $issues) {'Pass'} elseif ($daysSince -le 60) {'Partial'} else {'Fail'}
+            $status = if ($daysSince -le 30 -and -not $kevRisk) {'Pass'} elseif ($daysSince -le 60) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Get-HotFix + CISA KEV @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
@@ -1448,7 +1444,7 @@ $script:AutoChecks = @{
             [void]$sb.AppendLine("`nUNQUOTED SERVICE PATHS:")
             try {
                 $services = Get-CimInstance Win32_Service -EA SilentlyContinue | Where-Object {
-                    $_.PathName -and $_.PathName -notmatch '^"' -and $_.PathName -match '\s' -and $_.PathName -notmatch '^[A-Za-z]:\\Windows\\' }
+                    $_.PathName -and $_.PathName -notmatch '^"' -and $_.PathName -notmatch '^\\\\' -and $_.PathName -match '\s' -and $_.PathName -notmatch '^[A-Za-z]:\\Windows\\' }
                 if ($services) {
                     foreach ($svc in ($services | Select-Object -First 10)) {
                         $issues++
@@ -8143,7 +8139,7 @@ function Export-FindingsJSON {
     $export = [ordered]@{
         schema_version = '2.1'
         tool           = 'NetworkSecurityAudit'
-        tool_version   = '4.0'
+        tool_version   = '4.1'
         export_type    = 'structured_findings'
         timestamp      = $scanTs
         client         = $ClientName
@@ -8154,7 +8150,7 @@ function Export-FindingsJSON {
             domain      = $script:Env.IsDomainJoined
             admin       = $script:Env.IsAdmin
             join_type   = $script:Env.JoinType
-            intune      = $script:Env.IntuneMgmt
+            intune      = $script:Env.IntuneManaged
         }
         score          = [ordered]@{
             overall    = $riskData.Pct
@@ -8387,7 +8383,7 @@ function Export-ComplianceSummary {
         target         = $scanTarget
         environment    = [ordered]@{
             os=$script:Env.OSCaption; domain=$script:Env.IsDomainJoined; admin=$script:Env.IsAdmin
-            join_type=$script:Env.JoinType; intune=$script:Env.IntuneMgmt
+            join_type=$script:Env.JoinType; intune=$script:Env.IntuneManaged
         }
         overall_score  = $riskData.Pct
         overall_grade  = $riskData.Grade
@@ -8506,10 +8502,20 @@ function Export-PDF {
         Write-Log "PDF export: No Edge or Chrome found for headless PDF generation" 'WARN'
         return $null
     }
-    $absHtml = (Resolve-Path $HtmlPath).Path
+    try {
+        $absHtml = (Resolve-Path $HtmlPath -EA Stop).Path
+    } catch {
+        Write-Log "PDF export: HTML file not found: $HtmlPath" 'WARN'
+        return $null
+    }
     $absPdf = if ([System.IO.Path]::IsPathRooted($PdfPath)) { $PdfPath } else { Join-Path (Get-Location) $PdfPath }
-    $args2 = @('--headless','--disable-gpu',"--print-to-pdf=$absPdf","--no-margins","file:///$($absHtml -replace '\\','/')")
-    Start-Process -FilePath $browser -ArgumentList $args2 -Wait -WindowStyle Hidden -EA Stop
+    $args2 = @('--headless','--disable-gpu',"--print-to-pdf=`"$absPdf`"","--no-margins","file:///$($absHtml -replace '\\','/')")
+    try {
+        Start-Process -FilePath $browser -ArgumentList $args2 -Wait -WindowStyle Hidden -EA Stop
+    } catch {
+        Write-Log "PDF export: browser process failed: $($_.Exception.Message)" 'WARN'
+        return $null
+    }
     if (Test-Path $absPdf) {
         Write-Log "PDF exported: $absPdf" 'INFO'
         return $absPdf
