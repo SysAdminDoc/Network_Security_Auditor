@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.0.0-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.1.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -203,23 +203,47 @@ Every check runs in an isolated runspace with timeout protection. Results includ
 
 ### Compliance Framework Mapping
 
-Every check maps to one or more controls across 7 frameworks:
+Every check maps to one or more controls across 8 frameworks:
 
 | Framework | Standard | Coverage |
 |-----------|----------|----------|
 | **CIS** | Controls v8.1 | All 67 checks mapped |
-| **NIST** | SP 800-171 Rev 2 | All 67 checks mapped |
+| **NIST** | SP 800-171 Rev 3 | All 67 checks mapped |
 | **CMMC** | Level 2 (v2.0) | All 67 checks mapped |
 | **HIPAA** | Security Rule | ~45 checks |
 | **PCI-DSS** | v4.0.1 | ~48 checks |
 | **SOC 2** | Type II (Trust Criteria) | ~60 checks |
 | **ISO 27001** | :2022 (Annex A) | All 67 checks mapped |
+| **DISA STIG** | Windows Server/Client | All 67 checks mapped |
 
 Framework-specific scan profiles run only the checks relevant to that standard.
 
 ### MITRE ATT&CK Mapping
 
 All 67 checks map to ATT&CK Enterprise techniques (v15.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.
+
+### CISA KEV Cross-Reference
+
+The EP04 patch compliance check automatically downloads the [CISA Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and cross-references it against detected Microsoft products on the system, flagging any actively exploited CVEs with remediation due dates.
+
+### Active Directory IOC Detection
+
+Beyond misconfiguration checks, the tool detects active indicators of compromise:
+
+- **Golden Ticket risk** — krbtgt password age monitoring (should rotate every 180 days)
+- **DCSync permissions** — non-standard accounts with Replicating Directory Changes rights
+- **AdminSDHolder tampering** — unexpected ACEs on the AdminSDHolder container
+- **SID History abuse** — accounts with SID History from foreign domains
+- **ADCS vulnerabilities** — ESC1/ESC6/ESC8/ESC10 certificate template and CA misconfigurations
+
+### Domain Security Maturity Score
+
+A dedicated scoring engine evaluates AD security maturity across four domains:
+
+- **Privileged Access** (30%) — DA minimization, LAPS, Kerberoast risk, service accounts
+- **Identity Hygiene** (25%) — Stale accounts, password policy, MFA, vendor lifecycle
+- **Infrastructure Hardening** (25%) — Credential Guard, SMB/TLS, EDR, patching
+- **Visibility** (20%) — SIEM, audit policy, failed logon monitoring, IDS/IPS
 
 ### Ransomware Readiness Score
 
@@ -304,6 +328,9 @@ Automatic platform detection and field population:
 | JSON | `*_findings.json` | Per-finding structured data with full metadata |
 | JSONL | `*_siem.jsonl` | One event per finding for Splunk/Elastic/Sentinel |
 | CSV | `*.csv` | Pivot table analysis with compliance columns |
+| SARIF | `*.sarif` | Static Analysis Results Interchange Format for GitHub/Azure DevOps |
+| PDF | `*.pdf` | Portable report via Edge/Chrome headless rendering |
+| Intune | `*_intune.json` | Device compliance discovery script for Conditional Access |
 | Compliance Summary | `*_summary.json` | Compact RMM dashboard payload |
 
 ---
@@ -326,7 +353,7 @@ Optional for full coverage:
 ```
 -Silent              Run headless (no GUI). Auto-scans, exports, exits.
 -ScanProfile         Quick | Standard | Full | ADOnly | LocalOnly |
-                     HIPAA | PCI | CMMC | SOC2 | ISO27001
+                     HIPAA | PCI | CMMC | SOC2 | ISO27001 | STIG
                      Default: Full (all 67 checks)
 -OutputPath          Report output path. Default: Desktop
 -ReportTier          Executive | Management | Technical | All
@@ -340,6 +367,8 @@ Optional for full coverage:
 -ExportJSON          Also export structured findings JSON
 -ExportCSV           Also export CSV
 -ExportJSONL         Also export SIEM-format JSONL
+-ExportSARIF         Also export SARIF 2.1.0 for GitHub/Azure DevOps
+-ExportPDF           Also export PDF via Edge/Chrome headless
 ```
 
 ---
@@ -358,6 +387,7 @@ Optional for full coverage:
 | **CMMC** | 67 | ~60 min | Defense contractor compliance |
 | **SOC 2** | ~60 | ~50 min | Service organization compliance |
 | **ISO 27001** | 67 | ~60 min | International standard compliance |
+| **STIG** | 67 | ~60 min | DISA STIG for DoD/government |
 
 ---
 
@@ -431,7 +461,7 @@ Audit state (all check statuses, findings, evidence, notes, remediation tracking
 This is a single-file tool by design. One `.ps1` file, no modules, no config files, no build process. Download it and run it.
 
 ```
-NetworkSecurityAudit.ps1    # The entire tool (~8,500 lines)
+NetworkSecurityAudit.ps1    # The entire tool (~8,900 lines)
 README.md                   # This file
 ```
 
