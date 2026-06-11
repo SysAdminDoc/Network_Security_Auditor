@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.1.1 - Professional GUI Tool
+    Network Security Auditor v4.1.2 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -43,7 +43,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.1
+    4.1.2
 #>
 param(
     [switch]$Silent,
@@ -65,7 +65,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.1.1'
+$script:ProductVersion = '4.1.2'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -8340,6 +8340,17 @@ function Export-FindingsJSONL {
 
 # ── Phase 5B: CSV Export for MSP Analysis ─────────────────────────────────────
 # Column layout optimized for pivot tables across multi-client audits
+function ConvertTo-CsvSafeText {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) { return '' }
+
+    $text = [string]$Value
+    if ($text -match '^\s*[=+\-@]') {
+        return "'$text"
+    }
+    return $text
+}
+
 function Export-FindingsCSV {
     param([string]$OutPath, [string]$ClientName = '', [string]$AuditorName = '')
     if (-not $ClientName) { $ClientName = try { $el['txtClient'].Text } catch { $env:COMPUTERNAME } }
@@ -8375,36 +8386,36 @@ function Export-FindingsCSV {
 
             $row = [PSCustomObject][ordered]@{
                 ScanDate         = $scanTs
-                Client           = $ClientName
-                Auditor          = $AuditorName
-                Target           = $scanTarget
+                Client           = ConvertTo-CsvSafeText $ClientName
+                Auditor          = ConvertTo-CsvSafeText $AuditorName
+                Target           = ConvertTo-CsvSafeText $scanTarget
                 OverallGrade     = $riskData.Grade
                 OverallScore     = $riskData.Pct
-                CheckID          = $id
-                Category         = $cn
-                Severity         = $item.Severity
+                CheckID          = ConvertTo-CsvSafeText $id
+                Category         = ConvertTo-CsvSafeText $cn
+                Severity         = ConvertTo-CsvSafeText $item.Severity
                 Weight           = $item.Weight
                 RiskPriority     = $riskPriority
-                Status           = $sv
-                Description      = $item.Text
-                Findings         = if ($script:FindingsBoxes[$id]) { ($script:FindingsBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }
-                Evidence         = if ($script:EvidenceBoxes[$id]) { ($script:EvidenceBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }
-                Notes            = if ($script:NotesBoxes[$id]) { ($script:NotesBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }
-                RemStatus        = $rs
-                RemAssigned      = if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' }
-                RemDue           = if ($script:RemDueBoxes[$id]) { $script:RemDueBoxes[$id].Text } else { '' }
-                NIST_CSF         = $nistCsf
-                CIS_Controls     = $cisCtrl
-                HIPAA            = $hipaaRef
-                NIST_800_171     = if ($fwData) { $fwData.NIST } else { '' }
-                CMMC_2_0         = if ($fwData) { $fwData.CMMC } else { '' }
-                PCI_DSS_4        = if ($fwData) { $fwData.PCI } else { '' }
-                SOC2             = if ($fwData) { $fwData.SOC2 } else { '' }
-                ISO_27001        = if ($fwData) { $fwData.ISO27001 } else { '' }
-                STIG             = if ($fwData) { $fwData.STIG } else { '' }
-                MITRE_Tactics    = if ($mitreData) { $mitreData.Tactics -join '; ' } else { '' }
-                MITRE_Techniques = if ($mitreData) { $mitreData.Techniques -join '; ' } else { '' }
-                ScanTimestamp    = if ($script:ScanTimestamps.Contains($id)) { $script:ScanTimestamps[$id] } else { '' }
+                Status           = ConvertTo-CsvSafeText $sv
+                Description      = ConvertTo-CsvSafeText $item.Text
+                Findings         = ConvertTo-CsvSafeText $(if ($script:FindingsBoxes[$id]) { ($script:FindingsBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' })
+                Evidence         = ConvertTo-CsvSafeText $(if ($script:EvidenceBoxes[$id]) { ($script:EvidenceBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' })
+                Notes            = ConvertTo-CsvSafeText $(if ($script:NotesBoxes[$id]) { ($script:NotesBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' })
+                RemStatus        = ConvertTo-CsvSafeText $rs
+                RemAssigned      = ConvertTo-CsvSafeText $(if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' })
+                RemDue           = ConvertTo-CsvSafeText $(if ($script:RemDueBoxes[$id]) { $script:RemDueBoxes[$id].Text } else { '' })
+                NIST_CSF         = ConvertTo-CsvSafeText $nistCsf
+                CIS_Controls     = ConvertTo-CsvSafeText $cisCtrl
+                HIPAA            = ConvertTo-CsvSafeText $hipaaRef
+                NIST_800_171     = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.NIST } else { '' })
+                CMMC_2_0         = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.CMMC } else { '' })
+                PCI_DSS_4        = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.PCI } else { '' })
+                SOC2             = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.SOC2 } else { '' })
+                ISO_27001        = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.ISO27001 } else { '' })
+                STIG             = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.STIG } else { '' })
+                MITRE_Tactics    = ConvertTo-CsvSafeText $(if ($mitreData) { $mitreData.Tactics -join '; ' } else { '' })
+                MITRE_Techniques = ConvertTo-CsvSafeText $(if ($mitreData) { $mitreData.Techniques -join '; ' } else { '' })
+                ScanTimestamp    = ConvertTo-CsvSafeText $(if ($script:ScanTimestamps.Contains($id)) { $script:ScanTimestamps[$id] } else { '' })
             }
             $rows.Add($row)
         }
