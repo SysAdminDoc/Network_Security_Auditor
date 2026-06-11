@@ -260,6 +260,9 @@ if ($scriptText -notmatch "'IA11'\s*=\s*@\{\s*Type='AD'" -or $scriptText -notmat
 if ($scriptText -notmatch "'IA12'\s*=\s*@\{\s*Type='AD'" -or $scriptText -notmatch 'BadSuccessor' -or $scriptText -notmatch 'msDS-DelegatedManagedServiceAccount' -or $scriptText -notmatch 'msDS-ManagedAccountPrecededByLink' -or $scriptText -notmatch 'msDS-ManagedAccountSucceededByLink' -or $scriptText -notmatch 'msDS-DelegatedMSAState') {
     Add-Failure 'IA12 BadSuccessor/dMSA check must inspect dMSA class, migration links, delegated state, and backlink evidence.'
 }
+if ($scriptText -notmatch 'ESC9' -or $scriptText -notmatch 'CT_FLAG_NO_SECURITY_EXTENSION' -or $scriptText -notmatch '0x00080000' -or $scriptText -notmatch 'ESC11' -or $scriptText -notmatch 'IF_ENFORCEENCRYPTICERTREQUEST' -or $scriptText -notmatch 'ESC13' -or $scriptText -notmatch 'msDS-OIDToGroupLink' -or $scriptText -notmatch 'ESC15/EKUwu' -or $scriptText -notmatch 'msPKI-Template-Schema-Version' -or $scriptText -notmatch 'CVE-2024-49019') {
+    Add-Failure 'CF01 ADCS scan must cover ESC9, ESC11, ESC13, and ESC15/EKUwu indicators.'
+}
 if ($scriptText -notmatch "Pass','Fail','Partial','N/A") {
     Add-Failure 'Auto-check status mapping must preserve N/A results for non-applicable checks.'
 }

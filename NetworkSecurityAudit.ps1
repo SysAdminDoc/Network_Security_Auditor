@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.7.1 - Professional GUI Tool
+    Network Security Auditor v4.8.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.7.1
+    4.8.0
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.7.1'
+$script:ProductVersion = '4.8.0'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -2246,27 +2246,127 @@ $script:AutoChecks = @{
                         foreach ($ca in $cas) {
                             [void]$sb.AppendLine("  CA: $($ca.Name) | DNS: $($ca.dNSHostName)")
                         }
+                        function ConvertTo-AdcsFlagInt {
+                            param([object]$Value)
+                            if ($null -eq $Value -or $Value -eq '') { return 0 }
+                            try { return [int64]$Value } catch { return 0 }
+                        }
+                        function Get-AdcsTemplateName {
+                            param([object]$Template)
+                            if ($Template.DisplayName) { return $Template.DisplayName }
+                            if ($Template.Name) { return $Template.Name }
+                            return "$($Template.CN)"
+                        }
+                        function Test-AdcsTemplateAuthEku {
+                            param([object]$Template)
+                            $ekus = @($Template.'pKIExtendedKeyUsage') | Where-Object { $_ }
+                            if ($ekus.Count -eq 0) { return $true }
+                            $authOids = @(
+                                '1.3.6.1.5.5.7.3.2'       # Client Authentication
+                                '1.3.6.1.4.1.311.20.2.2'  # Smart Card Logon
+                                '1.3.6.1.5.2.3.4'         # PKINIT Client Authentication
+                                '2.5.29.37.0'             # Any Purpose
+                            )
+                            return (@($ekus | Where-Object { $_ -in $authOids }).Count -gt 0)
+                        }
+                        function Test-AdcsTemplatePublished {
+                            param([object]$Template, [object]$PublishedNames)
+                            if ($PublishedNames.Count -eq 0) { return $true }
+                            return ($PublishedNames.Contains("$($Template.Name)") -or $PublishedNames.Contains("$($Template.CN)") -or $PublishedNames.Contains("$($Template.DisplayName)"))
+                        }
+
+                        $publishedTemplateNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+                        foreach ($ca in $cas) {
+                            foreach ($tplName in @($ca.certificateTemplates) | Where-Object { $_ }) {
+                                [void]$publishedTemplateNames.Add("$tplName")
+                            }
+                        }
+
+                        $oidGroupLinks = @{}
+                        try {
+                            $oidContainer = "CN=OID,CN=Public Key Services,CN=Services,$configNC"
+                            $oidObjects = @(Get-ADObject -SearchBase $oidContainer -LDAPFilter '(msDS-OIDToGroupLink=*)' -Properties 'msDS-OIDToGroupLink','msPKI-Cert-Template-OID',displayName -EA SilentlyContinue)
+                            foreach ($oid in $oidObjects) {
+                                $policyOid = $oid.'msPKI-Cert-Template-OID'
+                                $groupDn = $oid.'msDS-OIDToGroupLink'
+                                if (-not $policyOid -or -not $groupDn) { continue }
+                                $groupLabel = $groupDn
+                                $privilegedGroup = $false
+                                try {
+                                    $linkedGroup = Get-ADObject -Identity $groupDn -Properties sAMAccountName,adminCount -EA SilentlyContinue
+                                    if ($linkedGroup) {
+                                        $groupLabel = if ($linkedGroup.sAMAccountName) { "$($linkedGroup.sAMAccountName) ($groupDn)" } else { "$($linkedGroup.Name) ($groupDn)" }
+                                        $privilegedGroup = ($linkedGroup.adminCount -eq 1 -or "$($linkedGroup.DistinguishedName)" -match '(?i)CN=(Domain Admins|Enterprise Admins|Schema Admins|Administrators),')
+                                    }
+                                } catch {}
+                                $oidGroupLinks["$policyOid"] = @{ Group=$groupLabel; Privileged=$privilegedGroup }
+                            }
+                            if ($oidGroupLinks.Count -gt 0) { [void]$sb.AppendLine("  OID group links found for ESC13 review: $($oidGroupLinks.Count)") }
+                        } catch {
+                            [void]$sb.AppendLine("  ESC13 OID group-link scan: Could not query OID container ($($_.Exception.Message))")
+                        }
+
                         # ESC1: Templates allowing SAN (Subject Alternative Name) from requester
                         $templates = Get-ADObject -SearchBase "CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC" -Filter {objectClass -eq 'pKICertificateTemplate'} -Properties * -EA SilentlyContinue
-                        $esc1Count = 0; $esc6Count = 0
+                        $esc1Count = 0; $esc9Count = 0; $esc13Count = 0; $esc15Count = 0
+                        $esc9ReviewCount = 0; $esc13ReviewCount = 0
                         foreach ($tmpl in $templates) {
+                            $templateName = Get-AdcsTemplateName $tmpl
+                            $isPublished = Test-AdcsTemplatePublished $tmpl $publishedTemplateNames
+                            if (-not $isPublished) { continue }
                             # ESC1: CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT (bit 0x00000001) in msPKI-Certificate-Name-Flag
-                            $nameFlag = $tmpl.'msPKI-Certificate-Name-Flag'
+                            $nameFlag = ConvertTo-AdcsFlagInt $tmpl.'msPKI-Certificate-Name-Flag'
+                            $enrollmentFlag = ConvertTo-AdcsFlagInt $tmpl.'msPKI-Enrollment-Flag'
+                            $schemaVersion = ConvertTo-AdcsFlagInt $tmpl.'msPKI-Template-Schema-Version'
+                            $raSignatures = ConvertTo-AdcsFlagInt $tmpl.'msPKI-RA-Signature'
                             $enrolleeSAN = ($nameFlag -band 1) -eq 1
                             # Check if template allows client auth EKU
-                            $ekus = $tmpl.'pKIExtendedKeyUsage'
-                            $clientAuth = $ekus -contains '1.3.6.1.5.5.7.3.2'  # Client Authentication
-                            $anyPurpose = $ekus -contains '2.5.29.37.0'         # Any Purpose
-                            $hasAuthEKU = $clientAuth -or $anyPurpose -or ($ekus.Count -eq 0)
+                            $hasAuthEKU = Test-AdcsTemplateAuthEku $tmpl
                             if ($enrolleeSAN -and $hasAuthEKU) {
                                 $esc1Count++
-                                if ($esc1Count -le 5) { [void]$sb.AppendLine("  [CRITICAL] ESC1: $($tmpl.Name) - enrollee supplies SAN + client auth") }
+                                if ($esc1Count -le 5) { [void]$sb.AppendLine("  [CRITICAL] ESC1: $templateName - enrollee supplies SAN + client auth") }
                             }
-                            # ESC6: EDITF_ATTRIBUTESUBJECTALTNAME2 flag (checked at CA level below)
+                            # ESC9: CT_FLAG_NO_SECURITY_EXTENSION (0x80000) omits the SID security extension.
+                            $noSecurityExtension = (($enrollmentFlag -band 0x00080000) -ne 0)
+                            if ($noSecurityExtension) {
+                                if ($hasAuthEKU) {
+                                    $esc9Count++
+                                    if ($esc9Count -le 5) { [void]$sb.AppendLine("  [CRITICAL] ESC9: $templateName - CT_FLAG_NO_SECURITY_EXTENSION + authentication EKU") }
+                                } else {
+                                    $esc9ReviewCount++
+                                    if ($esc9ReviewCount -le 3) { [void]$sb.AppendLine("  [REVIEW] ESC9 flag present on non-auth template: $templateName") }
+                                }
+                            }
+                            # ESC13: Issuance policy OID linked to an AD group; exploitable when auth EKU and no RA approval block enrollment.
+                            foreach ($policyOid in @($tmpl.'msPKI-Certificate-Policy') | Where-Object { $_ }) {
+                                if (-not $oidGroupLinks.ContainsKey("$policyOid")) { continue }
+                                $link = $oidGroupLinks["$policyOid"]
+                                if ($hasAuthEKU -and $raSignatures -eq 0) {
+                                    $esc13Count++
+                                    if ($esc13Count -le 5) { [void]$sb.AppendLine("  [CRITICAL] ESC13: $templateName - issuance policy $policyOid grants group link $($link.Group)$(if($link.Privileged){' [PRIVILEGED GROUP]'})") }
+                                } else {
+                                    $esc13ReviewCount++
+                                    if ($esc13ReviewCount -le 3) { [void]$sb.AppendLine("  [REVIEW] ESC13 OID link on $templateName - auth EKU:$hasAuthEKU RA signatures:$raSignatures group:$($link.Group)") }
+                                }
+                            }
+                            # ESC15/EKUwu: schema v1 templates that allow subject supply can accept arbitrary application policies on unpatched CAs.
+                            if ($schemaVersion -eq 1 -and $enrolleeSAN) {
+                                $esc15Count++
+                                if ($esc15Count -le 5) { [void]$sb.AppendLine("  [CRITICAL] ESC15/EKUwu: $templateName - schema v1 + supply in request; patch CVE-2024-49019 or migrate to v2+") }
+                            }
                         }
                         if ($esc1Count -gt 5) { [void]$sb.AppendLine("  ... +$($esc1Count - 5) more ESC1 templates") }
                         if ($esc1Count -gt 0) { $issues += 2 }
                         else { [void]$sb.AppendLine("  ESC1 (enrollee SAN + auth): None found [OK]") }
+                        if ($esc9Count -gt 5) { [void]$sb.AppendLine("  ... +$($esc9Count - 5) more ESC9 templates") }
+                        if ($esc9Count -gt 0) { $issues += 2 }
+                        else { [void]$sb.AppendLine("  ESC9 (no security extension + auth): None found [OK]") }
+                        if ($esc13Count -gt 5) { [void]$sb.AppendLine("  ... +$($esc13Count - 5) more ESC13 templates") }
+                        if ($esc13Count -gt 0) { $issues += 2 }
+                        else { [void]$sb.AppendLine("  ESC13 (issuance policy OID group link + auth): None found [OK]") }
+                        if ($esc15Count -gt 5) { [void]$sb.AppendLine("  ... +$($esc15Count - 5) more ESC15 templates") }
+                        if ($esc15Count -gt 0) { $issues += 2 }
+                        else { [void]$sb.AppendLine("  ESC15/EKUwu (schema v1 + supply in request): None found [OK]") }
                         # ESC6: Check CA for EDITF_ATTRIBUTESUBJECTALTNAME2 via registry (if local CA)
                         try {
                             $caEditFlags = (certutil -getreg policy\EditFlags 2>&1) -join ' '
@@ -2275,6 +2375,27 @@ $script:AutoChecks = @{
                                 [void]$sb.AppendLine("  [CRITICAL] ESC6: EDITF_ATTRIBUTESUBJECTALTNAME2 enabled on local CA - any cert can specify SAN!")
                             } else { [void]$sb.AppendLine("  ESC6 (SAN edit flag on CA): Not detected on this host [OK*] (*check all CA servers)") }
                         } catch { [void]$sb.AppendLine("  ESC6: Could not check (not a CA server or certutil unavailable)") }
+                        # ESC11: CA RPC enrollment must enforce packet privacy via IF_ENFORCEENCRYPTICERTREQUEST.
+                        $esc11Count = 0; $esc11Unknown = 0
+                        foreach ($ca in $cas) {
+                            $caConfig = if ($ca.dNSHostName) { "$($ca.dNSHostName)\$($ca.Name)" } else { "$($ca.Name)" }
+                            try {
+                                $interfaceFlags = (certutil.exe -config $caConfig -getreg 'CA\InterfaceFlags' 2>&1) -join ' '
+                                if ($interfaceFlags -match 'IF_ENFORCEENCRYPTICERTREQUEST') {
+                                    [void]$sb.AppendLine("  ESC11 (RPC enrollment encryption): $caConfig [OK]")
+                                } elseif ($interfaceFlags -match 'InterfaceFlags|REG_DWORD|0x[0-9a-fA-F]+') {
+                                    $esc11Count++
+                                    [void]$sb.AppendLine("  [CRITICAL] ESC11: $caConfig does not show IF_ENFORCEENCRYPTICERTREQUEST (RPC relay risk)")
+                                } else {
+                                    $esc11Unknown++
+                                    [void]$sb.AppendLine("  [REVIEW] ESC11: Could not confirm InterfaceFlags for $caConfig")
+                                }
+                            } catch {
+                                $esc11Unknown++
+                                [void]$sb.AppendLine("  [REVIEW] ESC11: certutil query failed for $caConfig ($($_.Exception.Message))")
+                            }
+                        }
+                        if ($esc11Count -gt 0) { $issues += 2 }
                         # ESC8: HTTP enrollment endpoints (NTLM relay to web enrollment)
                         try {
                             $webEnroll = Get-Service CertSvc -EA SilentlyContinue

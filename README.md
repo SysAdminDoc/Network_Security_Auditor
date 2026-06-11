@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.7.1-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.8.0-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -16,7 +16,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.7.1-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.8.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -255,7 +255,7 @@ Beyond misconfiguration checks, the tool detects active indicators of compromise
 - **DCSync permissions** — non-standard accounts with Replicating Directory Changes rights
 - **AdminSDHolder tampering** — unexpected ACEs on the AdminSDHolder container
 - **SID History abuse** — accounts with SID History from foreign domains
-- **ADCS vulnerabilities** — ESC1/ESC6/ESC8/ESC10 certificate template and CA misconfigurations
+- **ADCS vulnerabilities** — ESC1/ESC6/ESC8/ESC9/ESC10/ESC11/ESC13/ESC15 certificate template and CA misconfigurations
 - **Kerberos legacy encryption** — RC4/DES-only or default-dependent accounts, trusts, and KDC event evidence
 - **BadSuccessor / dMSA exposure** — Windows Server 2025 delegated MSA objects, migration links, and OU create/control rights
 
