@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.4.1 - Professional GUI Tool
+    Network Security Auditor v4.5.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -16,7 +16,7 @@
     Designed for RMM deployment via ConnectWise, Datto, NinjaRMM, etc.
 .PARAMETER ScanProfile
     Scan profile to use: Quick, Standard, Full, ADOnly, LocalOnly,
-    HIPAA, PCI, CMMC, E8, SOC2, ISO27001, STIG.
+    HIPAA, PCI, CMMC, E8, CyberEssentials, SOC2, ISO27001, STIG.
     Default: Full (all 68 checks). Quick runs ~20 critical checks.
     Framework profiles run checks mapped to that compliance framework.
 .PARAMETER OutputPath
@@ -51,11 +51,11 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.4.1
+    4.5.0
 #>
 param(
     [switch]$Silent,
-    [ValidateSet('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','SOC2','ISO27001','STIG')]
+    [ValidateSet('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')]
     [string]$ScanProfile = 'Full',
     [string]$OutputPath = '',
     [ValidateSet('Executive','Management','Technical','All')]
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.4.1'
+$script:ProductVersion = '4.5.0'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -1536,8 +1536,18 @@ $script:AutoChecks = @{
 
     'EP02' = @{ Type='Local'; Label='Scan BitLocker'
         Script = {
-            $vols = Get-BitLockerVolume -EA Stop
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
+            if (-not (Get-Command Get-BitLockerVolume -EA SilentlyContinue)) {
+                [void]$sb.AppendLine('BitLocker status unavailable: Get-BitLockerVolume is not available on this host.')
+                return @{ Status='N/A'; Findings=$sb.ToString().Trim(); Evidence="Get-BitLockerVolume unavailable @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            }
+            try {
+                $vols = @(Get-BitLockerVolume -EA Stop)
+            } catch {
+                [void]$sb.AppendLine("BitLocker status unavailable: $($_.Exception.Message)")
+                [void]$sb.AppendLine('Run as Administrator for full disk-encryption evidence.')
+                return @{ Status='Partial'; Findings=$sb.ToString().Trim(); Evidence="Get-BitLockerVolume failed @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            }
             foreach ($v in $vols) {
                 $ok = $v.ProtectionStatus -eq 'On' -and $v.VolumeStatus -eq 'FullyEncrypted'
                 if (-not $ok) { $issues++ }
@@ -4004,6 +4014,11 @@ $script:ScanProfiles = @{
         Description = 'Checks mapped to ACSC Essential Eight strategies and maturity-level indicators.'
         IDs = @('EP01','EP04','EP07','EP09','EP10','IA01','IA02','IA03','IA06','IA09','IA10','CF01','CF03','CF07','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','LM02','LM03','LM08','NP03','NP10')
     }
+    CyberEssentials = @{
+        Label = 'Cyber Essentials (36 checks)'
+        Description = 'Checks mapped to UK NCSC Cyber Essentials technical controls.'
+        IDs = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
+    }
     SOC2 = @{
         Label = 'SOC 2 Type II (66 checks)'
         Description = 'Checks mapped to SOC 2 Trust Services Criteria (CC/A1) for service organization audits.'
@@ -4067,10 +4082,10 @@ $script:CategoryWeights = @{
 }
 
 # ── Phase 3: Compliance Framework Integration ────────────────────────────────
-# Structured mapping of all 68 checks to 9 compliance frameworks with specific control IDs.
+# Structured mapping of all 68 checks across 10 compliance frameworks with specific control IDs.
 # CIS and HIPAA coverage is represented through built-in compliance strings and framework profiles.
-# This table adds structured control IDs for NIST 800-171 Rev 3, CMMC 2.0, PCI-DSS 4.0.1, ACSC Essential Eight, SOC 2, ISO 27001:2022, and DISA STIG.
-$script:ComplianceTarget = 'All'   # Active framework filter: All, CIS, NIST, CMMC, HIPAA, PCI, E8, SOC2, ISO27001, STIG
+# This table adds structured control IDs for NIST 800-171 Rev 3, CMMC 2.0, PCI-DSS 4.0.1, ACSC Essential Eight, Cyber Essentials, SOC 2, ISO 27001:2022, and DISA STIG.
+$script:ComplianceTarget = 'All'   # Active framework filter: All, CIS, NIST, CMMC, HIPAA, PCI, E8, CyberEssentials, SOC2, ISO27001, STIG
 
 $script:FrameworkMeta = [ordered]@{
     'CIS'      = @{ Name='CIS Controls v8.1'; Color='#38bdf8'; Short='CIS' }
@@ -4079,6 +4094,7 @@ $script:FrameworkMeta = [ordered]@{
     'HIPAA'    = @{ Name='HIPAA Security Rule'; Color='#22c55e'; Short='HIPAA' }
     'PCI'      = @{ Name='PCI-DSS 4.0.1'; Color='#f97316'; Short='PCI' }
     'E8'       = @{ Name='ACSC Essential Eight'; Color='#14b8a6'; Short='E8' }
+    'CyberEssentials' = @{ Name='Cyber Essentials v3.3'; Color='#84cc16'; Short='CE' }
     'SOC2'     = @{ Name='SOC 2 Type II'; Color='#eab308'; Short='SOC2' }
     'ISO27001' = @{ Name='ISO 27001:2022'; Color='#ec4899'; Short='ISO' }
     'STIG'     = @{ Name='DISA STIG'; Color='#06b6d4'; Short='STIG' }
@@ -4225,6 +4241,49 @@ foreach ($eid in $e8Map.Keys) {
     if ($script:FrameworkMap.Contains($eid)) { $script:FrameworkMap[$eid]['E8'] = $e8Map[$eid] }
 }
 
+# ── UK NCSC Cyber Essentials Mapping (v3.3 technical controls) ────────────────
+$cyberEssentialsMap = @{
+    'NP01'='Cyber Essentials v3.3: Firewalls'
+    'NP02'='Cyber Essentials v3.3: Firewalls'
+    'NP03'='Cyber Essentials v3.3: User access control; Firewalls'
+    'NP04'='Cyber Essentials v3.3: Malware protection'
+    'NP05'='Cyber Essentials v3.3: Firewalls'
+    'NP06'='Cyber Essentials v3.3: Firewalls'
+    'NP09'='Cyber Essentials v3.3: Firewalls'
+    'NP10'='Cyber Essentials v3.3: Security update management'
+    'IA01'='Cyber Essentials v3.3: User access control'
+    'IA02'='Cyber Essentials v3.3: User access control'
+    'IA03'='Cyber Essentials v3.3: User access control'
+    'IA04'='Cyber Essentials v3.3: User access control'
+    'IA05'='Cyber Essentials v3.3: User access control'
+    'IA06'='Cyber Essentials v3.3: User access control'
+    'IA07'='Cyber Essentials v3.3: User access control'
+    'IA08'='Cyber Essentials v3.3: User access control'
+    'IA09'='Cyber Essentials v3.3: User access control'
+    'IA10'='Cyber Essentials v3.3: User access control'
+    'IA11'='Cyber Essentials v3.3: Secure configuration; User access control'
+    'EP01'='Cyber Essentials v3.3: Malware protection'
+    'EP02'='Cyber Essentials v3.3: Secure configuration'
+    'EP03'='Cyber Essentials v3.3: Secure configuration'
+    'EP04'='Cyber Essentials v3.3: Security update management'
+    'EP05'='Cyber Essentials v3.3: Firewalls; Secure configuration'
+    'EP06'='Cyber Essentials v3.3: Secure configuration'
+    'EP07'='Cyber Essentials v3.3: Malware protection; Secure configuration'
+    'EP08'='Cyber Essentials v3.3: Secure configuration'
+    'EP09'='Cyber Essentials v3.3: Secure configuration'
+    'EP10'='Cyber Essentials v3.3: Security update management'
+    'CF01'='Cyber Essentials v3.3: User access control'
+    'CF02'='Cyber Essentials v3.3: Secure configuration; Firewalls'
+    'CF04'='Cyber Essentials v3.3: Secure configuration'
+    'CF05'='Cyber Essentials v3.3: Secure configuration'
+    'CF06'='Cyber Essentials v3.3: Secure configuration'
+    'CF07'='Cyber Essentials v3.3: User access control'
+    'CF08'='Cyber Essentials v3.3: Malware protection'
+}
+foreach ($ceid in $cyberEssentialsMap.Keys) {
+    if ($script:FrameworkMap.Contains($ceid)) { $script:FrameworkMap[$ceid]['CyberEssentials'] = $cyberEssentialsMap[$ceid] }
+}
+
 # Checks relevant to each framework (for framework-specific scan profiles)
 $script:FrameworkChecks = @{
     'CIS'      = @($script:FrameworkMap.Keys)  # CIS covers all checks
@@ -4233,6 +4292,7 @@ $script:FrameworkChecks = @{
     'HIPAA'    = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
     'PCI'      = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
     'E8'       = @('EP01','EP04','EP07','EP09','EP10','IA01','IA02','IA03','IA06','IA09','IA10','CF01','CF03','CF07','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','LM02','LM03','LM08','NP03','NP10')
+    'CyberEssentials' = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
     'SOC2'     = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
     'ISO27001' = @($script:FrameworkMap.Keys)  # ISO 27001 covers all checks
     'STIG'     = @($script:FrameworkMap.Keys)  # DISA STIG covers all checks
@@ -4274,6 +4334,11 @@ function Get-ComplianceString {
     if ($Framework -eq 'All' -or $Framework -eq 'E8') {
         if ($script:FrameworkMap.Contains($CheckID) -and $script:FrameworkMap[$CheckID].E8) {
             $parts += "E8: $($script:FrameworkMap[$CheckID].E8)"
+        }
+    }
+    if ($Framework -eq 'All' -or $Framework -eq 'CyberEssentials') {
+        if ($script:FrameworkMap.Contains($CheckID) -and $script:FrameworkMap[$CheckID].CyberEssentials) {
+            $parts += "CE: $($script:FrameworkMap[$CheckID].CyberEssentials)"
         }
     }
     if ($Framework -eq 'All' -or $Framework -eq 'SOC2') {
@@ -4928,7 +4993,7 @@ $script:SuppressAdvance = $false
                               ToolTip="Scan profile: Quick, Standard, Full, AD-only, Local-only, or compliance framework"/>
                     <TextBlock x:Name="lblFramework" Text="Framework:" FontSize="10.5" VerticalAlignment="Center" Margin="12,0,4,0"/>
                     <ComboBox x:Name="cboFramework" Width="120" FontSize="10.5" Padding="4,2"
-                              ToolTip="Compliance framework to highlight in reports: All, CIS, NIST 800-171, CMMC, HIPAA, PCI-DSS, E8, SOC 2, ISO 27001, STIG"/>
+                              ToolTip="Compliance framework to highlight in reports: All, CIS, NIST 800-171, CMMC, HIPAA, PCI-DSS, E8, Cyber Essentials, SOC 2, ISO 27001, STIG"/>
                 </StackPanel>
                 <Button x:Name="btnFullAudit" Grid.Column="3" Content="Full Audit" Padding="14,4" Margin="8,0,0,0"
                         FontSize="11.5" FontWeight="Bold" Cursor="Hand"
@@ -5027,7 +5092,7 @@ $el = @{}
 $el['txtDate'].Text = (Get-Date -Format 'yyyy-MM-dd')
 
 # ── Initialize Scan Profile ComboBox ─────────────────────────────────────────
-$profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','SOC2','ISO27001','STIG')
+$profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
 foreach ($pn in $profileOrder) {
     $el['cboProfile'].Items.Add($script:ScanProfiles[$pn].Label) | Out-Null
 }
@@ -5039,8 +5104,8 @@ if ($script:CliProfile) {
 }
 
 # ── Initialize Framework Selector ComboBox ────────────────────────────────────
-$frameworkOrder = @('All','CIS','NIST','CMMC','HIPAA','PCI','E8','SOC2','ISO27001','STIG')
-$frameworkLabels = @{ 'All'='All Frameworks'; 'CIS'='CIS v8.1'; 'NIST'='NIST 800-171'; 'CMMC'='CMMC 2.0'; 'HIPAA'='HIPAA'; 'PCI'='PCI-DSS 4.0.1'; 'E8'='ACSC Essential Eight'; 'SOC2'='SOC 2'; 'ISO27001'='ISO 27001'; 'STIG'='DISA STIG' }
+$frameworkOrder = @('All','CIS','NIST','CMMC','HIPAA','PCI','E8','CyberEssentials','SOC2','ISO27001','STIG')
+$frameworkLabels = @{ 'All'='All Frameworks'; 'CIS'='CIS v8.1'; 'NIST'='NIST 800-171'; 'CMMC'='CMMC 2.0'; 'HIPAA'='HIPAA'; 'PCI'='PCI-DSS 4.0.1'; 'E8'='ACSC Essential Eight'; 'CyberEssentials'='Cyber Essentials'; 'SOC2'='SOC 2'; 'ISO27001'='ISO 27001'; 'STIG'='DISA STIG' }
 foreach ($fw in $frameworkOrder) { $el['cboFramework'].Items.Add($frameworkLabels[$fw]) | Out-Null }
 $el['cboFramework'].SelectedIndex = 0  # Default: All
 $el['cboFramework'].Add_SelectionChanged({
@@ -5693,7 +5758,7 @@ function Start-ScanBatch([string]$filterType) {
     }
     elseif ($filterType -eq 'Profile') {
         # Get selected profile from ComboBox
-        $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','SOC2','ISO27001','STIG')
+        $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
         $selIdx = $el['cboProfile'].SelectedIndex
         if ($selIdx -lt 0) { $selIdx = 2 }
         $profName = $profileOrder[$selIdx]
@@ -7493,7 +7558,7 @@ $el['btnPreflight'].Add_Click({
 
 $el['btnScanAll'].Add_Click({
     if ($script:ScanRunning) { return }
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','SOC2','ISO27001','STIG')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
     $selIdx = $el['cboProfile'].SelectedIndex
     if ($selIdx -lt 0) { $selIdx = 2 }
     $profName = $profileOrder[$selIdx]
@@ -7822,7 +7887,7 @@ function Export-HTMLReport([string]$outPath, [switch]$OpenAfter, [string]$Tier =
     $totalFindings = $critFindings.Count + $highFindings.Count + $medFindings.Count
 
     # Profile info
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','SOC2','ISO27001','STIG')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
     $selIdx = $el['cboProfile'].SelectedIndex; if ($selIdx -lt 0) { $selIdx = 2 }
     $profName = $profileOrder[$selIdx]
     $roMode = if ($script:ReadOnlyMode) { 'Yes (safe mode)' } else { 'No' }
@@ -8196,6 +8261,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                             'CMMC'     { $fwData.CMMC }
                             'PCI'      { $fwData.PCI }
                             'E8'       { $fwData.E8 }
+                            'CyberEssentials' { $fwData.CyberEssentials }
                             'SOC2'     { $fwData.SOC2 }
                             'ISO27001' { $fwData.ISO27001 }
                             'STIG'     { $fwData.STIG }
@@ -8234,6 +8300,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                         'HIPAA'    { if ($item.Compliance -match 'HIPAA (.+)$') { $Matches[1].Trim() } else { '' } }
                         'PCI'      { $fwData.PCI }
                         'E8'       { $fwData.E8 }
+                        'CyberEssentials' { $fwData.CyberEssentials }
                         'SOC2'     { $fwData.SOC2 }
                         'ISO27001' { $fwData.ISO27001 }
                         'STIG'     { $fwData.STIG }
@@ -8453,6 +8520,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                     if ($fwData.CMMC) { $extParts += "<span style='color:#a855f7'>CMMC: $($fwData.CMMC)</span>" }
                     if ($fwData.PCI) { $extParts += "<span style='color:#f97316'>PCI: $($fwData.PCI)</span>" }
                     if ($fwData.E8) { $extParts += "<span style='color:#14b8a6'>E8: $($fwData.E8)</span>" }
+                    if ($fwData.CyberEssentials) { $extParts += "<span style='color:#84cc16'>CE: $($fwData.CyberEssentials)</span>" }
                     if ($fwData.SOC2) { $extParts += "<span style='color:#eab308'>SOC2: $($fwData.SOC2)</span>" }
                     if ($fwData.ISO27001) { $extParts += "<span style='color:#ec4899'>ISO: $($fwData.ISO27001)</span>" }
                     if ($fwData.STIG) { $extParts += "<span style='color:#06b6d4'>STIG: $($fwData.STIG)</span>" }
@@ -8606,6 +8674,7 @@ function Export-FindingsJSON {
                 if ($fwData.CMMC) { $compObj['CMMC_2_0'] = $fwData.CMMC }
                 if ($fwData.PCI) { $compObj['PCI_DSS_4'] = $fwData.PCI }
                 if ($fwData.E8) { $compObj['ACSC_Essential_Eight'] = $fwData.E8 }
+                if ($fwData.CyberEssentials) { $compObj['Cyber_Essentials'] = $fwData.CyberEssentials }
                 if ($fwData.SOC2) { $compObj['SOC2'] = $fwData.SOC2 }
                 if ($fwData.ISO27001) { $compObj['ISO_27001'] = $fwData.ISO27001 }
                 if ($fwData.STIG) { $compObj['STIG'] = $fwData.STIG }
@@ -8774,6 +8843,7 @@ function Export-FindingsJSONL {
                 cmmc            = if ($fwData) { $fwData.CMMC } else { '' }
                 pci_dss         = if ($fwData) { $fwData.PCI } else { '' }
                 essential_eight = if ($fwData) { $fwData.E8 } else { '' }
+                cyber_essentials = if ($fwData) { $fwData.CyberEssentials } else { '' }
                 soc2            = if ($fwData) { $fwData.SOC2 } else { '' }
                 iso_27001       = if ($fwData) { $fwData.ISO27001 } else { '' }
                 stig            = if ($fwData) { $fwData.STIG } else { '' }
@@ -8879,6 +8949,7 @@ function Export-FindingsCSV {
                 CMMC_2_0         = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.CMMC } else { '' })
                 PCI_DSS_4        = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.PCI } else { '' })
                 Essential_Eight  = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.E8 } else { '' })
+                Cyber_Essentials = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.CyberEssentials } else { '' })
                 SOC2             = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.SOC2 } else { '' })
                 ISO_27001        = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.ISO27001 } else { '' })
                 STIG             = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.STIG } else { '' })
@@ -9225,7 +9296,7 @@ if ($script:SilentMode) {
     $el['txtAuditor'].Text = $auditorName
 
     # Set profile
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','SOC2','ISO27001','STIG')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
     $idx = $profileOrder.IndexOf($script:CliProfile)
     if ($idx -ge 0) { $el['cboProfile'].SelectedIndex = $idx }
 
