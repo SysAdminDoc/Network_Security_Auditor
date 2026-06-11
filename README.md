@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.2.1-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.3.0-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -10,13 +10,13 @@
 
 # Network Security Auditor
 
-A single-file PowerShell security audit tool. Runs 68 automated checks across 8 security domains, maps findings to 8 compliance frameworks and MITRE ATT&CK, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
+A single-file PowerShell security audit tool. Runs 68 automated checks across 8 security domains, maps findings to 8 compliance frameworks, MITRE ATT&CK, and MITRE D3FEND, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
 
 One script. No dependencies to pre-install. Works on any Windows machine from standalone workstations to enterprise domain controllers.
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.2.1-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.3.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -242,6 +242,10 @@ Framework-specific scan profiles run only the checks relevant to that standard.
 
 All 68 checks map to ATT&CK Enterprise techniques (v15.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.
 
+### MITRE D3FEND Mapping
+
+All 68 checks also map to MITRE D3FEND defensive techniques (v1.4.0). Reports show D3FEND stage coverage for Model, Harden, Detect, Isolate, Deceive, Evict, and Restore, while JSON, JSONL, CSV, and SARIF exports include D3FEND technique fields for downstream GRC, SIEM, and MSP analytics.
+
 ### CISA KEV Cross-Reference
 
 The EP04 patch compliance check automatically downloads the [CISA Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and cross-references it against detected Microsoft products on the system, flagging any actively exploited CVEs with remediation due dates.
@@ -346,10 +350,10 @@ Automatic platform detection and field population:
 | Format | File | Use Case |
 |--------|------|----------|
 | HTML | `SecurityAudit_*.html` | Human-readable report with all three tiers |
-| JSON | `*_findings.json` | Per-finding structured data with full metadata |
-| JSONL | `*_siem.jsonl` | One event per finding for Splunk/Elastic/Sentinel with truncation metadata |
-| CSV | `*.csv` | Pivot table analysis with compliance columns |
-| SARIF | `*.sarif` | Static Analysis Results Interchange Format for GitHub/Azure DevOps |
+| JSON | `*_findings.json` | Per-finding structured data with compliance, ATT&CK, and D3FEND metadata |
+| JSONL | `*_siem.jsonl` | One event per finding for Splunk/Elastic/Sentinel with truncation and D3FEND fields |
+| CSV | `*.csv` | Pivot table analysis with compliance, ATT&CK, and D3FEND columns |
+| SARIF | `*.sarif` | Static Analysis Results Interchange Format with D3FEND rule properties |
 | PDF | `*.pdf` | Portable report via Edge/Chrome headless rendering |
 | Intune | `*_intune.json` | Device compliance discovery script for Conditional Access |
 | Compliance Summary | `*_summary.json` | Compact RMM dashboard payload |

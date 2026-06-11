@@ -94,12 +94,15 @@ $riskBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:RiskTiers
 $riskIds = @(Get-UniqueMatches -Text $riskBlock -Pattern "'([A-Z]{2}\d{2})'\s*=\s*\d")
 $frameworkChecksBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:FrameworkChecks\s*=\s*@\{' -EndPattern '# Helper: Get formatted compliance string'
 $frameworkCheckIds = @(Get-UniqueMatches -Text $frameworkChecksBlock -Pattern "'([A-Z]{2}\d{2})'")
+$d3fendBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:D3FendMap\s*=\s*@\{' -EndPattern '\$script:D3FendStages'
+$d3fendIds = @(Get-UniqueMatches -Text $d3fendBlock -Pattern "(?m)^\s*'([A-Z]{2}\d{2})'\s*=\s*@\{")
 
 if (@($catalogIds).Count -ne 68) { Add-Failure "Expected 68 audit catalog IDs, found $(@($catalogIds).Count)" }
 if (@($autoCheckIds).Count -ne 68) { Add-Failure "Expected 68 auto-check IDs, found $(@($autoCheckIds).Count)" }
 Compare-Set -Expected $catalogIds -Actual $autoCheckIds -Name 'AutoChecks'
 Compare-Set -Expected $catalogIds -Actual $frameworkIds -Name 'FrameworkMap'
 Compare-Set -Expected $catalogIds -Actual $riskIds -Name 'RiskTiers'
+Compare-Set -Expected $catalogIds -Actual $d3fendIds -Name 'D3FendMap'
 
 $profileUnknown = @($profileIds | Where-Object { $_ -notin $catalogIds } | Sort-Object)
 if (@($profileUnknown).Count -gt 0) { Add-Failure "ScanProfiles reference unknown IDs: $($profileUnknown -join ', ')" }
@@ -160,6 +163,12 @@ if ($scriptText -notmatch 'findings_truncated' -or $scriptText -notmatch 'findin
 }
 if ($scriptText -notmatch 'logicalLocations' -or $scriptText -notmatch 'network-security-audit://check/') {
     Add-Failure 'SARIF results must include logical check locations.'
+}
+if ($scriptText -notmatch '\$script:D3FendMap' -or $scriptText -notmatch 'function Get-D3FendCoverage' -or $scriptText -notmatch 'D3FEND Coverage') {
+    Add-Failure 'D3FEND map and HTML coverage summary must be present.'
+}
+if ($scriptText -notmatch 'd3fend_techniques' -or $scriptText -notmatch 'D3FEND_Techniques' -or $scriptText -notmatch 'd3fend\s*=') {
+    Add-Failure 'JSON, JSONL, and CSV exports must include D3FEND technique fields.'
 }
 if ($scriptText -match '(?m)^\s*(Set-Service|Start-Service|Stop-Service|Restart-Service)\b') {
     Add-Failure 'Automation paths must use sc.exe instead of service cmdlets that can show progress UI.'
