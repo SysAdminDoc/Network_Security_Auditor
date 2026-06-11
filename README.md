@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.4.1-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.5.0-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -16,7 +16,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.4.1-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.5.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -219,7 +219,7 @@ Every check runs in an isolated runspace with timeout protection. Results includ
 
 ### Compliance Framework Mapping
 
-Every check maps to one or more controls across 9 frameworks. Framework-specific scan profiles run the most relevant checks for that standard:
+Every check maps to one or more controls across 10 frameworks. Framework-specific scan profiles run the most relevant checks for that standard:
 
 | Framework | Standard | Profile checks |
 |-----------|----------|----------|
@@ -229,6 +229,7 @@ Every check maps to one or more controls across 9 frameworks. Framework-specific
 | **HIPAA** | Security Rule | 48 checks |
 | **PCI-DSS** | v4.0.1 | 50 checks |
 | **ACSC Essential Eight** | Maturity Model | 27 checks |
+| **Cyber Essentials** | UK NCSC v3.3 | 36 checks |
 | **SOC 2** | Type II (Trust Criteria) | 66 checks |
 | **ISO 27001** | :2022 (Annex A) | 68 checks |
 | **DISA STIG** | Windows Server/Client | 68 checks |
@@ -400,7 +401,8 @@ The same validation runs in GitHub Actions on push and pull request.
 ```
 -Silent              Run headless (no GUI). Auto-scans, exports, exits.
 -ScanProfile         Quick | Standard | Full | ADOnly | LocalOnly |
-                     HIPAA | PCI | CMMC | E8 | SOC2 | ISO27001 | STIG
+                     HIPAA | PCI | CMMC | E8 | CyberEssentials |
+                     SOC2 | ISO27001 | STIG
                      Default: Full (all 68 checks)
 -OutputPath          Report output path. Default: Desktop
 -ReportTier          Executive | Management | Technical | All
@@ -437,6 +439,7 @@ The same validation runs in GitHub Actions on push and pull request.
 | **PCI** | 50 | ~35 min | Payment card compliance |
 | **CMMC** | 68 | ~60 min | Defense contractor compliance |
 | **E8** | 27 | ~25 min | ACSC Essential Eight maturity indicators |
+| **CyberEssentials** | 36 | ~35 min | UK NCSC Cyber Essentials technical controls |
 | **SOC 2** | 66 | ~50 min | Service organization compliance |
 | **ISO 27001** | 68 | ~60 min | International standard compliance |
 | **STIG** | 68 | ~60 min | DISA STIG for DoD/government |
@@ -527,7 +530,7 @@ Contributions are welcome. Areas where help is most needed:
 
 - **Additional auto-check scripts** for specific technologies (Exchange, SQL Server, VMware, etc.)
 - **Cloud/hybrid identity checks** (Entra ID, M365 Secure Score, Intune compliance)
-- **Additional compliance framework mappings** (FedRAMP, NIST 800-53, Essential Eight, Cyber Essentials)
+- **Additional compliance framework mappings** (FedRAMP, NIST 800-53)
 - **Bug reports** from diverse environments (different OS versions, domain configurations, edge cases)
 - **Localization** of check descriptions and report text
 

@@ -135,6 +135,7 @@ $readmeFrameworkLabels = [ordered]@{
     HIPAA = 'HIPAA'
     PCI = 'PCI-DSS'
     E8 = 'ACSC Essential Eight'
+    CyberEssentials = 'Cyber Essentials'
     SOC2 = 'SOC 2'
     ISO27001 = 'ISO 27001'
     STIG = 'DISA STIG'
@@ -199,11 +200,17 @@ if ($scriptText -notmatch "Framework -eq 'STIG'" -or $scriptText -notmatch 'STIG
 if ($scriptText -notmatch "Framework -eq 'E8'" -or $scriptText -notmatch 'E8:' -or $scriptText -notmatch "'E8'\s*=\s*@\{" -or $scriptText -notmatch '\[ValidateSet\([^\)]*E8') {
     Add-Failure 'ACSC Essential Eight must be exposed as a framework, scan profile, and formatted compliance target.'
 }
+if ($scriptText -notmatch "Framework -eq 'CyberEssentials'" -or $scriptText -notmatch 'CE:' -or $scriptText -notmatch "'CyberEssentials'\s*=\s*@\{" -or $scriptText -notmatch '\[ValidateSet\([^\)]*CyberEssentials') {
+    Add-Failure 'Cyber Essentials must be exposed as a framework, scan profile, and formatted compliance target.'
+}
 if ($scriptText -notmatch "\`$compObj\['STIG'\]" -or $scriptText -notmatch '(?m)^\s+stig\s+=' -or $scriptText -notmatch '(?m)^\s+STIG\s+=') {
     Add-Failure 'Structured JSON, JSONL, and CSV exports must include STIG detail fields.'
 }
 if ($scriptText -notmatch "\`$compObj\['ACSC_Essential_Eight'\]" -or $scriptText -notmatch '(?m)^\s+essential_eight\s+=' -or $scriptText -notmatch '(?m)^\s+Essential_Eight\s+=') {
     Add-Failure 'Structured JSON, JSONL, and CSV exports must include ACSC Essential Eight fields.'
+}
+if ($scriptText -notmatch "\`$compObj\['Cyber_Essentials'\]" -or $scriptText -notmatch '(?m)^\s+cyber_essentials\s+=' -or $scriptText -notmatch '(?m)^\s+Cyber_Essentials\s+=') {
+    Add-Failure 'Structured JSON, JSONL, and CSV exports must include Cyber Essentials fields.'
 }
 if ($scriptText -notmatch 'function ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Findings\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Evidence\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Notes\s+=\s+ConvertTo-CsvSafeText') {
     Add-Failure 'CSV export free-text fields must be formula-injection neutralized.'
@@ -234,6 +241,9 @@ if ($scriptText -match '\$t\.TextSec\b') {
 }
 if ($scriptText -notmatch 'Defender provider unavailable' -or $scriptText -notmatch 'Defender status unavailable') {
     Add-Failure 'EP01 must degrade Defender provider failures into a partial finding instead of aborting the check.'
+}
+if ($scriptText -notmatch 'BitLocker status unavailable' -or $scriptText -notmatch 'Run as Administrator for full disk-encryption evidence') {
+    Add-Failure 'EP02 must degrade BitLocker access/provider failures into a partial finding instead of aborting the check.'
 }
 if ($scriptText -match '(?m)^\s*(Set-Service|Start-Service|Stop-Service|Restart-Service)\b') {
     Add-Failure 'Automation paths must use sc.exe instead of service cmdlets that can show progress UI.'
