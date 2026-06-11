@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.3.0 - Professional GUI Tool
+    Network Security Auditor v4.3.1 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.3.0
+    4.3.1
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.3.0'
+$script:ProductVersion = '4.3.1'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -4049,9 +4049,9 @@ $script:CategoryWeights = @{
 }
 
 # ── Phase 3: Compliance Framework Integration ────────────────────────────────
-# Structured mapping of all 68 checks to 7 compliance frameworks with specific control IDs.
-# NIST CSF, CIS Controls v8, and HIPAA are already in the per-check Compliance string.
-# This table adds: NIST 800-171 Rev 3, CMMC 2.0, PCI-DSS 4.0.1, SOC 2, ISO 27001:2022, DISA STIG
+# Structured mapping of all 68 checks to 8 compliance frameworks with specific control IDs.
+# CIS and HIPAA coverage is represented through built-in compliance strings and framework profiles.
+# This table adds structured control IDs for NIST 800-171 Rev 3, CMMC 2.0, PCI-DSS 4.0.1, SOC 2, ISO 27001:2022, and DISA STIG.
 $script:ComplianceTarget = 'All'   # Active framework filter: All, CIS, NIST, CMMC, HIPAA, PCI, SOC2, ISO27001, STIG
 
 $script:FrameworkMeta = [ordered]@{
@@ -4066,7 +4066,7 @@ $script:FrameworkMeta = [ordered]@{
 }
 
 # Per-check mapping: each key = check ID, value = hashtable of framework -> control IDs
-# CIS and HIPAA are parsed from existing Compliance string; these add the remaining 5 frameworks
+# FrameworkMap supplies structured controls for detailed reports and exports.
 $script:FrameworkMap = @{
     # ── Identity & Access ──
     'IA01' = @{ 'NIST'='3.1.1, 3.1.2, 3.1.5'; 'CMMC'='AC.L2-3.1.1, AC.L2-3.1.2, AC.L2-3.1.5'; 'PCI'='7.2.1, 7.2.2, 8.6.1'; 'SOC2'='CC6.1, CC6.3'; 'ISO27001'='A.5.15, A.5.18, A.8.2' }
