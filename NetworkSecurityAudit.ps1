@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.1.7 - Professional GUI Tool
+    Network Security Auditor v4.1.8 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -33,6 +33,8 @@
     Skip public internet downloads, DNS filter tests, and outbound probe checks.
 .PARAMETER NoElevate
     Do not auto-relaunch with UAC elevation when the process is not already Administrator.
+.PARAMETER NoRegistryWrite
+    In silent mode, skip registry-backed RMM/cache writes while allowing command-based RMM integrations.
 .PARAMETER Client
     Client name for the report header. Default: domain or computer name.
 .PARAMETER Auditor
@@ -49,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.7
+    4.1.8
 #>
 param(
     [switch]$Silent,
@@ -68,13 +70,14 @@ param(
     [switch]$ExportPDF,
     [switch]$NoRmmWrite,
     [switch]$NoInternet,
-    [switch]$NoElevate
+    [switch]$NoElevate,
+    [switch]$NoRegistryWrite
 )
 
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.1.7'
+$script:ProductVersion = '4.1.8'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -101,6 +104,7 @@ if (-not $script:IsAdmin -and -not $NoElevate) {
         if ($ExportPDF)    { $argList += '-ExportPDF' }
         if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
         if ($NoInternet)   { $argList += '-NoInternet' }
+        if ($NoRegistryWrite) { $argList += '-NoRegistryWrite' }
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs -WindowStyle Hidden
         exit
     }
@@ -127,6 +131,7 @@ $script:CliExportPDF   = $ExportPDF.IsPresent
 $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 $script:CliNoInternet  = $NoInternet.IsPresent
 $script:CliNoElevate   = $NoElevate.IsPresent
+$script:CliNoRegistryWrite = $NoRegistryWrite.IsPresent
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
@@ -8993,8 +8998,12 @@ if ($script:SilentMode) {
             } catch { Write-Host "[Silent Mode] NinjaRMM field write failed: $_" -ForegroundColor Yellow }
         }
 
+        if ($script:CliNoRegistryWrite) {
+            Write-Host "[Silent Mode] Registry-backed RMM/cache writes skipped (-NoRegistryWrite)" -ForegroundColor Cyan
+        }
+
         # Datto RMM (UDF)
-        if (Test-Path 'HKLM:\SOFTWARE\CentraStage' -EA SilentlyContinue) {
+        if (-not $script:CliNoRegistryWrite -and (Test-Path 'HKLM:\SOFTWARE\CentraStage' -EA SilentlyContinue)) {
             try {
                 New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom1' -Value $riskData.Grade -Force -EA SilentlyContinue | Out-Null
                 New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom2' -Value "$($riskData.Pct)%" -Force -EA SilentlyContinue | Out-Null
@@ -9006,7 +9015,7 @@ if ($script:SilentMode) {
         }
 
         # ConnectWise Automate (LabTech) - write to registry EDFs
-        if (Test-Path 'HKLM:\SOFTWARE\LabTech\Service' -EA SilentlyContinue) {
+        if (-not $script:CliNoRegistryWrite -and (Test-Path 'HKLM:\SOFTWARE\LabTech\Service' -EA SilentlyContinue)) {
             try {
                 $ltPath = 'HKLM:\SOFTWARE\LabTech\Service\SecurityAudit'
                 if (-not (Test-Path $ltPath)) { New-Item -Path $ltPath -Force | Out-Null }
@@ -9032,7 +9041,7 @@ if ($script:SilentMode) {
         }
 
         # HaloPSA - write custom asset fields via registry cache
-        if (Test-Path 'HKLM:\SOFTWARE\HaloPSA' -EA SilentlyContinue) {
+        if (-not $script:CliNoRegistryWrite -and (Test-Path 'HKLM:\SOFTWARE\HaloPSA' -EA SilentlyContinue)) {
             try {
                 $haloPath = 'HKLM:\SOFTWARE\HaloPSA\SecurityAudit'
                 if (-not (Test-Path $haloPath)) { New-Item -Path $haloPath -Force | Out-Null }
@@ -9045,20 +9054,22 @@ if ($script:SilentMode) {
         }
 
         # Generic RMM output: write summary to well-known registry path
-        try {
-            $rmmPath = 'HKLM:\SOFTWARE\NetworkSecurityAudit'
-            if (-not (Test-Path $rmmPath)) { New-Item -Path $rmmPath -Force | Out-Null }
-            Set-ItemProperty -Path $rmmPath -Name 'LastScanDate' -Value (Get-Date -Format 'o') -Force
-            Set-ItemProperty -Path $rmmPath -Name 'Grade' -Value $riskData.Grade -Force
-            Set-ItemProperty -Path $rmmPath -Name 'Score' -Value $riskData.Pct -Force
-            Set-ItemProperty -Path $rmmPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
-            Set-ItemProperty -Path $rmmPath -Name 'RansomwareGrade' -Value $rwData.Grade -Force
-            Set-ItemProperty -Path $rmmPath -Name 'ComplianceFlags' -Value $complianceStr -Force
-            Set-ItemProperty -Path $rmmPath -Name 'FailCount' -Value ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count -Force
-            Set-ItemProperty -Path $rmmPath -Name 'ReportPath' -Value $outFile -Force
-            Set-ItemProperty -Path $rmmPath -Name 'SummaryPath' -Value $summaryOut -Force
-            Write-Host "[Silent Mode] Registry audit data updated (HKLM\SOFTWARE\NetworkSecurityAudit)" -ForegroundColor Cyan
-        } catch { Write-Host "[Silent Mode] Registry write failed: $_" -ForegroundColor Yellow }
+        if (-not $script:CliNoRegistryWrite) {
+            try {
+                $rmmPath = 'HKLM:\SOFTWARE\NetworkSecurityAudit'
+                if (-not (Test-Path $rmmPath)) { New-Item -Path $rmmPath -Force | Out-Null }
+                Set-ItemProperty -Path $rmmPath -Name 'LastScanDate' -Value (Get-Date -Format 'o') -Force
+                Set-ItemProperty -Path $rmmPath -Name 'Grade' -Value $riskData.Grade -Force
+                Set-ItemProperty -Path $rmmPath -Name 'Score' -Value $riskData.Pct -Force
+                Set-ItemProperty -Path $rmmPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
+                Set-ItemProperty -Path $rmmPath -Name 'RansomwareGrade' -Value $rwData.Grade -Force
+                Set-ItemProperty -Path $rmmPath -Name 'ComplianceFlags' -Value $complianceStr -Force
+                Set-ItemProperty -Path $rmmPath -Name 'FailCount' -Value ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count -Force
+                Set-ItemProperty -Path $rmmPath -Name 'ReportPath' -Value $outFile -Force
+                Set-ItemProperty -Path $rmmPath -Name 'SummaryPath' -Value $summaryOut -Force
+                Write-Host "[Silent Mode] Registry audit data updated (HKLM\SOFTWARE\NetworkSecurityAudit)" -ForegroundColor Cyan
+            } catch { Write-Host "[Silent Mode] Registry write failed: $_" -ForegroundColor Yellow }
+        }
     }
 
     # ── Exit Codes for RMM Alerting ──
