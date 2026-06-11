@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.1.9 - Professional GUI Tool
+    Network Security Auditor v4.2.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -17,7 +17,7 @@
 .PARAMETER ScanProfile
     Scan profile to use: Quick, Standard, Full, ADOnly, LocalOnly,
     HIPAA, PCI, CMMC, SOC2, ISO27001, STIG.
-    Default: Full (all 67 checks). Quick runs ~20 critical checks.
+    Default: Full (all 68 checks). Quick runs ~20 critical checks.
     Framework profiles run checks mapped to that compliance framework.
 .PARAMETER OutputPath
     Path for report output. Default: Desktop\SecurityAudit_<client>_<date>.html
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.9
+    4.2.0
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.1.9'
+$script:ProductVersion = '4.2.0'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -724,6 +724,12 @@ $script:AuditCategories = [ordered]@{
                 Hint='Run: Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonTimestamp | Where { [DateTime]::FromFileTime($_.LastLogonTimestamp) -lt (Get-Date).AddDays(-90) } | Select Name,SamAccountName,@{N="LastLogon";E={[DateTime]::FromFileTime($_.LastLogonTimestamp)}}. This finds enabled accounts that have not logged in for 90+ days. These are prime targets for attackers because nobody notices unauthorized use of a forgotten account. Cross-reference against the terminated employee list (IA04) and service accounts. Some will be legitimate (seasonal workers, leave of absence), but most are just forgotten. Disable them immediately and delete after 30 days if unclaimed.'
                 Compliance='NIST CSF PR.AC-1, PR.AC-6 | CIS Control 5.3 | HIPAA 164.312(a)(2)(ii)'
             }
+            @{
+                ID='IA11'; Severity='High'; Weight=7
+                Text='Kerberos RC4/DES deprecation readiness - detect legacy encryption dependencies'
+                Hint='Run from a domain-joined admin workstation with the Active Directory module. Review service accounts, computer accounts, and trusts with msDS-SupportedEncryptionTypes missing AES128/AES256 flags or explicitly allowing DES/RC4 without AES. Also review KDC System log Event IDs 201-209, DefaultDomainSupportedEncTypes, and RC4DefaultDisablementPhase. Remediate by enabling AES encryption types, resetting affected account passwords so AES keys exist, removing DES/RC4 where legacy applications allow, and documenting any temporary RC4 exceptions before Microsoft RC4 enforcement phases complete.'
+                Compliance='NIST CSF PR.AC-1, PR.AC-7, PR.DS-2 | CIS Control 5.2, 6.7, 8.11 | HIPAA 164.312(a)(2)(i), 164.312(d), 164.312(e)(2)(ii)'
+            }
         )
     }
 
@@ -1267,6 +1273,149 @@ $script:AutoChecks = @{
             foreach ($u in $inactive) { [void]$sb.AppendLine("  $($u.SamAccountName) | Last: $(if($u.LastLogonDate){$u.LastLogonDate.ToString('yyyy-MM-dd')}else{'Never'})") }
             $status = if ($inactive.Count -eq 0) {'Pass'} elseif ($inactive.Count -le 5) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Inactive account scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+        }
+    }
+
+    'IA11' = @{ Type='AD'; Label='Scan Kerberos RC4/DES Readiness'
+        Script = {
+            function Test-KerberosEncUnset {
+                param([object]$Value)
+                return ($null -eq $Value -or $Value -eq '' -or [int]$Value -eq 0)
+            }
+            function Test-KerberosEncHasAes {
+                param([object]$Value)
+                if (Test-KerberosEncUnset $Value) { return $false }
+                $enc = [int]$Value
+                return (($enc -band 0x18) -ne 0)
+            }
+            function Test-KerberosEncHasLegacy {
+                param([object]$Value)
+                if (Test-KerberosEncUnset $Value) { return $false }
+                $enc = [int]$Value
+                return (($enc -band 0x7) -ne 0)
+            }
+            function Test-KerberosEncLegacyOnly {
+                param([object]$Value)
+                if (Test-KerberosEncUnset $Value) { return $false }
+                return ((Test-KerberosEncHasLegacy $Value) -and -not (Test-KerberosEncHasAes $Value))
+            }
+            function ConvertTo-KerberosEncSummary {
+                param([object]$Value)
+                if (Test-KerberosEncUnset $Value) { return 'Unset/default-dependent' }
+                $enc = [int]$Value
+                $parts = New-Object System.Collections.Generic.List[string]
+                if (($enc -band 0x1) -ne 0) { [void]$parts.Add('DES-CBC-CRC') }
+                if (($enc -band 0x2) -ne 0) { [void]$parts.Add('DES-CBC-MD5') }
+                if (($enc -band 0x4) -ne 0) { [void]$parts.Add('RC4-HMAC') }
+                if (($enc -band 0x8) -ne 0) { [void]$parts.Add('AES128') }
+                if (($enc -band 0x10) -ne 0) { [void]$parts.Add('AES256') }
+                if (($enc -band 0x20) -ne 0) { [void]$parts.Add('FAST/compound identity/claims') }
+                if ($parts.Count -eq 0) { [void]$parts.Add('No recognized bits') }
+                return ('0x{0:X} ({1})' -f $enc, ($parts -join ', '))
+            }
+
+            $sb = [System.Text.StringBuilder]::new()
+            $issues = 0
+            $warnings = 0
+            $domain = Get-ADDomain -EA Stop
+            [void]$sb.AppendLine("Domain: $($domain.DNSRoot)")
+            [void]$sb.AppendLine("Kerberos encryption flags: DES=0x1/0x2, RC4=0x4, AES128=0x8, AES256=0x10")
+
+            $spnAccounts = @(Get-ADUser -LDAPFilter '(servicePrincipalName=*)' -Properties 'msDS-SupportedEncryptionTypes',PasswordLastSet,PasswordNeverExpires,ServicePrincipalName,Enabled -EA Stop)
+            $legacyUsers = @($spnAccounts | Where-Object { Test-KerberosEncLegacyOnly $_.'msDS-SupportedEncryptionTypes' })
+            $defaultUsers = @($spnAccounts | Where-Object { Test-KerberosEncUnset $_.'msDS-SupportedEncryptionTypes' })
+            $legacyEnabledUsers = @($legacyUsers | Where-Object { $_.Enabled })
+            if ($legacyEnabledUsers.Count -gt 0) { $issues += $legacyEnabledUsers.Count }
+            if ($defaultUsers.Count -gt 0) { $warnings += $defaultUsers.Count }
+
+            [void]$sb.AppendLine("`nSERVICE ACCOUNT SPN ENCRYPTION TYPES:")
+            [void]$sb.AppendLine("  SPN accounts inspected: $($spnAccounts.Count)")
+            [void]$sb.AppendLine("  Legacy-only enabled accounts: $($legacyEnabledUsers.Count)")
+            [void]$sb.AppendLine("  Unset/default-dependent accounts: $($defaultUsers.Count)")
+            foreach ($u in ($legacyEnabledUsers | Sort-Object SamAccountName | Select-Object -First 20)) {
+                $age = if ($u.PasswordLastSet) { ((Get-Date) - $u.PasswordLastSet).Days } else { 'Unknown' }
+                [void]$sb.AppendLine("  [LEGACY-ONLY] $($u.SamAccountName) | $(ConvertTo-KerberosEncSummary $u.'msDS-SupportedEncryptionTypes') | Password age: ${age}d")
+            }
+            foreach ($u in ($defaultUsers | Sort-Object SamAccountName | Select-Object -First 10)) {
+                [void]$sb.AppendLine("  [DEFAULT-DEPENDENT] $($u.SamAccountName) | set AES flags and reset password if the service supports AES")
+            }
+
+            $computers = @(Get-ADComputer -Filter * -Properties 'msDS-SupportedEncryptionTypes',OperatingSystem,Enabled -EA SilentlyContinue)
+            $legacyComputers = @($computers | Where-Object { $_.Enabled -and (Test-KerberosEncLegacyOnly $_.'msDS-SupportedEncryptionTypes') })
+            $defaultComputers = @($computers | Where-Object { $_.Enabled -and (Test-KerberosEncUnset $_.'msDS-SupportedEncryptionTypes') })
+            if ($legacyComputers.Count -gt 0) { $issues += $legacyComputers.Count }
+            if ($defaultComputers.Count -gt 0) { $warnings += [math]::Min($defaultComputers.Count, 25) }
+            [void]$sb.AppendLine("`nCOMPUTER ACCOUNT ENCRYPTION TYPES:")
+            [void]$sb.AppendLine("  Computers inspected: $($computers.Count)")
+            [void]$sb.AppendLine("  Legacy-only enabled computers: $($legacyComputers.Count)")
+            [void]$sb.AppendLine("  Unset/default-dependent computers: $($defaultComputers.Count)")
+            foreach ($c in ($legacyComputers | Sort-Object Name | Select-Object -First 20)) {
+                [void]$sb.AppendLine("  [LEGACY-ONLY] $($c.Name) | $(ConvertTo-KerberosEncSummary $c.'msDS-SupportedEncryptionTypes') | $($c.OperatingSystem)")
+            }
+
+            $trusts = @(Get-ADObject -LDAPFilter '(objectClass=trustedDomain)' -SearchBase "CN=System,$($domain.DistinguishedName)" -Properties 'msDS-SupportedEncryptionTypes',flatName,trustPartner -EA SilentlyContinue)
+            $legacyTrusts = @($trusts | Where-Object { Test-KerberosEncLegacyOnly $_.'msDS-SupportedEncryptionTypes' })
+            $defaultTrusts = @($trusts | Where-Object { Test-KerberosEncUnset $_.'msDS-SupportedEncryptionTypes' })
+            if ($legacyTrusts.Count -gt 0) { $issues += $legacyTrusts.Count }
+            if ($defaultTrusts.Count -gt 0) { $warnings += $defaultTrusts.Count }
+            [void]$sb.AppendLine("`nTRUST ENCRYPTION TYPES:")
+            [void]$sb.AppendLine("  Trusts inspected: $($trusts.Count)")
+            [void]$sb.AppendLine("  Legacy-only trusts: $($legacyTrusts.Count)")
+            [void]$sb.AppendLine("  Unset/default-dependent trusts: $($defaultTrusts.Count)")
+            foreach ($t in ($legacyTrusts | Sort-Object Name | Select-Object -First 20)) {
+                $trustName = if ($t.trustPartner) { $t.trustPartner } elseif ($t.flatName) { $t.flatName } else { $t.Name }
+                [void]$sb.AppendLine("  [LEGACY-ONLY] $trustName | $(ConvertTo-KerberosEncSummary $t.'msDS-SupportedEncryptionTypes')")
+            }
+
+            try {
+                $os = Get-CimInstance Win32_OperatingSystem -EA Stop
+                if ($os.ProductType -eq 2) {
+                    $eventIds = @(201,202,203,204,205,206,207,208,209)
+                    $since = (Get-Date).AddDays(-30)
+                    $events = @(Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Kdcsvc'; Id=$eventIds; StartTime=$since} -MaxEvents 20 -EA Stop)
+                    if ($events.Count -gt 0) {
+                        $issues += $events.Count
+                        [void]$sb.AppendLine("`nKDC RC4/DES EVENT IDS 201-209 (last 30 days): $($events.Count)+")
+                        foreach ($evt in $events) {
+                            [void]$sb.AppendLine("  Event $($evt.Id) | $($evt.TimeCreated.ToString('yyyy-MM-dd HH:mm')) | $($evt.ProviderName)")
+                        }
+                    } else {
+                        [void]$sb.AppendLine("`nKDC RC4/DES events 201-209 (last 30 days): none found locally [OK]")
+                    }
+                } else {
+                    $warnings++
+                    [void]$sb.AppendLine("`nKDC event review: local host is not a domain controller; review System/Kdcsvc Event IDs 201-209 on DCs")
+                }
+            } catch {
+                $warnings++
+                [void]$sb.AppendLine("`nKDC event review: could not query local System/Kdcsvc Event IDs 201-209 ($($_.Exception.Message))")
+            }
+
+            try {
+                $kerbRegPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters'
+                $kerbReg = Get-ItemProperty -Path $kerbRegPath -EA Stop
+                $defaultEnc = $kerbReg.DefaultDomainSupportedEncTypes
+                $phase = $kerbReg.RC4DefaultDisablementPhase
+                [void]$sb.AppendLine("`nLOCAL KERBEROS POLICY REGISTRY:")
+                [void]$sb.AppendLine("  DefaultDomainSupportedEncTypes: $(ConvertTo-KerberosEncSummary $defaultEnc)")
+                [void]$sb.AppendLine("  RC4DefaultDisablementPhase: $(if($null -ne $phase){$phase}else{'Not configured'})")
+                if ($null -ne $defaultEnc -and (Test-KerberosEncLegacyOnly $defaultEnc)) {
+                    $issues++
+                    [void]$sb.AppendLine("  [LEGACY-ONLY] DefaultDomainSupportedEncTypes permits only DES/RC4 without AES")
+                }
+            } catch {
+                $warnings++
+                [void]$sb.AppendLine("`nLocal Kerberos policy registry: not configured or not readable")
+            }
+
+            [void]$sb.AppendLine("`nREMEDIATION SUMMARY:")
+            [void]$sb.AppendLine("  1. Enable AES128/AES256 on affected users, computers, and trusts.")
+            [void]$sb.AppendLine("  2. Reset passwords for affected service/computer accounts so AES keys are generated.")
+            [void]$sb.AppendLine("  3. Remove DES/RC4 flags after dependent applications are validated.")
+            [void]$sb.AppendLine("  4. Review temporary RC4 exceptions and KDC Event IDs 201-209 before enforcement windows.")
+
+            $status = if ($issues -gt 0) { 'Fail' } elseif ($warnings -gt 0) { 'Partial' } else { 'Pass' }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Kerberos RC4/DES readiness scan ($issues blocking findings, $warnings follow-ups) @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
     }
 
@@ -3754,7 +3903,7 @@ foreach ($k in $script:AutoChecks.Keys) { $script:AutoCheckIDs.Add($k) | Out-Nul
 # ── Scan Profiles ────────────────────────────────────────────────────────────
 # Quick: ~20 critical/high checks - fast field assessment (15 min)
 # Standard: ~45 checks - solid audit without the deep dives (30 min)
-# Full: all 67 checks - comprehensive compliance audit (45-60 min)
+# Full: all 68 checks - comprehensive compliance audit (45-60 min)
 # ADOnly / LocalOnly: type-filtered subsets
 $script:ScanProfiles = @{
     Quick = @{
@@ -3762,7 +3911,7 @@ $script:ScanProfiles = @{
         Description = 'Critical and high-severity checks only. Fast field triage.'
         IDs = @(
             'NP01','NP02','NP07','NP08'          # Firewall, open ports, IDS, SSL/TLS
-            'IA01','IA02','IA03','IA04','IA05'    # Admin groups, service accts, MFA, stale, password policy
+            'IA01','IA02','IA03','IA04','IA05','IA11'  # Admin groups, service accts, MFA, stale, password policy, Kerberos encryption
             'EP01','EP02','EP04','EP05'            # Defender, patching, BitLocker, firewall status
             'LM01','LM02'                          # Audit config, SIEM
             'BR01','BR06'                          # Backup solution, backup monitoring
@@ -3774,7 +3923,7 @@ $script:ScanProfiles = @{
         Description = 'All critical/high plus key medium checks. Covers most compliance needs.'
         IDs = @(
             'NP01','NP02','NP03','NP04','NP05','NP07','NP08','NP09','NP10'
-            'IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09'
+            'IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11'
             'EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08'
             'LM01','LM02','LM03','LM04','LM06','LM08'
             'BR01','BR02','BR03','BR05','BR06','BR08'
@@ -3784,7 +3933,7 @@ $script:ScanProfiles = @{
         )
     }
     Full = @{
-        Label = 'Full Compliance Audit (67 checks, ~60 min)'
+        Label = 'Full Compliance Audit (68 checks, ~60 min)'
         Description = 'All checks across all categories. Complete NIST/CIS/HIPAA coverage.'
         IDs = @()  # Empty = all checks
     }
@@ -3802,30 +3951,30 @@ $script:ScanProfiles = @{
     HIPAA = @{
         Label = 'HIPAA Assessment (~45 checks)'
         Description = 'Checks mapped to HIPAA Security Rule (164.3xx) requirements for healthcare compliance.'
-        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
+        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
     }
     PCI = @{
         Label = 'PCI-DSS 4.0.1 Scan (~48 checks)'
         Description = 'Checks mapped to PCI-DSS 4.0.1 requirements for payment card data environments.'
-        IDs = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
+        IDs = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
     }
     CMMC = @{
-        Label = 'CMMC 2.0 Level 2 (all 67 checks)'
+        Label = 'CMMC 2.0 Level 2 (all 68 checks)'
         Description = 'CMMC 2.0 Level 2 maps to NIST 800-171 - full audit coverage required for DoD contractors.'
         IDs = @()  # All checks apply
     }
     SOC2 = @{
         Label = 'SOC 2 Type II (~60 checks)'
         Description = 'Checks mapped to SOC 2 Trust Services Criteria (CC/A1) for service organization audits.'
-        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
+        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
     }
     ISO27001 = @{
-        Label = 'ISO 27001:2022 (all 67 checks)'
+        Label = 'ISO 27001:2022 (all 68 checks)'
         Description = 'Full coverage for ISO 27001:2022 Annex A controls with specific clause mapping.'
         IDs = @()  # All checks apply
     }
     STIG = @{
-        Label = 'DISA STIG (all 67 checks)'
+        Label = 'DISA STIG (all 68 checks)'
         Description = 'DISA Security Technical Implementation Guide compliance for DoD/government environments.'
         IDs = @()  # All checks apply
     }
@@ -3839,7 +3988,7 @@ $script:ScanProfiles = @{
 $script:RiskTiers = @{
     # ── Identity & Access (all Tier 0-1: pure AD reads) ──
     'IA01' = 0; 'IA02' = 0; 'IA03' = 0; 'IA04' = 0; 'IA05' = 0
-    'IA06' = 0; 'IA07' = 0; 'IA08' = 0; 'IA09' = 0; 'IA10' = 0
+    'IA06' = 0; 'IA07' = 0; 'IA08' = 0; 'IA09' = 0; 'IA10' = 0; 'IA11' = 0
     # ── Endpoint Security (Tier 0: local reads) ──
     'EP01' = 0; 'EP02' = 0; 'EP03' = 0; 'EP04' = 0; 'EP05' = 0
     'EP06' = 0; 'EP07' = 0; 'EP08' = 0; 'EP09' = 0; 'EP10' = 0
@@ -3877,7 +4026,7 @@ $script:CategoryWeights = @{
 }
 
 # ── Phase 3: Compliance Framework Integration ────────────────────────────────
-# Structured mapping of all 67 checks to 7 compliance frameworks with specific control IDs.
+# Structured mapping of all 68 checks to 7 compliance frameworks with specific control IDs.
 # NIST CSF, CIS Controls v8, and HIPAA are already in the per-check Compliance string.
 # This table adds: NIST 800-171 Rev 3, CMMC 2.0, PCI-DSS 4.0.1, SOC 2, ISO 27001:2022, DISA STIG
 $script:ComplianceTarget = 'All'   # Active framework filter: All, CIS, NIST, CMMC, HIPAA, PCI, SOC2, ISO27001, STIG
@@ -3907,6 +4056,7 @@ $script:FrameworkMap = @{
     'IA08' = @{ 'NIST'='3.1.1, 3.1.12'; 'CMMC'='AC.L2-3.1.1, PS.L2-3.9.2'; 'PCI'='8.1.4, 8.6.1'; 'SOC2'='CC6.1, CC6.2'; 'ISO27001'='A.5.18, A.5.19, A.5.20' }
     'IA09' = @{ 'NIST'='3.1.3, 3.5.3'; 'CMMC'='AC.L2-3.1.3, IA.L2-3.5.3'; 'PCI'='7.2.1, 8.4.1'; 'SOC2'='CC6.1, CC6.6'; 'ISO27001'='A.5.15, A.8.5' }
     'IA10' = @{ 'NIST'='3.1.1, 3.1.12'; 'CMMC'='AC.L2-3.1.1'; 'PCI'='8.2.6'; 'SOC2'='CC6.1, CC6.2'; 'ISO27001'='A.5.18, A.6.5' }
+    'IA11' = @{ 'NIST'='3.5.2, 3.5.3, 3.13.8'; 'CMMC'='IA.L2-3.5.2, IA.L2-3.5.3, SC.L2-3.13.8'; 'PCI'='4.2.1, 8.3.6, 8.4.2'; 'SOC2'='CC6.1, CC6.6'; 'ISO27001'='A.5.17, A.8.5, A.8.24' }
     # ── Endpoint Security ──
     'EP01' = @{ 'NIST'='3.14.1, 3.14.2, 3.14.4, 3.14.5'; 'CMMC'='SI.L2-3.14.1, SI.L2-3.14.2'; 'PCI'='5.2.1, 5.2.2, 5.3.1, 5.3.2'; 'SOC2'='CC6.8, CC7.1'; 'ISO27001'='A.8.7' }
     'EP02' = @{ 'NIST'='3.8.6, 3.13.11'; 'CMMC'='MP.L2-3.8.6, SC.L2-3.13.11'; 'PCI'='3.5.1, 9.4.1'; 'SOC2'='CC6.1, CC6.7'; 'ISO27001'='A.8.24' }
@@ -3977,7 +4127,7 @@ $script:FrameworkMap = @{
 $stigMap = @{
     'IA01'='V-254247,V-254248'; 'IA02'='V-254249,V-254250'; 'IA03'='V-254251'; 'IA04'='V-254252,V-254253'
     'IA05'='V-254254,V-254255,V-254256'; 'IA06'='V-254257,V-254258'; 'IA07'='V-254259'; 'IA08'='V-254260'
-    'IA09'='V-254261,V-254262'; 'IA10'='V-254263'
+    'IA09'='V-254261,V-254262'; 'IA10'='V-254263'; 'IA11'='Kerberos encryption type policy / RC4 deprecation readiness'
     'EP01'='V-254264,V-254265,V-254266'; 'EP02'='V-254267,V-254268'; 'EP03'='V-254269,V-254270,V-254271'
     'EP04'='V-254272,V-254273'; 'EP05'='V-254274,V-254275'; 'EP06'='V-254276,V-254277'
     'EP07'='V-254278,V-254279'; 'EP08'='V-254280,V-254281,V-254282'; 'EP09'='V-254283'; 'EP10'='V-254284'
@@ -4004,9 +4154,9 @@ $script:FrameworkChecks = @{
     'CIS'      = @($script:FrameworkMap.Keys)  # CIS covers all checks
     'NIST'     = @($script:FrameworkMap.Keys | Where-Object { $script:FrameworkMap[$_].NIST })
     'CMMC'     = @($script:FrameworkMap.Keys | Where-Object { $script:FrameworkMap[$_].CMMC })
-    'HIPAA'    = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
-    'PCI'      = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
-    'SOC2'     = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
+    'HIPAA'    = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
+    'PCI'      = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
+    'SOC2'     = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
     'ISO27001' = @($script:FrameworkMap.Keys)  # ISO 27001 covers all checks
     'STIG'     = @($script:FrameworkMap.Keys)  # DISA STIG covers all checks
 }
@@ -4085,7 +4235,7 @@ function Get-FrameworkScores {
 # ── End Phase 3A ─────────────────────────────────────────────────────────────
 
 # ── Phase 4A: MITRE ATT&CK Mapping ──────────────────────────────────────────
-# Maps all 67 checks to ATT&CK Enterprise techniques (v15.1)
+# Maps all 68 checks to ATT&CK Enterprise techniques (v15.1)
 # Format: CheckID -> @{ Tactics=@('TA00xx',...); Techniques=@('T1xxx',...); Desc='short attack context' }
 $script:MitreMap = @{
     # ── Identity & Access ──
@@ -4099,6 +4249,7 @@ $script:MitreMap = @{
     'IA08' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078','T1199'); Desc='Vendor accounts with persistent access enable trusted relationship attacks' }
     'IA09' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1078.004','T1556.006'); Desc='Missing conditional access allows cloud compromise from any device/location' }
     'IA10' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078','T1078.002'); Desc='Stale accounts expand the attack surface for credential-based initial access' }
+    'IA11' = @{ Tactics=@('TA0006','TA0008'); Techniques=@('T1558.003','T1550.003'); Desc='RC4/DES Kerberos dependencies keep service tickets crackable and weaken pass-the-ticket resistance' }
     # ── Endpoint Security ──
     'EP01' = @{ Tactics=@('TA0005','TA0002'); Techniques=@('T1562.001','T1562.004','T1059'); Desc='Disabled/misconfigured AV allows malware execution, defense evasion, and payload delivery' }
     'EP02' = @{ Tactics=@('TA0005','TA0002'); Techniques=@('T1486','T1059'); Desc='Missing encryption exposes data at rest; enables theft on stolen/decommissioned devices' }
