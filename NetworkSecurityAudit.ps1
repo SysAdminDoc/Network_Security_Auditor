@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.1.2 - Professional GUI Tool
+    Network Security Auditor v4.1.3 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -27,6 +27,8 @@
 .PARAMETER ReadOnly
     Safety mode: skip any checks that could modify system state.
     Default: $true. Set -ReadOnly:$false to allow WinRM/audit policy setup.
+.PARAMETER NoRmmWrite
+    In silent mode, generate reports and exports but skip all RMM and registry field writes.
 .PARAMETER Client
     Client name for the report header. Default: domain or computer name.
 .PARAMETER Auditor
@@ -43,7 +45,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.2
+    4.1.3
 #>
 param(
     [switch]$Silent,
@@ -59,13 +61,14 @@ param(
     [switch]$ExportCSV,
     [switch]$ExportJSONL,
     [switch]$ExportSARIF,
-    [switch]$ExportPDF
+    [switch]$ExportPDF,
+    [switch]$NoRmmWrite
 )
 
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.1.2'
+$script:ProductVersion = '4.1.3'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -89,6 +92,7 @@ if (-not $script:IsAdmin) {
         if ($ExportJSONL)  { $argList += '-ExportJSONL' }
         if ($ExportSARIF)  { $argList += '-ExportSARIF' }
         if ($ExportPDF)    { $argList += '-ExportPDF' }
+        if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs -WindowStyle Hidden
         exit
     }
@@ -112,6 +116,7 @@ $script:CliExportCSV   = $ExportCSV.IsPresent
 $script:CliExportJSONL = $ExportJSONL.IsPresent
 $script:CliExportSARIF = $ExportSARIF.IsPresent
 $script:CliExportPDF   = $ExportPDF.IsPresent
+$script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
@@ -8904,7 +8909,6 @@ if ($script:SilentMode) {
         Write-Host "[Silent Mode] Compliance summary: $summaryOut" -ForegroundColor Green
     } catch { Write-Host "[Silent Mode] Compliance summary export failed: $_" -ForegroundColor Yellow; $summaryOut = '' }
 
-    # ── RMM Platform Detection & Custom Field Writing ──
     $riskData = Get-RiskScore
     $rwData = Get-RansomwareScore
     $fwFlags = @{}
@@ -8914,86 +8918,92 @@ if ($script:SilentMode) {
     } catch {}
     $complianceStr = ($fwFlags.Keys | ForEach-Object { "$_`:$(if($fwFlags[$_]){'PASS'}else{'FAIL'})" }) -join '|'
 
-    # NinjaRMM
-    if (Get-Command 'Ninja-Property-Set' -EA SilentlyContinue) {
-        try {
-            Ninja-Property-Set 'securityAuditGrade' $riskData.Grade
-            Ninja-Property-Set 'securityAuditScore' $riskData.Pct
-            Ninja-Property-Set 'securityAuditDate' (Get-Date -Format 'yyyy-MM-dd')
-            Ninja-Property-Set 'securityAuditFindings' ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
-            Ninja-Property-Set 'ransomwareScore' $rwData.Overall
-            Ninja-Property-Set 'ransomwareGrade' $rwData.Grade
-            Ninja-Property-Set 'complianceStatus' $complianceStr
-            Write-Host "[Silent Mode] NinjaRMM custom fields updated" -ForegroundColor Cyan
-        } catch { Write-Host "[Silent Mode] NinjaRMM field write failed: $_" -ForegroundColor Yellow }
+    if ($script:CliNoRmmWrite) {
+        Write-Host "[Silent Mode] RMM and registry field writes skipped (-NoRmmWrite)" -ForegroundColor Cyan
     }
+    else {
+        # ── RMM Platform Detection & Custom Field Writing ──
+        # NinjaRMM
+        if (Get-Command 'Ninja-Property-Set' -EA SilentlyContinue) {
+            try {
+                Ninja-Property-Set 'securityAuditGrade' $riskData.Grade
+                Ninja-Property-Set 'securityAuditScore' $riskData.Pct
+                Ninja-Property-Set 'securityAuditDate' (Get-Date -Format 'yyyy-MM-dd')
+                Ninja-Property-Set 'securityAuditFindings' ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
+                Ninja-Property-Set 'ransomwareScore' $rwData.Overall
+                Ninja-Property-Set 'ransomwareGrade' $rwData.Grade
+                Ninja-Property-Set 'complianceStatus' $complianceStr
+                Write-Host "[Silent Mode] NinjaRMM custom fields updated" -ForegroundColor Cyan
+            } catch { Write-Host "[Silent Mode] NinjaRMM field write failed: $_" -ForegroundColor Yellow }
+        }
 
-    # Datto RMM (UDF)
-    if (Test-Path 'HKLM:\SOFTWARE\CentraStage' -EA SilentlyContinue) {
+        # Datto RMM (UDF)
+        if (Test-Path 'HKLM:\SOFTWARE\CentraStage' -EA SilentlyContinue) {
+            try {
+                New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom1' -Value $riskData.Grade -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom2' -Value "$($riskData.Pct)%" -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom3' -Value (Get-Date -Format 'yyyy-MM-dd') -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom4' -Value "RW:$($rwData.Overall)% ($($rwData.Grade))" -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom5' -Value $complianceStr -Force -EA SilentlyContinue | Out-Null
+                Write-Host "[Silent Mode] Datto RMM UDFs updated" -ForegroundColor Cyan
+            } catch { Write-Host "[Silent Mode] Datto UDF write failed: $_" -ForegroundColor Yellow }
+        }
+
+        # ConnectWise Automate (LabTech) - write to registry EDFs
+        if (Test-Path 'HKLM:\SOFTWARE\LabTech\Service' -EA SilentlyContinue) {
+            try {
+                $ltPath = 'HKLM:\SOFTWARE\LabTech\Service\SecurityAudit'
+                if (-not (Test-Path $ltPath)) { New-Item -Path $ltPath -Force | Out-Null }
+                Set-ItemProperty -Path $ltPath -Name 'Grade' -Value $riskData.Grade -Force
+                Set-ItemProperty -Path $ltPath -Name 'Score' -Value $riskData.Pct -Force
+                Set-ItemProperty -Path $ltPath -Name 'Date' -Value (Get-Date -Format 'yyyy-MM-dd') -Force
+                Set-ItemProperty -Path $ltPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
+                Set-ItemProperty -Path $ltPath -Name 'Compliance' -Value $complianceStr -Force
+                Set-ItemProperty -Path $ltPath -Name 'ReportPath' -Value $outFile -Force
+                Write-Host "[Silent Mode] ConnectWise Automate EDFs updated" -ForegroundColor Cyan
+            } catch { Write-Host "[Silent Mode] CW Automate EDF write failed: $_" -ForegroundColor Yellow }
+        }
+
+        # Syncro RMM - write via Syncro module if available
+        if (Get-Command 'Set-SyncroCustomField' -EA SilentlyContinue) {
+            try {
+                Set-SyncroCustomField -Name 'SecurityAuditGrade' -Value $riskData.Grade
+                Set-SyncroCustomField -Name 'SecurityAuditScore' -Value "$($riskData.Pct)%"
+                Set-SyncroCustomField -Name 'RansomwareScore' -Value "$($rwData.Overall)% ($($rwData.Grade))"
+                Set-SyncroCustomField -Name 'ComplianceStatus' -Value $complianceStr
+                Write-Host "[Silent Mode] Syncro RMM custom fields updated" -ForegroundColor Cyan
+            } catch { Write-Host "[Silent Mode] Syncro field write failed: $_" -ForegroundColor Yellow }
+        }
+
+        # HaloPSA - write custom asset fields via registry cache
+        if (Test-Path 'HKLM:\SOFTWARE\HaloPSA' -EA SilentlyContinue) {
+            try {
+                $haloPath = 'HKLM:\SOFTWARE\HaloPSA\SecurityAudit'
+                if (-not (Test-Path $haloPath)) { New-Item -Path $haloPath -Force | Out-Null }
+                Set-ItemProperty -Path $haloPath -Name 'Grade' -Value $riskData.Grade -Force
+                Set-ItemProperty -Path $haloPath -Name 'Score' -Value $riskData.Pct -Force
+                Set-ItemProperty -Path $haloPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
+                Set-ItemProperty -Path $haloPath -Name 'Compliance' -Value $complianceStr -Force
+                Write-Host "[Silent Mode] HaloPSA fields updated" -ForegroundColor Cyan
+            } catch { Write-Host "[Silent Mode] HaloPSA field write failed: $_" -ForegroundColor Yellow }
+        }
+
+        # Generic RMM output: write summary to well-known registry path
         try {
-            New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom1' -Value $riskData.Grade -Force -EA SilentlyContinue | Out-Null
-            New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom2' -Value "$($riskData.Pct)%" -Force -EA SilentlyContinue | Out-Null
-            New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom3' -Value (Get-Date -Format 'yyyy-MM-dd') -Force -EA SilentlyContinue | Out-Null
-            New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom4' -Value "RW:$($rwData.Overall)% ($($rwData.Grade))" -Force -EA SilentlyContinue | Out-Null
-            New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom5' -Value $complianceStr -Force -EA SilentlyContinue | Out-Null
-            Write-Host "[Silent Mode] Datto RMM UDFs updated" -ForegroundColor Cyan
-        } catch { Write-Host "[Silent Mode] Datto UDF write failed: $_" -ForegroundColor Yellow }
+            $rmmPath = 'HKLM:\SOFTWARE\NetworkSecurityAudit'
+            if (-not (Test-Path $rmmPath)) { New-Item -Path $rmmPath -Force | Out-Null }
+            Set-ItemProperty -Path $rmmPath -Name 'LastScanDate' -Value (Get-Date -Format 'o') -Force
+            Set-ItemProperty -Path $rmmPath -Name 'Grade' -Value $riskData.Grade -Force
+            Set-ItemProperty -Path $rmmPath -Name 'Score' -Value $riskData.Pct -Force
+            Set-ItemProperty -Path $rmmPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
+            Set-ItemProperty -Path $rmmPath -Name 'RansomwareGrade' -Value $rwData.Grade -Force
+            Set-ItemProperty -Path $rmmPath -Name 'ComplianceFlags' -Value $complianceStr -Force
+            Set-ItemProperty -Path $rmmPath -Name 'FailCount' -Value ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count -Force
+            Set-ItemProperty -Path $rmmPath -Name 'ReportPath' -Value $outFile -Force
+            Set-ItemProperty -Path $rmmPath -Name 'SummaryPath' -Value $summaryOut -Force
+            Write-Host "[Silent Mode] Registry audit data updated (HKLM\SOFTWARE\NetworkSecurityAudit)" -ForegroundColor Cyan
+        } catch { Write-Host "[Silent Mode] Registry write failed: $_" -ForegroundColor Yellow }
     }
-
-    # ConnectWise Automate (LabTech) - write to registry EDFs
-    if (Test-Path 'HKLM:\SOFTWARE\LabTech\Service' -EA SilentlyContinue) {
-        try {
-            $ltPath = 'HKLM:\SOFTWARE\LabTech\Service\SecurityAudit'
-            if (-not (Test-Path $ltPath)) { New-Item -Path $ltPath -Force | Out-Null }
-            Set-ItemProperty -Path $ltPath -Name 'Grade' -Value $riskData.Grade -Force
-            Set-ItemProperty -Path $ltPath -Name 'Score' -Value $riskData.Pct -Force
-            Set-ItemProperty -Path $ltPath -Name 'Date' -Value (Get-Date -Format 'yyyy-MM-dd') -Force
-            Set-ItemProperty -Path $ltPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
-            Set-ItemProperty -Path $ltPath -Name 'Compliance' -Value $complianceStr -Force
-            Set-ItemProperty -Path $ltPath -Name 'ReportPath' -Value $outFile -Force
-            Write-Host "[Silent Mode] ConnectWise Automate EDFs updated" -ForegroundColor Cyan
-        } catch { Write-Host "[Silent Mode] CW Automate EDF write failed: $_" -ForegroundColor Yellow }
-    }
-
-    # Syncro RMM - write via Syncro module if available
-    if (Get-Command 'Set-SyncroCustomField' -EA SilentlyContinue) {
-        try {
-            Set-SyncroCustomField -Name 'SecurityAuditGrade' -Value $riskData.Grade
-            Set-SyncroCustomField -Name 'SecurityAuditScore' -Value "$($riskData.Pct)%"
-            Set-SyncroCustomField -Name 'RansomwareScore' -Value "$($rwData.Overall)% ($($rwData.Grade))"
-            Set-SyncroCustomField -Name 'ComplianceStatus' -Value $complianceStr
-            Write-Host "[Silent Mode] Syncro RMM custom fields updated" -ForegroundColor Cyan
-        } catch { Write-Host "[Silent Mode] Syncro field write failed: $_" -ForegroundColor Yellow }
-    }
-
-    # HaloPSA - write custom asset fields via registry cache
-    if (Test-Path 'HKLM:\SOFTWARE\HaloPSA' -EA SilentlyContinue) {
-        try {
-            $haloPath = 'HKLM:\SOFTWARE\HaloPSA\SecurityAudit'
-            if (-not (Test-Path $haloPath)) { New-Item -Path $haloPath -Force | Out-Null }
-            Set-ItemProperty -Path $haloPath -Name 'Grade' -Value $riskData.Grade -Force
-            Set-ItemProperty -Path $haloPath -Name 'Score' -Value $riskData.Pct -Force
-            Set-ItemProperty -Path $haloPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
-            Set-ItemProperty -Path $haloPath -Name 'Compliance' -Value $complianceStr -Force
-            Write-Host "[Silent Mode] HaloPSA fields updated" -ForegroundColor Cyan
-        } catch { Write-Host "[Silent Mode] HaloPSA field write failed: $_" -ForegroundColor Yellow }
-    }
-
-    # Generic RMM output: write summary to well-known registry path
-    try {
-        $rmmPath = 'HKLM:\SOFTWARE\NetworkSecurityAudit'
-        if (-not (Test-Path $rmmPath)) { New-Item -Path $rmmPath -Force | Out-Null }
-        Set-ItemProperty -Path $rmmPath -Name 'LastScanDate' -Value (Get-Date -Format 'o') -Force
-        Set-ItemProperty -Path $rmmPath -Name 'Grade' -Value $riskData.Grade -Force
-        Set-ItemProperty -Path $rmmPath -Name 'Score' -Value $riskData.Pct -Force
-        Set-ItemProperty -Path $rmmPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
-        Set-ItemProperty -Path $rmmPath -Name 'RansomwareGrade' -Value $rwData.Grade -Force
-        Set-ItemProperty -Path $rmmPath -Name 'ComplianceFlags' -Value $complianceStr -Force
-        Set-ItemProperty -Path $rmmPath -Name 'FailCount' -Value ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count -Force
-        Set-ItemProperty -Path $rmmPath -Name 'ReportPath' -Value $outFile -Force
-        Set-ItemProperty -Path $rmmPath -Name 'SummaryPath' -Value $summaryOut -Force
-        Write-Host "[Silent Mode] Registry audit data updated (HKLM\SOFTWARE\NetworkSecurityAudit)" -ForegroundColor Cyan
-    } catch { Write-Host "[Silent Mode] Registry write failed: $_" -ForegroundColor Yellow }
 
     # ── Exit Codes for RMM Alerting ──
     # 0 = Clean (A/B grade, no critical failures)

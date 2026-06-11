@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.1.2-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.1.3-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -16,7 +16,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.1.2-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.1.3-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -372,6 +372,7 @@ Optional for full coverage:
 - The default scan mode is read-only for audit checks; higher-risk setup actions require explicit user action.
 - Internet access is limited to documented lookup paths such as the CISA KEV catalog used by patch-compliance checks.
 - Reports and structured exports are written to the selected output folder; RMM field writes are documented in the RMM section.
+- Use `-NoRmmWrite` in silent mode when reports should be generated without updating RMM or registry fields.
 - The script does not auto-update or replace itself.
 - In sensitive environments, download the script first, inspect it, and verify the Authenticode signature state with `Get-AuthenticodeSignature` before running.
 
@@ -401,6 +402,7 @@ The same validation runs in GitHub Actions on push and pull request.
                      Default: All
 -ReadOnly            Safety mode - skip system-modifying checks.
                      Default: $true
+-NoRmmWrite          Silent mode only: skip RMM and registry field writes
 -Client              Client name for report header.
                      Default: domain name or computer name
 -Auditor             Auditor name for report header.
