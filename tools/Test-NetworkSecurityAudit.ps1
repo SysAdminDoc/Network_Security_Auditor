@@ -140,6 +140,9 @@ if ($scriptText -notmatch "Framework -eq 'STIG'" -or $scriptText -notmatch 'STIG
 if ($scriptText -notmatch "\`$compObj\['STIG'\]" -or $scriptText -notmatch '(?m)^\s+stig\s+=' -or $scriptText -notmatch '(?m)^\s+STIG\s+=') {
     Add-Failure 'Structured JSON, JSONL, and CSV exports must include STIG detail fields.'
 }
+if ($scriptText -notmatch 'function ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Findings\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Evidence\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Notes\s+=\s+ConvertTo-CsvSafeText') {
+    Add-Failure 'CSV export free-text fields must be formula-injection neutralized.'
+}
 
 if ($failures.Count -gt 0) {
     Write-Host 'NetworkSecurityAudit validation FAILED' -ForegroundColor Red
