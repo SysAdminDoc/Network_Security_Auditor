@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.5.0 - Professional GUI Tool
+    Network Security Auditor v4.6.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.5.0
+    4.6.0
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.5.0'
+$script:ProductVersion = '4.6.0'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -5375,6 +5375,9 @@ function Update-TabStyles {
 
 # ── Scan Execution Engine (Async) ────────────────────────────────────────────
 $script:ScanTimestamps = @{}  # ID -> last scan datetime string
+$script:RunLog = [System.Collections.Generic.List[object]]::new()
+$script:CurrentRunLogEntry = $null
+$script:CurrentScanProfile = ''
 $script:TabScanCounts  = @{}  # tabIndex -> @{Pass=0;Fail=0;Partial=0;Error=0}
 
 function Write-Log([string]$msg, [string]$level = 'VERBOSE') {
@@ -5384,6 +5387,128 @@ function Write-Log([string]$msg, [string]$level = 'VERBOSE') {
     if ($script:ConsoleVisible) { $el['txtConsole'].ScrollToEnd() }
     $script:ConsoleLineCount++
     $el['lblConsoleCount'].Text = "$($script:ConsoleLineCount) lines"
+}
+
+function Start-RunLogEntry {
+    param(
+        [string]$Id,
+        [string]$Label,
+        [string]$Type,
+        [string]$Target,
+        [string]$Profile
+    )
+    $now = Get-Date
+    $script:CurrentRunLogEntry = [ordered]@{
+        check_id = $Id
+        label = $Label
+        type = $Type
+        target = $Target
+        profile = $Profile
+        start_time = $now.ToString('o')
+        end_time = $null
+        duration_ms = $null
+        duration_seconds = $null
+        status = 'Running'
+        skip_reason = ''
+        timed_out = $false
+        error = ''
+        slow = $false
+    }
+}
+
+function Complete-RunLogEntry {
+    param(
+        [string]$Id,
+        [string]$Status,
+        [string]$ErrorMessage = '',
+        [string]$SkipReason = '',
+        [switch]$TimedOut
+    )
+    $entry = $script:CurrentRunLogEntry
+    if (-not $entry -or $entry.check_id -ne $Id) {
+        $check = if ($script:AutoChecks.Contains($Id)) { $script:AutoChecks[$Id] } else { @{ Label=$Id; Type='' } }
+        $now = Get-Date
+        $entry = [ordered]@{
+            check_id = $Id
+            label = $check.Label
+            type = $check.Type
+            target = ''
+            profile = $script:CurrentScanProfile
+            start_time = $now.ToString('o')
+            end_time = $null
+            duration_ms = $null
+            duration_seconds = $null
+            status = 'Running'
+            skip_reason = ''
+            timed_out = $false
+            error = ''
+            slow = $false
+        }
+    }
+
+    $end = Get-Date
+    $start = try { [datetime]::Parse($entry.start_time) } catch { $end }
+    $durationMs = [int64][math]::Max(0, ($end - $start).TotalMilliseconds)
+    $entry.end_time = $end.ToString('o')
+    $entry.duration_ms = $durationMs
+    $entry.duration_seconds = [math]::Round(($durationMs / 1000), 3)
+    $entry.status = $Status
+    $entry.skip_reason = $SkipReason
+    $entry.timed_out = [bool]$TimedOut
+    $entry.error = $ErrorMessage
+    $entry.slow = ($durationMs -ge 30000)
+    [void]$script:RunLog.Add($entry)
+    if ($script:CurrentRunLogEntry -and $script:CurrentRunLogEntry.check_id -eq $Id) {
+        $script:CurrentRunLogEntry = $null
+    }
+}
+
+function Add-SkippedRunLogEntry {
+    param(
+        [string]$Id,
+        [string]$Reason,
+        [string]$Target = '',
+        [string]$Profile = ''
+    )
+    $check = if ($script:AutoChecks.Contains($Id)) { $script:AutoChecks[$Id] } else { @{ Label=$Id; Type='' } }
+    $now = Get-Date
+    [void]$script:RunLog.Add([ordered]@{
+        check_id = $Id
+        label = $check.Label
+        type = $check.Type
+        target = $Target
+        profile = $Profile
+        start_time = $now.ToString('o')
+        end_time = $now.ToString('o')
+        duration_ms = 0
+        duration_seconds = 0
+        status = 'Skipped'
+        skip_reason = $Reason
+        timed_out = $false
+        error = ''
+        slow = $false
+    })
+}
+
+function Get-RunLogSummary {
+    $entries = @($script:RunLog)
+    $slow = @($entries | Where-Object { $_.slow })
+    $timedOut = @($entries | Where-Object { $_.timed_out })
+    $skipped = @($entries | Where-Object { $_.status -eq 'Skipped' })
+    $errors = @($entries | Where-Object { $_.status -eq 'Error' -or $_.error })
+    $durations = @($entries | Where-Object { $null -ne $_.duration_ms } | ForEach-Object { [double]$_.duration_ms })
+    $totalMs = if ($durations.Count -gt 0) { [int64](($durations | Measure-Object -Sum).Sum) } else { 0 }
+    $maxMs = if ($durations.Count -gt 0) { [int64](($durations | Measure-Object -Maximum).Maximum) } else { 0 }
+    [ordered]@{
+        entries = $entries.Count
+        total_duration_ms = $totalMs
+        total_duration_seconds = [math]::Round(($totalMs / 1000), 3)
+        max_duration_ms = $maxMs
+        slow_checks = $slow.Count
+        timed_out = $timedOut.Count
+        skipped = $skipped.Count
+        errors = $errors.Count
+    }
 }
 
 function Flash-TabForCheck([string]$id, [string]$status) {
@@ -5495,6 +5620,7 @@ function Apply-ScanResult([string]$id, [hashtable]$result) {
     if ($result.Evidence -and $script:EvidenceBoxes.Contains($id)) { $script:EvidenceBoxes[$id].Text = $result.Evidence }
 
     $script:ScanTimestamps[$id] = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    Complete-RunLogEntry -Id $id -Status $result.Status
 
     # Auto-check the checkbox so progress updates and item shows as reviewed
     if ($script:CheckBoxes.Contains($id)) {
@@ -5553,7 +5679,7 @@ function Apply-ScanResult([string]$id, [hashtable]$result) {
     Write-Log "[$id] $($result.Status): $($check.Label)${elapsed}${findingsPreview}" $levelTag
 }
 
-function Apply-ScanError([string]$id, [string]$errMsg) {
+function Apply-ScanError([string]$id, [string]$errMsg, [switch]$TimedOut) {
     if ($script:FindingsBoxes.Contains($id)) { $script:FindingsBoxes[$id].Text = "SCAN ERROR: $errMsg" }
     if ($script:EvidenceBoxes.Contains($id)) { $script:EvidenceBoxes[$id].Text = "Error during auto-check @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
     # Mark as reviewed so it shows in reports (not left as "Not Assessed")
@@ -5568,6 +5694,7 @@ function Apply-ScanError([string]$id, [string]$errMsg) {
     Flash-TabForCheck $id 'Error'
     $elapsed = ''
     if ($script:CurrentScanStopwatch) { $elapsed = " ($([math]::Round($script:CurrentScanStopwatch.Elapsed.TotalSeconds, 1))s)" }
+    Complete-RunLogEntry -Id $id -Status 'Error' -ErrorMessage $errMsg -TimedOut:$TimedOut
     Write-Log "[$id] ERROR: $errMsg${elapsed}" 'ERROR'
 }
 
@@ -5589,6 +5716,7 @@ function Start-AsyncCheck([string]$id) {
     $script:CurrentScanId = $id
     $script:CurrentScanStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     $script:CurrentScanHeartbeat = 0  # tracks last heartbeat second
+    Start-RunLogEntry -Id $id -Label $check.Label -Type $check.Type -Target $target -Profile $script:CurrentScanProfile
 
     $progressPrefix = if ($script:ScanBatchMode -eq 'Batch') { "[$($script:ScanBatchDone)/$($script:ScanBatchTotal)] " } else { "" }
     $el['StatusText'].Text = "${progressPrefix}Scanning [$id] $($check.Label)..."
@@ -5745,6 +5873,8 @@ function Process-ScanQueue {
 
 function Start-ScanBatch([string]$filterType) {
     $ids = $script:AutoChecks.Keys | Sort-Object
+    $profileNameForLog = $filterType
+    $script:RunLog.Clear()
 
     # Reset tab scan badges from prior runs
     Reset-TabScanBadges
@@ -5762,6 +5892,7 @@ function Start-ScanBatch([string]$filterType) {
         $selIdx = $el['cboProfile'].SelectedIndex
         if ($selIdx -lt 0) { $selIdx = 2 }
         $profName = $profileOrder[$selIdx]
+        $profileNameForLog = $profName
         $prof = $script:ScanProfiles[$profName]
 
         if ($profName -eq 'ADOnly') {
@@ -5779,6 +5910,10 @@ function Start-ScanBatch([string]$filterType) {
         Write-Log "Scan profile: $profName ($($prof.Label))" 'INFO'
     }
 
+    $idsBeforeRiskFilter = @($ids)
+    $scanTargetForLog = $el['txtScanTarget'].Text
+    if (-not $scanTargetForLog) { $scanTargetForLog = 'localhost' }
+
     # Risk tier filtering in read-only mode
     if ($script:ReadOnlyMode) {
         $preCount = @($ids).Count
@@ -5789,6 +5924,13 @@ function Start-ScanBatch([string]$filterType) {
         $postCount = @($ids).Count
         if ($preCount -ne $postCount) {
             Write-Log "Read-only mode: skipped $($preCount - $postCount) modifying checks (Tier 3)" 'WARN'
+            $runIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+            foreach ($runId in @($ids)) { [void]$runIds.Add($runId) }
+            foreach ($skippedId in $idsBeforeRiskFilter) {
+                if (-not $runIds.Contains($skippedId)) {
+                    Add-SkippedRunLogEntry -Id $skippedId -Reason 'ReadOnlyRiskTier3' -Target $scanTargetForLog -Profile $profileNameForLog
+                }
+            }
         }
     }
 
@@ -5803,6 +5945,7 @@ function Start-ScanBatch([string]$filterType) {
 
     $script:ScanRunning = $true
     $script:ScanBatchMode = 'Batch'
+    $script:CurrentScanProfile = $profileNameForLog
     $script:ScanBatchTotal = $idList.Count
     $script:ScanBatchDone = 0
     $script:ScanBatchStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -5823,6 +5966,8 @@ function Start-SingleCheck([string]$id) {
     if ($script:ScanRunning) { return }
     $script:ScanRunning = $true
     $script:ScanBatchMode = 'Single'
+    $script:CurrentScanProfile = 'Single'
+    $script:RunLog.Clear()
     $script:ScanBatchTotal = 1
     $script:ScanBatchDone = 0
 
@@ -6414,7 +6559,7 @@ $script:ScanTimer.Add_Tick({
             $id = $script:CurrentScanId
             Write-Log "[$id] TIMEOUT after ${secs}s - force stopping" 'ERROR'
             try { $script:CurrentPS.Stop() } catch {}
-            Apply-ScanError $id "Timed out after ${secs}s"
+            Apply-ScanError $id "Timed out after ${secs}s" -TimedOut
             if ($script:ScanBatchTally) { $script:ScanBatchTally.Error++ }
             if ($script:CurrentScanStopwatch) { $script:CurrentScanStopwatch.Stop() }
             # Dispose the PS instance (does NOT close the shared runspace)
@@ -8103,6 +8248,12 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
         $html += "<div class='scan-info' style='border-left:3px solid #ef4444;margin-bottom:14px'><strong style='color:#ef4444'>No checks have been assessed.</strong> Run a scan profile or manually set check statuses before exporting.</div>`n"
     }
 
+    $slowRunLog = @($script:RunLog | Where-Object { $_.slow } | Sort-Object -Property duration_ms -Descending)
+    if ($slowRunLog.Count -gt 0) {
+        $html += "<div class='scan-info' style='border-left:3px solid #eab308;margin-bottom:14px'><strong style='color:#facc15'>Slow checks:</strong> $($slowRunLog.Count) checks exceeded 30 seconds. "
+        $html += "Slowest: $([System.Net.WebUtility]::HtmlEncode($slowRunLog[0].check_id)) at $($slowRunLog[0].duration_seconds)s.</div>`n"
+    }
+
     # ── CATEGORY SCORE BARS (all tiers) ──────────────────────────────────────
     $html += "<div class='cat-grid'>`n"
     foreach($cn in ($catScores.Keys | Sort-Object)){
@@ -8564,6 +8715,17 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
     if ($OpenAfter) { Start-Process $outPath }
 }
 
+function Export-RunLogJSONL {
+    param([string]$OutPath)
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($entry in @($script:RunLog)) {
+        $lines.Add(($entry | ConvertTo-Json -Depth 5 -Compress))
+    }
+    $lines -join "`n" | Set-Content $OutPath -Encoding UTF8
+    Write-Log "Run log JSONL exported: $OutPath ($($lines.Count) events)" 'INFO'
+    return $OutPath
+}
+
 function Invoke-AutoExport {
     $desktop = [Environment]::GetFolderPath('Desktop')
     # Fallback if Desktop path is empty (roaming profiles, OneDrive redirection)
@@ -8590,6 +8752,7 @@ function Invoke-AutoExport {
     try { Export-FindingsJSON -OutPath "${basePath}_findings.json"; Write-Log "Auto-export findings JSON" 'INFO' } catch {}
     try { Export-FindingsCSV -OutPath "${basePath}.csv"; Write-Log "Auto-export CSV" 'INFO' } catch {}
     try { Export-ComplianceSummary -OutPath "${basePath}_summary.json"; Write-Log "Auto-export compliance summary" 'INFO' } catch {}
+    try { Export-RunLogJSONL -OutPath "${basePath}_runlog.jsonl"; Write-Log "Auto-export run log JSONL" 'INFO' } catch {}
     return $outFile
 }
 
@@ -8765,6 +8928,8 @@ function Export-FindingsJSON {
             ransomware = [ordered]@{ score=$rwData.Overall; grade=$rwData.Grade }
         }
         compliance_frameworks = $fwStatus
+        run_log_summary = Get-RunLogSummary
+        run_log = @($script:RunLog)
         findings_count = [ordered]@{
             total    = $findings.Count
             pass     = ($findings | Where-Object { $_.status -eq 'Pass' }).Count
@@ -9324,6 +9489,8 @@ if ($script:SilentMode) {
     }
     $prof = $script:ScanProfiles[$profName]
     $ids = $script:AutoChecks.Keys | Sort-Object
+    $script:CurrentScanProfile = $profName
+    $script:RunLog.Clear()
 
     if ($profName -eq 'ADOnly') {
         $ids = $ids | Where-Object { $script:AutoChecks[$_].Type -eq 'AD' }
@@ -9337,11 +9504,20 @@ if ($script:SilentMode) {
         $ids = $ids | Where-Object { $profileSet.Contains($_) -and $script:AutoCheckIDs.Contains($_) }
     }
 
+    $idsBeforeRiskFilter = @($ids)
+
     # Risk tier filtering
     if ($script:ReadOnlyMode) {
         $ids = $ids | Where-Object {
             $tier = if ($script:RiskTiers.Contains($_)) { $script:RiskTiers[$_] } else { 0 }
             $tier -le 2
+        }
+        $runIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($runId in @($ids)) { [void]$runIds.Add($runId) }
+        foreach ($skippedId in $idsBeforeRiskFilter) {
+            if (-not $runIds.Contains($skippedId)) {
+                Add-SkippedRunLogEntry -Id $skippedId -Reason 'ReadOnlyRiskTier3' -Target 'localhost' -Profile $profName
+            }
         }
     }
 
@@ -9354,6 +9530,7 @@ if ($script:SilentMode) {
     foreach ($id in $idList) {
         $check = $script:AutoChecks[$id]
         if (-not $check) { continue }
+        Start-RunLogEntry -Id $id -Label $check.Label -Type $check.Type -Target 'localhost' -Profile $profName
         try {
             # Run each check in an isolated runspace with timeout protection
             $checkPS = [PowerShell]::Create()
@@ -9364,6 +9541,7 @@ if ($script:SilentMode) {
                 $failed++
                 Write-Host "  [!] $id - $($check.Label): TIMEOUT (>${silentTimeoutMs}ms)" -ForegroundColor Red
                 if ($script:FindingsBoxes.Contains($id)) { $script:FindingsBoxes[$id].Text = "Auto-check timed out after $($silentTimeoutMs/1000)s" }
+                Complete-RunLogEntry -Id $id -Status 'Error' -ErrorMessage "Timed out after $($silentTimeoutMs/1000)s" -TimedOut
                 continue
             }
             $checkOutput = $checkPS.EndInvoke($checkHandle)
@@ -9388,6 +9566,7 @@ if ($script:SilentMode) {
                 if ($script:CheckStates.Contains($id)) { $script:CheckStates[$id] = $true }
                 $script:ScanTimestamps[$id] = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
                 $completed++
+                Complete-RunLogEntry -Id $id -Status $result.Status
                 $statusIcon = switch ($result.Status) { 'Pass'{'+'} 'Fail'{'X'} default{'~'} }
                 Write-Host "  [$statusIcon] $id - $($check.Label): $($result.Status)" -ForegroundColor $(switch($result.Status){'Pass'{'Green'}'Fail'{'Red'}default{'Yellow'}})
             }
@@ -9397,6 +9576,7 @@ if ($script:SilentMode) {
             if ($script:FindingsBoxes.Contains($id)) {
                 $script:FindingsBoxes[$id].Text = "Auto-check error: $($_.Exception.Message)"
             }
+            Complete-RunLogEntry -Id $id -Status 'Error' -ErrorMessage $_.Exception.Message
         }
     }
 
@@ -9436,6 +9616,13 @@ if ($script:SilentMode) {
             Write-Host "[Silent Mode] SIEM JSONL: $jsonlOut" -ForegroundColor Green
         } catch { Write-Host "[Silent Mode] JSONL export failed: $_" -ForegroundColor Yellow; $jsonlOut = '' }
     }
+
+    # Per-check timing and execution diagnostics
+    $runLogOut = "${basePath}_runlog.jsonl"
+    try {
+        Export-RunLogJSONL -OutPath $runLogOut
+        Write-Host "[Silent Mode] Run log JSONL: $runLogOut" -ForegroundColor Green
+    } catch { Write-Host "[Silent Mode] Run log export failed: $_" -ForegroundColor Yellow; $runLogOut = '' }
 
     # CSV export (when -ExportCSV or always in silent mode)
     $csvOut = ''
@@ -9607,6 +9794,7 @@ if ($script:SilentMode) {
     Write-Host "  HTML:     $outFile"
     Write-Host "  JSON:     $jsonFindingsOut"
     if ($script:CliExportJSONL -or $script:SilentMode) { Write-Host "  JSONL:    $jsonlOut" }
+    Write-Host "  RunLog:   $runLogOut"
     if ($script:CliExportCSV -or $script:SilentMode) { Write-Host "  CSV:      $csvOut" }
     Write-Host "  Summary:  $summaryOut"
 
