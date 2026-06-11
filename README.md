@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.1.3-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.1.4-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -16,7 +16,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.1.3-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.1.4-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -345,7 +345,7 @@ Automatic platform detection and field population:
 |--------|------|----------|
 | HTML | `SecurityAudit_*.html` | Human-readable report with all three tiers |
 | JSON | `*_findings.json` | Per-finding structured data with full metadata |
-| JSONL | `*_siem.jsonl` | One event per finding for Splunk/Elastic/Sentinel |
+| JSONL | `*_siem.jsonl` | One event per finding for Splunk/Elastic/Sentinel with truncation metadata |
 | CSV | `*.csv` | Pivot table analysis with compliance columns |
 | SARIF | `*.sarif` | Static Analysis Results Interchange Format for GitHub/Azure DevOps |
 | PDF | `*.pdf` | Portable report via Edge/Chrome headless rendering |
