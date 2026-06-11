@@ -263,6 +263,9 @@ if ($scriptText -notmatch "'IA12'\s*=\s*@\{\s*Type='AD'" -or $scriptText -notmat
 if ($scriptText -notmatch "Pass','Fail','Partial','N/A") {
     Add-Failure 'Auto-check status mapping must preserve N/A results for non-applicable checks.'
 }
+if ($scriptText -notmatch 'counts\.NA' -or $scriptText -notmatch "'N/A'\s*\{\s*'NA'\s*\}" -or $scriptText -notmatch "'N/A'\s*\{\s*'-'\s*\}" -or $scriptText -notmatch "'N/A'\s*\{\s*'DarkGray'\s*\}") {
+    Add-Failure 'N/A results must have distinct GUI, tab badge, and silent console presentation instead of warning/error fallbacks.'
+}
 
 if ($failures.Count -gt 0) {
     Write-Host 'NetworkSecurityAudit validation FAILED' -ForegroundColor Red
