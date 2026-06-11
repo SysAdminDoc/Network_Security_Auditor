@@ -149,6 +149,9 @@ if ($scriptText -notmatch 'function ConvertTo-CsvSafeText' -or $scriptText -notm
 if ($scriptText -notmatch 'findings_truncated' -or $scriptText -notmatch 'findings_original_length' -or $scriptText -notmatch 'evidence_truncated' -or $scriptText -notmatch 'evidence_original_length') {
     Add-Failure 'JSONL truncation must include flags and original lengths.'
 }
+if ($scriptText -notmatch 'logicalLocations' -or $scriptText -notmatch 'network-security-audit://check/') {
+    Add-Failure 'SARIF results must include logical check locations.'
+}
 
 if ($failures.Count -gt 0) {
     Write-Host 'NetworkSecurityAudit validation FAILED' -ForegroundColor Red
