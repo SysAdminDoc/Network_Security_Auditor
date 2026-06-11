@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.1.8 - Professional GUI Tool
+    Network Security Auditor v4.1.9 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.8
+    4.1.9
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.1.8'
+$script:ProductVersion = '4.1.9'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -426,8 +426,10 @@ function Enable-RemoteRegistry {
         if ($isLocal) {
             $svc = Get-Service RemoteRegistry -EA Stop
             if ($svc.Status -ne 'Running') {
-                Set-Service RemoteRegistry -StartupType Manual -EA Stop
-                Start-Service RemoteRegistry -EA Stop
+                sc.exe config RemoteRegistry start= demand 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "sc.exe config RemoteRegistry failed with exit code $LASTEXITCODE" }
+                sc.exe start RemoteRegistry 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "sc.exe start RemoteRegistry failed with exit code $LASTEXITCODE" }
                 return @{ Success=$true; Message='Remote Registry started locally' }
             }
             return @{ Success=$true; Message='Remote Registry already running' }
@@ -436,8 +438,10 @@ function Enable-RemoteRegistry {
             $params = @{ ComputerName=$Target; ErrorAction='Stop' }
             if ($Credential) { $params.Credential = $Credential }
             Invoke-Command @params -ScriptBlock {
-                Set-Service RemoteRegistry -StartupType Manual -EA Stop
-                Start-Service RemoteRegistry -EA Stop
+                sc.exe config RemoteRegistry start= demand 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "sc.exe config RemoteRegistry failed with exit code $LASTEXITCODE" }
+                sc.exe start RemoteRegistry 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "sc.exe start RemoteRegistry failed with exit code $LASTEXITCODE" }
             }
             return @{ Success=$true; Message="Remote Registry started on $Target" }
         }
@@ -6785,8 +6789,10 @@ function Start-AsyncTurnkey {
             try {
                 $svc = Get-Service RemoteRegistry -EA Stop
                 if ($svc.Status -ne 'Running') {
-                    Set-Service RemoteRegistry -StartupType Manual -EA Stop
-                    Start-Service RemoteRegistry -EA Stop
+                    sc.exe config RemoteRegistry start= demand 2>&1 | Out-Null
+                    if ($LASTEXITCODE -ne 0) { throw "sc.exe config RemoteRegistry failed with exit code $LASTEXITCODE" }
+                    sc.exe start RemoteRegistry 2>&1 | Out-Null
+                    if ($LASTEXITCODE -ne 0) { throw "sc.exe start RemoteRegistry failed with exit code $LASTEXITCODE" }
                     $results.RemoteRegistry = @{ Success=$true; Message='Remote Registry started' }
                     Log "Remote Registry service started" 'INFO'
                 } else {

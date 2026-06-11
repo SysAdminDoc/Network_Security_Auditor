@@ -161,6 +161,9 @@ if ($scriptText -notmatch 'findings_truncated' -or $scriptText -notmatch 'findin
 if ($scriptText -notmatch 'logicalLocations' -or $scriptText -notmatch 'network-security-audit://check/') {
     Add-Failure 'SARIF results must include logical check locations.'
 }
+if ($scriptText -match '(?m)^\s*(Set-Service|Start-Service|Stop-Service|Restart-Service)\b') {
+    Add-Failure 'Automation paths must use sc.exe instead of service cmdlets that can show progress UI.'
+}
 
 if ($failures.Count -gt 0) {
     Write-Host 'NetworkSecurityAudit validation FAILED' -ForegroundColor Red
