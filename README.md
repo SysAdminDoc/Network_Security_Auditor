@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.3.1-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.4.0-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -10,13 +10,13 @@
 
 # Network Security Auditor
 
-A single-file PowerShell security audit tool. Runs 68 automated checks across 8 security domains, maps findings to 8 compliance frameworks, MITRE ATT&CK, and MITRE D3FEND, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
+A single-file PowerShell security audit tool. Runs 68 automated checks across 8 security domains, maps findings to 9 compliance frameworks, MITRE ATT&CK, and MITRE D3FEND, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
 
 One script. No dependencies to pre-install. Works on any Windows machine from standalone workstations to enterprise domain controllers.
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.3.1-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.4.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -223,7 +223,7 @@ Every check runs in an isolated runspace with timeout protection. Results includ
 
 ### Compliance Framework Mapping
 
-Every check maps to one or more controls across 8 frameworks. Framework-specific scan profiles run the most relevant checks for that standard:
+Every check maps to one or more controls across 9 frameworks. Framework-specific scan profiles run the most relevant checks for that standard:
 
 | Framework | Standard | Profile checks |
 |-----------|----------|----------|
@@ -232,6 +232,7 @@ Every check maps to one or more controls across 8 frameworks. Framework-specific
 | **CMMC** | Level 2 (v2.0) | 68 checks |
 | **HIPAA** | Security Rule | 48 checks |
 | **PCI-DSS** | v4.0.1 | 50 checks |
+| **ACSC Essential Eight** | Maturity Model | 27 checks |
 | **SOC 2** | Type II (Trust Criteria) | 66 checks |
 | **ISO 27001** | :2022 (Annex A) | 68 checks |
 | **DISA STIG** | Windows Server/Client | 68 checks |
@@ -400,7 +401,7 @@ The same validation runs in GitHub Actions on push and pull request.
 ```
 -Silent              Run headless (no GUI). Auto-scans, exports, exits.
 -ScanProfile         Quick | Standard | Full | ADOnly | LocalOnly |
-                     HIPAA | PCI | CMMC | SOC2 | ISO27001 | STIG
+                     HIPAA | PCI | CMMC | E8 | SOC2 | ISO27001 | STIG
                      Default: Full (all 68 checks)
 -OutputPath          Report output path. Default: Desktop
 -ReportTier          Executive | Management | Technical | All
@@ -433,10 +434,11 @@ The same validation runs in GitHub Actions on push and pull request.
 | **Full** | 68 | ~60 min | Comprehensive audit |
 | **ADOnly** | ~13 | ~10 min | Domain-focused checks only |
 | **LocalOnly** | ~55 | ~45 min | Endpoint-only (no AD required) |
-| **HIPAA** | ~46 | ~30 min | Healthcare compliance |
-| **PCI** | ~49 | ~35 min | Payment card compliance |
+| **HIPAA** | 48 | ~30 min | Healthcare compliance |
+| **PCI** | 50 | ~35 min | Payment card compliance |
 | **CMMC** | 68 | ~60 min | Defense contractor compliance |
-| **SOC 2** | ~61 | ~50 min | Service organization compliance |
+| **E8** | 27 | ~25 min | ACSC Essential Eight maturity indicators |
+| **SOC 2** | 66 | ~50 min | Service organization compliance |
 | **ISO 27001** | 68 | ~60 min | International standard compliance |
 | **STIG** | 68 | ~60 min | DISA STIG for DoD/government |
 
