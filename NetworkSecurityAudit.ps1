@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.6.1 - Professional GUI Tool
+    Network Security Auditor v4.7.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -17,7 +17,7 @@
 .PARAMETER ScanProfile
     Scan profile to use: Quick, Standard, Full, ADOnly, LocalOnly,
     HIPAA, PCI, CMMC, E8, CyberEssentials, SOC2, ISO27001, STIG.
-    Default: Full (all 68 checks). Quick runs ~20 critical checks.
+    Default: Full (all 69 checks). Quick runs ~22 critical checks.
     Framework profiles run checks mapped to that compliance framework.
 .PARAMETER OutputPath
     Path for report output. Default: Desktop\SecurityAudit_<client>_<date>.html
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.6.1
+    4.7.0
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.6.1'
+$script:ProductVersion = '4.7.0'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -730,6 +730,12 @@ $script:AuditCategories = [ordered]@{
                 Hint='Run from a domain-joined admin workstation with the Active Directory module. Review service accounts, computer accounts, and trusts with msDS-SupportedEncryptionTypes missing AES128/AES256 flags or explicitly allowing DES/RC4 without AES. Also review KDC System log Event IDs 201-209, DefaultDomainSupportedEncTypes, and RC4DefaultDisablementPhase. Remediate by enabling AES encryption types, resetting affected account passwords so AES keys exist, removing DES/RC4 where legacy applications allow, and documenting any temporary RC4 exceptions before Microsoft RC4 enforcement phases complete.'
                 Compliance='NIST CSF PR.AC-1, PR.AC-7, PR.DS-2 | CIS Control 5.2, 6.7, 8.11 | HIPAA 164.312(a)(2)(i), 164.312(d), 164.312(e)(2)(ii)'
             }
+            @{
+                ID='IA12'; Severity='Critical'; Weight=10
+                Text='BadSuccessor / dMSA privilege escalation exposure'
+                Hint='Run from a domain-joined admin workstation with the Active Directory module. Review Windows Server 2025 domain controllers, delegated Managed Service Account objects (objectClass msDS-DelegatedManagedServiceAccount), msDS-ManagedAccountPrecededByLink, msDS-ManagedAccountSucceededByLink, and msDS-DelegatedMSAState. Audit OU ACLs for non-tier-0 principals with CreateChild, GenericAll, GenericWrite, WriteDacl, or WriteOwner rights that could create or manipulate dMSA objects. Remediate by applying CVE-2025-53779 updates, restricting OU delegation, auditing SACLs on dMSA link attributes, and reviewing every migration link before production use.'
+                Compliance='NIST CSF PR.AC-1, PR.AC-4, PR.AC-6 | CIS Control 5.4, 6.8 | HIPAA 164.312(a)(1), 164.312(a)(2)(i)'
+            }
         )
     }
 
@@ -1054,7 +1060,7 @@ $script:AuditCategories = [ordered]@{
 
 # ── Auto-Check Definitions ──────────────────────────────────────────────────
 # Each entry maps an audit item ID to a scriptblock that returns:
-#   @{ Status='Pass|Fail|Partial'; Findings='text'; Evidence='text' }
+#   @{ Status='Pass|Fail|Partial|N/A'; Findings='text'; Evidence='text' }
 # Type: AD = requires domain controller, Local = runs on target endpoint,
 #       Remote = runs via Invoke-Command on target
 $script:AutoChecks = @{
@@ -1439,6 +1445,189 @@ $script:AutoChecks = @{
 
             $status = if ($issues -gt 0) { 'Fail' } elseif ($warnings -gt 0) { 'Partial' } else { 'Pass' }
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Kerberos RC4/DES readiness scan ($issues blocking findings, $warnings follow-ups) @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+        }
+    }
+
+    'IA12' = @{ Type='AD'; Label='Scan BadSuccessor / dMSA Exposure'
+        Script = {
+            function ConvertTo-SafeGuid {
+                param([object]$Value)
+                if ($null -eq $Value) { return $null }
+                try {
+                    if ($Value -is [guid]) { return $Value }
+                    if ($Value -is [byte[]]) { return (New-Object -TypeName System.Guid -ArgumentList (,$Value)) }
+                    return ([guid]$Value)
+                } catch {
+                    return $null
+                }
+            }
+            function Test-TierZeroTrustee {
+                param([object]$Identity)
+                $id = "$Identity"
+                if ([string]::IsNullOrWhiteSpace($id)) { return $false }
+                return ($id -match '(?i)(^NT AUTHORITY\\SYSTEM$|^S-1-5-18$|\\SYSTEM$|\\Domain Admins$|\\Enterprise Admins$|\\Schema Admins$|\\Administrators$|\\Enterprise Key Admins$|\\Key Admins$|\\Domain Controllers$|\\Enterprise Domain Controllers$)')
+            }
+            function Test-PrivilegedADObject {
+                param([object]$Object)
+                if ($null -eq $Object) { return $false }
+                if ($Object.adminCount -eq 1) { return $true }
+                $dn = "$($Object.DistinguishedName)"
+                if ($dn -match '(?i)CN=(krbtgt|Domain Admins|Enterprise Admins|Schema Admins|Administrators),') { return $true }
+                $groups = @($Object.memberOf) -join ';'
+                return ($groups -match '(?i)CN=(Domain Admins|Enterprise Admins|Schema Admins|Administrators),')
+            }
+
+            $sb = [System.Text.StringBuilder]::new()
+            $issues = 0
+            $warnings = 0
+            $domain = Get-ADDomain -EA SilentlyContinue
+            if (-not $domain -or -not $domain.DNSRoot) {
+                [void]$sb.AppendLine("Active Directory domain context is unavailable on this host.")
+                [void]$sb.AppendLine("BadSuccessor/dMSA exposure is only applicable when the scan can query a domain directory.")
+                return @{ Status='N/A'; Findings=$sb.ToString().Trim(); Evidence="BadSuccessor / dMSA applicability scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+            }
+            $rootDse = Get-ADRootDSE -EA SilentlyContinue
+            [void]$sb.AppendLine("Domain: $($domain.DNSRoot)")
+            [void]$sb.AppendLine("BadSuccessor detection checks dMSA objects, migration links, and OU create/delegation rights.")
+
+            $dcs = @(Get-ADDomainController -Filter * -EA SilentlyContinue)
+            $server2025Dcs = @($dcs | Where-Object { $_.OperatingSystem -match '2025' -or $_.OperatingSystemVersion -match '26100' })
+            [void]$sb.AppendLine("Windows Server 2025 DCs detected: $($server2025Dcs.Count) of $($dcs.Count)")
+            foreach ($dc in ($server2025Dcs | Sort-Object HostName | Select-Object -First 10)) {
+                [void]$sb.AppendLine("  $($dc.HostName) | $($dc.OperatingSystem) | $($dc.OperatingSystemVersion)")
+            }
+
+            $schemaNc = $rootDse.schemaNamingContext
+            $dmsaClass = $null
+            if ($schemaNc) {
+                $dmsaClass = Get-ADObject -SearchBase $schemaNc -LDAPFilter '(lDAPDisplayName=msDS-DelegatedManagedServiceAccount)' -Properties schemaIDGUID,lDAPDisplayName -EA SilentlyContinue
+            }
+            if (-not $dmsaClass) {
+                [void]$sb.AppendLine("dMSA schema class msDS-DelegatedManagedServiceAccount: not present or not readable.")
+                if ($server2025Dcs.Count -eq 0) {
+                    [void]$sb.AppendLine("No Windows Server 2025 DCs or dMSA schema support were detected; BadSuccessor is not applicable to this domain state.")
+                    return @{ Status='N/A'; Findings=$sb.ToString().Trim(); Evidence="BadSuccessor / dMSA applicability scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+                }
+                $warnings++
+                [void]$sb.AppendLine("[REVIEW] Windows Server 2025 DCs are present but the dMSA schema class was not visible. Validate schema/read permissions and patch state.")
+            }
+
+            $dmsaClassGuid = ConvertTo-SafeGuid $dmsaClass.schemaIDGUID
+            if ($dmsaClassGuid) { [void]$sb.AppendLine("dMSA class schemaIDGUID: $dmsaClassGuid") }
+
+            $dmsaObjects = @()
+            if ($dmsaClass) {
+                try {
+                    $dmsaObjects = @(Get-ADObject -LDAPFilter '(objectClass=msDS-DelegatedManagedServiceAccount)' -Properties 'msDS-ManagedAccountPrecededByLink','msDS-DelegatedMSAState','msDS-ManagedAccountSucceededByLink',whenChanged,adminCount,servicePrincipalName -EA Stop)
+                } catch {
+                    $warnings++
+                    [void]$sb.AppendLine("dMSA object query failed: $($_.Exception.Message)")
+                }
+            }
+
+            [void]$sb.AppendLine("`ndMSA OBJECT INVENTORY:")
+            [void]$sb.AppendLine("  Objects found: $($dmsaObjects.Count)")
+            if ($dmsaObjects.Count -gt 0) { $warnings += $dmsaObjects.Count }
+            foreach ($acct in ($dmsaObjects | Sort-Object Name | Select-Object -First 25)) {
+                $state = $acct.'msDS-DelegatedMSAState'
+                $preceded = @($acct.'msDS-ManagedAccountPrecededByLink') | Where-Object { $_ }
+                [void]$sb.AppendLine("  $($acct.Name) | State:$state | Changed:$($acct.whenChanged)")
+                [void]$sb.AppendLine("    DN: $($acct.DistinguishedName)")
+                if ($preceded.Count -eq 0) {
+                    [void]$sb.AppendLine("    Predecessor links: none")
+                    continue
+                }
+                foreach ($predDn in $preceded) {
+                    $warnings++
+                    [void]$sb.AppendLine("    Predecessor: $predDn")
+                    try {
+                        $target = Get-ADObject -Identity $predDn -Properties adminCount,memberOf,sAMAccountName,objectClass,'msDS-ManagedAccountSucceededByLink' -EA Stop
+                        $targetName = if ($target.sAMAccountName) { $target.sAMAccountName } else { $target.Name }
+                        $succeededLinks = @($target.'msDS-ManagedAccountSucceededByLink') | Where-Object { $_ }
+                        $hasBackLink = @($succeededLinks | Where-Object { $_ -eq $acct.DistinguishedName }).Count -gt 0
+                        [void]$sb.AppendLine("      Target: $targetName | ObjectClass:$($target.objectClass -join ',') | adminCount:$($target.adminCount) | SucceededByLink:$hasBackLink")
+                        if (-not $hasBackLink) {
+                            $issues++
+                            [void]$sb.AppendLine("      [SUSPICIOUS] dMSA predecessor link lacks the target account backlink required by patched CVE-2025-53779 behavior.")
+                        }
+                        if (Test-PrivilegedADObject $target) {
+                            $issues++
+                            [void]$sb.AppendLine("      [CRITICAL] dMSA predecessor resolves to a privileged or protected account.")
+                        }
+                    } catch {
+                        $warnings++
+                        [void]$sb.AppendLine("      Could not resolve predecessor target: $($_.Exception.Message)")
+                    }
+                }
+            }
+
+            [void]$sb.AppendLine("`nOU dMSA CREATE/CONTROL RIGHTS:")
+            $riskyAces = New-Object System.Collections.Generic.List[object]
+            if ($dmsaClass -and (Get-PSDrive -Name AD -EA SilentlyContinue)) {
+                try {
+                    $allOus = @(Get-ADOrganizationalUnit -Filter * -Properties DistinguishedName -EA Stop)
+                    $ouLimit = 300
+                    $ousToCheck = @($allOus | Sort-Object DistinguishedName | Select-Object -First $ouLimit)
+                    if ($allOus.Count -gt $ouLimit) {
+                        $warnings++
+                        [void]$sb.AppendLine("  OU ACL scan sampled first $ouLimit of $($allOus.Count) OUs; run a targeted review for complete coverage in very large domains.")
+                    } else {
+                        [void]$sb.AppendLine("  OUs inspected: $($ousToCheck.Count)")
+                    }
+                    $emptyGuid = [guid]::Empty
+                    foreach ($ou in $ousToCheck) {
+                        try {
+                            $acl = Get-Acl -Path ("AD:\{0}" -f $ou.DistinguishedName) -EA Stop
+                            foreach ($ace in $acl.Access) {
+                                if ($ace.AccessControlType -ne 'Allow') { continue }
+                                $rights = "$($ace.ActiveDirectoryRights)"
+                                if ($rights -notmatch 'CreateChild|GenericAll|GenericWrite|WriteDacl|WriteOwner') { continue }
+                                $objectType = $ace.ObjectType
+                                $appliesToDmsa = ($objectType -eq $emptyGuid -or ($dmsaClassGuid -and $objectType -eq $dmsaClassGuid))
+                                if (-not $appliesToDmsa) { continue }
+                                if (Test-TierZeroTrustee $ace.IdentityReference) { continue }
+                                [void]$riskyAces.Add([pscustomobject]@{
+                                    OU = $ou.DistinguishedName
+                                    Trustee = "$($ace.IdentityReference)"
+                                    Rights = $rights
+                                    ObjectType = "$objectType"
+                                    Inherited = [bool]$ace.IsInherited
+                                })
+                            }
+                        } catch {
+                            $warnings++
+                            [void]$sb.AppendLine("  Could not read OU ACL for $($ou.DistinguishedName): $($_.Exception.Message)")
+                        }
+                    }
+                } catch {
+                    $warnings++
+                    [void]$sb.AppendLine("  OU ACL enumeration failed: $($_.Exception.Message)")
+                }
+            } elseif ($dmsaClass) {
+                $warnings++
+                [void]$sb.AppendLine("  AD: provider drive is unavailable; OU ACL review could not be completed.")
+            } else {
+                [void]$sb.AppendLine("  Skipped because the dMSA schema class is not visible.")
+            }
+
+            if ($riskyAces.Count -gt 0) {
+                $issues += $riskyAces.Count
+                [void]$sb.AppendLine("  Risky non-tier-0 OU ACEs found: $($riskyAces.Count)")
+                foreach ($ace in ($riskyAces | Select-Object -First 20)) {
+                    [void]$sb.AppendLine("  [RISK] $($ace.Trustee) | $($ace.Rights) | Inherited:$($ace.Inherited) | OU:$($ace.OU)")
+                }
+            } elseif ($dmsaClass) {
+                [void]$sb.AppendLine("  No broad non-tier-0 dMSA create/control rights found in inspected OU ACLs.")
+            }
+
+            [void]$sb.AppendLine("`nREMEDIATION SUMMARY:")
+            [void]$sb.AppendLine("  1. Apply Microsoft updates for CVE-2025-53779 on every domain controller.")
+            [void]$sb.AppendLine("  2. Review every dMSA migration link and require documented approval for predecessor accounts.")
+            [void]$sb.AppendLine("  3. Remove non-tier-0 OU rights that can create or control dMSA objects.")
+            [void]$sb.AppendLine("  4. Add SACL/audit coverage for msDS-ManagedAccountPrecededByLink and msDS-ManagedAccountSucceededByLink changes.")
+
+            $status = if ($issues -gt 0) { 'Fail' } elseif ($warnings -gt 0) { 'Partial' } else { 'Pass' }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="BadSuccessor / dMSA scan ($issues blocking findings, $warnings follow-ups) @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
     }
 
@@ -3947,17 +4136,17 @@ $script:AutoCheckIDs = [System.Collections.Generic.HashSet[string]]::new([String
 foreach ($k in $script:AutoChecks.Keys) { $script:AutoCheckIDs.Add($k) | Out-Null }
 
 # ── Scan Profiles ────────────────────────────────────────────────────────────
-# Quick: ~20 critical/high checks - fast field assessment (15 min)
-# Standard: ~45 checks - solid audit without the deep dives (30 min)
-# Full: all 68 checks - comprehensive compliance audit (45-60 min)
+# Quick: ~22 critical/high checks - fast field assessment (15 min)
+# Standard: ~52 checks - solid audit without the deep dives (30 min)
+# Full: all 69 checks - comprehensive compliance audit (45-60 min)
 # ADOnly / LocalOnly: type-filtered subsets
 $script:ScanProfiles = @{
     Quick = @{
-        Label = 'Quick Assessment (~20 checks, ~15 min)'
+        Label = 'Quick Assessment (~22 checks, ~15 min)'
         Description = 'Critical and high-severity checks only. Fast field triage.'
         IDs = @(
             'NP01','NP02','NP07','NP08'          # Firewall, open ports, IDS, SSL/TLS
-            'IA01','IA02','IA03','IA04','IA05','IA11'  # Admin groups, service accts, MFA, stale, password policy, Kerberos encryption
+            'IA01','IA02','IA03','IA04','IA05','IA11','IA12'  # Admin groups, service accts, MFA, stale, password policy, Kerberos encryption, dMSA exposure
             'EP01','EP02','EP04','EP05'            # Defender, patching, BitLocker, firewall status
             'LM01','LM02'                          # Audit config, SIEM
             'BR01','BR06'                          # Backup solution, backup monitoring
@@ -3965,11 +4154,11 @@ $script:ScanProfiles = @{
         )
     }
     Standard = @{
-        Label = 'Standard Audit (~45 checks, ~30 min)'
+        Label = 'Standard Audit (~52 checks, ~30 min)'
         Description = 'All critical/high plus key medium checks. Covers most compliance needs.'
         IDs = @(
             'NP01','NP02','NP03','NP04','NP05','NP07','NP08','NP09','NP10'
-            'IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11'
+            'IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12'
             'EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08'
             'LM01','LM02','LM03','LM04','LM06','LM08'
             'BR01','BR02','BR03','BR05','BR06','BR08'
@@ -3979,7 +4168,7 @@ $script:ScanProfiles = @{
         )
     }
     Full = @{
-        Label = 'Full Compliance Audit (68 checks, ~60 min)'
+        Label = 'Full Compliance Audit (69 checks, ~60 min)'
         Description = 'All checks across all categories. Complete NIST/CIS/HIPAA coverage.'
         IDs = @()  # Empty = all checks
     }
@@ -3995,42 +4184,42 @@ $script:ScanProfiles = @{
     }
     # ── Framework-Specific Profiles ──
     HIPAA = @{
-        Label = 'HIPAA Assessment (48 checks)'
+        Label = 'HIPAA Assessment (49 checks)'
         Description = 'Checks mapped to HIPAA Security Rule (164.3xx) requirements for healthcare compliance.'
-        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
+        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
     }
     PCI = @{
-        Label = 'PCI-DSS 4.0.1 Scan (50 checks)'
+        Label = 'PCI-DSS 4.0.1 Scan (51 checks)'
         Description = 'Checks mapped to PCI-DSS 4.0.1 requirements for payment card data environments.'
-        IDs = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
+        IDs = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
     }
     CMMC = @{
-        Label = 'CMMC 2.0 Level 2 (all 68 checks)'
+        Label = 'CMMC 2.0 Level 2 (all 69 checks)'
         Description = 'CMMC 2.0 Level 2 maps to NIST 800-171 - full audit coverage required for DoD contractors.'
         IDs = @()  # All checks apply
     }
     E8 = @{
-        Label = 'ACSC Essential Eight (27 checks)'
+        Label = 'ACSC Essential Eight (28 checks)'
         Description = 'Checks mapped to ACSC Essential Eight strategies and maturity-level indicators.'
-        IDs = @('EP01','EP04','EP07','EP09','EP10','IA01','IA02','IA03','IA06','IA09','IA10','CF01','CF03','CF07','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','LM02','LM03','LM08','NP03','NP10')
+        IDs = @('EP01','EP04','EP07','EP09','EP10','IA01','IA02','IA03','IA06','IA09','IA10','IA12','CF01','CF03','CF07','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','LM02','LM03','LM08','NP03','NP10')
     }
     CyberEssentials = @{
-        Label = 'Cyber Essentials (36 checks)'
+        Label = 'Cyber Essentials (37 checks)'
         Description = 'Checks mapped to UK NCSC Cyber Essentials technical controls.'
-        IDs = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
+        IDs = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
     }
     SOC2 = @{
-        Label = 'SOC 2 Type II (66 checks)'
+        Label = 'SOC 2 Type II (67 checks)'
         Description = 'Checks mapped to SOC 2 Trust Services Criteria (CC/A1) for service organization audits.'
-        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
+        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
     }
     ISO27001 = @{
-        Label = 'ISO 27001:2022 (all 68 checks)'
+        Label = 'ISO 27001:2022 (all 69 checks)'
         Description = 'Full coverage for ISO 27001:2022 Annex A controls with specific clause mapping.'
         IDs = @()  # All checks apply
     }
     STIG = @{
-        Label = 'DISA STIG (all 68 checks)'
+        Label = 'DISA STIG (all 69 checks)'
         Description = 'DISA Security Technical Implementation Guide compliance for DoD/government environments.'
         IDs = @()  # All checks apply
     }
@@ -4044,7 +4233,7 @@ $script:ScanProfiles = @{
 $script:RiskTiers = @{
     # ── Identity & Access (all Tier 0-1: pure AD reads) ──
     'IA01' = 0; 'IA02' = 0; 'IA03' = 0; 'IA04' = 0; 'IA05' = 0
-    'IA06' = 0; 'IA07' = 0; 'IA08' = 0; 'IA09' = 0; 'IA10' = 0; 'IA11' = 0
+    'IA06' = 0; 'IA07' = 0; 'IA08' = 0; 'IA09' = 0; 'IA10' = 0; 'IA11' = 0; 'IA12' = 0
     # ── Endpoint Security (Tier 0: local reads) ──
     'EP01' = 0; 'EP02' = 0; 'EP03' = 0; 'EP04' = 0; 'EP05' = 0
     'EP06' = 0; 'EP07' = 0; 'EP08' = 0; 'EP09' = 0; 'EP10' = 0
@@ -4082,7 +4271,7 @@ $script:CategoryWeights = @{
 }
 
 # ── Phase 3: Compliance Framework Integration ────────────────────────────────
-# Structured mapping of all 68 checks across 10 compliance frameworks with specific control IDs.
+# Structured mapping of all 69 checks across 10 compliance frameworks with specific control IDs.
 # CIS and HIPAA coverage is represented through built-in compliance strings and framework profiles.
 # This table adds structured control IDs for NIST 800-171 Rev 3, CMMC 2.0, PCI-DSS 4.0.1, ACSC Essential Eight, Cyber Essentials, SOC 2, ISO 27001:2022, and DISA STIG.
 $script:ComplianceTarget = 'All'   # Active framework filter: All, CIS, NIST, CMMC, HIPAA, PCI, E8, CyberEssentials, SOC2, ISO27001, STIG
@@ -4115,6 +4304,7 @@ $script:FrameworkMap = @{
     'IA09' = @{ 'NIST'='3.1.3, 3.5.3'; 'CMMC'='AC.L2-3.1.3, IA.L2-3.5.3'; 'PCI'='7.2.1, 8.4.1'; 'SOC2'='CC6.1, CC6.6'; 'ISO27001'='A.5.15, A.8.5' }
     'IA10' = @{ 'NIST'='3.1.1, 3.1.12'; 'CMMC'='AC.L2-3.1.1'; 'PCI'='8.2.6'; 'SOC2'='CC6.1, CC6.2'; 'ISO27001'='A.5.18, A.6.5' }
     'IA11' = @{ 'NIST'='3.5.2, 3.5.3, 3.13.8'; 'CMMC'='IA.L2-3.5.2, IA.L2-3.5.3, SC.L2-3.13.8'; 'PCI'='4.2.1, 8.3.6, 8.4.2'; 'SOC2'='CC6.1, CC6.6'; 'ISO27001'='A.5.17, A.8.5, A.8.24' }
+    'IA12' = @{ 'NIST'='3.1.5, 3.1.6, 3.1.7, 3.5.2'; 'CMMC'='AC.L2-3.1.5, AC.L2-3.1.6, AC.L2-3.1.7, IA.L2-3.5.2'; 'PCI'='7.2.1, 7.2.2, 8.2.4, 8.6.1'; 'SOC2'='CC6.1, CC6.3, CC6.6'; 'ISO27001'='A.5.15, A.5.17, A.8.2, A.8.18' }
     # ── Endpoint Security ──
     'EP01' = @{ 'NIST'='3.14.1, 3.14.2, 3.14.4, 3.14.5'; 'CMMC'='SI.L2-3.14.1, SI.L2-3.14.2'; 'PCI'='5.2.1, 5.2.2, 5.3.1, 5.3.2'; 'SOC2'='CC6.8, CC7.1'; 'ISO27001'='A.8.7' }
     'EP02' = @{ 'NIST'='3.8.6, 3.13.11'; 'CMMC'='MP.L2-3.8.6, SC.L2-3.13.11'; 'PCI'='3.5.1, 9.4.1'; 'SOC2'='CC6.1, CC6.7'; 'ISO27001'='A.8.24' }
@@ -4185,7 +4375,7 @@ $script:FrameworkMap = @{
 $stigMap = @{
     'IA01'='V-254247,V-254248'; 'IA02'='V-254249,V-254250'; 'IA03'='V-254251'; 'IA04'='V-254252,V-254253'
     'IA05'='V-254254,V-254255,V-254256'; 'IA06'='V-254257,V-254258'; 'IA07'='V-254259'; 'IA08'='V-254260'
-    'IA09'='V-254261,V-254262'; 'IA10'='V-254263'; 'IA11'='Kerberos encryption type policy / RC4 deprecation readiness'
+    'IA09'='V-254261,V-254262'; 'IA10'='V-254263'; 'IA11'='Kerberos encryption type policy / RC4 deprecation readiness'; 'IA12'='Windows Server 2025 dMSA / BadSuccessor delegated service account migration exposure'
     'EP01'='V-254264,V-254265,V-254266'; 'EP02'='V-254267,V-254268'; 'EP03'='V-254269,V-254270,V-254271'
     'EP04'='V-254272,V-254273'; 'EP05'='V-254274,V-254275'; 'EP06'='V-254276,V-254277'
     'EP07'='V-254278,V-254279'; 'EP08'='V-254280,V-254281,V-254282'; 'EP09'='V-254283'; 'EP10'='V-254284'
@@ -4220,6 +4410,7 @@ $e8Map = @{
     'IA06'='E8 Restrict Administrative Privileges ML2-ML3'
     'IA09'='E8 Multi-factor Authentication ML2-ML3'
     'IA10'='E8 Restrict Administrative Privileges ML1-ML3'
+    'IA12'='E8 Restrict Administrative Privileges ML2-ML3'
     'CF01'='E8 Restrict Administrative Privileges ML1-ML3'
     'CF03'='E8 Regular Backups ML1-ML3'
     'CF07'='E8 Restrict Administrative Privileges ML1-ML3'
@@ -4262,6 +4453,7 @@ $cyberEssentialsMap = @{
     'IA09'='Cyber Essentials v3.3: User access control'
     'IA10'='Cyber Essentials v3.3: User access control'
     'IA11'='Cyber Essentials v3.3: Secure configuration; User access control'
+    'IA12'='Cyber Essentials v3.3: Secure configuration; User access control'
     'EP01'='Cyber Essentials v3.3: Malware protection'
     'EP02'='Cyber Essentials v3.3: Secure configuration'
     'EP03'='Cyber Essentials v3.3: Secure configuration'
@@ -4289,11 +4481,11 @@ $script:FrameworkChecks = @{
     'CIS'      = @($script:FrameworkMap.Keys)  # CIS covers all checks
     'NIST'     = @($script:FrameworkMap.Keys | Where-Object { $script:FrameworkMap[$_].NIST })
     'CMMC'     = @($script:FrameworkMap.Keys | Where-Object { $script:FrameworkMap[$_].CMMC })
-    'HIPAA'    = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
-    'PCI'      = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
-    'E8'       = @('EP01','EP04','EP07','EP09','EP10','IA01','IA02','IA03','IA06','IA09','IA10','CF01','CF03','CF07','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','LM02','LM03','LM08','NP03','NP10')
-    'CyberEssentials' = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
-    'SOC2'     = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
+    'HIPAA'    = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
+    'PCI'      = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
+    'E8'       = @('EP01','EP04','EP07','EP09','EP10','IA01','IA02','IA03','IA06','IA09','IA10','IA12','CF01','CF03','CF07','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','LM02','LM03','LM08','NP03','NP10')
+    'CyberEssentials' = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
+    'SOC2'     = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
     'ISO27001' = @($script:FrameworkMap.Keys)  # ISO 27001 covers all checks
     'STIG'     = @($script:FrameworkMap.Keys)  # DISA STIG covers all checks
 }
@@ -4382,7 +4574,7 @@ function Get-FrameworkScores {
 # ── End Phase 3A ─────────────────────────────────────────────────────────────
 
 # ── Phase 4A: MITRE ATT&CK Mapping ──────────────────────────────────────────
-# Maps all 68 checks to ATT&CK Enterprise techniques (v15.1)
+# Maps all 69 checks to ATT&CK Enterprise techniques (v15.1)
 # Format: CheckID -> @{ Tactics=@('TA00xx',...); Techniques=@('T1xxx',...); Desc='short attack context' }
 $script:MitreMap = @{
     # ── Identity & Access ──
@@ -4397,6 +4589,7 @@ $script:MitreMap = @{
     'IA09' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1078.004','T1556.006'); Desc='Missing conditional access allows cloud compromise from any device/location' }
     'IA10' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078','T1078.002'); Desc='Stale accounts expand the attack surface for credential-based initial access' }
     'IA11' = @{ Tactics=@('TA0006','TA0008'); Techniques=@('T1558.003','T1550.003'); Desc='RC4/DES Kerberos dependencies keep service tickets crackable and weaken pass-the-ticket resistance' }
+    'IA12' = @{ Tactics=@('TA0004','TA0003','TA0006'); Techniques=@('T1098','T1078.002','T1550.003'); Desc='BadSuccessor/dMSA abuse can turn delegated OU rights into domain privilege escalation and persistence' }
     # ── Endpoint Security ──
     'EP01' = @{ Tactics=@('TA0005','TA0002'); Techniques=@('T1562.001','T1562.004','T1059'); Desc='Disabled/misconfigured AV allows malware execution, defense evasion, and payload delivery' }
     'EP02' = @{ Tactics=@('TA0005','TA0002'); Techniques=@('T1486','T1059'); Desc='Missing encryption exposes data at rest; enables theft on stolen/decommissioned devices' }
@@ -4478,6 +4671,7 @@ $script:D3FendMap = @{
     'IA09' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MFA','D3-WSAM','D3-CTS'); Labels=@('Multi-factor Authentication','Web Session Access Mediation','Credential Transmission Scoping'); Desc='Mediates cloud and remote sessions with conditional access controls' }
     'IA10' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP'); Labels=@('Domain Account Monitoring','User Account Permissions'); Desc='Finds inactive accounts so access can be removed before abuse' }
     'IA11' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-CH','D3-CRO','D3-MENCR','D3-DAM'); Labels=@('Credential Hardening','Credential Rotation','Message Encryption','Domain Account Monitoring'); Desc='Hardens Kerberos encryption by identifying RC4/DES dependencies and AES readiness gaps' }
+    'IA12' = @{ Stages=@('Model','Harden','Detect','Isolate'); Techniques=@('D3-AM','D3-UAP','D3-APA','D3-DAM'); Labels=@('Access Modeling','User Account Permissions','Access Policy Administration','Domain Account Monitoring'); Desc='Models and restricts dMSA creation/migration rights while monitoring BadSuccessor abuse indicators' }
 
     # Endpoint Security
     'EP01' = @{ Stages=@('Detect','Harden'); Techniques=@('D3-PM','D3-OSM','D3-PH'); Labels=@('Platform Monitoring','Operating System Monitoring','Platform Hardening'); Desc='Validates endpoint protection, ASR, and anti-malware monitoring controls' }
@@ -5616,8 +5810,8 @@ function Reset-TabScanBadges {
 
 function Apply-ScanResult([string]$id, [hashtable]$result) {
     $check = $script:AutoChecks[$id]
-    # Status values match combo exactly: Pass/Fail/Partial
-    $statusText = if ($result.Status -eq 'Pass' -or $result.Status -eq 'Fail' -or $result.Status -eq 'Partial') { $result.Status } else { 'Not Assessed' }
+    # Status values match combo exactly: Pass/Fail/Partial/N/A
+    $statusText = if ($result.Status -in @('Pass','Fail','Partial','N/A')) { $result.Status } else { 'Not Assessed' }
 
     if ($script:StatusCombos.Contains($id)) {
         $combo = $script:StatusCombos[$id]
@@ -9557,8 +9751,8 @@ if ($script:SilentMode) {
             $checkPS.Dispose()
             $result = if ($checkOutput -and $checkOutput.Count -gt 0) { $checkOutput[0] } else { $null }
             if ($result -and $result.Status) {
-                # Apply result to UI state (for export) - values match combo: Pass/Fail/Partial
-                $mappedStatus = if ($result.Status -eq 'Pass' -or $result.Status -eq 'Fail' -or $result.Status -eq 'Partial') { $result.Status } else { 'Not Assessed' }
+                # Apply result to UI state (for export) - values match combo: Pass/Fail/Partial/N/A
+                $mappedStatus = if ($result.Status -in @('Pass','Fail','Partial','N/A')) { $result.Status } else { 'Not Assessed' }
 
                 if ($script:StatusCombos.Contains($id)) {
                     $combo = $script:StatusCombos[$id]
