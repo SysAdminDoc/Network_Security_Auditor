@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.1.3 - Professional GUI Tool
+    Network Security Auditor v4.1.4 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -45,7 +45,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.3
+    4.1.4
 #>
 param(
     [switch]$Silent,
@@ -68,7 +68,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.1.3'
+$script:ProductVersion = '4.1.4'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -8286,6 +8286,12 @@ function Export-FindingsJSONL {
             $rs = if ($script:RemStatusCombos[$id] -and $script:RemStatusCombos[$id].SelectedItem) { $script:RemStatusCombos[$id].SelectedItem.ToString() } else { 'Open' }
             $fwData = if ($script:FrameworkMap.Contains($id)) { $script:FrameworkMap[$id] } else { $null }
             $mitreData = if ($script:MitreMap.Contains($id)) { $script:MitreMap[$id] } else { $null }
+            $findingsText = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
+            $evidenceText = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
+            $findingsTruncated = ($findingsText.Length -gt 4000)
+            $evidenceTruncated = ($evidenceText.Length -gt 2000)
+            $findingsForExport = if ($findingsTruncated) { $findingsText.Substring(0,4000) + '...[truncated]' } else { $findingsText }
+            $evidenceForExport = if ($evidenceTruncated) { $evidenceText.Substring(0,2000) + '...[truncated]' } else { $evidenceText }
 
             # Flat event record - one line per finding
             $evt = [ordered]@{
@@ -8306,8 +8312,12 @@ function Export-FindingsJSONL {
                 weight          = $item.Weight
                 status          = $sv
                 description     = $item.Text
-                findings        = if ($script:FindingsBoxes[$id]) { $f=$script:FindingsBoxes[$id].Text; if($f.Length -gt 4000){$f.Substring(0,4000)+'...[truncated]'}else{$f} } else { '' }
-                evidence        = if ($script:EvidenceBoxes[$id]) { $e2=$script:EvidenceBoxes[$id].Text; if($e2.Length -gt 2000){$e2.Substring(0,2000)+'...[truncated]'}else{$e2} } else { '' }
+                findings        = $findingsForExport
+                findings_truncated = $findingsTruncated
+                findings_original_length = $findingsText.Length
+                evidence        = $evidenceForExport
+                evidence_truncated = $evidenceTruncated
+                evidence_original_length = $evidenceText.Length
                 remediation_status = $rs
                 remediation_assigned = if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' }
                 remediation_due = if ($script:RemDueBoxes[$id]) { $script:RemDueBoxes[$id].Text } else { '' }
