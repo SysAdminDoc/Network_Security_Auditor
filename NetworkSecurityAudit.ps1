@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.7.0 - Professional GUI Tool
+    Network Security Auditor v4.7.1 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.7.0
+    4.7.1
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.7.0'
+$script:ProductVersion = '4.7.1'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -5724,11 +5724,11 @@ function Flash-TabForCheck([string]$id, [string]$status) {
 
     # Track scan counts per tab
     if (-not $script:TabScanCounts.Contains($tabIdx)) {
-        $script:TabScanCounts[$tabIdx] = @{Pass=0;Fail=0;Partial=0;Error=0;Total=0}
+        $script:TabScanCounts[$tabIdx] = @{Pass=0;Fail=0;Partial=0;NA=0;Error=0;Total=0}
     }
     $counts = $script:TabScanCounts[$tabIdx]
     $counts.Total++
-    switch ($status) { 'Pass'{$counts.Pass++} 'Fail'{$counts.Fail++} 'Partial'{$counts.Partial++} default{$counts.Error++} }
+    switch ($status) { 'Pass'{$counts.Pass++} 'Fail'{$counts.Fail++} 'Partial'{$counts.Partial++} 'N/A'{$counts.NA++} default{$counts.Error++} }
 
     # Get the original category name
     $catName = $tab.Header
@@ -5737,13 +5737,20 @@ function Flash-TabForCheck([string]$id, [string]$status) {
     }
 
     # Determine badge colors based on worst result
-    $flashColor = switch ($status) { 'Pass' {'#22c55e'} 'Fail' {'#ef4444'} 'Partial' {'#eab308'} default {'#0ea5e9'} }
+    $flashColor = switch ($status) { 'Pass' {'#22c55e'} 'Fail' {'#ef4444'} 'Partial' {'#eab308'} 'N/A' {'#94a3b8'} default {'#0ea5e9'} }
+    $naSuffix = if ($counts.NA -gt 0) { " $($counts.NA)N/A" } else { '' }
     if ($counts.Fail -gt 0) {
         $badgeBg = '#dc2626'; $badgeFg = '#ffffff'
-        $badgeText = "$($counts.Pass)P $($counts.Fail)F"
+        $badgeText = "$($counts.Pass)P $($counts.Fail)F$naSuffix"
     } elseif ($counts.Partial -gt 0) {
         $badgeBg = '#854d0e'; $badgeFg = '#fef08a'
-        $badgeText = "$($counts.Pass)P $($counts.Partial)W"
+        $badgeText = "$($counts.Pass)P $($counts.Partial)W$naSuffix"
+    } elseif ($counts.Error -gt 0) {
+        $badgeBg = '#075985'; $badgeFg = '#bae6fd'
+        $badgeText = "$($counts.Pass)P $($counts.Error)E$naSuffix"
+    } elseif ($counts.NA -gt 0) {
+        $badgeBg = '#334155'; $badgeFg = '#cbd5e1'
+        $badgeText = "$($counts.Pass)P$naSuffix"
     } else {
         $badgeBg = '#166534'; $badgeFg = '#bbf7d0'
         $badgeText = "$($counts.Pass)P"
@@ -5839,20 +5846,21 @@ function Apply-ScanResult([string]$id, [hashtable]$result) {
 
     if ($script:ScanButtons.Contains($id)) {
         $btn = $script:ScanButtons[$id]
-        $resultIcon = switch ($result.Status) { 'Pass' { 'OK' } 'Fail' { 'FAIL' } 'Partial' { '~' } default { '?' } }
+        $resultIcon = switch ($result.Status) { 'Pass' { 'OK' } 'Fail' { 'FAIL' } 'Partial' { '~' } 'N/A' { 'NA' } default { '?' } }
         $btn.Content = "$resultIcon"
         $btn.ToolTip = "Last: $($script:ScanTimestamps[$id]) | $statusText - Click to re-scan"
         switch ($result.Status) {
             'Pass'    { Apply-ButtonTheme $btn '#16a34a' '#22c55e' }
             'Fail'    { Apply-ButtonTheme $btn '#dc2626' '#ef4444' }
             'Partial' { Apply-ButtonTheme $btn '#eab308' '#facc15' }
+            'N/A'     { Apply-ButtonTheme $btn '#334155' '#64748b' }
         }
     }
 
     # Flash the item card border to show data was populated
     if ($script:ItemCards.Contains($id)) {
         $card = $script:ItemCards[$id]
-        $flashColor = switch ($result.Status) { 'Pass' {'#22c55e'} 'Fail' {'#ef4444'} 'Partial' {'#eab308'} default {'#0ea5e9'} }
+        $flashColor = switch ($result.Status) { 'Pass' {'#22c55e'} 'Fail' {'#ef4444'} 'Partial' {'#eab308'} 'N/A' {'#94a3b8'} default {'#0ea5e9'} }
         $card.BorderBrush = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.ColorConverter]::ConvertFromString($flashColor))
         $card.BorderThickness = [System.Windows.Thickness]::new(2)
         # Pre-compute reset brush (avoid Get-T/New-Brush in closure)
@@ -5870,7 +5878,7 @@ function Apply-ScanResult([string]$id, [hashtable]$result) {
         $resetTimer.Start()
     }
 
-    $levelTag = switch ($result.Status) { 'Pass' {'PASS'} 'Fail' {'FAIL'} 'Partial' {'WARN'} default {'INFO'} }
+    $levelTag = switch ($result.Status) { 'Pass' {'PASS'} 'Fail' {'FAIL'} 'Partial' {'WARN'} 'N/A' {'INFO'} default {'INFO'} }
     $elapsed = ''
     if ($script:CurrentScanStopwatch) { $elapsed = " ($([math]::Round($script:CurrentScanStopwatch.Elapsed.TotalSeconds, 1))s)" }
     $findingsPreview = ''
@@ -9770,8 +9778,8 @@ if ($script:SilentMode) {
                 $script:ScanTimestamps[$id] = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
                 $completed++
                 Complete-RunLogEntry -Id $id -Status $result.Status
-                $statusIcon = switch ($result.Status) { 'Pass'{'+'} 'Fail'{'X'} default{'~'} }
-                Write-Host "  [$statusIcon] $id - $($check.Label): $($result.Status)" -ForegroundColor $(switch($result.Status){'Pass'{'Green'}'Fail'{'Red'}default{'Yellow'}})
+                $statusIcon = switch ($result.Status) { 'Pass'{'+'} 'Fail'{'X'} 'Partial'{'~'} 'N/A'{'-'} default{'!'} }
+                Write-Host "  [$statusIcon] $id - $($check.Label): $($result.Status)" -ForegroundColor $(switch($result.Status){'Pass'{'Green'}'Fail'{'Red'}'Partial'{'Yellow'}'N/A'{'DarkGray'}default{'Yellow'}})
             }
         } catch {
             $failed++
