@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-preview-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.1.1-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -10,13 +10,13 @@
 
 # Network Security Auditor
 
-A single-file PowerShell security audit tool. Runs 67 automated checks across 8 security domains, maps findings to 7 compliance frameworks and MITRE ATT&CK, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
+A single-file PowerShell security audit tool. Runs 67 automated checks across 8 security domains, maps findings to 8 compliance frameworks and MITRE ATT&CK, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
 
 One script. No dependencies to pre-install. Works on any Windows machine from standalone workstations to enterprise domain controllers.
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.1.0-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.1.1-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -42,7 +42,16 @@ This tool fills that gap. It auto-detects the environment, runs every check it c
 
 **[Download NetworkSecurityAudit.ps1](https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1)**
 
-Or via PowerShell (run as Administrator):
+Or download without executing immediately, then inspect and run it:
+```powershell
+$uri = "https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1"
+Invoke-WebRequest -Uri $uri -OutFile .\NetworkSecurityAudit.ps1 -UseBasicParsing
+Get-AuthenticodeSignature .\NetworkSecurityAudit.ps1
+notepad .\NetworkSecurityAudit.ps1
+.\NetworkSecurityAudit.ps1
+```
+
+PowerShell one-liner execution is convenient for lab/RMM use, but review the script first in security-sensitive environments:
 ```powershell
 irm https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1 | iex
 ```
@@ -358,6 +367,28 @@ Optional for full coverage:
 
 ---
 
+## Trust and Safety
+
+- The default scan mode is read-only for audit checks; higher-risk setup actions require explicit user action.
+- Internet access is limited to documented lookup paths such as the CISA KEV catalog used by patch-compliance checks.
+- Reports and structured exports are written to the selected output folder; RMM field writes are documented in the RMM section.
+- The script does not auto-update or replace itself.
+- In sensitive environments, download the script first, inspect it, and verify the Authenticode signature state with `Get-AuthenticodeSignature` before running.
+
+---
+
+## Development Validation
+
+Maintainers can run the static validation gate without executing audit checks:
+
+```powershell
+.\tools\Test-NetworkSecurityAudit.ps1
+```
+
+The same validation runs in GitHub Actions on push and pull request.
+
+---
+
 ## Parameters
 
 ```
@@ -473,6 +504,8 @@ This is a single-file tool by design. One `.ps1` file, no modules, no config fil
 ```
 NetworkSecurityAudit.ps1    # The entire tool (~8,900 lines)
 README.md                   # This file
+tools/                      # Maintainer-only validation scripts
+.github/workflows/          # CI validation
 ```
 
 ---

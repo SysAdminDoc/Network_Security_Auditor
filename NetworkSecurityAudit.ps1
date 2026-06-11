@@ -1,9 +1,9 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Audit Checklist v4.0 - Professional GUI Tool
+    Network Security Auditor v4.1.1 - Professional GUI Tool
 .DESCRIPTION
-    Comprehensive WPF-based security audit checklist for SMB environments.
+    Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
     context hints for junior auditors, compliance mapping (NIST/CIS/HIPAA),
     per-item findings/notes/evidence/remediation tracking, severity ratings,
@@ -16,7 +16,7 @@
     Designed for RMM deployment via ConnectWise, Datto, NinjaRMM, etc.
 .PARAMETER ScanProfile
     Scan profile to use: Quick, Standard, Full, ADOnly, LocalOnly,
-    HIPAA, PCI, CMMC, SOC2, ISO27001.
+    HIPAA, PCI, CMMC, SOC2, ISO27001, STIG.
     Default: Full (all 67 checks). Quick runs ~20 critical checks.
     Framework profiles run checks mapped to that compliance framework.
 .PARAMETER OutputPath
@@ -43,7 +43,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.0
+    4.1.1
 #>
 param(
     [switch]$Silent,
@@ -62,6 +62,15 @@ param(
     [switch]$ExportPDF
 )
 
+$script:ProductName = 'Network Security Auditor'
+$script:ProductTitle = $script:ProductName
+$script:ProductShortName = 'NetworkSecurityAudit'
+$script:ProductVersion = '4.1.1'
+$script:SchemaVersion = '2.1'
+$script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
+$script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
+$script:ProductSubtitle = "Windows Security Assessment Tool v$($script:ProductVersion) - Guided Audit with Compliance Mapping"
+
 # ── Auto-Elevate to Administrator ────────────────────────────────────────────
 $script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $script:IsAdmin) {
@@ -78,6 +87,8 @@ if (-not $script:IsAdmin) {
         if ($ExportJSON)   { $argList += '-ExportJSON' }
         if ($ExportCSV)    { $argList += '-ExportCSV' }
         if ($ExportJSONL)  { $argList += '-ExportJSONL' }
+        if ($ExportSARIF)  { $argList += '-ExportSARIF' }
+        if ($ExportPDF)    { $argList += '-ExportPDF' }
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs -WindowStyle Hidden
         exit
     }
@@ -3827,8 +3838,8 @@ $script:CategoryWeights = @{
 # ── Phase 3: Compliance Framework Integration ────────────────────────────────
 # Structured mapping of all 67 checks to 7 compliance frameworks with specific control IDs.
 # NIST CSF, CIS Controls v8, and HIPAA are already in the per-check Compliance string.
-# This table adds: NIST 800-171 Rev 3, CMMC 2.0, PCI-DSS 4.0.1, SOC 2, ISO 27001:2022
-$script:ComplianceTarget = 'All'   # Active framework filter: All, CIS, NIST, CMMC, HIPAA, PCI, SOC2, ISO27001
+# This table adds: NIST 800-171 Rev 3, CMMC 2.0, PCI-DSS 4.0.1, SOC 2, ISO 27001:2022, DISA STIG
+$script:ComplianceTarget = 'All'   # Active framework filter: All, CIS, NIST, CMMC, HIPAA, PCI, SOC2, ISO27001, STIG
 
 $script:FrameworkMeta = [ordered]@{
     'CIS'      = @{ Name='CIS Controls v8.1'; Color='#38bdf8'; Short='CIS' }
@@ -4000,6 +4011,11 @@ function Get-ComplianceString {
     if ($Framework -eq 'All' -or $Framework -eq 'ISO27001') {
         if ($script:FrameworkMap.Contains($CheckID) -and $script:FrameworkMap[$CheckID].ISO27001) {
             $parts += "ISO: $($script:FrameworkMap[$CheckID].ISO27001)"
+        }
+    }
+    if ($Framework -eq 'All' -or $Framework -eq 'STIG') {
+        if ($script:FrameworkMap.Contains($CheckID) -and $script:FrameworkMap[$CheckID].STIG) {
+            $parts += "STIG: $($script:FrameworkMap[$CheckID].STIG)"
         }
     }
     return ($parts -join ' | ')
@@ -4422,7 +4438,7 @@ $script:SuppressAdvance = $false
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Network Security Audit Checklist v4.1"
+        Title="$($script:WindowTitle)"
         Width="1250" Height="860" MinWidth="1000" MinHeight="650"
         WindowStartupLocation="CenterScreen"
         SnapsToDevicePixels="True" UseLayoutRounding="True">
@@ -4444,9 +4460,9 @@ $script:SuppressAdvance = $false
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock x:Name="TitleText" Text="Network Security Audit Checklist"
+                    <TextBlock x:Name="TitleText" Text="$($script:ProductTitle)"
                                FontSize="20" FontWeight="Bold"/>
-                    <TextBlock x:Name="SubtitleText" Text="SMB Security Assessment Tool v4.1 - Guided Audit with Compliance Mapping"
+                    <TextBlock x:Name="SubtitleText" Text="$($script:ProductSubtitle)"
                                FontSize="11.5" Margin="0,2,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
@@ -5996,7 +6012,7 @@ $el['btnConsoleToggle'].Add_Click({
     }
 })
 
-Write-Log "Network Security Audit v4.1 initialized" 'INFO'
+Write-Log "$($script:ProductDisplayName) initialized" 'INFO'
 Write-Log "$($script:TotalItems) audit items | $($script:AutoChecks.Count) auto-checks available" 'INFO'
 
 $el['btnSetCreds'].Add_Click({
@@ -6051,7 +6067,7 @@ function Show-RunnerPopup {
 
     # Title
     $title = New-Object System.Windows.Controls.TextBlock
-    $title.Text = 'Network Security Audit v4.1'
+    $title.Text = $script:ProductDisplayName
     $title.Foreground = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.ColorConverter]::ConvertFromString($t.TextPrimary))
     $title.FontSize = 15; $title.FontWeight = 'SemiBold'
     $title.HorizontalAlignment = 'Center'
@@ -7199,7 +7215,18 @@ $window.Add_PreviewKeyDown({
 
 # ── Save / Load ──────────────────────────────────────────────────────────────
 function Get-AuditState {
-    $state = @{ Client=$el['txtClient'].Text; Auditor=$el['txtAuditor'].Text; Date=$el['txtDate'].Text; Theme=$script:CurrentThemeName; Version='4.1'; ScanTarget=$el['txtScanTarget'].Text; Items=@{} }
+    $state = @{
+        Product=$script:ProductName
+        ProductShortName=$script:ProductShortName
+        SchemaVersion=$script:SchemaVersion
+        Client=$el['txtClient'].Text
+        Auditor=$el['txtAuditor'].Text
+        Date=$el['txtDate'].Text
+        Theme=$script:CurrentThemeName
+        Version=$script:ProductVersion
+        ScanTarget=$el['txtScanTarget'].Text
+        Items=@{}
+    }
     foreach ($id in $script:CheckStates.Keys) {
         $sv=if($script:StatusCombos[$id].SelectedItem){$script:StatusCombos[$id].SelectedItem.ToString()}else{'Not Assessed'}
         $rs4=if($script:RemStatusCombos[$id].SelectedItem){$script:RemStatusCombos[$id].SelectedItem.ToString()}else{'Open'}
@@ -7553,7 +7580,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
     # ── HEADER ───────────────────────────────────────────────────────────────
     $html += @"
 <div class="hdr">
-<h1>Network Security Audit Report</h1>
+<h1>$([System.Net.WebUtility]::HtmlEncode($script:ProductName)) Report</h1>
 <div class="sub">Confidential - Prepared for $([System.Net.WebUtility]::HtmlEncode($state.Client))</div>
 <div class="meta-grid">
 <div>Client: <strong>$([System.Net.WebUtility]::HtmlEncode($state.Client))</strong></div>
@@ -7563,7 +7590,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 <div>Profile: <strong>$profName</strong></div>
 <div>Read-Only: <strong>$roMode</strong></div>
 <div>Report Tier: <strong>$Tier</strong></div>
-<div>Version: <strong>v4.1.0</strong></div>
+<div>Version: <strong>v$($script:ProductVersion)</strong></div>
 </div>
 </div>
 "@
@@ -8026,7 +8053,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
     }
 
     $fwLabel = if ($script:ComplianceTarget -eq 'All') { 'All Frameworks' } else { $script:FrameworkMeta[$script:ComplianceTarget].Name }
-    $html += "<div class='ftr'>Generated by Network Security Audit Checklist v4.1 | $(Get-Date -Format 'yyyy-MM-dd HH:mm') | Profile: $profName | Framework: $fwLabel | $scannedCount auto-checks on $([System.Net.WebUtility]::HtmlEncode($scanTarget)) | Read-Only: $roMode</div></body></html>"
+    $html += "<div class='ftr'>Generated by $([System.Net.WebUtility]::HtmlEncode($script:ProductDisplayName)) | $(Get-Date -Format 'yyyy-MM-dd HH:mm') | Profile: $profName | Framework: $fwLabel | $scannedCount auto-checks on $([System.Net.WebUtility]::HtmlEncode($scanTarget)) | Read-Only: $roMode</div></body></html>"
     $html | Set-Content $outPath -Encoding UTF8
     $el['StatusText'].Text = "Exported: $outPath"; Write-Log "HTML exported: $outPath (Tier: $Tier)" 'INFO'
     if ($OpenAfter) { Start-Process $outPath }
@@ -8143,6 +8170,7 @@ function Export-FindingsJSON {
                 if ($fwData.PCI) { $compObj['PCI_DSS_4'] = $fwData.PCI }
                 if ($fwData.SOC2) { $compObj['SOC2'] = $fwData.SOC2 }
                 if ($fwData.ISO27001) { $compObj['ISO_27001'] = $fwData.ISO27001 }
+                if ($fwData.STIG) { $compObj['STIG'] = $fwData.STIG }
             }
 
             # MITRE mapping
@@ -8197,9 +8225,9 @@ function Export-FindingsJSON {
     $scanTarget = if ($el -and $el['txtScanTarget']) { $el['txtScanTarget'].Text } else { 'localhost' }
 
     $export = [ordered]@{
-        schema_version = '2.1'
-        tool           = 'NetworkSecurityAudit'
-        tool_version   = '4.1'
+        schema_version = $script:SchemaVersion
+        tool           = $script:ProductShortName
+        tool_version   = $script:ProductVersion
         export_type    = 'structured_findings'
         timestamp      = $scanTs
         client         = $ClientName
@@ -8258,8 +8286,8 @@ function Export-FindingsJSONL {
             $evt = [ordered]@{
                 timestamp       = if ($script:ScanTimestamps.Contains($id)) { try { [datetime]::ParseExact($script:ScanTimestamps[$id],'yyyy-MM-dd HH:mm:ss',$null).ToString('o') } catch { $scanTs } } else { $scanTs }
                 event_type      = 'security_audit_finding'
-                source          = 'NetworkSecurityAudit'
-                source_version  = '4.1'
+                source          = $script:ProductShortName
+                source_version  = $script:ProductVersion
                 client          = $ClientName
                 auditor         = $AuditorName
                 host            = $scanTarget
@@ -8286,6 +8314,7 @@ function Export-FindingsJSONL {
                 pci_dss         = if ($fwData) { $fwData.PCI } else { '' }
                 soc2            = if ($fwData) { $fwData.SOC2 } else { '' }
                 iso_27001       = if ($fwData) { $fwData.ISO27001 } else { '' }
+                stig            = if ($fwData) { $fwData.STIG } else { '' }
                 mitre_tactics   = if ($mitreData) { $mitreData.Tactics -join ',' } else { '' }
                 mitre_techniques = if ($mitreData) { $mitreData.Techniques -join ',' } else { '' }
                 mitre_context   = if ($mitreData) { $mitreData.Desc } else { '' }
@@ -8372,6 +8401,7 @@ function Export-FindingsCSV {
                 PCI_DSS_4        = if ($fwData) { $fwData.PCI } else { '' }
                 SOC2             = if ($fwData) { $fwData.SOC2 } else { '' }
                 ISO_27001        = if ($fwData) { $fwData.ISO27001 } else { '' }
+                STIG             = if ($fwData) { $fwData.STIG } else { '' }
                 MITRE_Tactics    = if ($mitreData) { $mitreData.Tactics -join '; ' } else { '' }
                 MITRE_Techniques = if ($mitreData) { $mitreData.Techniques -join '; ' } else { '' }
                 ScanTimestamp    = if ($script:ScanTimestamps.Contains($id)) { $script:ScanTimestamps[$id] } else { '' }
@@ -8435,7 +8465,9 @@ function Export-ComplianceSummary {
     } catch {}
 
     $summary = [ordered]@{
-        schema_version = '2.1'
+        schema_version = $script:SchemaVersion
+        tool           = $script:ProductShortName
+        tool_version   = $script:ProductVersion
         export_type    = 'compliance_summary'
         timestamp      = Get-Date -Format 'o'
         client         = $ClientName
@@ -8496,8 +8528,8 @@ function Export-SARIF {
         runs = @(@{
             tool = @{
                 driver = @{
-                    name = 'NetworkSecurityAuditor'
-                    version = '4.1.0'
+                    name = $script:ProductShortName
+                    version = $script:ProductVersion
                     informationUri = 'https://github.com/SysAdminDoc/Network_Security_Auditor'
                     rules = $rules
                 }
@@ -8531,7 +8563,13 @@ function Export-IntuneCompliance {
         }
     }
     $riskData = Get-RiskScore
+    $target = try { $el['txtScanTarget'].Text } catch { $env:COMPUTERNAME }
     $output = [ordered]@{
+        SchemaVersion = $script:SchemaVersion
+        Tool = $script:ProductShortName
+        ToolVersion = $script:ProductVersion
+        Timestamp = Get-Date -Format 'o'
+        Target = $target
         SecurityAuditGrade = $riskData.Grade
         SecurityAuditScore = $riskData.Pct
         OverallCompliant = ($riskData.Grade -in @('A','B'))
@@ -8664,7 +8702,7 @@ $script:LaunchTimer.Start()
 # ── Headless / Silent Mode (RMM) ────────────────────────────────────────────
 if ($script:SilentMode) {
     # In silent mode: skip GUI, run scans synchronously, export, exit
-    Write-Host "[Silent Mode] Network Security Audit v4.1" -ForegroundColor Cyan
+    Write-Host "[Silent Mode] $($script:ProductDisplayName)" -ForegroundColor Cyan
     Write-Host "[Silent Mode] Profile: $($script:CliProfile) | ReadOnly: $($script:ReadOnlyMode) | Report: $($script:CliReport)"
 
     # Auto-populate fields

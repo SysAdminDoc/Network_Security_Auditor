@@ -1,0 +1,17 @@
+name: PowerShell Validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate NetworkSecurityAudit
+        shell: powershell
+        run: .\tools\Test-NetworkSecurityAudit.ps1
