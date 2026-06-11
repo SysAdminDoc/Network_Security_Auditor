@@ -134,6 +134,7 @@ $readmeFrameworkLabels = [ordered]@{
     CMMC = 'CMMC'
     HIPAA = 'HIPAA'
     PCI = 'PCI-DSS'
+    E8 = 'ACSC Essential Eight'
     SOC2 = 'SOC 2'
     ISO27001 = 'ISO 27001'
     STIG = 'DISA STIG'
@@ -195,8 +196,14 @@ if ($scriptText -notmatch '\[switch\]\$NoElevate' -or $scriptText -notmatch '\$s
 if ($scriptText -notmatch "Framework -eq 'STIG'" -or $scriptText -notmatch 'STIG:') {
     Add-Failure 'Get-ComplianceString does not emit STIG mappings.'
 }
+if ($scriptText -notmatch "Framework -eq 'E8'" -or $scriptText -notmatch 'E8:' -or $scriptText -notmatch "'E8'\s*=\s*@\{" -or $scriptText -notmatch '\[ValidateSet\([^\)]*E8') {
+    Add-Failure 'ACSC Essential Eight must be exposed as a framework, scan profile, and formatted compliance target.'
+}
 if ($scriptText -notmatch "\`$compObj\['STIG'\]" -or $scriptText -notmatch '(?m)^\s+stig\s+=' -or $scriptText -notmatch '(?m)^\s+STIG\s+=') {
     Add-Failure 'Structured JSON, JSONL, and CSV exports must include STIG detail fields.'
+}
+if ($scriptText -notmatch "\`$compObj\['ACSC_Essential_Eight'\]" -or $scriptText -notmatch '(?m)^\s+essential_eight\s+=' -or $scriptText -notmatch '(?m)^\s+Essential_Eight\s+=') {
+    Add-Failure 'Structured JSON, JSONL, and CSV exports must include ACSC Essential Eight fields.'
 }
 if ($scriptText -notmatch 'function ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Findings\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Evidence\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Notes\s+=\s+ConvertTo-CsvSafeText') {
     Add-Failure 'CSV export free-text fields must be formula-injection neutralized.'
@@ -212,6 +219,21 @@ if ($scriptText -notmatch '\$script:D3FendMap' -or $scriptText -notmatch 'functi
 }
 if ($scriptText -notmatch 'd3fend_techniques' -or $scriptText -notmatch 'D3FEND_Techniques' -or $scriptText -notmatch 'd3fend\s*=') {
     Add-Failure 'JSON, JSONL, and CSV exports must include D3FEND technique fields.'
+}
+if ($scriptText -notmatch '(?s)function Export-FindingsCSV.*\$d3fendData\s*=.*D3FEND_Techniques') {
+    Add-Failure 'CSV export must initialize D3FEND data before writing D3FEND columns.'
+}
+if ($scriptText -match 'ToolTip="[^"]*ATT&CK') {
+    Add-Failure 'XAML tooltips must XML-escape ATT&CK as ATT&amp;CK.'
+}
+if ($scriptText -match 'foreach\s*\(\$pid\b') {
+    Add-Failure 'Profile loops must not use $pid because it collides with read-only $PID.'
+}
+if ($scriptText -match '\$t\.TextSec\b') {
+    Add-Failure 'Theme code must use the TextSecondary token, not the nonexistent TextSec alias.'
+}
+if ($scriptText -notmatch 'Defender provider unavailable' -or $scriptText -notmatch 'Defender status unavailable') {
+    Add-Failure 'EP01 must degrade Defender provider failures into a partial finding instead of aborting the check.'
 }
 if ($scriptText -match '(?m)^\s*(Set-Service|Start-Service|Stop-Service|Restart-Service)\b') {
     Add-Failure 'Automation paths must use sc.exe instead of service cmdlets that can show progress UI.'
