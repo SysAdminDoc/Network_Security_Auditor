@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.1.5 - Professional GUI Tool
+    Network Security Auditor v4.1.6 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -29,6 +29,8 @@
     Default: $true. Set -ReadOnly:$false to allow WinRM/audit policy setup.
 .PARAMETER NoRmmWrite
     In silent mode, generate reports and exports but skip all RMM and registry field writes.
+.PARAMETER NoInternet
+    Skip public internet downloads, DNS filter tests, and outbound probe checks.
 .PARAMETER Client
     Client name for the report header. Default: domain or computer name.
 .PARAMETER Auditor
@@ -45,7 +47,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.5
+    4.1.6
 #>
 param(
     [switch]$Silent,
@@ -62,13 +64,14 @@ param(
     [switch]$ExportJSONL,
     [switch]$ExportSARIF,
     [switch]$ExportPDF,
-    [switch]$NoRmmWrite
+    [switch]$NoRmmWrite,
+    [switch]$NoInternet
 )
 
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.1.5'
+$script:ProductVersion = '4.1.6'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -93,6 +96,7 @@ if (-not $script:IsAdmin) {
         if ($ExportSARIF)  { $argList += '-ExportSARIF' }
         if ($ExportPDF)    { $argList += '-ExportPDF' }
         if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
+        if ($NoInternet)   { $argList += '-NoInternet' }
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs -WindowStyle Hidden
         exit
     }
@@ -117,6 +121,7 @@ $script:CliExportJSONL = $ExportJSONL.IsPresent
 $script:CliExportSARIF = $ExportSARIF.IsPresent
 $script:CliExportPDF   = $ExportPDF.IsPresent
 $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
+$script:CliNoInternet  = $NoInternet.IsPresent
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
@@ -1412,7 +1417,10 @@ $script:AutoChecks = @{
             }
             # CISA KEV (Known Exploited Vulnerabilities) Cross-Reference
             [void]$sb.AppendLine("`nCISA KEV CROSS-REFERENCE:")
-            try {
+            if ($script:CliNoInternet) {
+                [void]$sb.AppendLine("  KEV lookup skipped (-NoInternet)")
+            } else {
+              try {
                 $kevJson = (Invoke-WebRequest -Uri 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json' -UseBasicParsing -TimeoutSec 30 -EA Stop).Content | ConvertFrom-Json
                 $kevTotal = ($kevJson.vulnerabilities | Measure-Object).Count
                 [void]$sb.AppendLine("  KEV catalog loaded: $kevTotal known exploited vulnerabilities")
@@ -1433,8 +1441,9 @@ $script:AutoChecks = @{
                     }
                     if ($daysSince -gt 30) { $kevRisk = $true }
                 } else { [void]$sb.AppendLine("  No recent KEV matches for detected products [OK]") }
-            } catch {
+              } catch {
                 [void]$sb.AppendLine("  KEV check skipped (no internet or timeout): $($_.Exception.Message)")
+              }
             }
             $status = if ($daysSince -le 30 -and -not $kevRisk) {'Pass'} elseif ($daysSince -le 60) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Get-HotFix + CISA KEV @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
@@ -2248,6 +2257,11 @@ $script:AutoChecks = @{
     'CF02' = @{ Type='Local'; Label='Test Egress Filtering'
         Script = {
             $sb = [System.Text.StringBuilder]::new(); $openPorts = 0
+            if ($script:CliNoInternet) {
+                [void]$sb.AppendLine("Egress port probe skipped (-NoInternet)")
+                [void]$sb.AppendLine("No public network connection attempts were made.")
+                return @{ Status='N/A'; Findings=$sb.ToString().Trim(); Evidence="Egress filtering probe skipped @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            }
             $testPorts = @(
                 @{Port=25;   Desc='SMTP (email relay)'}
                 @{Port=445;  Desc='SMB (file sharing)'}
@@ -2358,20 +2372,24 @@ $script:AutoChecks = @{
             $dns = Get-DnsClientServerAddress -AddressFamily IPv4 -EA SilentlyContinue | Where-Object { $_.ServerAddresses } | Select-Object -First 1
             [void]$sb.AppendLine("DNS SERVERS: $(($dns.ServerAddresses) -join ', ')")
             [void]$sb.AppendLine("`nDNS FILTERING TEST:")
-            foreach ($td in $testDomains) {
-                try {
-                    $r = Resolve-DnsName $td.Domain -EA Stop -DnsOnly
-                    [void]$sb.AppendLine("  $($td.Domain): RESOLVED ($($r.IPAddress -join ',')) [NOT FILTERED]")
-                } catch {
-                    $filtered = $true
-                    [void]$sb.AppendLine("  $($td.Domain): BLOCKED/NXDOMAIN [FILTERED - Good]")
+            if ($script:CliNoInternet) {
+                [void]$sb.AppendLine("  External DNS test skipped (-NoInternet)")
+            } else {
+                foreach ($td in $testDomains) {
+                    try {
+                        $r = Resolve-DnsName $td.Domain -EA Stop -DnsOnly
+                        [void]$sb.AppendLine("  $($td.Domain): RESOLVED ($($r.IPAddress -join ',')) [NOT FILTERED]")
+                    } catch {
+                        $filtered = $true
+                        [void]$sb.AppendLine("  $($td.Domain): BLOCKED/NXDOMAIN [FILTERED - Good]")
+                    }
                 }
             }
             # Check if using known filtering DNS
             $knownFilters = @('208.67.222.222','208.67.220.220','9.9.9.9','149.112.112.112','45.90.28.0','45.90.30.0','185.228.168.168','185.228.169.168')
             $usingFilter = ($dns.ServerAddresses | Where-Object { $_ -in $knownFilters }).Count -gt 0
             if ($usingFilter) { [void]$sb.AppendLine("`nUsing known filtering DNS resolver. Good."); $filtered = $true }
-            $status = if ($filtered) {'Pass'} else {'Fail'}
+            $status = if ($filtered) {'Pass'} elseif ($script:CliNoInternet) {'N/A'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="DNS filtering test @ $(Get-Date -f 'yyyy-MM-dd HH:mm') from $env:COMPUTERNAME" }
         }
     }
@@ -2942,11 +2960,15 @@ $script:AutoChecks = @{
             # Test known bad domains
             [void]$sb.AppendLine("`nDNS FILTER TEST:")
             $testDomains = @('examplemalwaredomain.com','internetbadguys.com')
-            foreach ($td in $testDomains) {
-                try { $r = Resolve-DnsName $td -EA Stop -DnsOnly; [void]$sb.AppendLine("  $td`: RESOLVED [NOT FILTERED]") }
-                catch { $filtered = $true; [void]$sb.AppendLine("  $td`: BLOCKED [FILTERED - Good]") }
+            if ($script:CliNoInternet) {
+                [void]$sb.AppendLine("  External DNS test skipped (-NoInternet)")
+            } else {
+                foreach ($td in $testDomains) {
+                    try { $r = Resolve-DnsName $td -EA Stop -DnsOnly; [void]$sb.AppendLine("  $td`: RESOLVED [NOT FILTERED]") }
+                    catch { $filtered = $true; [void]$sb.AppendLine("  $td`: BLOCKED [FILTERED - Good]") }
+                }
             }
-            $status = if ($filtered) {'Pass'} else {'Fail'}
+            $status = if ($filtered) {'Pass'} elseif ($script:CliNoInternet) {'N/A'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="DNS filtering scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
@@ -7000,10 +7022,14 @@ function Start-AsyncPreflight {
             $results['SMB'] = 'OK'; $log.Add("[OK]  SMB: Accessible | SMB1=$($smbCfg.EnableSMB1Protocol) | Encrypt=$($smbCfg.EncryptData)") | Out-Null
         } catch { $results['SMB'] = 'WARN'; $log.Add("[WARN] SMB: $($_.Exception.Message)") | Out-Null }
         # 5. DNS
-        try {
-            $dns = Resolve-DnsName 'microsoft.com' -EA Stop -DnsOnly | Select-Object -First 1
-            $results['DNS'] = 'OK'; $log.Add("[OK]  DNS: microsoft.com -> $($dns.IPAddress)") | Out-Null
-        } catch { $results['DNS'] = 'FAIL'; $log.Add("[FAIL] DNS: $_") | Out-Null }
+        if ($script:CliNoInternet) {
+            $results['DNS'] = 'SKIP'; $log.Add("[SKIP] DNS: external lookup skipped (-NoInternet)") | Out-Null
+        } else {
+            try {
+                $dns = Resolve-DnsName 'microsoft.com' -EA Stop -DnsOnly | Select-Object -First 1
+                $results['DNS'] = 'OK'; $log.Add("[OK]  DNS: microsoft.com -> $($dns.IPAddress)") | Out-Null
+            } catch { $results['DNS'] = 'FAIL'; $log.Add("[FAIL] DNS: $_") | Out-Null }
+        }
         # 6. Elevation
         $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         if ($isAdmin) { $results['Elevation'] = 'OK'; $log.Add("[OK]  Elevation: Administrator") | Out-Null }
@@ -8740,7 +8766,7 @@ $script:LaunchTimer.Start()
 if ($script:SilentMode) {
     # In silent mode: skip GUI, run scans synchronously, export, exit
     Write-Host "[Silent Mode] $($script:ProductDisplayName)" -ForegroundColor Cyan
-    Write-Host "[Silent Mode] Profile: $($script:CliProfile) | ReadOnly: $($script:ReadOnlyMode) | Report: $($script:CliReport)"
+    Write-Host "[Silent Mode] Profile: $($script:CliProfile) | ReadOnly: $($script:ReadOnlyMode) | Report: $($script:CliReport) | NoInternet: $($script:CliNoInternet)"
 
     # Auto-populate fields
     $clientName = if ($script:CliClient) { $script:CliClient }
