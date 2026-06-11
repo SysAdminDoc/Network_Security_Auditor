@@ -218,6 +218,9 @@ if ($scriptText -notmatch 'function ConvertTo-CsvSafeText' -or $scriptText -notm
 if ($scriptText -notmatch 'findings_truncated' -or $scriptText -notmatch 'findings_original_length' -or $scriptText -notmatch 'evidence_truncated' -or $scriptText -notmatch 'evidence_original_length') {
     Add-Failure 'JSONL truncation must include flags and original lengths.'
 }
+if ($scriptText -notmatch '\$script:RunLog' -or $scriptText -notmatch 'function Export-RunLogJSONL' -or $scriptText -notmatch 'run_log_summary' -or $scriptText -notmatch 'duration_ms' -or $scriptText -notmatch 'timed_out' -or $scriptText -notmatch 'skip_reason' -or $scriptText -notmatch '_runlog\.jsonl') {
+    Add-Failure 'Scans must export structured run-log timing, timeout, skip, and error metadata.'
+}
 if ($scriptText -notmatch 'logicalLocations' -or $scriptText -notmatch 'network-security-audit://check/') {
     Add-Failure 'SARIF results must include logical check locations.'
 }
