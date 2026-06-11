@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.8.0 - Professional GUI Tool
+    Network Security Auditor v4.8.1 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.8.0
+    4.8.1
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.8.0'
+$script:ProductVersion = '4.8.1'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -9078,13 +9078,13 @@ function Invoke-AutoExport {
     $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
     $basePath = Join-Path $desktop "SecurityAudit_${client}_$ts"
     $outFile = "${basePath}.html"
-    try { Export-HTMLReport $outFile -OpenAfter; Write-Log "Auto-export HTML: $outFile" 'INFO' }
+    try { $null = Export-HTMLReport $outFile -OpenAfter; Write-Log "Auto-export HTML: $outFile" 'INFO' }
     catch { Write-Log "Auto-export HTML failed: $_" 'ERROR'; $el['StatusText'].Text = "HTML export failed: $($_.Exception.Message)" }
     # Also generate structured JSON and CSV
-    try { Export-FindingsJSON -OutPath "${basePath}_findings.json"; Write-Log "Auto-export findings JSON" 'INFO' } catch {}
-    try { Export-FindingsCSV -OutPath "${basePath}.csv"; Write-Log "Auto-export CSV" 'INFO' } catch {}
-    try { Export-ComplianceSummary -OutPath "${basePath}_summary.json"; Write-Log "Auto-export compliance summary" 'INFO' } catch {}
-    try { Export-RunLogJSONL -OutPath "${basePath}_runlog.jsonl"; Write-Log "Auto-export run log JSONL" 'INFO' } catch {}
+    try { $null = Export-FindingsJSON -OutPath "${basePath}_findings.json"; Write-Log "Auto-export findings JSON" 'INFO' } catch {}
+    try { $null = Export-FindingsCSV -OutPath "${basePath}.csv"; Write-Log "Auto-export CSV" 'INFO' } catch {}
+    try { $null = Export-ComplianceSummary -OutPath "${basePath}_summary.json"; Write-Log "Auto-export compliance summary" 'INFO' } catch {}
+    try { $null = Export-RunLogJSONL -OutPath "${basePath}_runlog.jsonl"; Write-Log "Auto-export run log JSONL" 'INFO' } catch {}
     return $outFile
 }
 
@@ -9925,7 +9925,7 @@ if ($script:SilentMode) {
 
     # HTML Report (always generated)
     try {
-        Export-HTMLReport -outPath $outFile -Tier $script:CliReport
+        $null = Export-HTMLReport -outPath $outFile -Tier $script:CliReport
         Write-Host "[Silent Mode] HTML report: $outFile" -ForegroundColor Green
     } catch {
         Write-Host "[Silent Mode] HTML report FAILED: $($_.Exception.Message)" -ForegroundColor Red
@@ -9935,7 +9935,7 @@ if ($script:SilentMode) {
     # Structured findings JSON (always generated, or when -ExportJSON)
     $jsonFindingsOut = "${basePath}_findings.json"
     try {
-        Export-FindingsJSON -OutPath $jsonFindingsOut -ClientName $clientName -AuditorName $auditorName
+        $null = Export-FindingsJSON -OutPath $jsonFindingsOut -ClientName $clientName -AuditorName $auditorName
         Write-Host "[Silent Mode] Findings JSON: $jsonFindingsOut" -ForegroundColor Green
     } catch { Write-Host "[Silent Mode] Findings JSON export failed: $_" -ForegroundColor Yellow; $jsonFindingsOut = '' }
 
@@ -9944,7 +9944,7 @@ if ($script:SilentMode) {
     if ($script:CliExportJSONL -or $script:SilentMode) {
         $jsonlOut = "${basePath}_siem.jsonl"
         try {
-            Export-FindingsJSONL -OutPath $jsonlOut -ClientName $clientName -AuditorName $auditorName
+            $null = Export-FindingsJSONL -OutPath $jsonlOut -ClientName $clientName -AuditorName $auditorName
             Write-Host "[Silent Mode] SIEM JSONL: $jsonlOut" -ForegroundColor Green
         } catch { Write-Host "[Silent Mode] JSONL export failed: $_" -ForegroundColor Yellow; $jsonlOut = '' }
     }
@@ -9952,7 +9952,7 @@ if ($script:SilentMode) {
     # Per-check timing and execution diagnostics
     $runLogOut = "${basePath}_runlog.jsonl"
     try {
-        Export-RunLogJSONL -OutPath $runLogOut
+        $null = Export-RunLogJSONL -OutPath $runLogOut
         Write-Host "[Silent Mode] Run log JSONL: $runLogOut" -ForegroundColor Green
     } catch { Write-Host "[Silent Mode] Run log export failed: $_" -ForegroundColor Yellow; $runLogOut = '' }
 
@@ -9961,7 +9961,7 @@ if ($script:SilentMode) {
     if ($script:CliExportCSV -or $script:SilentMode) {
         $csvOut = "${basePath}.csv"
         try {
-            Export-FindingsCSV -OutPath $csvOut -ClientName $clientName -AuditorName $auditorName
+            $null = Export-FindingsCSV -OutPath $csvOut -ClientName $clientName -AuditorName $auditorName
             Write-Host "[Silent Mode] CSV: $csvOut" -ForegroundColor Green
         } catch { Write-Host "[Silent Mode] CSV export failed: $_" -ForegroundColor Yellow; $csvOut = '' }
     }
@@ -9970,7 +9970,7 @@ if ($script:SilentMode) {
     if ($script:CliExportSARIF) {
         $sarifOut = "${basePath}.sarif"
         try {
-            Export-SARIF -OutPath $sarifOut -ClientName $clientName
+            $null = Export-SARIF -OutPath $sarifOut -ClientName $clientName
             Write-Host "[Silent Mode] SARIF: $sarifOut" -ForegroundColor Green
         } catch { Write-Host "[Silent Mode] SARIF export failed: $_" -ForegroundColor Yellow }
     }
@@ -9978,7 +9978,7 @@ if ($script:SilentMode) {
     # Intune compliance export
     $intuneOut = "${basePath}_intune.json"
     try {
-        Export-IntuneCompliance -OutPath $intuneOut
+        $null = Export-IntuneCompliance -OutPath $intuneOut
         Write-Host "[Silent Mode] Intune: $intuneOut" -ForegroundColor Green
     } catch { Write-Host "[Silent Mode] Intune export failed: $_" -ForegroundColor Yellow }
 
@@ -9994,7 +9994,7 @@ if ($script:SilentMode) {
     # Compliance summary JSON (compact RMM dashboard payload)
     $summaryOut = "${basePath}_summary.json"
     try {
-        Export-ComplianceSummary -OutPath $summaryOut -ClientName $clientName -AuditorName $auditorName
+        $null = Export-ComplianceSummary -OutPath $summaryOut -ClientName $clientName -AuditorName $auditorName
         Write-Host "[Silent Mode] Compliance summary: $summaryOut" -ForegroundColor Green
     } catch { Write-Host "[Silent Mode] Compliance summary export failed: $_" -ForegroundColor Yellow; $summaryOut = '' }
 

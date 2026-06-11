@@ -269,6 +269,28 @@ if ($scriptText -notmatch "Pass','Fail','Partial','N/A") {
 if ($scriptText -notmatch 'counts\.NA' -or $scriptText -notmatch "'N/A'\s*\{\s*'NA'\s*\}" -or $scriptText -notmatch "'N/A'\s*\{\s*'-'\s*\}" -or $scriptText -notmatch "'N/A'\s*\{\s*'DarkGray'\s*\}") {
     Add-Failure 'N/A results must have distinct GUI, tab badge, and silent console presentation instead of warning/error fallbacks.'
 }
+$silentExportBlock = Get-TextBetween -Text $scriptText -StartPattern '# Export report' -EndPattern '\$riskData\s*=\s*Get-RiskScore'
+$autoExportBlock = Get-TextBetween -Text $scriptText -StartPattern 'function Invoke-AutoExport' -EndPattern 'return \$outFile'
+$suppressedExportCalls = @(
+    @{ Name = 'silent HTML'; Block = $silentExportBlock; Pattern = '\$null\s*=\s*Export-HTMLReport\b' },
+    @{ Name = 'silent findings JSON'; Block = $silentExportBlock; Pattern = '\$null\s*=\s*Export-FindingsJSON\b' },
+    @{ Name = 'silent SIEM JSONL'; Block = $silentExportBlock; Pattern = '\$null\s*=\s*Export-FindingsJSONL\b' },
+    @{ Name = 'silent run log JSONL'; Block = $silentExportBlock; Pattern = '\$null\s*=\s*Export-RunLogJSONL\b' },
+    @{ Name = 'silent CSV'; Block = $silentExportBlock; Pattern = '\$null\s*=\s*Export-FindingsCSV\b' },
+    @{ Name = 'silent SARIF'; Block = $silentExportBlock; Pattern = '\$null\s*=\s*Export-SARIF\b' },
+    @{ Name = 'silent Intune'; Block = $silentExportBlock; Pattern = '\$null\s*=\s*Export-IntuneCompliance\b' },
+    @{ Name = 'silent compliance summary'; Block = $silentExportBlock; Pattern = '\$null\s*=\s*Export-ComplianceSummary\b' },
+    @{ Name = 'auto HTML'; Block = $autoExportBlock; Pattern = '\$null\s*=\s*Export-HTMLReport\b' },
+    @{ Name = 'auto findings JSON'; Block = $autoExportBlock; Pattern = '\$null\s*=\s*Export-FindingsJSON\b' },
+    @{ Name = 'auto CSV'; Block = $autoExportBlock; Pattern = '\$null\s*=\s*Export-FindingsCSV\b' },
+    @{ Name = 'auto compliance summary'; Block = $autoExportBlock; Pattern = '\$null\s*=\s*Export-ComplianceSummary\b' },
+    @{ Name = 'auto run log JSONL'; Block = $autoExportBlock; Pattern = '\$null\s*=\s*Export-RunLogJSONL\b' }
+)
+foreach ($call in $suppressedExportCalls) {
+    if ([string]::IsNullOrWhiteSpace($call.Block) -or $call.Block -notmatch $call.Pattern) {
+        Add-Failure "Export call output must be suppressed with `$null assignment: $($call.Name)."
+    }
+}
 
 if ($failures.Count -gt 0) {
     Write-Host 'NetworkSecurityAudit validation FAILED' -ForegroundColor Red
