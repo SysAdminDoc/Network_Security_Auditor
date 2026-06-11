@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.3.0-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.3.1-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -16,7 +16,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.3.0-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.3.1-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -223,20 +223,18 @@ Every check runs in an isolated runspace with timeout protection. Results includ
 
 ### Compliance Framework Mapping
 
-Every check maps to one or more controls across 8 frameworks:
+Every check maps to one or more controls across 8 frameworks. Framework-specific scan profiles run the most relevant checks for that standard:
 
-| Framework | Standard | Coverage |
+| Framework | Standard | Profile checks |
 |-----------|----------|----------|
-| **CIS** | Controls v8.1 | All 68 checks mapped |
-| **NIST** | SP 800-171 Rev 3 | All 68 checks mapped |
-| **CMMC** | Level 2 (v2.0) | All 68 checks mapped |
-| **HIPAA** | Security Rule | ~46 checks |
-| **PCI-DSS** | v4.0.1 | ~49 checks |
-| **SOC 2** | Type II (Trust Criteria) | ~61 checks |
-| **ISO 27001** | :2022 (Annex A) | All 68 checks mapped |
-| **DISA STIG** | Windows Server/Client | All 68 checks mapped |
-
-Framework-specific scan profiles run only the checks relevant to that standard.
+| **CIS** | Controls v8.1 | 68 checks |
+| **NIST** | SP 800-171 Rev 3 | 68 checks |
+| **CMMC** | Level 2 (v2.0) | 68 checks |
+| **HIPAA** | Security Rule | 48 checks |
+| **PCI-DSS** | v4.0.1 | 50 checks |
+| **SOC 2** | Type II (Trust Criteria) | 66 checks |
+| **ISO 27001** | :2022 (Annex A) | 68 checks |
+| **DISA STIG** | Windows Server/Client | 68 checks |
 
 ### MITRE ATT&CK Mapping
 

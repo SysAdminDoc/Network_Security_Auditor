@@ -73,6 +73,25 @@ function Compare-Set {
     if (@($extra).Count -gt 0) { Add-Failure "$Name contains unknown IDs: $($extra -join ', ')" }
 }
 
+function Get-FrameworkCoverageCount {
+    param(
+        [string]$Framework,
+        [string]$FrameworkChecksBlock,
+        [int]$AllCheckCount
+    )
+
+    $pattern = "(?ms)'$([regex]::Escape($Framework))'\s*=\s*@\((.*?)\)"
+    $match = [regex]::Match($FrameworkChecksBlock, $pattern)
+    if (-not $match.Success) { return -1 }
+
+    $expression = $match.Groups[1].Value
+    if ($expression -match '\$script:FrameworkMap\.Keys') { return $AllCheckCount }
+
+    return @(
+        Get-UniqueMatches -Text $expression -Pattern "'([A-Z]{2}\d{2})'"
+    ).Count
+}
+
 $tokens = $null
 $parseErrors = $null
 [System.Management.Automation.Language.Parser]::ParseInput($scriptText, [ref]$tokens, [ref]$parseErrors) | Out-Null
@@ -108,6 +127,30 @@ $profileUnknown = @($profileIds | Where-Object { $_ -notin $catalogIds } | Sort-
 if (@($profileUnknown).Count -gt 0) { Add-Failure "ScanProfiles reference unknown IDs: $($profileUnknown -join ', ')" }
 $frameworkChecksUnknown = @($frameworkCheckIds | Where-Object { $_ -notin $catalogIds } | Sort-Object)
 if (@($frameworkChecksUnknown).Count -gt 0) { Add-Failure "FrameworkChecks reference unknown IDs: $($frameworkChecksUnknown -join ', ')" }
+
+$readmeFrameworkLabels = [ordered]@{
+    CIS = 'CIS'
+    NIST = 'NIST'
+    CMMC = 'CMMC'
+    HIPAA = 'HIPAA'
+    PCI = 'PCI-DSS'
+    SOC2 = 'SOC 2'
+    ISO27001 = 'ISO 27001'
+    STIG = 'DISA STIG'
+}
+foreach ($framework in $readmeFrameworkLabels.Keys) {
+    $coverageCount = Get-FrameworkCoverageCount -Framework $framework -FrameworkChecksBlock $frameworkChecksBlock -AllCheckCount @($catalogIds).Count
+    if ($coverageCount -lt 0) {
+        Add-Failure "FrameworkChecks is missing framework: $framework"
+        continue
+    }
+
+    $labelPattern = [regex]::Escape("**$($readmeFrameworkLabels[$framework])**")
+    $coveragePattern = "\|\s*$labelPattern\s*\|[^|]+\|\s*$coverageCount checks\s*\|"
+    if ($readmeText -notmatch $coveragePattern) {
+        Add-Failure "README framework profile count for $framework must be $coverageCount checks."
+    }
+}
 
 $headerVersion = [regex]::Match($scriptText, '(?ms)\.VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
 $productVersion = [regex]::Match($scriptText, "\`$script:ProductVersion\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)'").Groups[1].Value
