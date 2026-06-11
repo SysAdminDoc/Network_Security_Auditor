@@ -134,6 +134,9 @@ if ($scriptText -notmatch "if\s*\(\`$ExportSARIF\)[^\r\n]*'-ExportSARIF'") {
 if ($scriptText -notmatch "if\s*\(\`$ExportPDF\)[^\r\n]*'-ExportPDF'") {
     Add-Failure 'Auto-elevation does not preserve -ExportPDF.'
 }
+if ($scriptText -notmatch '\[switch\]\$NoRmmWrite' -or $scriptText -notmatch "if\s*\(\`$NoRmmWrite\)[^\r\n]*'-NoRmmWrite'" -or $scriptText -notmatch '\$script:CliNoRmmWrite' -or $scriptText -notmatch 'RMM and registry field writes skipped') {
+    Add-Failure 'Silent mode must expose, preserve, and honor -NoRmmWrite.'
+}
 if ($scriptText -notmatch "Framework -eq 'STIG'" -or $scriptText -notmatch 'STIG:') {
     Add-Failure 'Get-ComplianceString does not emit STIG mappings.'
 }
