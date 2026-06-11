@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.2.1 - Professional GUI Tool
+    Network Security Auditor v4.3.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.2.1
+    4.3.0
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.2.1'
+$script:ProductVersion = '4.3.0'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -4339,6 +4339,124 @@ $script:MitreMap = @{
     'PS06' = @{ Tactics=@('TA0001','TA0043'); Techniques=@('T1566','T1598','T1204'); Desc='Without ongoing training, users remain the weakest link for phishing and social engineering' }
 }
 
+# MITRE D3FEND defensive technique mapping (v1.4.0)
+# Format: CheckID -> @{ Stages=@('Harden',...); Techniques=@('D3-xxx',...); Labels=@('Name',...); Desc='short defensive context' }
+$script:D3FendMap = @{
+    # Identity & Access
+    'IA01' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-AM','D3F-UGPH','D3-UAP'); Labels=@('Access Modeling','User Group Permissions','User Account Permissions'); Desc='Models and restricts privileged identities and administrative group membership' }
+    'IA02' = @{ Stages=@('Harden'); Techniques=@('D3-CH','D3-CRO','D3-PR'); Labels=@('Credential Hardening','Credential Rotation','Password Rotation'); Desc='Hardens service-account credentials and reduces Kerberoast exposure' }
+    'IA03' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MFA','D3-CTS'); Labels=@('Multi-factor Authentication','Credential Transmission Scoping'); Desc='Requires stronger authentication and scopes credential use for remote access' }
+    'IA04' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP','D3-APA'); Labels=@('Domain Account Monitoring','User Account Permissions','Access Policy Administration'); Desc='Monitors and revokes access for separated users' }
+    'IA05' = @{ Stages=@('Harden'); Techniques=@('D3-SPP','D3-PWA','D3-PR'); Labels=@('Strong Password Policy','Password Authentication','Password Rotation'); Desc='Enforces password strength, authentication, and rotation controls' }
+    'IA06' = @{ Stages=@('Isolate','Harden'); Techniques=@('D3-AMED','D3-UAP','D3-CH'); Labels=@('Access Mediation','User Account Permissions','Credential Hardening'); Desc='Mediates privileged access and hardens administrator credential handling' }
+    'IA07' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP'); Labels=@('Domain Account Monitoring','User Account Permissions'); Desc='Identifies shared accounts and restores user-level accountability' }
+    'IA08' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-APA','D3-UAP'); Labels=@('Domain Account Monitoring','Access Policy Administration','User Account Permissions'); Desc='Controls guest and vendor account lifecycle and permissions' }
+    'IA09' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MFA','D3-WSAM','D3-CTS'); Labels=@('Multi-factor Authentication','Web Session Access Mediation','Credential Transmission Scoping'); Desc='Mediates cloud and remote sessions with conditional access controls' }
+    'IA10' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP'); Labels=@('Domain Account Monitoring','User Account Permissions'); Desc='Finds inactive accounts so access can be removed before abuse' }
+    'IA11' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-CH','D3-CRO','D3-MENCR','D3-DAM'); Labels=@('Credential Hardening','Credential Rotation','Message Encryption','Domain Account Monitoring'); Desc='Hardens Kerberos encryption by identifying RC4/DES dependencies and AES readiness gaps' }
+
+    # Endpoint Security
+    'EP01' = @{ Stages=@('Detect','Harden'); Techniques=@('D3-PM','D3-OSM','D3-PH'); Labels=@('Platform Monitoring','Operating System Monitoring','Platform Hardening'); Desc='Validates endpoint protection, ASR, and anti-malware monitoring controls' }
+    'EP02' = @{ Stages=@('Harden'); Techniques=@('D3-DENCR','D3-FE'); Labels=@('Disk Encryption','File Encryption'); Desc='Protects endpoint data at rest through disk and file encryption' }
+    'EP03' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-CH','D3-NTF','D3-MENCR'); Labels=@('Credential Hardening','Network Traffic Filtering','Message Encryption'); Desc='Hardens SMB, NTLM, LLMNR, and credential relay exposure' }
+    'EP04' = @{ Stages=@('Model','Harden'); Techniques=@('D3-SWI','D3-SU','D3-SYSVA'); Labels=@('Software Inventory','Software Update','System Vulnerability Assessment'); Desc='Inventories and updates vulnerable software and operating systems' }
+    'EP05' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-SICA','D3-SCP','D3-UAP'); Labels=@('System Init Config Analysis','System Configuration Permissions','User Account Permissions'); Desc='Identifies local privilege escalation and unsafe startup/configuration paths' }
+    'EP06' = @{ Stages=@('Isolate'); Techniques=@('D3-NTF','D3-ITF','D3-OTF'); Labels=@('Network Traffic Filtering','Inbound Traffic Filtering','Outbound Traffic Filtering'); Desc='Enforces host firewall and attack-surface traffic controls' }
+    'EP07' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-EAL','D3-SCF','D3-FFV'); Labels=@('Executable Allowlisting','System Call Filtering','File Format Verification'); Desc='Controls script, macro, and executable launch paths' }
+    'EP08' = @{ Stages=@('Harden'); Techniques=@('D3-CH','D3-HBPI','D3-TBI'); Labels=@('Credential Hardening','Hardware-based Process Isolation','TPM Boot Integrity'); Desc='Uses hardware-backed isolation and boot integrity to protect credentials' }
+    'EP09' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-SICA','D3-OPR','D3-IOPR'); Labels=@('System Init Config Analysis','Operating Mode Restriction','IO Port Restriction'); Desc='Restricts AutoRun/AutoPlay and removable-media execution paths' }
+    'EP10' = @{ Stages=@('Model','Harden'); Techniques=@('D3-AI','D3-SWI','D3-SU'); Labels=@('Asset Inventory','Software Inventory','Software Update'); Desc='Identifies unsupported operating systems and upgrade/ESU gaps' }
+
+    # Logging & Monitoring
+    'LM01' = @{ Stages=@('Detect'); Techniques=@('D3-OSM','D3-DAM','D3-AET'); Labels=@('Operating System Monitoring','Domain Account Monitoring','Authentication Event Thresholding'); Desc='Validates audit policy and authentication event visibility' }
+    'LM02' = @{ Stages=@('Detect'); Techniques=@('D3-NTA','D3-PM','D3-OSM'); Labels=@('Network Traffic Analysis','Platform Monitoring','Operating System Monitoring'); Desc='Centralizes telemetry for correlation and investigation' }
+    'LM03' = @{ Stages=@('Detect'); Techniques=@('D3-SEA','D3-SICA','D3-PLA'); Labels=@('Script Execution Analysis','System Init Config Analysis','Process Lineage Analysis'); Desc='Collects PowerShell and process evidence for script-based attacks' }
+    'LM04' = @{ Stages=@('Detect'); Techniques=@('D3-NTA','D3-NTSA','D3-NTCD'); Labels=@('Network Traffic Analysis','Network Traffic Signature Analysis','Network Traffic Community Deviation'); Desc='Validates firewall and IDS/IPS network telemetry' }
+    'LM05' = @{ Stages=@('Detect'); Techniques=@('D3-FIM','D3-SFA','D3-SICA'); Labels=@('File Integrity Monitoring','System File Analysis','System Init Config Analysis'); Desc='Detects unauthorized changes to files, logs, and system configuration' }
+    'LM06' = @{ Stages=@('Detect'); Techniques=@('D3-UBA','D3-DAM','D3-AET'); Labels=@('User Behavior Analysis','Domain Account Monitoring','Authentication Event Thresholding'); Desc='Turns collected events into reviewed and actionable alerts' }
+    'LM07' = @{ Stages=@('Detect'); Techniques=@('D3-OSM','D3-PM'); Labels=@('Operating System Monitoring','Platform Monitoring'); Desc='Preserves enough event data for incident reconstruction' }
+    'LM08' = @{ Stages=@('Detect'); Techniques=@('D3-AET','D3-NTSA','D3-UBA'); Labels=@('Authentication Event Thresholding','Network Traffic Signature Analysis','User Behavior Analysis'); Desc='Validates alerting for authentication, network, and behavior anomalies' }
+
+    # Network Architecture
+    'NA01' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-NM','D3-NI','D3-NRAM'); Labels=@('Network Mapping','Network Isolation','Network Resource Access Mediation'); Desc='Models and isolates network zones to limit lateral movement' }
+    'NA02' = @{ Stages=@('Isolate'); Techniques=@('D3-NI','D3-NRAM','D3-RAM'); Labels=@('Network Isolation','Network Resource Access Mediation','Routing Access Mediation'); Desc='Controls traffic between client, server, and sensitive tiers' }
+    'NA03' = @{ Stages=@('Isolate'); Techniques=@('D3-NAM','D3-ITF','D3-PBWSAM'); Labels=@('Network Access Mediation','Inbound Traffic Filtering','Proxy-based Web Server Access Mediation'); Desc='Separates public-facing services from internal networks' }
+    'NA04' = @{ Stages=@('Isolate','Model'); Techniques=@('D3-NI','D3-NAM','D3-NM'); Labels=@('Network Isolation','Network Access Mediation','Network Mapping'); Desc='Segments wireless and guest access from production systems' }
+    'NA05' = @{ Stages=@('Isolate','Harden'); Techniques=@('D3-ET','D3-NAM','D3-CTS'); Labels=@('Encrypted Tunnels','Network Access Mediation','Credential Transmission Scoping'); Desc='Scopes VPN and remote access to required resources' }
+    'NA06' = @{ Stages=@('Detect'); Techniques=@('D3-NTA','D3-NTSA','D3-NTCD'); Labels=@('Network Traffic Analysis','Network Traffic Signature Analysis','Network Traffic Community Deviation'); Desc='Detects anomalous traffic and lateral movement attempts' }
+    'NA07' = @{ Stages=@('Isolate','Detect'); Techniques=@('D3-DNSAL','D3-DNSDL','D3-DNRA'); Labels=@('DNS Allowlisting','DNS Denylisting','Domain Name Reputation Analysis'); Desc='Controls and analyzes DNS resolution for malicious destinations' }
+
+    # Network Perimeter
+    'NP01' = @{ Stages=@('Isolate'); Techniques=@('D3-NTF','D3-ITF','D3-OTF'); Labels=@('Network Traffic Filtering','Inbound Traffic Filtering','Outbound Traffic Filtering'); Desc='Filters traffic at the perimeter to reduce exposure' }
+    'NP02' = @{ Stages=@('Model','Detect'); Techniques=@('D3-NVA','D3-NTPM','D3-NNI'); Labels=@('Network Vulnerability Assessment','Network Traffic Policy Mapping','Network Node Inventory'); Desc='Enumerates externally exposed services and policy drift' }
+    'NP03' = @{ Stages=@('Isolate','Harden'); Techniques=@('D3-DRA','D3-NAM','D3-MFA'); Labels=@('Disable Remote Access','Network Access Mediation','Multi-factor Authentication'); Desc='Hardens VPN/RDP and remote administration exposure' }
+    'NP04' = @{ Stages=@('Isolate'); Techniques=@('D3-PBWSAM','D3-ITF','D3-CF'); Labels=@('Proxy-based Web Server Access Mediation','Inbound Traffic Filtering','Content Filtering'); Desc='Mediates web-facing traffic with WAF or equivalent edge controls' }
+    'NP05' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-NTPM','D3-NTF','D3-NRAM'); Labels=@('Network Traffic Policy Mapping','Network Traffic Filtering','Network Resource Access Mediation'); Desc='Reviews firewall ACL scope and route exposure' }
+    'NP06' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-MENCR','D3-PCA','D3-NTA'); Labels=@('Message Encryption','Passive Certificate Analysis','Network Traffic Analysis'); Desc='Assesses encrypted inspection and TLS visibility boundaries' }
+    'NP07' = @{ Stages=@('Detect'); Techniques=@('D3-NTA','D3-NTSA','D3-NTCD'); Labels=@('Network Traffic Analysis','Network Traffic Signature Analysis','Network Traffic Community Deviation'); Desc='Validates intrusion detection and prevention coverage' }
+    'NP08' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-MENCR','D3-PCA','D3-CERO'); Labels=@('Message Encryption','Passive Certificate Analysis','Certificate Rotation'); Desc='Assesses TLS protocol, certificate, and cryptographic hygiene' }
+    'NP09' = @{ Stages=@('Isolate','Model'); Techniques=@('D3-ITF','D3-NTPM','D3-NRAM'); Labels=@('Inbound Traffic Filtering','Network Traffic Policy Mapping','Network Resource Access Mediation'); Desc='Reviews NAT and port-forward exposure to internal hosts' }
+    'NP10' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-SU','D3-FV','D3-SYSVA'); Labels=@('Software Update','Firmware Verification','System Vulnerability Assessment'); Desc='Validates perimeter firmware currency and vulnerability posture' }
+
+    # Backup & Recovery
+    'BR01' = @{ Stages=@('Restore'); Techniques=@('D3-RA','D3-RF','D3-RDI'); Labels=@('Restore Access','Restore File','Restore Disk Image'); Desc='Establishes a recoverable backup baseline' }
+    'BR02' = @{ Stages=@('Restore'); Techniques=@('D3-RDI','D3-RF','D3-RO'); Labels=@('Restore Disk Image','Restore File','Restore Object'); Desc='Protects backups from local destruction and supports offsite restore' }
+    'BR03' = @{ Stages=@('Restore','Model'); Techniques=@('D3-RC','D3-RA','D3-ORA'); Labels=@('Restore Configuration','Restore Access','Operational Risk Assessment'); Desc='Defines disaster recovery procedures and recovery priorities' }
+    'BR04' = @{ Stages=@('Restore'); Techniques=@('D3-RF','D3-RDI','D3-RO'); Labels=@('Restore File','Restore Disk Image','Restore Object'); Desc='Confirms that backup restore procedures actually work' }
+    'BR05' = @{ Stages=@('Restore','Model'); Techniques=@('D3-RC','D3-ORA','D3-ODM'); Labels=@('Restore Configuration','Operational Risk Assessment','Operational Dependency Mapping'); Desc='Documents recovery objectives and dependency priorities' }
+    'BR06' = @{ Stages=@('Detect','Restore'); Techniques=@('D3-PM','D3-RA','D3-RC'); Labels=@('Platform Monitoring','Restore Access','Restore Configuration'); Desc='Monitors backup jobs and raises failures before recovery is needed' }
+    'BR07' = @{ Stages=@('Harden','Restore'); Techniques=@('D3-FE','D3-MENCR','D3-RF'); Labels=@('File Encryption','Message Encryption','Restore File'); Desc='Protects backup data confidentiality during storage and restore' }
+    'BR08' = @{ Stages=@('Restore'); Techniques=@('D3-RS','D3-RE','D3-RD'); Labels=@('Restore Software','Restore Email','Restore Database'); Desc='Ensures critical SaaS and cloud workloads have restore paths' }
+
+    # Common Findings
+    'CF01' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-CH','D3-CRO','D3-UAP'); Labels=@('Credential Hardening','Credential Rotation','User Account Permissions'); Desc='Hardens common privileged-service-account and ADCS exposure paths' }
+    'CF02' = @{ Stages=@('Isolate','Harden'); Techniques=@('D3-NTF','D3-NI','D3-MENCR'); Labels=@('Network Traffic Filtering','Network Isolation','Message Encryption'); Desc='Removes legacy file-sharing protocols and weak lateral movement paths' }
+    'CF03' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-MA','D3-URA','D3-CF'); Labels=@('Message Analysis','URL Reputation Analysis','Content Filtering'); Desc='Reduces phishing exposure through message analysis and content controls' }
+    'CF04' = @{ Stages=@('Isolate','Model'); Techniques=@('D3-LFAM','D3-UAP','D3-AM'); Labels=@('Local File Access Mediation','User Account Permissions','Access Modeling'); Desc='Scopes file access to business need and least privilege' }
+    'CF05' = @{ Stages=@('Isolate'); Techniques=@('D3-LFP','D3-RFAM','D3-UAP'); Labels=@('Local File Permissions','Remote File Access Mediation','User Account Permissions'); Desc='Restricts open shares and network file access' }
+    'CF06' = @{ Stages=@('Isolate'); Techniques=@('D3-DRA','D3-NAM','D3-NI'); Labels=@('Disable Remote Access','Network Access Mediation','Network Isolation'); Desc='Removes unnecessary remote access paths and flat network reachability' }
+    'CF07' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-LAM','D3-UAP','D3-APA'); Labels=@('Local Account Monitoring','User Account Permissions','Access Policy Administration'); Desc='Finds and reduces excessive local administrator rights' }
+    'CF08' = @{ Stages=@('Model','Harden'); Techniques=@('D3-SYSVA','D3-SU','D3-SWI'); Labels=@('System Vulnerability Assessment','Software Update','Software Inventory'); Desc='Discovers and remediates vulnerable systems and software' }
+
+    # Policies & Standards
+    'PS01' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-APA','D3-ORA','D3-AM'); Labels=@('Access Policy Administration','Operational Risk Assessment','Access Modeling'); Desc='Defines security policy and control ownership' }
+    'PS02' = @{ Stages=@('Model'); Techniques=@('D3-APA','D3-OM'); Labels=@('Access Policy Administration','Organization Mapping'); Desc='Defines acceptable use responsibilities and organizational expectations' }
+    'PS03' = @{ Stages=@('Restore','Model'); Techniques=@('D3-RA','D3-ORA','D3-ODM'); Labels=@('Restore Access','Operational Risk Assessment','Operational Dependency Mapping'); Desc='Structures incident response and recovery decision making' }
+    'PS04' = @{ Stages=@('Model','Detect'); Techniques=@('D3-ORA','D3-CI','D3-PM'); Labels=@('Operational Risk Assessment','Configuration Inventory','Platform Monitoring'); Desc='Tracks compliance drift through periodic assessment' }
+    'PS05' = @{ Stages=@('Model'); Techniques=@('D3-ORA','D3-SYSVA','D3-AI'); Labels=@('Operational Risk Assessment','System Vulnerability Assessment','Asset Inventory'); Desc='Identifies risks and vulnerable assets before exploitation' }
+    'PS06' = @{ Stages=@('Detect','Model'); Techniques=@('D3-MA','D3-UBA','D3-WSAA'); Labels=@('Message Analysis','User Behavior Analysis','Web Session Activity Analysis'); Desc='Improves user resilience and behavioral detection for social engineering' }
+}
+
+$script:D3FendStages = [ordered]@{
+    'Model'   = @{ Name='Model'; Short='Model'; Color='#38bdf8' }
+    'Harden'  = @{ Name='Harden'; Short='Harden'; Color='#22c55e' }
+    'Detect'  = @{ Name='Detect'; Short='Detect'; Color='#eab308' }
+    'Isolate' = @{ Name='Isolate'; Short='Isolate'; Color='#a855f7' }
+    'Deceive' = @{ Name='Deceive'; Short='Deceive'; Color='#f97316' }
+    'Evict'   = @{ Name='Evict'; Short='Evict'; Color='#ef4444' }
+    'Restore' = @{ Name='Restore'; Short='Restore'; Color='#14b8a6' }
+}
+
+function Get-D3FendCoverage {
+    $stageCoverage = @{}
+    foreach ($stage in $script:D3FendStages.Keys) {
+        $stageCoverage[$stage] = @{ Covered=0; Failed=0; Total=0; Checks=@() }
+    }
+    foreach ($id in $script:D3FendMap.Keys) {
+        $d = $script:D3FendMap[$id]
+        $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+        foreach ($stage in $d.Stages) {
+            if (-not $stageCoverage.Contains($stage)) { continue }
+            $stageCoverage[$stage].Total++
+            $stageCoverage[$stage].Checks += @{ ID=$id; Status=$sv }
+            if ($sv -eq 'Pass') { $stageCoverage[$stage].Covered++ }
+            elseif ($sv -eq 'Fail') { $stageCoverage[$stage].Failed++ }
+            elseif ($sv -eq 'Partial') { $stageCoverage[$stage].Covered += 0.5 }
+        }
+    }
+    return $stageCoverage
+}
+
 # ATT&CK Tactic metadata for heatmap display
 $script:MitreTactics = [ordered]@{
     'TA0043' = @{ Name='Reconnaissance'; Short='Recon'; Color='#94a3b8' }
@@ -4810,7 +4928,7 @@ $script:SuppressAdvance = $false
                 <StackPanel Grid.Column="3" Orientation="Horizontal">
                     <Button x:Name="btnReset" Content="Reset All" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand"/>
                     <Button x:Name="btnExportHTML" Content="Export HTML" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand"/>
-                    <Button x:Name="btnExportJSON" Content="Export JSON" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="Export structured findings JSON with full compliance + MITRE metadata"/>
+                    <Button x:Name="btnExportJSON" Content="Export JSON" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="Export structured findings JSON with full compliance, ATT&CK, and D3FEND metadata"/>
                     <Button x:Name="btnExportCSV" Content="Export CSV" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="Export CSV for MSP pivot table analysis across clients"/>
                 </StackPanel>
             </Grid>
@@ -8100,6 +8218,29 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
         }
         $html += "</div>`n"
 
+        # D3FEND defensive coverage summary
+        $d3Cov = Get-D3FendCoverage
+        $html += "<div style='margin-top:16px'><strong style='font-size:13px;color:#22c55e'>MITRE D3FEND Coverage</strong>"
+        $html += "<div style='font-size:11px;color:#94a3b8;margin-bottom:8px'>Defensive technique coverage mapped against D3FEND v1.4.0 stages. Higher coverage = more defensive controls are implemented or partially implemented.</div>`n"
+        $html += "<div class='mitre-grid'>`n"
+        foreach ($stage in $script:D3FendStages.Keys) {
+            $dmeta = $script:D3FendStages[$stage]
+            $cov = $d3Cov[$stage]
+            $covPct = if ($cov.Total -gt 0) { [math]::Round($cov.Covered / $cov.Total * 100) } else { 0 }
+            $bgOpacity = [math]::Max(0.08, [math]::Min(0.4, $covPct / 250.0))
+            $cellBg = if ($cov.Total -eq 0) { '#1e293b' }
+                      elseif ($covPct -ge 80) { "rgba(34,197,94,$bgOpacity)" }
+                      elseif ($covPct -ge 50) { "rgba(234,179,8,$bgOpacity)" }
+                      else { "rgba(239,68,68,$bgOpacity)" }
+            $pctColor = if ($cov.Total -eq 0) { '#64748b' } elseif ($covPct -ge 80) { '#22c55e' } elseif ($covPct -ge 50) { '#eab308' } else { '#ef4444' }
+            $html += "<div class='mitre-cell' style='background:$cellBg'>"
+            $html += "<div class='m-name' style='color:$($dmeta.Color)'>$($dmeta.Short)</div>"
+            $html += "<div class='m-pct' style='color:$pctColor'>$covPct%</div>"
+            $html += "<div class='m-det'>$([int]$cov.Covered)/$($cov.Total) checks</div>"
+            $html += "</div>`n"
+        }
+        $html += "</div></div>`n"
+
         # Attack Path Narratives (only if failed checks form chains)
         $atkPaths = Get-AttackPaths
         if ($atkPaths.Count -gt 0) {
@@ -8257,6 +8398,14 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                     $tacStr = ($mitreData.Tactics | ForEach-Object { if ($script:MitreTactics[$_]) { $script:MitreTactics[$_].Short } else { $_ } }) -join ' > '
                     $detHtml += "<div class='comp' style='margin-top:2px'><span style='color:#ef4444'>ATT&CK:</span> <span style='color:#94a3b8'>$tacStr</span> | <span style='color:#f87171'>$techStr</span></div>"
                 }
+                # MITRE D3FEND defensive technique display
+                $d3Data = if ($script:D3FendMap.Contains($id)) { $script:D3FendMap[$id] } else { $null }
+                if ($d3Data) {
+                    $d3Stages = ($d3Data.Stages -join ' > ')
+                    $d3Tech = ($d3Data.Techniques -join ', ')
+                    $d3Labels = ($d3Data.Labels -join ', ')
+                    $detHtml += "<div class='comp' style='margin-top:2px'><span style='color:#22c55e'>D3FEND:</span> <span style='color:#94a3b8'>$([System.Net.WebUtility]::HtmlEncode($d3Stages))</span> | <span style='color:#4ade80'>$([System.Net.WebUtility]::HtmlEncode($d3Tech))</span> | <span style='color:#94a3b8'>$([System.Net.WebUtility]::HtmlEncode($d3Labels))</span></div>"
+                }
 
                 $rs5=if($script:RemStatusCombos[$id].SelectedItem){$script:RemStatusCombos[$id].SelectedItem.ToString()}else{'Open'}
                 $assign=[System.Net.WebUtility]::HtmlEncode($script:RemAssignBoxes[$id].Text)
@@ -8364,7 +8513,7 @@ function Invoke-AutoSave {
 }
 
 # ── Phase 5A: Enhanced Structured JSON Export ─────────────────────────────────
-# Per-finding JSON with full compliance, MITRE, remediation metadata
+# Per-finding JSON with full compliance, ATT&CK, D3FEND, remediation metadata
 function Export-FindingsJSON {
     param([string]$OutPath, [string]$ClientName = '', [string]$AuditorName = '')
     if (-not $ClientName) { $ClientName = try { $el['txtClient'].Text } catch { $env:COMPUTERNAME } }
@@ -8404,6 +8553,17 @@ function Export-FindingsJSON {
                     Description = $m.Desc
                 }
             }
+            $d3fendObj = $null
+            if ($script:D3FendMap.Contains($id)) {
+                $d3 = $script:D3FendMap[$id]
+                $d3fendObj = @{
+                    Version = '1.4.0'
+                    Stages = $d3.Stages
+                    Techniques = $d3.Techniques
+                    Labels = $d3.Labels
+                    Description = $d3.Desc
+                }
+            }
 
             $finding = [ordered]@{
                 id            = $id
@@ -8422,6 +8582,7 @@ function Export-FindingsJSON {
                 }
                 compliance    = $compObj
                 mitre_attack  = $mitreObj
+                d3fend        = $d3fendObj
                 scan_time     = if ($script:ScanTimestamps.Contains($id)) { $script:ScanTimestamps[$id] } else { $null }
             }
             $findings += $finding
@@ -8502,6 +8663,7 @@ function Export-FindingsJSONL {
             $rs = if ($script:RemStatusCombos[$id] -and $script:RemStatusCombos[$id].SelectedItem) { $script:RemStatusCombos[$id].SelectedItem.ToString() } else { 'Open' }
             $fwData = if ($script:FrameworkMap.Contains($id)) { $script:FrameworkMap[$id] } else { $null }
             $mitreData = if ($script:MitreMap.Contains($id)) { $script:MitreMap[$id] } else { $null }
+            $d3fendData = if ($script:D3FendMap.Contains($id)) { $script:D3FendMap[$id] } else { $null }
             $findingsText = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
             $evidenceText = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
             $findingsTruncated = ($findingsText.Length -gt 4000)
@@ -8549,6 +8711,11 @@ function Export-FindingsJSONL {
                 mitre_tactics   = if ($mitreData) { $mitreData.Tactics -join ',' } else { '' }
                 mitre_techniques = if ($mitreData) { $mitreData.Techniques -join ',' } else { '' }
                 mitre_context   = if ($mitreData) { $mitreData.Desc } else { '' }
+                d3fend_version  = if ($d3fendData) { '1.4.0' } else { '' }
+                d3fend_stages   = if ($d3fendData) { $d3fendData.Stages -join ',' } else { '' }
+                d3fend_techniques = if ($d3fendData) { $d3fendData.Techniques -join ',' } else { '' }
+                d3fend_labels   = if ($d3fendData) { $d3fendData.Labels -join ',' } else { '' }
+                d3fend_context  = if ($d3fendData) { $d3fendData.Desc } else { '' }
             }
             # Parse built-in compliance string for NIST CSF, CIS, HIPAA
             if ($item.Compliance) {
@@ -8646,6 +8813,10 @@ function Export-FindingsCSV {
                 STIG             = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.STIG } else { '' })
                 MITRE_Tactics    = ConvertTo-CsvSafeText $(if ($mitreData) { $mitreData.Tactics -join '; ' } else { '' })
                 MITRE_Techniques = ConvertTo-CsvSafeText $(if ($mitreData) { $mitreData.Techniques -join '; ' } else { '' })
+                D3FEND_Version   = ConvertTo-CsvSafeText $(if ($d3fendData) { '1.4.0' } else { '' })
+                D3FEND_Stages    = ConvertTo-CsvSafeText $(if ($d3fendData) { $d3fendData.Stages -join '; ' } else { '' })
+                D3FEND_Techniques = ConvertTo-CsvSafeText $(if ($d3fendData) { $d3fendData.Techniques -join '; ' } else { '' })
+                D3FEND_Labels    = ConvertTo-CsvSafeText $(if ($d3fendData) { $d3fendData.Labels -join '; ' } else { '' })
                 ScanTimestamp    = ConvertTo-CsvSafeText $(if ($script:ScanTimestamps.Contains($id)) { $script:ScanTimestamps[$id] } else { '' })
             }
             $rows.Add($row)
@@ -8746,12 +8917,21 @@ function Export-SARIF {
         foreach ($item in $script:AuditCategories[$cn].Items) {
             $id = $item.ID
             $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+            $d3fendData = if ($script:D3FendMap.Contains($id)) { $script:D3FendMap[$id] } else { $null }
             $rules += [ordered]@{
                 id = $id
                 name = $item.Text.Substring(0, [math]::Min(100, $item.Text.Length))
                 shortDescription = @{ text = $item.Text }
                 defaultConfiguration = @{ level = switch($item.Severity) { 'Critical'{'error'} 'High'{'error'} 'Medium'{'warning'} 'Low'{'note'} default{'none'} } }
-                properties = @{ severity = $item.Severity; category = $cn; weight = $item.Weight }
+                properties = @{
+                    severity = $item.Severity
+                    category = $cn
+                    weight = $item.Weight
+                    d3fend_version = if ($d3fendData) { '1.4.0' } else { '' }
+                    d3fend_stages = if ($d3fendData) { $d3fendData.Stages } else { @() }
+                    d3fend_techniques = if ($d3fendData) { $d3fendData.Techniques } else { @() }
+                    d3fend_labels = if ($d3fendData) { $d3fendData.Labels } else { @() }
+                }
             }
             if ($sv -eq 'Fail' -or $sv -eq 'Partial') {
                 $findings = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
@@ -8770,7 +8950,14 @@ function Export-SARIF {
                             decoratedName = $item.Text
                         })
                     })
-                    properties = @{ status = $sv; category = $cn }
+                    properties = @{
+                        status = $sv
+                        category = $cn
+                        d3fend_version = if ($d3fendData) { '1.4.0' } else { '' }
+                        d3fend_stages = if ($d3fendData) { $d3fendData.Stages } else { @() }
+                        d3fend_techniques = if ($d3fendData) { $d3fendData.Techniques } else { @() }
+                        d3fend_labels = if ($d3fendData) { $d3fendData.Labels } else { @() }
+                    }
                 }
             }
         }
