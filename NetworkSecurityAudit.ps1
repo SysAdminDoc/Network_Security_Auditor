@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.1.6 - Professional GUI Tool
+    Network Security Auditor v4.1.7 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -31,6 +31,8 @@
     In silent mode, generate reports and exports but skip all RMM and registry field writes.
 .PARAMETER NoInternet
     Skip public internet downloads, DNS filter tests, and outbound probe checks.
+.PARAMETER NoElevate
+    Do not auto-relaunch with UAC elevation when the process is not already Administrator.
 .PARAMETER Client
     Client name for the report header. Default: domain or computer name.
 .PARAMETER Auditor
@@ -47,7 +49,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.6
+    4.1.7
 #>
 param(
     [switch]$Silent,
@@ -65,13 +67,14 @@ param(
     [switch]$ExportSARIF,
     [switch]$ExportPDF,
     [switch]$NoRmmWrite,
-    [switch]$NoInternet
+    [switch]$NoInternet,
+    [switch]$NoElevate
 )
 
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.1.6'
+$script:ProductVersion = '4.1.7'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -79,7 +82,8 @@ $script:ProductSubtitle = "Windows Security Assessment Tool v$($script:ProductVe
 
 # ── Auto-Elevate to Administrator ────────────────────────────────────────────
 $script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $script:IsAdmin) {
+$script:ElevationSkipped = (-not $script:IsAdmin -and $NoElevate.IsPresent)
+if (-not $script:IsAdmin -and -not $NoElevate) {
     try {
         $argList = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"")
         # Pass through all CLI parameters on re-launch
@@ -122,6 +126,7 @@ $script:CliExportSARIF = $ExportSARIF.IsPresent
 $script:CliExportPDF   = $ExportPDF.IsPresent
 $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 $script:CliNoInternet  = $NoInternet.IsPresent
+$script:CliNoElevate   = $NoElevate.IsPresent
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
@@ -8786,6 +8791,10 @@ if ($script:SilentMode) {
     if ($script:ElevationFailed) {
         Write-Host "[Silent Mode] WARNING: UAC elevation was declined - running without admin privileges" -ForegroundColor Yellow
         Write-Host "[Silent Mode] AD checks and some local checks will fail or return incomplete results" -ForegroundColor Yellow
+    }
+    if ($script:ElevationSkipped) {
+        Write-Host "[Silent Mode] WARNING: Auto-elevation skipped (-NoElevate)" -ForegroundColor Yellow
+        Write-Host "[Silent Mode] AD checks and some local checks may return incomplete results" -ForegroundColor Yellow
     }
     if (-not $script:Env.IsAdmin) {
         Write-Host "[Silent Mode] WARNING: Not running as Administrator - results may be incomplete" -ForegroundColor Yellow
