@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.2.0 - Professional GUI Tool
+    Network Security Auditor v4.2.1 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.2.0
+    4.2.1
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.2.0'
+$script:ProductVersion = '4.2.1'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -1320,6 +1320,29 @@ $script:AutoChecks = @{
             $domain = Get-ADDomain -EA Stop
             [void]$sb.AppendLine("Domain: $($domain.DNSRoot)")
             [void]$sb.AppendLine("Kerberos encryption flags: DES=0x1/0x2, RC4=0x4, AES128=0x8, AES256=0x10")
+
+            try {
+                $krbtgt = Get-ADUser 'krbtgt' -Properties 'msDS-SupportedEncryptionTypes',PasswordLastSet -EA Stop
+                $krbtgtEnc = $krbtgt.'msDS-SupportedEncryptionTypes'
+                $krbtgtAge = if ($krbtgt.PasswordLastSet) { ((Get-Date) - $krbtgt.PasswordLastSet).Days } else { 'Unknown' }
+                [void]$sb.AppendLine("`nKRBTGT ENCRYPTION READINESS:")
+                [void]$sb.AppendLine("  Encryption types: $(ConvertTo-KerberosEncSummary $krbtgtEnc)")
+                [void]$sb.AppendLine("  Password age: ${krbtgtAge}d")
+                if (Test-KerberosEncLegacyOnly $krbtgtEnc) {
+                    $issues++
+                    [void]$sb.AppendLine("  [LEGACY-ONLY] krbtgt lacks AES encryption flags")
+                } elseif (Test-KerberosEncUnset $krbtgtEnc) {
+                    $warnings++
+                    [void]$sb.AppendLine("  [DEFAULT-DEPENDENT] set AES flags and perform a controlled double krbtgt reset")
+                }
+                if ($krbtgtAge -is [int] -and $krbtgtAge -gt 180) {
+                    $warnings++
+                    [void]$sb.AppendLine("  [ROTATION] krbtgt password is older than 180 days")
+                }
+            } catch {
+                $warnings++
+                [void]$sb.AppendLine("`nKRBTGT ENCRYPTION READINESS: could not query krbtgt account ($($_.Exception.Message))")
+            }
 
             $spnAccounts = @(Get-ADUser -LDAPFilter '(servicePrincipalName=*)' -Properties 'msDS-SupportedEncryptionTypes',PasswordLastSet,PasswordNeverExpires,ServicePrincipalName,Enabled -EA Stop)
             $legacyUsers = @($spnAccounts | Where-Object { Test-KerberosEncLegacyOnly $_.'msDS-SupportedEncryptionTypes' })

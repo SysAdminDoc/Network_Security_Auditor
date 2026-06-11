@@ -164,8 +164,8 @@ if ($scriptText -notmatch 'logicalLocations' -or $scriptText -notmatch 'network-
 if ($scriptText -match '(?m)^\s*(Set-Service|Start-Service|Stop-Service|Restart-Service)\b') {
     Add-Failure 'Automation paths must use sc.exe instead of service cmdlets that can show progress UI.'
 }
-if ($scriptText -notmatch "'IA11'\s*=\s*@\{\s*Type='AD'" -or $scriptText -notmatch 'msDS-SupportedEncryptionTypes' -or $scriptText -notmatch 'Kdcsvc' -or $scriptText -notmatch 'RC4DefaultDisablementPhase') {
-    Add-Failure 'IA11 Kerberos RC4/DES readiness check must inspect AD encryption flags, KDC events, and RC4 phase registry state.'
+if ($scriptText -notmatch "'IA11'\s*=\s*@\{\s*Type='AD'" -or $scriptText -notmatch 'msDS-SupportedEncryptionTypes' -or $scriptText -notmatch "Get-ADUser 'krbtgt'" -or $scriptText -notmatch 'Kdcsvc' -or $scriptText -notmatch 'RC4DefaultDisablementPhase') {
+    Add-Failure 'IA11 Kerberos RC4/DES readiness check must inspect krbtgt, AD encryption flags, KDC events, and RC4 phase registry state.'
 }
 
 if ($failures.Count -gt 0) {
