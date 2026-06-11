@@ -116,8 +116,8 @@ $frameworkCheckIds = @(Get-UniqueMatches -Text $frameworkChecksBlock -Pattern "'
 $d3fendBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:D3FendMap\s*=\s*@\{' -EndPattern '\$script:D3FendStages'
 $d3fendIds = @(Get-UniqueMatches -Text $d3fendBlock -Pattern "(?m)^\s*'([A-Z]{2}\d{2})'\s*=\s*@\{")
 
-if (@($catalogIds).Count -ne 68) { Add-Failure "Expected 68 audit catalog IDs, found $(@($catalogIds).Count)" }
-if (@($autoCheckIds).Count -ne 68) { Add-Failure "Expected 68 auto-check IDs, found $(@($autoCheckIds).Count)" }
+if (@($catalogIds).Count -ne 69) { Add-Failure "Expected 69 audit catalog IDs, found $(@($catalogIds).Count)" }
+if (@($autoCheckIds).Count -ne 69) { Add-Failure "Expected 69 auto-check IDs, found $(@($autoCheckIds).Count)" }
 Compare-Set -Expected $catalogIds -Actual $autoCheckIds -Name 'AutoChecks'
 Compare-Set -Expected $catalogIds -Actual $frameworkIds -Name 'FrameworkMap'
 Compare-Set -Expected $catalogIds -Actual $riskIds -Name 'RiskTiers'
@@ -256,6 +256,12 @@ if ($scriptText -match '(?m)^\s*(Set-Service|Start-Service|Stop-Service|Restart-
 }
 if ($scriptText -notmatch "'IA11'\s*=\s*@\{\s*Type='AD'" -or $scriptText -notmatch 'msDS-SupportedEncryptionTypes' -or $scriptText -notmatch "Get-ADUser 'krbtgt'" -or $scriptText -notmatch 'Kdcsvc' -or $scriptText -notmatch 'RC4DefaultDisablementPhase') {
     Add-Failure 'IA11 Kerberos RC4/DES readiness check must inspect krbtgt, AD encryption flags, KDC events, and RC4 phase registry state.'
+}
+if ($scriptText -notmatch "'IA12'\s*=\s*@\{\s*Type='AD'" -or $scriptText -notmatch 'BadSuccessor' -or $scriptText -notmatch 'msDS-DelegatedManagedServiceAccount' -or $scriptText -notmatch 'msDS-ManagedAccountPrecededByLink' -or $scriptText -notmatch 'msDS-ManagedAccountSucceededByLink' -or $scriptText -notmatch 'msDS-DelegatedMSAState') {
+    Add-Failure 'IA12 BadSuccessor/dMSA check must inspect dMSA class, migration links, delegated state, and backlink evidence.'
+}
+if ($scriptText -notmatch "Pass','Fail','Partial','N/A") {
+    Add-Failure 'Auto-check status mapping must preserve N/A results for non-applicable checks.'
 }
 
 if ($failures.Count -gt 0) {
