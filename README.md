@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.1.9-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.2.0-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -10,13 +10,13 @@
 
 # Network Security Auditor
 
-A single-file PowerShell security audit tool. Runs 67 automated checks across 8 security domains, maps findings to 8 compliance frameworks and MITRE ATT&CK, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
+A single-file PowerShell security audit tool. Runs 68 automated checks across 8 security domains, maps findings to 8 compliance frameworks and MITRE ATT&CK, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
 
 One script. No dependencies to pre-install. Works on any Windows machine from standalone workstations to enterprise domain controllers.
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.1.9-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.2.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -85,12 +85,12 @@ The tool auto-elevates to admin, detects your environment (domain/workgroup/hybr
 
 ## Features
 
-### 67 Automated Security Checks
+### 68 Automated Security Checks
 
 Every check runs in an isolated runspace with timeout protection. Results include findings text, evidence collection, severity rating, and compliance mapping.
 
 <details>
-<summary><strong>Identity &amp; Access (10 checks)</strong></summary>
+<summary><strong>Identity &amp; Access (11 checks)</strong></summary>
 
 | ID | Check | Severity |
 |----|-------|----------|
@@ -104,6 +104,7 @@ Every check runs in an isolated runspace with timeout protection. Results includ
 | IA08 | Guest/Vendor Account Lifecycle | Medium |
 | IA09 | Conditional Access / Remote Access | Medium |
 | IA10 | Stale/Inactive Accounts (90+ days) | High |
+| IA11 | Kerberos RC4/DES Deprecation Readiness | High |
 
 </details>
 
@@ -226,20 +227,20 @@ Every check maps to one or more controls across 8 frameworks:
 
 | Framework | Standard | Coverage |
 |-----------|----------|----------|
-| **CIS** | Controls v8.1 | All 67 checks mapped |
-| **NIST** | SP 800-171 Rev 3 | All 67 checks mapped |
-| **CMMC** | Level 2 (v2.0) | All 67 checks mapped |
-| **HIPAA** | Security Rule | ~45 checks |
-| **PCI-DSS** | v4.0.1 | ~48 checks |
-| **SOC 2** | Type II (Trust Criteria) | ~60 checks |
-| **ISO 27001** | :2022 (Annex A) | All 67 checks mapped |
-| **DISA STIG** | Windows Server/Client | All 67 checks mapped |
+| **CIS** | Controls v8.1 | All 68 checks mapped |
+| **NIST** | SP 800-171 Rev 3 | All 68 checks mapped |
+| **CMMC** | Level 2 (v2.0) | All 68 checks mapped |
+| **HIPAA** | Security Rule | ~46 checks |
+| **PCI-DSS** | v4.0.1 | ~49 checks |
+| **SOC 2** | Type II (Trust Criteria) | ~61 checks |
+| **ISO 27001** | :2022 (Annex A) | All 68 checks mapped |
+| **DISA STIG** | Windows Server/Client | All 68 checks mapped |
 
 Framework-specific scan profiles run only the checks relevant to that standard.
 
 ### MITRE ATT&CK Mapping
 
-All 67 checks map to ATT&CK Enterprise techniques (v15.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.
+All 68 checks map to ATT&CK Enterprise techniques (v15.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.
 
 ### CISA KEV Cross-Reference
 
@@ -254,6 +255,7 @@ Beyond misconfiguration checks, the tool detects active indicators of compromise
 - **AdminSDHolder tampering** — unexpected ACEs on the AdminSDHolder container
 - **SID History abuse** — accounts with SID History from foreign domains
 - **ADCS vulnerabilities** — ESC1/ESC6/ESC8/ESC10 certificate template and CA misconfigurations
+- **Kerberos legacy encryption** — RC4/DES-only or default-dependent accounts, trusts, and KDC event evidence
 
 ### Domain Security Maturity Score
 
@@ -362,7 +364,7 @@ Automatic platform detection and field population:
 - **No external modules required** — the script handles everything
 
 Optional for full coverage:
-- **RSAT / Active Directory module** — required for AD-type checks (IA01-IA10, CF01, CF04, EP10). The tool auto-offers to install RSAT on first run.
+- **RSAT / Active Directory module** — required for AD-type checks (IA01-IA08, IA10-IA11, CF01, CF04, EP10). The tool auto-offers to install RSAT on first run.
 - **Domain-joined machine** — non-domain machines skip AD checks automatically and run all 55 local checks.
 
 ---
@@ -397,7 +399,7 @@ The same validation runs in GitHub Actions on push and pull request.
 -Silent              Run headless (no GUI). Auto-scans, exports, exits.
 -ScanProfile         Quick | Standard | Full | ADOnly | LocalOnly |
                      HIPAA | PCI | CMMC | SOC2 | ISO27001 | STIG
-                     Default: Full (all 67 checks)
+                     Default: Full (all 68 checks)
 -OutputPath          Report output path. Default: Desktop
 -ReportTier          Executive | Management | Technical | All
                      Default: All
@@ -426,15 +428,15 @@ The same validation runs in GitHub Actions on push and pull request.
 |---------|--------|------|----------|
 | **Quick** | ~20 | ~15 min | Critical-only field triage |
 | **Standard** | ~45 | ~30 min | Routine assessment |
-| **Full** | 67 | ~60 min | Comprehensive audit |
-| **ADOnly** | ~12 | ~10 min | Domain-focused checks only |
+| **Full** | 68 | ~60 min | Comprehensive audit |
+| **ADOnly** | ~13 | ~10 min | Domain-focused checks only |
 | **LocalOnly** | ~55 | ~45 min | Endpoint-only (no AD required) |
-| **HIPAA** | ~45 | ~30 min | Healthcare compliance |
-| **PCI** | ~48 | ~35 min | Payment card compliance |
-| **CMMC** | 67 | ~60 min | Defense contractor compliance |
-| **SOC 2** | ~60 | ~50 min | Service organization compliance |
-| **ISO 27001** | 67 | ~60 min | International standard compliance |
-| **STIG** | 67 | ~60 min | DISA STIG for DoD/government |
+| **HIPAA** | ~46 | ~30 min | Healthcare compliance |
+| **PCI** | ~49 | ~35 min | Payment card compliance |
+| **CMMC** | 68 | ~60 min | Defense contractor compliance |
+| **SOC 2** | ~61 | ~50 min | Service organization compliance |
+| **ISO 27001** | 68 | ~60 min | International standard compliance |
+| **STIG** | 68 | ~60 min | DISA STIG for DoD/government |
 
 ---
 
@@ -474,7 +476,7 @@ Register-ScheduledTask -TaskName "WeeklySecurityAudit" -Action $action -Trigger 
 
 ### Overall Security Score
 
-Each of the 67 checks has a severity weight (Critical=10, High=7, Medium=5, Low=3). Each category also has a weight reflecting its relative importance. The score is calculated as:
+Each of the 68 checks has a severity weight (Critical=10, High=7, Medium=5, Low=3). Each category also has a weight reflecting its relative importance. The score is calculated as:
 
 ```
 Per-category:  (earned points / max points) * 100

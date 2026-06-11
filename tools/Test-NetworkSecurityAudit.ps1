@@ -95,8 +95,8 @@ $riskIds = @(Get-UniqueMatches -Text $riskBlock -Pattern "'([A-Z]{2}\d{2})'\s*=\
 $frameworkChecksBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:FrameworkChecks\s*=\s*@\{' -EndPattern '# Helper: Get formatted compliance string'
 $frameworkCheckIds = @(Get-UniqueMatches -Text $frameworkChecksBlock -Pattern "'([A-Z]{2}\d{2})'")
 
-if (@($catalogIds).Count -ne 67) { Add-Failure "Expected 67 audit catalog IDs, found $(@($catalogIds).Count)" }
-if (@($autoCheckIds).Count -ne 67) { Add-Failure "Expected 67 auto-check IDs, found $(@($autoCheckIds).Count)" }
+if (@($catalogIds).Count -ne 68) { Add-Failure "Expected 68 audit catalog IDs, found $(@($catalogIds).Count)" }
+if (@($autoCheckIds).Count -ne 68) { Add-Failure "Expected 68 auto-check IDs, found $(@($autoCheckIds).Count)" }
 Compare-Set -Expected $catalogIds -Actual $autoCheckIds -Name 'AutoChecks'
 Compare-Set -Expected $catalogIds -Actual $frameworkIds -Name 'FrameworkMap'
 Compare-Set -Expected $catalogIds -Actual $riskIds -Name 'RiskTiers'
@@ -163,6 +163,9 @@ if ($scriptText -notmatch 'logicalLocations' -or $scriptText -notmatch 'network-
 }
 if ($scriptText -match '(?m)^\s*(Set-Service|Start-Service|Stop-Service|Restart-Service)\b') {
     Add-Failure 'Automation paths must use sc.exe instead of service cmdlets that can show progress UI.'
+}
+if ($scriptText -notmatch "'IA11'\s*=\s*@\{\s*Type='AD'" -or $scriptText -notmatch 'msDS-SupportedEncryptionTypes' -or $scriptText -notmatch 'Kdcsvc' -or $scriptText -notmatch 'RC4DefaultDisablementPhase') {
+    Add-Failure 'IA11 Kerberos RC4/DES readiness check must inspect AD encryption flags, KDC events, and RC4 phase registry state.'
 }
 
 if ($failures.Count -gt 0) {
