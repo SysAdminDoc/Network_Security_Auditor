@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.6.0 - Professional GUI Tool
+    Network Security Auditor v4.6.1 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -51,7 +51,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.6.0
+    4.6.1
 #>
 param(
     [switch]$Silent,
@@ -77,7 +77,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.6.0'
+$script:ProductVersion = '4.6.1'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -4683,6 +4683,15 @@ function Get-AttackPaths {
 # ── Phase 4B: Ransomware Preparedness Score ──────────────────────────────────
 # Evaluates 4 domains: Prevention, Protection, Detection, Recovery
 # Each domain has weighted checks; overall score 0-100 with letter grade
+function ConvertTo-LetterGrade {
+    param([double]$Score)
+    if ($Score -ge 90) { return 'A' }
+    if ($Score -ge 80) { return 'B' }
+    if ($Score -ge 70) { return 'C' }
+    if ($Score -ge 60) { return 'D' }
+    return 'F'
+}
+
 function Get-RansomwareScore {
     $domains = [ordered]@{
         Prevention = @{
@@ -4760,7 +4769,7 @@ function Get-RansomwareScore {
         $overallWeighted += $pct * $d.Weight
     }
     $overall = [math]::Round($overallWeighted)
-    $grade = switch($true) { ($overall -ge 90){'A'} ($overall -ge 80){'B'} ($overall -ge 70){'C'} ($overall -ge 60){'D'} default{'F'} }
+    $grade = ConvertTo-LetterGrade $overall
     return @{ Overall=$overall; Grade=$grade; Domains=$domainScores }
 }
 
@@ -4832,7 +4841,7 @@ function Get-DomainMaturityScore {
         $overallWeighted += $pct * $d.Weight
     }
     $overall = [math]::Round($overallWeighted)
-    $grade = switch($true) { ($overall -ge 90){'A'} ($overall -ge 80){'B'} ($overall -ge 70){'C'} ($overall -ge 60){'D'} default{'F'} }
+    $grade = ConvertTo-LetterGrade $overall
     return @{ Overall=$overall; Grade=$grade; Domains=$domainScores }
 }
 
@@ -6380,7 +6389,7 @@ function Get-RiskScore {
     }
     if ($maxS -le 0) { return @{Score=0;Max=0;Pct=0;Grade='N/A';AllNA=$true} }
     $p=[math]::Round(($earn/$maxS)*100)
-    $g = switch($true) { ($p -ge 90){'A'} ($p -ge 80){'B'} ($p -ge 70){'C'} ($p -ge 60){'D'} default{'F'} }
+    $g = ConvertTo-LetterGrade $p
     @{Score=$earn;Max=$maxS;Pct=$p;Grade=$g}
 }
 
@@ -8010,7 +8019,7 @@ function Export-HTMLReport([string]$outPath, [switch]$OpenAfter, [string]$Tier =
         }
     }
     $overallScore = if ($weightTotal -gt 0) { [math]::Round($weightedSum / $weightTotal) } else { 0 }
-    $overallGrade = switch($true) { ($overallScore -ge 90){'A'} ($overallScore -ge 80){'B'} ($overallScore -ge 70){'C'} ($overallScore -ge 60){'D'} default{'F'} }
+    $overallGrade = ConvertTo-LetterGrade $overallScore
     $overallColor = switch($overallGrade){'A'{'#22c55e'}'B'{'#84cc16'}'C'{'#eab308'}'D'{'#f97316'}default{'#ef4444'}}
 
     # Collect all findings by severity for executive summary
@@ -8258,7 +8267,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
     $html += "<div class='cat-grid'>`n"
     foreach($cn in ($catScores.Keys | Sort-Object)){
         $cs = $catScores[$cn]; $col = $script:CategoryAccents[$cn]
-        $barColor = switch($true) { ($cs.Score -ge 80){$col} ($cs.Score -ge 60){'#eab308'} ($cs.Score -ge 40){'#f97316'} default{'#ef4444'} }
+        $barColor = if ($cs.Score -ge 80) { $col } elseif ($cs.Score -ge 60) { '#eab308' } elseif ($cs.Score -ge 40) { '#f97316' } else { '#ef4444' }
         $html += @"
 <div class="cat-bar">
 <div class="top"><span class="name" style="color:$col">$([System.Net.WebUtility]::HtmlEncode($cn))</span><span class="pct" style="color:$barColor">$($cs.Score)%</span></div>
@@ -8301,7 +8310,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
         foreach ($fw in $script:FrameworkMeta.Keys) {
             $meta = $script:FrameworkMeta[$fw]
             $sc = if ($fwScores.Contains($fw)) { $fwScores[$fw] } else { @{Score=0;Assessed=0;Pass=0;Fail=0;Partial=0;Total=0} }
-            $scColor = switch($true) { ($sc.Score -ge 80){$meta.Color} ($sc.Score -ge 60){'#eab308'} ($sc.Score -ge 40){'#f97316'} default{'#ef4444'} }
+            $scColor = if ($sc.Score -ge 80) { $meta.Color } elseif ($sc.Score -ge 60) { '#eab308' } elseif ($sc.Score -ge 40) { '#f97316' } else { '#ef4444' }
             $html += "<div class='fw-card' style='border-top-color:$($meta.Color)'>"
             $html += "<div class='fw-name' style='color:$($meta.Color)'>$($meta.Short)</div>"
             $html += "<div class='fw-score' style='color:$scColor'>$($sc.Score)%</div>"
@@ -8548,7 +8557,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
     # ── RANSOMWARE PREPAREDNESS (Management, All) ─────────────────────────
     if ($Tier -eq 'Management' -or $Tier -eq 'All') {
         $rwScore = Get-RansomwareScore
-        $rwColor = switch($true) { ($rwScore.Overall -ge 80){'#22c55e'} ($rwScore.Overall -ge 60){'#eab308'} ($rwScore.Overall -ge 40){'#f97316'} default{'#ef4444'} }
+        $rwColor = if ($rwScore.Overall -ge 80) { '#22c55e' } elseif ($rwScore.Overall -ge 60) { '#eab308' } elseif ($rwScore.Overall -ge 40) { '#f97316' } else { '#ef4444' }
         $gradeColor = switch($rwScore.Grade) { 'A'{'#22c55e'} 'B'{'#84cc16'} 'C'{'#eab308'} 'D'{'#f97316'} default{'#ef4444'} }
 
         $html += "<div class='sec' style='border-left:4px solid $rwColor'><h2 style='color:$rwColor'>Ransomware Preparedness <span class='tier-label' style='background:$($rwColor)22;color:$rwColor;border:1px solid $($rwColor)44'>RANSOMWARE</span></h2>`n"
@@ -8564,7 +8573,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
         $html += "<text x='50' y='60' text-anchor='middle' fill='$gradeColor' font-size='14' font-weight='700'>$($rwScore.Grade)</text>"
         $html += "</svg></div>`n"
         $html += "<div style='flex:1'>"
-        $riskLevel = switch($true) { ($rwScore.Overall -ge 80){'LOW - Organization has strong ransomware defenses'} ($rwScore.Overall -ge 60){'MODERATE - Key gaps exist that should be addressed'} ($rwScore.Overall -ge 40){'HIGH - Significant ransomware exposure present'} default{'CRITICAL - Organization is highly vulnerable to ransomware'} }
+        $riskLevel = if ($rwScore.Overall -ge 80) { 'LOW - Organization has strong ransomware defenses' } elseif ($rwScore.Overall -ge 60) { 'MODERATE - Key gaps exist that should be addressed' } elseif ($rwScore.Overall -ge 40) { 'HIGH - Significant ransomware exposure present' } else { 'CRITICAL - Organization is highly vulnerable to ransomware' }
         $html += "<div style='font-size:16px;font-weight:700;color:$rwColor;margin-bottom:4px'>Ransomware Risk: $riskLevel</div>"
         $html += "<div style='font-size:12px;color:#94a3b8'>This score reflects the organization's ability to prevent, withstand, detect, and recover from ransomware attacks based on the security controls assessed in this audit.</div>"
         $html += "</div></div>`n"
@@ -9178,7 +9187,7 @@ function Export-ComplianceSummary {
             $fwFlags[$fw] = [ordered]@{
                 compliant = ($s.Score -ge 80)
                 score     = $s.Score
-                grade     = switch($true) { ($s.Score -ge 90){'A'} ($s.Score -ge 80){'B'} ($s.Score -ge 70){'C'} ($s.Score -ge 60){'D'} default{'F'} }
+                grade     = ConvertTo-LetterGrade $s.Score
                 gap_count = $s.Fail + $s.Partial
             }
         }

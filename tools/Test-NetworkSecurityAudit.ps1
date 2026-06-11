@@ -175,6 +175,9 @@ $staleVersionPatterns = @(
 foreach ($pattern in $staleVersionPatterns) {
     if ($scriptText -match $pattern) { Add-Failure "Stale version string matched pattern: $pattern" }
 }
+if ($scriptText -match 'switch\(\$true\)') {
+    Add-Failure 'Threshold scoring must use scalar if/elseif logic instead of switch($true), which can emit multiple matches.'
+}
 
 if ($scriptText -notmatch "if\s*\(\`$ExportSARIF\)[^\r\n]*'-ExportSARIF'") {
     Add-Failure 'Auto-elevation does not preserve -ExportSARIF.'
