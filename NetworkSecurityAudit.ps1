@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.1.4 - Professional GUI Tool
+    Network Security Auditor v4.1.5 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -45,7 +45,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.1.4
+    4.1.5
 #>
 param(
     [switch]$Silent,
@@ -68,7 +68,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.1.4'
+$script:ProductVersion = '4.1.5'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -8543,6 +8543,17 @@ function Export-SARIF {
                     ruleId = $id
                     level = if ($sv -eq 'Fail') { switch($item.Severity) { 'Critical'{'error'} 'High'{'error'} default{'warning'} } } else { 'warning' }
                     message = @{ text = if ($findings) { $findings.Substring(0, [math]::Min(500, $findings.Length)) } else { $item.Text } }
+                    locations = @(@{
+                        physicalLocation = @{
+                            artifactLocation = @{ uri = "network-security-audit://check/$id" }
+                        }
+                        logicalLocations = @(@{
+                            name = $id
+                            fullyQualifiedName = "$($script:ProductShortName).$id"
+                            kind = 'function'
+                            decoratedName = $item.Text
+                        })
+                    })
                     properties = @{ status = $sv; category = $cn }
                 }
             }
