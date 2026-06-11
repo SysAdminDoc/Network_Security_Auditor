@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.4.0-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.4.1-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -16,7 +16,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.4.0-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.4.1-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -42,18 +42,14 @@ This tool fills that gap. It auto-detects the environment, runs every check it c
 
 **[Download NetworkSecurityAudit.ps1](https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1)**
 
-Or download without executing immediately, then inspect and run it:
+Download without executing immediately, then inspect and run it:
 ```powershell
 $uri = "https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1"
 Invoke-WebRequest -Uri $uri -OutFile .\NetworkSecurityAudit.ps1 -UseBasicParsing
+Get-FileHash .\NetworkSecurityAudit.ps1 -Algorithm SHA256
 Get-AuthenticodeSignature .\NetworkSecurityAudit.ps1
 notepad .\NetworkSecurityAudit.ps1
 .\NetworkSecurityAudit.ps1
-```
-
-PowerShell one-liner execution is convenient for lab/RMM use, but review the script first in security-sensitive environments:
-```powershell
-irm https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1 | iex
 ```
 
 ### Interactive (GUI)
@@ -374,13 +370,16 @@ Optional for full coverage:
 
 ## Trust and Safety
 
-- The default scan mode is read-only for audit checks; higher-risk setup actions require explicit user action.
+- The default scan mode is read-only for audit checks; higher-risk setup actions require explicit user action or `-ReadOnly:$false`.
+- The tool reads local Windows security state, event logs, registry policy keys, service status, installed patch data, and AD data when the host has RSAT/domain access.
 - Internet access is limited to documented lookup/probe paths such as the CISA KEV catalog, DNS filtering tests, and egress checks.
 - Use `-NoInternet` to skip public internet downloads, external DNS tests, and outbound egress probes.
-- Reports and structured exports are written to the selected output folder; RMM field writes are documented in the RMM section.
-- Use `-NoRmmWrite` in silent mode when reports should be generated without updating RMM or registry fields.
+- Reports and structured exports are written to the selected output folder. No report data is uploaded by the script.
+- RMM field writes are limited to the configured RMM integration paths documented below.
+- Use `-NoRmmWrite` in silent mode when reports should be generated without updating RMM fields.
+- Use `-NoRegistryWrite` when registry-backed RMM/cache writes should be suppressed while command-based RMM integrations remain available.
 - The script does not auto-update or replace itself.
-- In sensitive environments, download the script first, inspect it, and verify the Authenticode signature state with `Get-AuthenticodeSignature` before running.
+- In sensitive environments, download the script first, inspect it, record the SHA-256 hash, and verify the Authenticode signature state before running.
 
 ---
 
