@@ -222,6 +222,9 @@ if ($scriptText -notmatch "if\s*\(\`$ExportOSCAL\)[^\r\n]*'-ExportOSCAL'" ) {
 if ($scriptText -notmatch 'function Export-OSCALResults' -or $scriptText -notmatch 'oscal-version' -or $scriptText -notmatch 'CliExportOSCAL' -or $scriptText -notmatch '_oscal\.json') {
     Add-Failure 'OSCAL export must define Export-OSCALResults with oscal-version, honor CliExportOSCAL, and write _oscal.json.'
 }
+if ($scriptText -notmatch '\[switch\]\$PrivacyMode' -or $scriptText -notmatch "if\s*\(\`$PrivacyMode\)[^\r\n]*'-PrivacyMode'" -or $scriptText -notmatch '\$script:CliPrivacyMode' -or $scriptText -notmatch 'function ConvertTo-RedactedText' -or $scriptText -notmatch 'privacy_redacted') {
+    Add-Failure 'Privacy mode must expose -PrivacyMode switch, preserve in auto-elevation, store CliPrivacyMode, define ConvertTo-RedactedText, and flag privacy_redacted in JSON export.'
+}
 if ($scriptText -notmatch 'VerifiedAndReputablePolicyState' -or $scriptText -notmatch 'SMART APP CONTROL' -or $scriptText -notmatch 'DisableAIDataAnalysis' -or $scriptText -notmatch 'WINDOWS RECALL') {
     Add-Failure 'EP07 must check Smart App Control state and Windows Recall policy.'
 }

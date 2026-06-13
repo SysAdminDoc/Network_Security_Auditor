@@ -73,6 +73,7 @@ param(
     [switch]$ExportNavigator,
     [switch]$ExportOCSF,
     [switch]$ExportOSCAL,
+    [switch]$PrivacyMode,
     [switch]$NoRmmWrite,
     [switch]$NoInternet,
     [switch]$NoElevate,
@@ -111,6 +112,7 @@ if (-not $script:IsAdmin -and -not $NoElevate) {
         if ($ExportNavigator) { $argList += '-ExportNavigator' }
         if ($ExportOCSF) { $argList += '-ExportOCSF' }
         if ($ExportOSCAL) { $argList += '-ExportOSCAL' }
+        if ($PrivacyMode) { $argList += '-PrivacyMode' }
         if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
         if ($NoInternet)   { $argList += '-NoInternet' }
         if ($NoRegistryWrite) { $argList += '-NoRegistryWrite' }
@@ -141,12 +143,71 @@ $script:CliExportPDF   = $ExportPDF.IsPresent
 $script:CliExportNavigator = $ExportNavigator.IsPresent
 $script:CliExportOCSF  = $ExportOCSF.IsPresent
 $script:CliExportOSCAL = $ExportOSCAL.IsPresent
+$script:CliPrivacyMode = $PrivacyMode.IsPresent
 $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 $script:CliNoInternet  = $NoInternet.IsPresent
 $script:CliNoElevate   = $NoElevate.IsPresent
 $script:CliNoRegistryWrite = $NoRegistryWrite.IsPresent
 $script:CliCloudAssessmentPaths = @($CloudAssessmentPath | Where-Object { $_ })
 $script:CloudAssessmentImports = @()
+
+# ── Privacy/Redaction Helpers ───────────────────────────────────────────────
+$script:PrivacyMap = @{}
+function Get-PrivacyHash {
+    param([string]$Value)
+    if (-not $Value) { return '' }
+    $key = $Value.ToLower()
+    if ($script:PrivacyMap.Contains($key)) { return $script:PrivacyMap[$key] }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($key)
+    $hash = ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join ''
+    $short = $hash.Substring(0, 8)
+    $sha.Dispose()
+    $script:PrivacyMap[$key] = $short
+    return $short
+}
+
+function Initialize-PrivacyReplacements {
+    $script:PrivacyReplacements = @()
+    if (-not $script:CliPrivacyMode) { return }
+    $targets = @()
+    $compName = $env:COMPUTERNAME
+    if ($compName) { $targets += @{ Original = $compName; Tag = 'HOST' } }
+    $domName = $env:USERDOMAIN
+    if ($domName -and $domName -ne $compName) { $targets += @{ Original = $domName; Tag = 'DOMAIN' } }
+    $dnsDomain = $env:USERDNSDOMAIN
+    if ($dnsDomain) { $targets += @{ Original = $dnsDomain; Tag = 'DOMAIN' } }
+    $userName = $env:USERNAME
+    if ($userName) { $targets += @{ Original = $userName; Tag = 'USER' } }
+    $scanTarget = try { $el['txtScanTarget'].Text } catch { '' }
+    if ($scanTarget -and $scanTarget -ne $compName) { $targets += @{ Original = $scanTarget; Tag = 'HOST' } }
+    $clientName = try { $el['txtClient'].Text } catch { '' }
+    if (-not $clientName) { $clientName = $script:CliClient }
+    if ($clientName) { $targets += @{ Original = $clientName; Tag = 'CLIENT' } }
+    foreach ($t in $targets) {
+        $hash = Get-PrivacyHash $t.Original
+        $script:PrivacyReplacements += @{ Pattern = [regex]::Escape($t.Original); Replacement = "[$($t.Tag)-$hash]" }
+    }
+}
+
+function ConvertTo-RedactedText {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) { return '' }
+    if (-not $script:CliPrivacyMode) { return [string]$Value }
+    $text = [string]$Value
+    foreach ($r in $script:PrivacyReplacements) {
+        $text = [regex]::Replace($text, $r.Pattern, $r.Replacement, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    }
+    $text = [regex]::Replace($text, '\b(?:\d{1,3}\.){3}\d{1,3}\b', { param($m) "[IP-$(Get-PrivacyHash $m.Value)]" })
+    return $text
+}
+
+function Get-RedactedIdentity {
+    param([string]$Value, [string]$Tag = 'ID')
+    if (-not $Value) { return '' }
+    if (-not $script:CliPrivacyMode) { return $Value }
+    return "[$Tag-$(Get-PrivacyHash $Value)]"
+}
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
@@ -9463,6 +9524,7 @@ function Invoke-AutoExport {
     $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
     $basePath = Join-Path $desktop "SecurityAudit_${client}_$ts"
     $outFile = "${basePath}.html"
+    Initialize-PrivacyReplacements
     try { $null = Export-HTMLReport $outFile -OpenAfter; Write-Log "Auto-export HTML: $outFile" 'INFO' }
     catch { Write-Log "Auto-export HTML failed: $_" 'ERROR'; $el['StatusText'].Text = "HTML export failed: $($_.Exception.Message)" }
     # Also generate structured JSON and CSV
@@ -9583,6 +9645,9 @@ function Export-FindingsJSON {
                 }
             }
 
+            $rawFindings = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
+            $rawEvidence = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
+            $rawNotes    = if ($script:NotesBoxes[$id]) { $script:NotesBoxes[$id].Text } else { '' }
             $finding = [ordered]@{
                 id            = $id
                 category      = $cn
@@ -9590,9 +9655,9 @@ function Export-FindingsJSON {
                 weight        = $item.Weight
                 status        = $sv
                 text          = $item.Text
-                findings      = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
-                evidence      = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
-                notes         = if ($script:NotesBoxes[$id]) { $script:NotesBoxes[$id].Text } else { '' }
+                findings      = ConvertTo-RedactedText $rawFindings
+                evidence      = ConvertTo-RedactedText $rawEvidence
+                notes         = ConvertTo-RedactedText $rawNotes
                 remediation   = [ordered]@{
                     status   = $rs
                     assigned = if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' }
@@ -9624,15 +9689,17 @@ function Export-FindingsJSON {
 
     $scanTarget = if ($el -and $el['txtScanTarget']) { $el['txtScanTarget'].Text } else { 'localhost' }
 
+    $privacyFlag = $script:CliPrivacyMode
     $export = [ordered]@{
         schema_version = $script:SchemaVersion
         tool           = $script:ProductShortName
         tool_version   = $script:ProductVersion
         export_type    = 'structured_findings'
+        privacy_redacted = $privacyFlag
         timestamp      = $scanTs
-        client         = $ClientName
+        client         = Get-RedactedIdentity $ClientName 'CLIENT'
         auditor        = $AuditorName
-        target         = $scanTarget
+        target         = Get-RedactedIdentity $scanTarget 'HOST'
         environment    = [ordered]@{
             os          = $script:Env.OSCaption
             domain      = $script:Env.IsDomainJoined
@@ -9706,6 +9773,8 @@ function Export-FindingsJSONL {
             $evidenceTruncated = ($evidenceText.Length -gt 2000)
             $findingsForExport = if ($findingsTruncated) { $findingsText.Substring(0,4000) + '...[truncated]' } else { $findingsText }
             $evidenceForExport = if ($evidenceTruncated) { $evidenceText.Substring(0,2000) + '...[truncated]' } else { $evidenceText }
+            $findingsForExport = ConvertTo-RedactedText $findingsForExport
+            $evidenceForExport = ConvertTo-RedactedText $evidenceForExport
 
             # Flat event record - one line per finding
             $evt = [ordered]@{
@@ -9713,9 +9782,9 @@ function Export-FindingsJSONL {
                 event_type      = 'security_audit_finding'
                 source          = $script:ProductShortName
                 source_version  = $script:ProductVersion
-                client          = $ClientName
+                client          = Get-RedactedIdentity $ClientName 'CLIENT'
                 auditor         = $AuditorName
-                host            = $scanTarget
+                host            = Get-RedactedIdentity $scanTarget 'HOST'
                 os              = $script:Env.OSCaption
                 domain_joined   = $script:Env.IsDomainJoined
                 overall_grade   = $riskData.Grade
@@ -10073,9 +10142,9 @@ function Export-FindingsCSV {
 
             $row = [PSCustomObject][ordered]@{
                 ScanDate         = $scanTs
-                Client           = ConvertTo-CsvSafeText $ClientName
+                Client           = ConvertTo-CsvSafeText (Get-RedactedIdentity $ClientName 'CLIENT')
                 Auditor          = ConvertTo-CsvSafeText $AuditorName
-                Target           = ConvertTo-CsvSafeText $scanTarget
+                Target           = ConvertTo-CsvSafeText (Get-RedactedIdentity $scanTarget 'HOST')
                 OverallGrade     = $riskData.Grade
                 OverallScore     = $riskData.Pct
                 CheckID          = ConvertTo-CsvSafeText $id
@@ -10085,8 +10154,8 @@ function Export-FindingsCSV {
                 RiskPriority     = $riskPriority
                 Status           = ConvertTo-CsvSafeText $sv
                 Description      = ConvertTo-CsvSafeText $item.Text
-                Findings         = ConvertTo-CsvSafeText $(if ($script:FindingsBoxes[$id]) { ($script:FindingsBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' })
-                Evidence         = ConvertTo-CsvSafeText $(if ($script:EvidenceBoxes[$id]) { ($script:EvidenceBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' })
+                Findings         = ConvertTo-CsvSafeText (ConvertTo-RedactedText $(if ($script:FindingsBoxes[$id]) { ($script:FindingsBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }))
+                Evidence         = ConvertTo-CsvSafeText (ConvertTo-RedactedText $(if ($script:EvidenceBoxes[$id]) { ($script:EvidenceBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }))
                 Notes            = ConvertTo-CsvSafeText $(if ($script:NotesBoxes[$id]) { ($script:NotesBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' })
                 RemStatus        = ConvertTo-CsvSafeText $rs
                 RemAssigned      = ConvertTo-CsvSafeText $(if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' })
@@ -10630,6 +10699,12 @@ if ($script:SilentMode) {
         $outFile = Join-Path $desktop "SecurityAudit_${safeClient}_$(Get-Date -Format 'yyyyMMdd_HHmmss').html"
     }
     $basePath = $outFile -replace '\.[^.]+$',''
+
+    # Initialize privacy redaction map before any exports
+    Initialize-PrivacyReplacements
+    if ($script:CliPrivacyMode) {
+        Write-Host "[Silent Mode] Privacy mode active - hostnames, IPs, and identities will be redacted in exports" -ForegroundColor Cyan
+    }
 
     # HTML Report (always generated)
     try {
