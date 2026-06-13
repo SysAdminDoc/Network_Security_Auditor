@@ -234,6 +234,7 @@ Every check maps to one or more controls across 10 frameworks. Framework-specifi
 | **SOC 2** | Type II (Trust Criteria) | 67 checks |
 | **ISO 27001** | :2022 (Annex A) | 69 checks |
 | **DISA STIG** | Windows Server/Client | 69 checks |
+| **FedRAMP** | Moderate (NIST 800-53 Rev 5) | 69 checks |
 
 ### MITRE ATT&CK Mapping
 
@@ -450,6 +451,7 @@ The same validation runs in GitHub Actions on push and pull request.
 | **SOC 2** | 67 | ~50 min | Service organization compliance |
 | **ISO 27001** | 69 | ~60 min | International standard compliance |
 | **STIG** | 69 | ~60 min | DISA STIG for DoD/government |
+| **FedRAMP** | 69 | ~60 min | FedRAMP Moderate for federal cloud |
 
 ---
 

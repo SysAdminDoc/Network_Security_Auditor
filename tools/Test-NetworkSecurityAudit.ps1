@@ -139,6 +139,7 @@ $readmeFrameworkLabels = [ordered]@{
     SOC2 = 'SOC 2'
     ISO27001 = 'ISO 27001'
     STIG = 'DISA STIG'
+    FedRAMP = 'FedRAMP'
 }
 foreach ($framework in $readmeFrameworkLabels.Keys) {
     $coverageCount = Get-FrameworkCoverageCount -Framework $framework -FrameworkChecksBlock $frameworkChecksBlock -AllCheckCount @($catalogIds).Count
@@ -247,6 +248,12 @@ if ($scriptText -notmatch "Framework -eq 'CyberEssentials'" -or $scriptText -not
 }
 if ($scriptText -notmatch "\`$compObj\['STIG'\]" -or $scriptText -notmatch '(?m)^\s+stig\s+=' -or $scriptText -notmatch '(?m)^\s+STIG\s+=') {
     Add-Failure 'Structured JSON, JSONL, and CSV exports must include STIG detail fields.'
+}
+if ($scriptText -notmatch "Framework -eq 'FedRAMP'" -or $scriptText -notmatch 'FedRAMP:' -or $scriptText -notmatch "'FedRAMP'\s*=\s*@\{" -or $scriptText -notmatch '\[ValidateSet\([^\)]*FedRAMP') {
+    Add-Failure 'FedRAMP must be exposed as a framework, scan profile, and formatted compliance target.'
+}
+if ($scriptText -notmatch "\`$compObj\['FedRAMP'\]" -or $scriptText -notmatch '(?m)^\s+fedramp\s+=' -or $scriptText -notmatch '(?m)^\s+FedRAMP\s+=') {
+    Add-Failure 'Structured JSON, JSONL, and CSV exports must include FedRAMP detail fields.'
 }
 if ($scriptText -notmatch "\`$compObj\['ACSC_Essential_Eight'\]" -or $scriptText -notmatch '(?m)^\s+essential_eight\s+=' -or $scriptText -notmatch '(?m)^\s+Essential_Eight\s+=') {
     Add-Failure 'Structured JSON, JSONL, and CSV exports must include ACSC Essential Eight fields.'
