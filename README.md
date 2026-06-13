@@ -10,7 +10,7 @@
 
 # Network Security Auditor
 
-A single-file PowerShell security audit tool. Runs 69 automated checks across 8 security domains, maps findings to 10 compliance frameworks, MITRE ATT&CK, and MITRE D3FEND, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
+A single-file PowerShell security audit tool. Runs 69 automated checks across 8 security domains, maps findings to 11 compliance frameworks, MITRE ATT&CK, and MITRE D3FEND, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
 
 One script. No dependencies to pre-install. Works on any Windows machine from standalone workstations to enterprise domain controllers.
 
@@ -220,7 +220,7 @@ Every check runs in an isolated runspace with timeout protection. Results includ
 
 ### Compliance Framework Mapping
 
-Every check maps to one or more controls across 10 frameworks. Framework-specific scan profiles run the most relevant checks for that standard:
+Every check maps to one or more controls across 11 frameworks. Framework-specific scan profiles run the most relevant checks for that standard:
 
 | Framework | Standard | Profile checks |
 |-----------|----------|----------|
@@ -357,6 +357,9 @@ Automatic platform detection and field population:
 | PDF | `*.pdf` | Portable report via Edge/Chrome headless rendering |
 | Intune | `*_intune.json` | Device compliance discovery script for Conditional Access |
 | Compliance Summary | `*_summary.json` | Compact RMM dashboard payload |
+| ATT&CK Navigator | `*_navigator.json` | MITRE ATT&CK Navigator v4.5 layer with technique scoring |
+| OCSF | `*_ocsf.jsonl` | OCSF v1.3 Security Finding events for vendor-neutral SIEM/MDR |
+| OSCAL | `*_oscal.json` | NIST OSCAL v1.1.2 assessment results for GRC and FedRAMP |
 
 ---
 
@@ -423,7 +426,7 @@ The same validation runs in GitHub Actions on push and pull request.
 -Silent              Run headless (no GUI). Auto-scans, exports, exits.
 -ScanProfile         Quick | Standard | Full | ADOnly | LocalOnly |
                      HIPAA | PCI | CMMC | E8 | CyberEssentials |
-                     SOC2 | ISO27001 | STIG
+                     SOC2 | ISO27001 | STIG | FedRAMP
                      Default: Full (all 69 checks)
 -OutputPath          Report output path. Default: Desktop
 -ReportTier          Executive | Management | Technical | All
@@ -544,7 +547,7 @@ Audit state (all check statuses, findings, evidence, notes, remediation tracking
 This is a single-file tool by design. One `.ps1` file, no modules, no config files, no build process. Download it and run it.
 
 ```
-NetworkSecurityAudit.ps1    # The entire tool (~8,900 lines)
+NetworkSecurityAudit.ps1    # The entire tool (~11,000 lines)
 README.md                   # This file
 tools/                      # Maintainer-only validation scripts
 .github/workflows/          # CI validation
@@ -558,7 +561,7 @@ Contributions are welcome. Areas where help is most needed:
 
 - **Additional auto-check scripts** for specific technologies (Exchange, SQL Server, VMware, etc.)
 - **Cloud/hybrid identity checks** (Entra ID, M365 Secure Score, Intune compliance)
-- **Additional compliance framework mappings** (FedRAMP, NIST 800-53)
+- **Additional compliance framework mappings**
 - **Bug reports** from diverse environments (different OS versions, domain configurations, edge cases)
 - **Localization** of check descriptions and report text
 
