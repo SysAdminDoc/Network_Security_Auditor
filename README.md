@@ -2,7 +2,7 @@
 <p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.8.1-58A6FF?style=for-the-badge">
+  <img alt="Version" src="https://img.shields.io/badge/version-4.9.0-58A6FF?style=for-the-badge">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
   <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
 </p>
@@ -16,7 +16,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.8.1-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.9.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -425,6 +425,9 @@ The same validation runs in GitHub Actions on push and pull request.
 -ExportJSONL         Also export SIEM-format JSONL
 -ExportSARIF         Also export SARIF 2.1.0 for GitHub/Azure DevOps
 -ExportPDF           Also export PDF via Edge/Chrome headless
+-ExportNavigator     Also export MITRE ATT&CK Navigator layer JSON
+-CloudAssessmentPath Path(s) to Maester or CISA ScubaGear JSON results
+                     to import and include in reports
 ```
 
 ---
