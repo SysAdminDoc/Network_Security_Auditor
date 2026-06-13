@@ -209,6 +209,12 @@ if ($scriptText -notmatch 'cloud_assessments' -or $scriptText -notmatch 'CloudAs
 if ($scriptText -notmatch 'LAPS DELEGATION AUDIT' -or $scriptText -notmatch 'ms-Mcs-AdmPwd' -or $scriptText -notmatch 'msLAPS-EncryptedPassword' -or $scriptText -notmatch 'schemaIDGUID') {
     Add-Failure 'IA06 must audit LAPS password read/decrypt delegation via schema GUID ACL inspection.'
 }
+if ($scriptText -notmatch "if\s*\(\`$ExportOCSF\)[^\r\n]*'-ExportOCSF'") {
+    Add-Failure 'Auto-elevation does not preserve -ExportOCSF.'
+}
+if ($scriptText -notmatch 'function Export-OCSFFindings' -or $scriptText -notmatch 'class_uid\s*=\s*2001' -or $scriptText -notmatch 'CliExportOCSF' -or $scriptText -notmatch '_ocsf\.jsonl') {
+    Add-Failure 'OCSF export must define Export-OCSFFindings with class_uid 2001, honor CliExportOCSF, and write _ocsf.jsonl.'
+}
 if ($scriptText -notmatch '\[switch\]\$NoRmmWrite' -or $scriptText -notmatch "if\s*\(\`$NoRmmWrite\)[^\r\n]*'-NoRmmWrite'" -or $scriptText -notmatch '\$script:CliNoRmmWrite' -or $scriptText -notmatch 'RMM and registry field writes skipped') {
     Add-Failure 'Silent mode must expose, preserve, and honor -NoRmmWrite.'
 }

@@ -426,6 +426,7 @@ The same validation runs in GitHub Actions on push and pull request.
 -ExportSARIF         Also export SARIF 2.1.0 for GitHub/Azure DevOps
 -ExportPDF           Also export PDF via Edge/Chrome headless
 -ExportNavigator     Also export MITRE ATT&CK Navigator layer JSON
+-ExportOCSF          Also export OCSF v1.3 security finding JSONL
 -CloudAssessmentPath Path(s) to Maester or CISA ScubaGear JSON results
                      to import and include in reports
 ```

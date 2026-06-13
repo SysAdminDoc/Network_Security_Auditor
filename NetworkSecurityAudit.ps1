@@ -71,6 +71,7 @@ param(
     [switch]$ExportSARIF,
     [switch]$ExportPDF,
     [switch]$ExportNavigator,
+    [switch]$ExportOCSF,
     [switch]$NoRmmWrite,
     [switch]$NoInternet,
     [switch]$NoElevate,
@@ -107,6 +108,7 @@ if (-not $script:IsAdmin -and -not $NoElevate) {
         if ($ExportSARIF)  { $argList += '-ExportSARIF' }
         if ($ExportPDF)    { $argList += '-ExportPDF' }
         if ($ExportNavigator) { $argList += '-ExportNavigator' }
+        if ($ExportOCSF) { $argList += '-ExportOCSF' }
         if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
         if ($NoInternet)   { $argList += '-NoInternet' }
         if ($NoRegistryWrite) { $argList += '-NoRegistryWrite' }
@@ -135,6 +137,7 @@ $script:CliExportJSONL = $ExportJSONL.IsPresent
 $script:CliExportSARIF = $ExportSARIF.IsPresent
 $script:CliExportPDF   = $ExportPDF.IsPresent
 $script:CliExportNavigator = $ExportNavigator.IsPresent
+$script:CliExportOCSF  = $ExportOCSF.IsPresent
 $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 $script:CliNoInternet  = $NoInternet.IsPresent
 $script:CliNoElevate   = $NoElevate.IsPresent
@@ -9593,6 +9596,102 @@ function Export-FindingsJSONL {
     return $OutPath
 }
 
+# ── Phase 5A2: OCSF Security Finding JSONL Export ───────────────────────────
+# OCSF v1.3 Security Finding class (class_uid 2001) for vendor-neutral SIEM/MDR
+function Export-OCSFFindings {
+    param([string]$OutPath, [string]$ClientName = '', [string]$AuditorName = '')
+    if (-not $ClientName) { $ClientName = try { $el['txtClient'].Text } catch { $env:COMPUTERNAME } }
+    if (-not $AuditorName) { $AuditorName = try { $el['txtAuditor'].Text } catch { 'System' } }
+    $scanTs = (Get-Date).ToUniversalTime().ToString('o')
+    $scanTarget = try { $el['txtScanTarget'].Text } catch { $env:COMPUTERNAME }
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $sevMap = @{ 'Critical'=5; 'High'=4; 'Medium'=3; 'Low'=2; 'Info'=1 }
+    $statusMap = @{ 'Pass'=1; 'Partial'=2; 'Fail'=3; 'N/A'=4; 'Not Assessed'=0 }
+
+    foreach ($cn in $script:AuditCategories.Keys) {
+        $cat = $script:AuditCategories[$cn]
+        foreach ($item in $cat.Items) {
+            $id = $item.ID
+            $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+            if ($sv -eq 'Pass' -or $sv -eq 'Not Assessed' -or $sv -eq 'N/A') { continue }
+            $mitreData = if ($script:MitreMap.Contains($id)) { $script:MitreMap[$id] } else { $null }
+            $d3fendData = if ($script:D3FendMap.Contains($id)) { $script:D3FendMap[$id] } else { $null }
+            $findingsText = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
+            $evidenceText = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
+            $sevId = if ($sevMap.ContainsKey($item.Severity)) { $sevMap[$item.Severity] } else { 0 }
+            $statusId = if ($statusMap.ContainsKey($sv)) { $statusMap[$sv] } else { 0 }
+            $checkTs = if ($script:ScanTimestamps.Contains($id)) { try { [datetime]::ParseExact($script:ScanTimestamps[$id],'yyyy-MM-dd HH:mm:ss',$null).ToUniversalTime().ToString('o') } catch { $scanTs } } else { $scanTs }
+
+            $attacks = @()
+            if ($mitreData) {
+                for ($ti=0; $ti -lt $mitreData.Techniques.Count; $ti++) {
+                    $t = [ordered]@{ technique = [ordered]@{ uid = $mitreData.Techniques[$ti]; name = $mitreData.Techniques[$ti] }; version = '15.1' }
+                    if ($ti -lt $mitreData.Tactics.Count) { $t['tactic'] = [ordered]@{ uid = $mitreData.Tactics[$ti]; name = $mitreData.Tactics[$ti] } }
+                    $attacks += $t
+                }
+            }
+
+            $evt = [ordered]@{
+                class_uid    = 2001
+                class_name   = 'Security Finding'
+                category_uid = 2
+                category_name = 'Findings'
+                activity_id  = 1
+                activity_name = 'Create'
+                severity_id  = $sevId
+                severity      = $item.Severity
+                status_id     = $statusId
+                status        = $sv
+                time          = $checkTs
+                message       = $item.Text
+                metadata      = [ordered]@{
+                    version    = '1.3.0'
+                    product    = [ordered]@{
+                        name       = $script:ProductName
+                        version    = $script:ProductVersion
+                        vendor_name = 'SysAdminDoc'
+                    }
+                    profiles   = @('security_control')
+                }
+                finding_info  = [ordered]@{
+                    uid         = $id
+                    title       = $item.Text
+                    desc        = if ($findingsText.Length -gt 4000) { $findingsText.Substring(0,4000) } else { $findingsText }
+                    types       = @($cn)
+                    analytic    = [ordered]@{ type = 'Rule'; type_id = 1; uid = $id; name = "$id $($item.Text)"; category = $cn }
+                }
+                resources     = @(
+                    [ordered]@{
+                        type = 'Device'
+                        name = $scanTarget
+                        os   = [ordered]@{ name = $script:Env.OSCaption; type_id = 100; type = 'Windows' }
+                    }
+                )
+                evidences     = if ($evidenceText) { @([ordered]@{ data = if ($evidenceText.Length -gt 2000) { $evidenceText.Substring(0,2000) } else { $evidenceText } }) } else { @() }
+                attacks       = if ($attacks.Count -gt 0) { $attacks } else { $null }
+                compliance    = [ordered]@{
+                    requirements = @($cn)
+                }
+                actor         = [ordered]@{
+                    user = [ordered]@{ name = $AuditorName; type_id = 1; type = 'User' }
+                }
+                unmapped      = [ordered]@{
+                    check_id    = $id
+                    category    = $cn
+                    weight      = $item.Weight
+                    client      = $ClientName
+                    d3fend     = if ($d3fendData) { [ordered]@{ stages = $d3fendData.Stages; techniques = $d3fendData.Techniques } } else { $null }
+                }
+            }
+            $lines.Add(($evt | ConvertTo-Json -Depth 8 -Compress))
+        }
+    }
+
+    $lines -join "`n" | Set-Content $OutPath -Encoding UTF8
+    Write-Log "OCSF findings JSONL exported: $OutPath ($($lines.Count) events)" 'INFO'
+    return $OutPath
+}
+
 # ── Phase 5B: CSV Export for MSP Analysis ─────────────────────────────────────
 # Column layout optimized for pivot tables across multi-client audits
 function ConvertTo-CsvSafeText {
@@ -10265,6 +10364,15 @@ if ($script:SilentMode) {
             $pdfResult = Export-PDF -HtmlPath $outFile -PdfPath $pdfOut
             if ($pdfResult) { Write-Host "[Silent Mode] PDF: $pdfResult" -ForegroundColor Green }
         } catch { Write-Host "[Silent Mode] PDF export failed: $_" -ForegroundColor Yellow }
+    }
+
+    # OCSF security finding export
+    if ($script:CliExportOCSF) {
+        $ocsfOut = "${basePath}_ocsf.jsonl"
+        try {
+            $null = Export-OCSFFindings -OutPath $ocsfOut -ClientName $clientName -AuditorName $auditorName
+            Write-Host "[Silent Mode] OCSF JSONL: $ocsfOut" -ForegroundColor Green
+        } catch { Write-Host "[Silent Mode] OCSF export failed: $_" -ForegroundColor Yellow }
     }
 
     # ATT&CK Navigator layer export
