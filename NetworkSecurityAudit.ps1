@@ -660,59 +660,59 @@ $script:DiscoveredDCs      = @()
 $script:Themes = @{
     'Midnight' = @{
         WindowBg='#1a1a2e';PanelBg='#16213e';CardBg='#16213e';SurfaceBg='#0f3460'
-        InputBg='#1e293b';BorderDim='#334155';TextPrimary='#e2e8f0';TextSecondary='#94a3b8'
+        InputBg='#1e293b';BorderDim='#5e7185';TextPrimary='#e2e8f0';TextSecondary='#94a3b8'
         Accent='#0ea5e9';AccentHover='#38bdf8';AccentPress='#0284c7';BarBg='#1e293b'
-        ProgressGood='#22c55e';ProgressMid='#eab308';ThumbBg='#475569'
+        ProgressGood='#22c55e';ProgressMid='#eab308';ThumbBg='#657b91'
         HoverBg='#0f3460';SelectedBg='#0ea5e9';CheckedBorder='#22c55e';CheckedBg='#1a2e1a'
-        HeaderGrad1='#0f3460';HeaderGrad2='#16213e';HintBg='#0c2d4a';HintBorder='#1e4976'
+        HeaderGrad1='#0f3460';HeaderGrad2='#16213e';HintBg='#0c2d4a';HintBorder='#3a7aad'
     }
     'Slate' = @{
-        WindowBg='#0f172a';PanelBg='#1e293b';CardBg='#1e293b';SurfaceBg='#334155'
-        InputBg='#0f172a';BorderDim='#475569';TextPrimary='#f1f5f9';TextSecondary='#94a3b8'
-        Accent='#6366f1';AccentHover='#818cf8';AccentPress='#4f46e5';BarBg='#0f172a'
+        WindowBg='#0f172a';PanelBg='#1e293b';CardBg='#1e293b';SurfaceBg='#293649'
+        InputBg='#0f172a';BorderDim='#6e849b';TextPrimary='#f1f5f9';TextSecondary='#a3b1c6'
+        Accent='#8184f7';AccentHover='#818cf8';AccentPress='#4f46e5';BarBg='#0f172a'
         ProgressGood='#22c55e';ProgressMid='#eab308';ThumbBg='#64748b'
-        HoverBg='#334155';SelectedBg='#6366f1';CheckedBorder='#22c55e';CheckedBg='#1a2e1a'
-        HeaderGrad1='#1e293b';HeaderGrad2='#0f172a';HintBg='#1e1b4b';HintBorder='#3730a3'
+        HoverBg='#293649';SelectedBg='#6366f1';CheckedBorder='#22c55e';CheckedBg='#1a2e1a'
+        HeaderGrad1='#1e293b';HeaderGrad2='#0f172a';HintBg='#1e1b4b';HintBorder='#6860d4'
     }
     'Nord' = @{
         WindowBg='#2e3440';PanelBg='#3b4252';CardBg='#3b4252';SurfaceBg='#434c5e'
-        InputBg='#2e3440';BorderDim='#4c566a';TextPrimary='#eceff4';TextSecondary='#d8dee9'
+        InputBg='#2e3440';BorderDim='#8892a2';TextPrimary='#eceff4';TextSecondary='#d8dee9'
         Accent='#88c0d0';AccentHover='#8fbcbb';AccentPress='#5e81ac';BarBg='#2e3440'
-        ProgressGood='#a3be8c';ProgressMid='#ebcb8b';ThumbBg='#4c566a'
+        ProgressGood='#a3be8c';ProgressMid='#ebcb8b';ThumbBg='#8892a2'
         HoverBg='#434c5e';SelectedBg='#5e81ac';CheckedBorder='#a3be8c';CheckedBg='#2e3b2e'
-        HeaderGrad1='#434c5e';HeaderGrad2='#3b4252';HintBg='#2e3440';HintBorder='#4c566a'
+        HeaderGrad1='#434c5e';HeaderGrad2='#3b4252';HintBg='#2e3440';HintBorder='#8892a2'
     }
     'Dracula' = @{
-        WindowBg='#282a36';PanelBg='#44475a';CardBg='#44475a';SurfaceBg='#6272a4'
-        InputBg='#282a36';BorderDim='#6272a4';TextPrimary='#f8f8f2';TextSecondary='#bd93f9'
+        WindowBg='#282a36';PanelBg='#44475a';CardBg='#44475a';SurfaceBg='#484f73'
+        InputBg='#282a36';BorderDim='#929cc0';TextPrimary='#f8f8f2';TextSecondary='#d5b8ff'
         Accent='#ff79c6';AccentHover='#ff92d0';AccentPress='#ff55b8';BarBg='#282a36'
-        ProgressGood='#50fa7b';ProgressMid='#f1fa8c';ThumbBg='#6272a4'
-        HoverBg='#6272a4';SelectedBg='#ff79c6';CheckedBorder='#50fa7b';CheckedBg='#2a3a2a'
-        HeaderGrad1='#44475a';HeaderGrad2='#282a36';HintBg='#1e1f29';HintBorder='#44475a'
+        ProgressGood='#50fa7b';ProgressMid='#f1fa8c';ThumbBg='#929cc0'
+        HoverBg='#484f73';SelectedBg='#ff79c6';CheckedBorder='#50fa7b';CheckedBg='#2a3a2a'
+        HeaderGrad1='#44475a';HeaderGrad2='#282a36';HintBg='#1e1f29';HintBorder='#6b6f85'
     }
     'Monokai' = @{
         WindowBg='#272822';PanelBg='#3e3d32';CardBg='#3e3d32';SurfaceBg='#49483e'
-        InputBg='#272822';BorderDim='#75715e';TextPrimary='#f8f8f2';TextSecondary='#a6a68a'
+        InputBg='#272822';BorderDim='#9a9580';TextPrimary='#f8f8f2';TextSecondary='#bdbaa0'
         Accent='#a6e22e';AccentHover='#b8f340';AccentPress='#8cc41a';BarBg='#272822'
-        ProgressGood='#a6e22e';ProgressMid='#e6db74';ThumbBg='#75715e'
+        ProgressGood='#a6e22e';ProgressMid='#e6db74';ThumbBg='#9a9580'
         HoverBg='#49483e';SelectedBg='#a6e22e';CheckedBorder='#a6e22e';CheckedBg='#2e3a22'
-        HeaderGrad1='#3e3d32';HeaderGrad2='#272822';HintBg='#272822';HintBorder='#49483e'
+        HeaderGrad1='#3e3d32';HeaderGrad2='#272822';HintBg='#272822';HintBorder='#7d7968'
     }
     'Solarized Dark' = @{
-        WindowBg='#002b36';PanelBg='#073642';CardBg='#073642';SurfaceBg='#586e75'
-        InputBg='#002b36';BorderDim='#586e75';TextPrimary='#fdf6e3';TextSecondary='#93a1a1'
+        WindowBg='#002b36';PanelBg='#073642';CardBg='#073642';SurfaceBg='#0f3a45'
+        InputBg='#002b36';BorderDim='#759298';TextPrimary='#fdf6e3';TextSecondary='#b0c4c4'
         Accent='#268bd2';AccentHover='#2aa0f0';AccentPress='#1a6fb5';BarBg='#002b36'
-        ProgressGood='#859900';ProgressMid='#b58900';ThumbBg='#586e75'
-        HoverBg='#586e75';SelectedBg='#268bd2';CheckedBorder='#859900';CheckedBg='#0a3a1a'
-        HeaderGrad1='#073642';HeaderGrad2='#002b36';HintBg='#002b36';HintBorder='#586e75'
+        ProgressGood='#859900';ProgressMid='#b58900';ThumbBg='#759298'
+        HoverBg='#0f3a45';SelectedBg='#268bd2';CheckedBorder='#859900';CheckedBg='#0a3a1a'
+        HeaderGrad1='#073642';HeaderGrad2='#002b36';HintBg='#002b36';HintBorder='#759298'
     }
     'Catppuccin Mocha' = @{
         WindowBg='#1e1e2e';PanelBg='#313244';CardBg='#313244';SurfaceBg='#45475a'
-        InputBg='#1e1e2e';BorderDim='#585b70';TextPrimary='#cdd6f4';TextSecondary='#a6adc8'
+        InputBg='#1e1e2e';BorderDim='#7f839b';TextPrimary='#cdd6f4';TextSecondary='#b5bcd6'
         Accent='#cba6f7';AccentHover='#d4b8fa';AccentPress='#b48bf0';BarBg='#1e1e2e'
-        ProgressGood='#a6e3a1';ProgressMid='#f9e2af';ThumbBg='#585b70'
+        ProgressGood='#a6e3a1';ProgressMid='#f9e2af';ThumbBg='#7f839b'
         HoverBg='#45475a';SelectedBg='#cba6f7';CheckedBorder='#a6e3a1';CheckedBg='#2a3a2e'
-        HeaderGrad1='#313244';HeaderGrad2='#1e1e2e';HintBg='#1e1e2e';HintBorder='#45475a'
+        HeaderGrad1='#313244';HeaderGrad2='#1e1e2e';HintBg='#1e1e2e';HintBorder='#6b6e82'
     }
 }
 
@@ -722,7 +722,7 @@ function Get-T { $script:Themes[$script:CurrentThemeName] }
 function New-Brush([string]$hex) { New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString($hex)) }
 
 # ── Severity Colors ──────────────────────────────────────────────────────────
-$script:SeverityColors = @{ Critical='#ef4444'; High='#f97316'; Medium='#eab308'; Low='#22c55e' }
+$script:SeverityColors = @{ Critical='#f87171'; High='#f97316'; Medium='#eab308'; Low='#22c55e' }
 $script:CategoryAccents = @{
     'Network Perimeter'='#0ea5e9'; 'Identity & Access'='#a855f7'; 'Endpoint Security'='#22c55e'
     'Backup & Recovery'='#eab308'; 'Logging & Monitoring'='#f97316'; 'Network Architecture'='#06b6d4'

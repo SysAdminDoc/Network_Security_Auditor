@@ -347,6 +347,25 @@ foreach ($call in $suppressedExportCalls) {
     }
 }
 
+# ── Theme contrast validation ──────────────────────────────────────────────
+$themeContrastScript = Join-Path $scriptDir 'Test-ThemeContrast.ps1'
+if (-not (Test-Path $themeContrastScript)) {
+    Add-Failure 'Theme contrast validation script missing: tools/Test-ThemeContrast.ps1'
+}
+$themeTokens = @('WindowBg','PanelBg','CardBg','SurfaceBg','InputBg','BorderDim',
+    'TextPrimary','TextSecondary','Accent','ThumbBg','HoverBg','HintBg','HintBorder')
+foreach ($tok in $themeTokens) {
+    if ($scriptText -notmatch "\b$tok\s*=\s*'#[0-9a-fA-F]{6}'") {
+        Add-Failure "Theme token '$tok' not found in theme definitions."
+    }
+}
+$themeNames = @('Midnight','Slate','Nord','Dracula','Monokai','Solarized Dark','Catppuccin Mocha')
+foreach ($tn in $themeNames) {
+    if ($scriptText -notmatch [regex]::Escape("'$tn'")) {
+        Add-Failure "Theme '$tn' not found in theme definitions."
+    }
+}
+
 if ($failures.Count -gt 0) {
     Write-Host 'NetworkSecurityAudit validation FAILED' -ForegroundColor Red
     foreach ($failure in $failures) { Write-Host " - $failure" -ForegroundColor Red }
