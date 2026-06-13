@@ -206,6 +206,9 @@ if ($scriptText -notmatch 'function Export-AttackNavigator' -or $scriptText -not
 if ($scriptText -notmatch 'cloud_assessments' -or $scriptText -notmatch 'CloudAssessmentImports') {
     Add-Failure 'Structured JSON export must include cloud_assessments from imported cloud assessments.'
 }
+if ($scriptText -notmatch 'LAPS DELEGATION AUDIT' -or $scriptText -notmatch 'ms-Mcs-AdmPwd' -or $scriptText -notmatch 'msLAPS-EncryptedPassword' -or $scriptText -notmatch 'schemaIDGUID') {
+    Add-Failure 'IA06 must audit LAPS password read/decrypt delegation via schema GUID ACL inspection.'
+}
 if ($scriptText -notmatch '\[switch\]\$NoRmmWrite' -or $scriptText -notmatch "if\s*\(\`$NoRmmWrite\)[^\r\n]*'-NoRmmWrite'" -or $scriptText -notmatch '\$script:CliNoRmmWrite' -or $scriptText -notmatch 'RMM and registry field writes skipped') {
     Add-Failure 'Silent mode must expose, preserve, and honor -NoRmmWrite.'
 }

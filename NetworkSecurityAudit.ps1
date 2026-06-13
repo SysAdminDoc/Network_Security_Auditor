@@ -3091,6 +3091,66 @@ $script:AutoChecks = @{
                 if ($pct -lt 80) { $issues++; [void]$sb.AppendLine("  [!] Low LAPS coverage - target 80%+") }
                 if ($winLAPS -gt 0 -and $legLAPS -gt 0) { [void]$sb.AppendLine("  [i] Mixed deployment: $winLAPS Windows LAPS, $legLAPS Legacy LAPS") }
             } catch { [void]$sb.AppendLine("LAPS: Could not query (schema extension may not be deployed)"); $issues++ }
+            # LAPS password read/decrypt delegation audit
+            if ($lapsType -ne 'None') {
+                try {
+                    [void]$sb.AppendLine("`nLAPS DELEGATION AUDIT:")
+                    $broadGroups = @('Domain Users','Authenticated Users','Everyone','Users','Domain Computers')
+                    $tier0Groups = @('Domain Admins','Enterprise Admins','Administrators','BUILTIN\Administrators')
+                    $schemaPath = (Get-ADRootDSE -EA Stop).schemaNamingContext
+                    $legacyGuid = $null; $winLapsGuid = $null; $winLapsEncGuid = $null
+                    try {
+                        $legacyAttr = Get-ADObject -SearchBase $schemaPath -Filter "Name -eq 'ms-Mcs-AdmPwd'" -Properties schemaIDGUID -EA SilentlyContinue
+                        if ($legacyAttr) { $legacyGuid = [guid]$legacyAttr.schemaIDGUID }
+                    } catch {}
+                    try {
+                        $winAttr = Get-ADObject -SearchBase $schemaPath -Filter "Name -eq 'msLAPS-Password'" -Properties schemaIDGUID -EA SilentlyContinue
+                        if ($winAttr) { $winLapsGuid = [guid]$winAttr.schemaIDGUID }
+                        $winEncAttr = Get-ADObject -SearchBase $schemaPath -Filter "Name -eq 'msLAPS-EncryptedPassword'" -Properties schemaIDGUID -EA SilentlyContinue
+                        if ($winEncAttr) { $winLapsEncGuid = [guid]$winEncAttr.schemaIDGUID }
+                    } catch {}
+                    $lapsOUs = @($lapsComputers | ForEach-Object {
+                        ($_.DistinguishedName -replace '^CN=[^,]+,','')
+                    } | Select-Object -Unique | Select-Object -First 20)
+                    $delegationIssues = 0; $ouCount = 0
+                    foreach ($ouDN in $lapsOUs) {
+                        $ouCount++
+                        try {
+                            $acl = Get-Acl "AD:\$ouDN" -EA Stop
+                            $readers = @()
+                            foreach ($ace in $acl.Access) {
+                                $id = $ace.IdentityReference.Value
+                                $isRead = $ace.ActiveDirectoryRights -match 'ReadProperty|GenericAll|ExtendedRight'
+                                if (-not $isRead -or $ace.AccessControlType -ne 'Allow') { continue }
+                                $objType = $ace.ObjectType
+                                $matchesLaps = ($legacyGuid -and $objType -eq $legacyGuid) -or
+                                               ($winLapsGuid -and $objType -eq $winLapsGuid) -or
+                                               ($winLapsEncGuid -and $objType -eq $winLapsEncGuid) -or
+                                               ($objType -eq [guid]::Empty -and $ace.ActiveDirectoryRights -match 'GenericAll')
+                                if ($matchesLaps) { $readers += $id }
+                            }
+                            $selfWrite = @($acl.Access | Where-Object { $_.IdentityReference -match 'NT AUTHORITY\\SELF|SELF' -and $_.ActiveDirectoryRights -match 'WriteProperty' })
+                            if ($readers.Count -gt 0) {
+                                $ouShort = ($ouDN -split ',')[0..1] -join ','
+                                [void]$sb.AppendLine("  $ouShort :")
+                                foreach ($r in ($readers | Sort-Object -Unique)) {
+                                    $isBroad = ($broadGroups | Where-Object { $r -match $_ }).Count -gt 0
+                                    $isTier0 = ($tier0Groups | Where-Object { $r -match $_ }).Count -gt 0
+                                    $flag = if ($isBroad) { '[!!] BROAD - non-admin group'; $delegationIssues++ } elseif ($isTier0) { '[OK] Tier-0' } else { '[i] Review' }
+                                    [void]$sb.AppendLine("    Read/Decrypt: $r $flag")
+                                }
+                                if ($selfWrite.Count -gt 0) { [void]$sb.AppendLine("    SELF write  : Enabled (computer rotates own password)") }
+                            }
+                        } catch {}
+                    }
+                    if ($ouCount -eq 0) { [void]$sb.AppendLine("  No LAPS-managed OUs found for delegation scan") }
+                    elseif ($delegationIssues -gt 0) {
+                        $issues++
+                        [void]$sb.AppendLine("  [!] $delegationIssues broad delegation(s) found - restrict LAPS read to Tier-0 groups")
+                    } else { [void]$sb.AppendLine("  Delegation: No broad groups detected in sampled OUs [OK]") }
+                    if ($lapsOUs.Count -ge 20) { [void]$sb.AppendLine("  [i] Sampled first 20 OUs; large domains may have additional delegations") }
+                } catch { [void]$sb.AppendLine("`nLAPS delegation audit: could not read ACLs") }
+            }
             # Check admin logon sessions (who is currently admin-logged-in)
             try {
                 $daMembers = (Get-ADGroupMember 'Domain Admins' -EA Stop).SamAccountName
