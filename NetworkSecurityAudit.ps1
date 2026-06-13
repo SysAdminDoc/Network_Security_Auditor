@@ -57,7 +57,7 @@
 #>
 param(
     [switch]$Silent,
-    [ValidateSet('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')]
+    [ValidateSet('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')]
     [string]$ScanProfile = 'Full',
     [string]$OutputPath = '',
     [ValidateSet('Executive','Management','Technical','All')]
@@ -4654,6 +4654,11 @@ $script:ScanProfiles = @{
         Description = 'DISA Security Technical Implementation Guide compliance for DoD/government environments.'
         IDs = @()  # All checks apply
     }
+    FedRAMP = @{
+        Label = 'FedRAMP Moderate (all 69 checks)'
+        Description = 'FedRAMP Moderate baseline (NIST 800-53 Rev 5) for US federal cloud service provider compliance.'
+        IDs = @()  # All checks apply
+    }
 }
 
 # ── Risk Tier Classification ─────────────────────────────────────────────────
@@ -4718,6 +4723,7 @@ $script:FrameworkMeta = [ordered]@{
     'SOC2'     = @{ Name='SOC 2 Type II'; Color='#eab308'; Short='SOC2' }
     'ISO27001' = @{ Name='ISO 27001:2022'; Color='#ec4899'; Short='ISO' }
     'STIG'     = @{ Name='DISA STIG'; Color='#06b6d4'; Short='STIG' }
+    'FedRAMP'  = @{ Name='FedRAMP Moderate'; Color='#f43f5e'; Short='FedRAMP' }
 }
 
 # Per-check mapping: each key = check ID, value = hashtable of framework -> control IDs
@@ -4907,6 +4913,37 @@ foreach ($ceid in $cyberEssentialsMap.Keys) {
     if ($script:FrameworkMap.Contains($ceid)) { $script:FrameworkMap[$ceid]['CyberEssentials'] = $cyberEssentialsMap[$ceid] }
 }
 
+# ── FedRAMP Moderate Mapping (NIST 800-53 Rev 5 Moderate baseline) ──────────
+$fedRampMap = @{
+    'IA01'='AC-2,AC-3,AC-5,AC-6'; 'IA02'='AC-2,AC-6(5),AC-6(7)'; 'IA03'='IA-2(1),IA-2(2),IA-5'
+    'IA04'='AC-2(3),PS-4'; 'IA05'='IA-5(1),IA-5(2),IA-5(6)'; 'IA06'='AC-6(1),AC-6(2),AC-6(5)'
+    'IA07'='IA-2,IA-4,IA-8'; 'IA08'='AC-2(3),PS-4,PS-5'; 'IA09'='AC-17,AC-20,IA-2(1)'
+    'IA10'='AC-2(3),AC-2(12)'; 'IA11'='SC-12,SC-13,SC-23'; 'IA12'='AC-6(1),AC-6(2),IA-5'
+    'EP01'='SI-3,SI-4,SI-7'; 'EP02'='SC-28,SC-28(1),MP-5'; 'EP03'='AC-17(2),SC-8,SC-23'
+    'EP04'='RA-5,SI-2,SI-5'; 'EP05'='AC-6,CM-5,CM-7'; 'EP06'='SC-7,SC-7(5),SC-7(8)'
+    'EP07'='CM-7,CM-7(2),CM-7(5)'; 'EP08'='SI-7,SI-7(1),SC-13'; 'EP09'='CM-6,CM-7,SC-18'
+    'EP10'='MA-3,MA-5,PE-16'
+    'LM01'='AU-2,AU-3,AU-12'; 'LM02'='AU-2,AU-3(1),AU-12'; 'LM03'='AU-2,AU-3,AU-6'
+    'LM04'='AU-2,SC-7(4)'; 'LM05'='AU-6,AU-7,AU-9'; 'LM06'='AU-9,AU-9(4),AU-11'
+    'LM07'='AU-4,AU-5,AU-11'; 'LM08'='AU-6(1),IR-4,SI-4'
+    'NA01'='SC-7,SC-7(4),SC-7(5)'; 'NA02'='SC-7,SC-7(4)'; 'NA03'='SC-7(5),SC-7(18)'
+    'NA04'='SC-7,RA-5'; 'NA05'='AC-20,SC-7(7)'; 'NA06'='SC-7,SC-7(4),SC-7(8)'; 'NA07'='SC-7(5),SC-7(12)'
+    'NP01'='SC-7,SC-7(4),SC-7(5)'; 'NP02'='SC-7(4),SC-7(5)'; 'NP03'='SC-7(5),SC-7(8),SC-7(18)'
+    'NP04'='SC-20,SC-21,SC-22'; 'NP05'='SC-7(4)'; 'NP06'='SC-7(5),SC-7(8)'
+    'NP07'='SC-7(4),SC-7(5)'; 'NP08'='SC-7,SC-7(4)'; 'NP09'='SC-7(5),SC-7(12)'; 'NP10'='SI-2,RA-5'
+    'BR01'='CP-9,CP-10'; 'BR02'='CP-9(1),CP-10'; 'BR03'='CP-9,CP-9(1),CP-10'
+    'BR04'='CP-9,CP-10,SC-28'; 'BR05'='CP-9,CP-9(1)'; 'BR06'='CP-2,CP-10,IR-4'
+    'BR07'='CP-2,CP-4'; 'BR08'='CP-2,CP-4,CP-7'
+    'CF01'='IA-5,SC-12,SC-17'; 'CF02'='AC-4,SC-7,SC-8'; 'CF03'='CM-6,CM-7,AC-3'
+    'CF04'='CM-6,SC-8'; 'CF05'='CM-6,CM-7'; 'CF06'='CM-2,CM-6,CM-7'
+    'CF07'='AC-6,AU-9'; 'CF08'='CM-7,SC-7(4)'
+    'PS01'='PE-2,PE-3,PE-6'; 'PS02'='PE-1,PE-3,PE-6(1)'; 'PS03'='PE-4,PE-5,PE-9'
+    'PS04'='PE-14,PE-15,PE-18'; 'PS05'='PE-3(1),PE-6,PE-8'; 'PS06'='PE-17'
+}
+foreach ($frid in $fedRampMap.Keys) {
+    if ($script:FrameworkMap.Contains($frid)) { $script:FrameworkMap[$frid]['FedRAMP'] = $fedRampMap[$frid] }
+}
+
 # Checks relevant to each framework (for framework-specific scan profiles)
 $script:FrameworkChecks = @{
     'CIS'      = @($script:FrameworkMap.Keys)  # CIS covers all checks
@@ -4919,6 +4956,7 @@ $script:FrameworkChecks = @{
     'SOC2'     = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
     'ISO27001' = @($script:FrameworkMap.Keys)  # ISO 27001 covers all checks
     'STIG'     = @($script:FrameworkMap.Keys)  # DISA STIG covers all checks
+    'FedRAMP'  = @($script:FrameworkMap.Keys)  # FedRAMP Moderate covers all checks
 }
 
 # Helper: Get formatted compliance string for a check ID and optional framework filter
@@ -4977,6 +5015,11 @@ function Get-ComplianceString {
     if ($Framework -eq 'All' -or $Framework -eq 'STIG') {
         if ($script:FrameworkMap.Contains($CheckID) -and $script:FrameworkMap[$CheckID].STIG) {
             $parts += "STIG: $($script:FrameworkMap[$CheckID].STIG)"
+        }
+    }
+    if ($Framework -eq 'All' -or $Framework -eq 'FedRAMP') {
+        if ($script:FrameworkMap.Contains($CheckID) -and $script:FrameworkMap[$CheckID].FedRAMP) {
+            $parts += "FedRAMP: $($script:FrameworkMap[$CheckID].FedRAMP)"
         }
     }
     return ($parts -join ' | ')
@@ -5738,8 +5781,8 @@ if ($script:CliProfile) {
 }
 
 # ── Initialize Framework Selector ComboBox ────────────────────────────────────
-$frameworkOrder = @('All','CIS','NIST','CMMC','HIPAA','PCI','E8','CyberEssentials','SOC2','ISO27001','STIG')
-$frameworkLabels = @{ 'All'='All Frameworks'; 'CIS'='CIS v8.1'; 'NIST'='NIST 800-171'; 'CMMC'='CMMC 2.0'; 'HIPAA'='HIPAA'; 'PCI'='PCI-DSS 4.0.1'; 'E8'='ACSC Essential Eight'; 'CyberEssentials'='Cyber Essentials'; 'SOC2'='SOC 2'; 'ISO27001'='ISO 27001'; 'STIG'='DISA STIG' }
+$frameworkOrder = @('All','CIS','NIST','CMMC','HIPAA','PCI','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
+$frameworkLabels = @{ 'All'='All Frameworks'; 'CIS'='CIS v8.1'; 'NIST'='NIST 800-171'; 'CMMC'='CMMC 2.0'; 'HIPAA'='HIPAA'; 'PCI'='PCI-DSS 4.0.1'; 'E8'='ACSC Essential Eight'; 'CyberEssentials'='Cyber Essentials'; 'SOC2'='SOC 2'; 'ISO27001'='ISO 27001'; 'STIG'='DISA STIG'; 'FedRAMP'='FedRAMP Moderate' }
 foreach ($fw in $frameworkOrder) { $el['cboFramework'].Items.Add($frameworkLabels[$fw]) | Out-Null }
 $el['cboFramework'].SelectedIndex = 0  # Default: All
 $el['cboFramework'].Add_SelectionChanged({
@@ -9345,6 +9388,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                     if ($fwData.SOC2) { $extParts += "<span style='color:#eab308'>SOC2: $($fwData.SOC2)</span>" }
                     if ($fwData.ISO27001) { $extParts += "<span style='color:#ec4899'>ISO: $($fwData.ISO27001)</span>" }
                     if ($fwData.STIG) { $extParts += "<span style='color:#06b6d4'>STIG: $($fwData.STIG)</span>" }
+                    if ($fwData.FedRAMP) { $extParts += "<span style='color:#f43f5e'>FedRAMP: $($fwData.FedRAMP)</span>" }
                     if ($extParts.Count -gt 0) { $detHtml += "<div class='comp' style='margin-top:2px'>$($extParts -join ' | ')</div>" }
                 }
                 # MITRE ATT&CK technique display
@@ -9511,6 +9555,7 @@ function Export-FindingsJSON {
                 if ($fwData.SOC2) { $compObj['SOC2'] = $fwData.SOC2 }
                 if ($fwData.ISO27001) { $compObj['ISO_27001'] = $fwData.ISO27001 }
                 if ($fwData.STIG) { $compObj['STIG'] = $fwData.STIG }
+                if ($fwData.FedRAMP) { $compObj['FedRAMP'] = $fwData.FedRAMP }
             }
 
             # MITRE mapping
@@ -9698,6 +9743,7 @@ function Export-FindingsJSONL {
                 soc2            = if ($fwData) { $fwData.SOC2 } else { '' }
                 iso_27001       = if ($fwData) { $fwData.ISO27001 } else { '' }
                 stig            = if ($fwData) { $fwData.STIG } else { '' }
+                fedramp         = if ($fwData) { $fwData.FedRAMP } else { '' }
                 mitre_tactics   = if ($mitreData) { $mitreData.Tactics -join ',' } else { '' }
                 mitre_techniques = if ($mitreData) { $mitreData.Techniques -join ',' } else { '' }
                 mitre_context   = if ($mitreData) { $mitreData.Desc } else { '' }
@@ -9900,6 +9946,7 @@ function Export-FindingsCSV {
                 SOC2             = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.SOC2 } else { '' })
                 ISO_27001        = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.ISO27001 } else { '' })
                 STIG             = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.STIG } else { '' })
+                FedRAMP          = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.FedRAMP } else { '' })
                 MITRE_Tactics    = ConvertTo-CsvSafeText $(if ($mitreData) { $mitreData.Tactics -join '; ' } else { '' })
                 MITRE_Techniques = ConvertTo-CsvSafeText $(if ($mitreData) { $mitreData.Techniques -join '; ' } else { '' })
                 D3FEND_Version   = ConvertTo-CsvSafeText $(if ($d3fendData) { '1.4.0' } else { '' })
