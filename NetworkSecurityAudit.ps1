@@ -151,6 +151,21 @@ $script:CliNoRegistryWrite = $NoRegistryWrite.IsPresent
 $script:CliCloudAssessmentPaths = @($CloudAssessmentPath | Where-Object { $_ })
 $script:CloudAssessmentImports = @()
 
+# ── Version Staleness Check ───────────────────────────────────────────────
+$script:NewVersionAvailable = $null
+function Test-VersionStaleness {
+    if ($script:CliNoInternet) { return }
+    try {
+        $uri = 'https://api.github.com/repos/SysAdminDoc/Network_Security_Auditor/releases/latest'
+        $resp = Invoke-WebRequest -Uri $uri -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+        $json = $resp.Content | ConvertFrom-Json
+        $tag = $json.tag_name -replace '^v',''
+        if ($tag -and $tag -ne $script:ProductVersion) {
+            $script:NewVersionAvailable = $tag
+        }
+    } catch {}
+}
+
 # ── Privacy/Redaction Helpers ───────────────────────────────────────────────
 $script:PrivacyMap = @{}
 function Get-PrivacyHash {
@@ -10552,6 +10567,10 @@ $script:LaunchTimer.Add_Tick({
         $script:TurnkeyLaunched = $true
         Start-AsyncTurnkey
     }
+    Test-VersionStaleness
+    if ($script:NewVersionAvailable) {
+        $el['StatusText'].Text = "Update available: v$($script:NewVersionAvailable) -- see github.com/SysAdminDoc/Network_Security_Auditor/releases/latest"
+    }
 })
 $script:LaunchTimer.Start()
 
@@ -10586,6 +10605,10 @@ if ($script:SilentMode) {
     }
     if (-not $script:Env.IsAdmin) {
         Write-Host "[Silent Mode] WARNING: Not running as Administrator - results may be incomplete" -ForegroundColor Yellow
+    }
+    Test-VersionStaleness
+    if ($script:NewVersionAvailable) {
+        Write-Host "[Silent Mode] NOTE: Newer version v$($script:NewVersionAvailable) available at https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest" -ForegroundColor DarkYellow
     }
     Write-Host "[Silent Mode] Running scan..."
 
