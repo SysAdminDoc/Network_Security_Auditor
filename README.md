@@ -384,7 +384,24 @@ Optional for full coverage:
 - Use `-NoRmmWrite` in silent mode when reports should be generated without updating RMM fields.
 - Use `-NoRegistryWrite` when registry-backed RMM/cache writes should be suppressed while command-based RMM integrations remain available.
 - The script does not auto-update or replace itself.
-- In sensitive environments, download the script first, inspect it, record the SHA-256 hash, and verify the Authenticode signature state before running.
+- In sensitive environments, download the script first, inspect it, and verify the checksum before running.
+
+### Verify Download Integrity
+
+Every release publishes a `SHA256SUMS.txt` checksum manifest alongside the script.
+
+```powershell
+# Compare the downloaded file against the published checksum
+$hash = (Get-FileHash .\NetworkSecurityAudit.ps1 -Algorithm SHA256).Hash
+Write-Host "SHA256: $hash"
+# Match against SHA256SUMS.txt from the same release
+```
+
+If you have the [GitHub CLI](https://cli.github.com/) installed, you can also verify build provenance:
+
+```bash
+gh attestation verify NetworkSecurityAudit.ps1 --owner SysAdminDoc
+```
 
 ---
 
