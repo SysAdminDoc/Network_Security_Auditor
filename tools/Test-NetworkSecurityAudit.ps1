@@ -347,6 +347,14 @@ foreach ($call in $suppressedExportCalls) {
     }
 }
 
+# ── Version staleness check ───────────────────────────────────────────────
+$versionCheckKeywords = @('Test-VersionStaleness', 'NewVersionAvailable', 'releases/latest', 'CliNoInternet')
+foreach ($vk in $versionCheckKeywords) {
+    if ($scriptText -notmatch [regex]::Escape($vk)) {
+        Add-Failure "Version staleness check: keyword '$vk' not found."
+    }
+}
+
 # ── Theme contrast validation ──────────────────────────────────────────────
 $themeContrastScript = Join-Path $scriptDir 'Test-ThemeContrast.ps1'
 if (-not (Test-Path $themeContrastScript)) {
