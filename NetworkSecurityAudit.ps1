@@ -72,6 +72,7 @@ param(
     [switch]$ExportPDF,
     [switch]$ExportNavigator,
     [switch]$ExportOCSF,
+    [switch]$ExportOSCAL,
     [switch]$NoRmmWrite,
     [switch]$NoInternet,
     [switch]$NoElevate,
@@ -109,6 +110,7 @@ if (-not $script:IsAdmin -and -not $NoElevate) {
         if ($ExportPDF)    { $argList += '-ExportPDF' }
         if ($ExportNavigator) { $argList += '-ExportNavigator' }
         if ($ExportOCSF) { $argList += '-ExportOCSF' }
+        if ($ExportOSCAL) { $argList += '-ExportOSCAL' }
         if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
         if ($NoInternet)   { $argList += '-NoInternet' }
         if ($NoRegistryWrite) { $argList += '-NoRegistryWrite' }
@@ -138,6 +140,7 @@ $script:CliExportSARIF = $ExportSARIF.IsPresent
 $script:CliExportPDF   = $ExportPDF.IsPresent
 $script:CliExportNavigator = $ExportNavigator.IsPresent
 $script:CliExportOCSF  = $ExportOCSF.IsPresent
+$script:CliExportOSCAL = $ExportOSCAL.IsPresent
 $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 $script:CliNoInternet  = $NoInternet.IsPresent
 $script:CliNoElevate   = $NoElevate.IsPresent
@@ -9868,6 +9871,159 @@ function Export-OCSFFindings {
     return $OutPath
 }
 
+# ── Phase 5A3: OSCAL Assessment Results Export ───────────────────────────────
+# NIST OSCAL v1.1.2 assessment-results model for GRC and FedRAMP workflows
+function Export-OSCALResults {
+    param([string]$OutPath, [string]$ClientName = '', [string]$AuditorName = '')
+    if (-not $ClientName) { $ClientName = try { $el['txtClient'].Text } catch { $env:COMPUTERNAME } }
+    if (-not $AuditorName) { $AuditorName = try { $el['txtAuditor'].Text } catch { 'System' } }
+    $scanTs = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $scanTarget = try { $el['txtScanTarget'].Text } catch { $env:COMPUTERNAME }
+    $resultUuid = [guid]::NewGuid().ToString()
+    $docUuid = [guid]::NewGuid().ToString()
+
+    $observations = [System.Collections.Generic.List[object]]::new()
+    $findings = [System.Collections.Generic.List[object]]::new()
+    $controlSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($cn in $script:AuditCategories.Keys) {
+        $cat = $script:AuditCategories[$cn]
+        foreach ($item in $cat.Items) {
+            $id = $item.ID
+            $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+            $findingsText = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
+            $evidenceText = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
+            $fwData = if ($script:FrameworkMap.Contains($id)) { $script:FrameworkMap[$id] } else { $null }
+
+            $obsUuid = [guid]::NewGuid().ToString()
+            $obsDesc = if ($findingsText) { $findingsText } else { $item.Text }
+            if ($obsDesc.Length -gt 4000) { $obsDesc = $obsDesc.Substring(0,4000) }
+
+            $relControls = @()
+            if ($fwData) {
+                $fwKeys = @('NIST','CMMC','PCI','HIPAA','SOC2','ISO27001','STIG','FedRAMP','E8','CyberEssentials')
+                foreach ($fk in $fwKeys) {
+                    if ($fwData[$fk]) {
+                        foreach ($ctrl in ($fwData[$fk] -split ',')) {
+                            $ctrlId = $ctrl.Trim()
+                            if ($ctrlId) { [void]$controlSet.Add($ctrlId); $relControls += $ctrlId }
+                        }
+                    }
+                }
+            }
+
+            $obsObj = [ordered]@{
+                uuid = $obsUuid
+                title = "$id - $($item.Text)"
+                description = $obsDesc
+                methods = @('EXAMINE','TEST')
+                types = @('finding')
+                collected = $scanTs
+                subjects = @(
+                    [ordered]@{
+                        'subject-uuid' = $resultUuid
+                        type = 'inventory-item'
+                    }
+                )
+            }
+            if ($evidenceText) {
+                $evTrunc = if ($evidenceText.Length -gt 2000) { $evidenceText.Substring(0,2000) } else { $evidenceText }
+                $obsObj['relevant-evidence'] = @(
+                    [ordered]@{
+                        description = $evTrunc
+                    }
+                )
+            }
+            $observations.Add($obsObj)
+
+            $oscalState = switch ($sv) {
+                'Pass'   { 'satisfied' }
+                'N/A'    { 'not-applicable' }
+                default  { 'not-satisfied' }
+            }
+
+            $findObj = [ordered]@{
+                uuid = [guid]::NewGuid().ToString()
+                title = "$id - $($item.Text)"
+                description = "$sv - $($item.Severity) severity (weight $($item.Weight))"
+                'target' = [ordered]@{
+                    type = 'objective-id'
+                    'target-id' = $id
+                    status = [ordered]@{ state = $oscalState }
+                }
+                'related-observations' = @(
+                    [ordered]@{ 'observation-uuid' = $obsUuid }
+                )
+            }
+            if ($relControls.Count -gt 0) {
+                $findObj['associated-controls'] = @(
+                    [ordered]@{
+                        'control-id' = $relControls[0]
+                        'objective-id' = $id
+                    }
+                )
+            }
+            $findings.Add($findObj)
+        }
+    }
+
+    $controlEntries = @()
+    foreach ($ctrl in $controlSet) {
+        $controlEntries += [ordered]@{ 'control-id' = $ctrl }
+    }
+
+    $oscalDoc = [ordered]@{
+        'assessment-results' = [ordered]@{
+            uuid = $docUuid
+            metadata = [ordered]@{
+                title = "Network Security Audit - $ClientName"
+                'last-modified' = $scanTs
+                version = $script:ProductVersion
+                'oscal-version' = '1.1.2'
+                roles = @(
+                    [ordered]@{ id = 'assessor'; title = 'Assessor' }
+                )
+                parties = @(
+                    [ordered]@{
+                        uuid = [guid]::NewGuid().ToString()
+                        type = 'organization'
+                        name = if ($AuditorName) { $AuditorName } else { 'Assessor' }
+                    }
+                )
+                props = @(
+                    [ordered]@{ name = 'tool-name'; value = $script:ProductName }
+                    [ordered]@{ name = 'tool-version'; value = $script:ProductVersion }
+                )
+            }
+            results = @(
+                [ordered]@{
+                    uuid = $resultUuid
+                    title = "Assessment of $scanTarget"
+                    description = "Automated security assessment performed by $($script:ProductName) v$($script:ProductVersion)"
+                    start = $scanTs
+                    'reviewed-controls' = [ordered]@{
+                        'control-selections' = @(
+                            [ordered]@{
+                                'include-controls' = $controlEntries
+                            }
+                        )
+                    }
+                    observations = @($observations)
+                    findings = @($findings)
+                    props = @(
+                        [ordered]@{ name = 'scan-target'; value = $scanTarget }
+                        [ordered]@{ name = 'client'; value = $ClientName }
+                    )
+                }
+            )
+        }
+    }
+
+    ($oscalDoc | ConvertTo-Json -Depth 15) | Set-Content $OutPath -Encoding UTF8
+    Write-Log "OSCAL assessment results exported: $OutPath" 'INFO'
+    return $OutPath
+}
+
 # ── Phase 5B: CSV Export for MSP Analysis ─────────────────────────────────────
 # Column layout optimized for pivot tables across multi-client audits
 function ConvertTo-CsvSafeText {
@@ -10550,6 +10706,15 @@ if ($script:SilentMode) {
             $null = Export-OCSFFindings -OutPath $ocsfOut -ClientName $clientName -AuditorName $auditorName
             Write-Host "[Silent Mode] OCSF JSONL: $ocsfOut" -ForegroundColor Green
         } catch { Write-Host "[Silent Mode] OCSF export failed: $_" -ForegroundColor Yellow }
+    }
+
+    # OSCAL assessment results export
+    if ($script:CliExportOSCAL) {
+        $oscalOut = "${basePath}_oscal.json"
+        try {
+            $null = Export-OSCALResults -OutPath $oscalOut -ClientName $clientName -AuditorName $auditorName
+            Write-Host "[Silent Mode] OSCAL: $oscalOut" -ForegroundColor Green
+        } catch { Write-Host "[Silent Mode] OSCAL export failed: $_" -ForegroundColor Yellow }
     }
 
     # ATT&CK Navigator layer export

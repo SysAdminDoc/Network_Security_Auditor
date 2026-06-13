@@ -216,6 +216,12 @@ if ($scriptText -notmatch "if\s*\(\`$ExportOCSF\)[^\r\n]*'-ExportOCSF'") {
 if ($scriptText -notmatch 'function Export-OCSFFindings' -or $scriptText -notmatch 'class_uid\s*=\s*2001' -or $scriptText -notmatch 'CliExportOCSF' -or $scriptText -notmatch '_ocsf\.jsonl') {
     Add-Failure 'OCSF export must define Export-OCSFFindings with class_uid 2001, honor CliExportOCSF, and write _ocsf.jsonl.'
 }
+if ($scriptText -notmatch "if\s*\(\`$ExportOSCAL\)[^\r\n]*'-ExportOSCAL'" ) {
+    Add-Failure 'Auto-elevation does not preserve -ExportOSCAL.'
+}
+if ($scriptText -notmatch 'function Export-OSCALResults' -or $scriptText -notmatch 'oscal-version' -or $scriptText -notmatch 'CliExportOSCAL' -or $scriptText -notmatch '_oscal\.json') {
+    Add-Failure 'OSCAL export must define Export-OSCALResults with oscal-version, honor CliExportOSCAL, and write _oscal.json.'
+}
 if ($scriptText -notmatch 'VerifiedAndReputablePolicyState' -or $scriptText -notmatch 'SMART APP CONTROL' -or $scriptText -notmatch 'DisableAIDataAnalysis' -or $scriptText -notmatch 'WINDOWS RECALL') {
     Add-Failure 'EP07 must check Smart App Control state and Windows Recall policy.'
 }
