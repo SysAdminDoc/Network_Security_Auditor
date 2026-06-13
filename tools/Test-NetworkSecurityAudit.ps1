@@ -215,6 +215,15 @@ if ($scriptText -notmatch "if\s*\(\`$ExportOCSF\)[^\r\n]*'-ExportOCSF'") {
 if ($scriptText -notmatch 'function Export-OCSFFindings' -or $scriptText -notmatch 'class_uid\s*=\s*2001' -or $scriptText -notmatch 'CliExportOCSF' -or $scriptText -notmatch '_ocsf\.jsonl') {
     Add-Failure 'OCSF export must define Export-OCSFFindings with class_uid 2001, honor CliExportOCSF, and write _ocsf.jsonl.'
 }
+if ($scriptText -notmatch 'VerifiedAndReputablePolicyState' -or $scriptText -notmatch 'SMART APP CONTROL' -or $scriptText -notmatch 'DisableAIDataAnalysis' -or $scriptText -notmatch 'WINDOWS RECALL') {
+    Add-Failure 'EP07 must check Smart App Control state and Windows Recall policy.'
+}
+if ($scriptText -notmatch 'REMOTE ACCESS.*RMM TOOLS' -or $scriptText -notmatch 'AnyDesk' -or $scriptText -notmatch 'ScreenConnect' -or $scriptText -notmatch 'TeamViewer') {
+    Add-Failure 'IA09 must inventory remote access and RMM tools.'
+}
+if ($scriptText -notmatch 'highValueRules' -or $scriptText -notmatch 'Block credential stealing from LSASS' -or $scriptText -notmatch 'ExclusionPath' -or $scriptText -notmatch 'MISSING:') {
+    Add-Failure 'EP01 ASR section must list individual rules, flag missing high-value rules, and report Defender exclusions.'
+}
 if ($scriptText -notmatch '\[switch\]\$NoRmmWrite' -or $scriptText -notmatch "if\s*\(\`$NoRmmWrite\)[^\r\n]*'-NoRmmWrite'" -or $scriptText -notmatch '\$script:CliNoRmmWrite' -or $scriptText -notmatch 'RMM and registry field writes skipped') {
     Add-Failure 'Silent mode must expose, preserve, and honor -NoRmmWrite.'
 }
