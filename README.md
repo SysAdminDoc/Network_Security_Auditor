@@ -429,6 +429,7 @@ The same validation runs in GitHub Actions on push and pull request.
 -ExportNavigator     Also export MITRE ATT&CK Navigator layer JSON
 -ExportOCSF          Also export OCSF v1.3 security finding JSONL
 -ExportOSCAL         Also export NIST OSCAL v1.1.2 assessment results JSON
+-PrivacyMode         Redact hostnames, IPs, and identities in all exports
 -CloudAssessmentPath Path(s) to Maester or CISA ScubaGear JSON results
                      to import and include in reports
 ```
