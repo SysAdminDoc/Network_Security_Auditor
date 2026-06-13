@@ -2028,6 +2028,7 @@ $script:AutoChecks = @{
     'EP04' = @{ Type='Local'; Label='Scan Patch Level + CISA KEV'
         Script = {
             $kevRisk = $false
+            $kevRansomware = $false
             $fixes = Get-HotFix -EA Stop | Sort-Object InstalledOn -Descending -EA SilentlyContinue
             $latest = $fixes | Select-Object -First 1
             $sb = [System.Text.StringBuilder]::new()
@@ -2038,38 +2039,113 @@ $script:AutoChecks = @{
             foreach ($h in ($fixes | Select-Object -First 10)) {
                 [void]$sb.AppendLine("  $($h.HotFixID) | $($h.Description) | $(if($h.InstalledOn){$h.InstalledOn.ToString('yyyy-MM-dd')}else{'N/A'})")
             }
-            # CISA KEV (Known Exploited Vulnerabilities) Cross-Reference
             [void]$sb.AppendLine("`nCISA KEV CROSS-REFERENCE:")
+            $kevCachePath = Join-Path $env:TEMP 'NetworkSecurityAudit_kev_cache.json'
+            $kevSource = 'none'
+            $kevJson = $null
             if ($script:CliNoInternet) {
-                [void]$sb.AppendLine("  KEV lookup skipped (-NoInternet)")
+                if (Test-Path $kevCachePath) {
+                    try {
+                        $kevJson = Get-Content $kevCachePath -Raw -EA Stop | ConvertFrom-Json
+                        $cacheAge = [math]::Round(((Get-Date) - (Get-Item $kevCachePath).LastWriteTime).TotalHours, 1)
+                        $kevSource = "cache ($cacheAge hours old)"
+                    } catch { $kevJson = $null }
+                }
+                if (-not $kevJson) {
+                    [void]$sb.AppendLine("  KEV lookup skipped (-NoInternet, no local cache)")
+                }
             } else {
-              try {
-                $kevJson = (Invoke-WebRequest -Uri 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json' -UseBasicParsing -TimeoutSec 30 -EA Stop).Content | ConvertFrom-Json
-                $kevTotal = ($kevJson.vulnerabilities | Measure-Object).Count
-                [void]$sb.AppendLine("  KEV catalog loaded: $kevTotal known exploited vulnerabilities")
-                # Filter to Microsoft KEV entries
-                $msKevEntries = @($kevJson.vulnerabilities | Where-Object { $_.vendorProject -eq 'Microsoft' })
-                # Check if any KEV entries reference products running on this system
-                $osCaption = (Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).Caption
-                $msKevHits = $msKevEntries | Where-Object {
-                    ($_.product -match 'Windows' -and $osCaption -match 'Windows') -or
-                    ($_.product -match 'Exchange' -and (Get-Service MSExchangeIS -EA SilentlyContinue)) -or
-                    ($_.product -match 'SQL Server' -and (Get-Service MSSQLSERVER -EA SilentlyContinue))
-                } | Where-Object { $_.dueDate -and [datetime]$_.dueDate -gt (Get-Date).AddDays(-180) } |
-                    Sort-Object { [datetime]$_.dueDate } -Descending | Select-Object -First 10
-                if ($msKevHits) {
-                    [void]$sb.AppendLine("  Recent KEV entries for detected Microsoft products:")
-                    foreach ($kh in $msKevHits) {
-                        [void]$sb.AppendLine("    $($kh.cveID) | $($kh.product) | $($kh.vulnerabilityName) | Due: $($kh.dueDate)")
+                $useCache = $false
+                if (Test-Path $kevCachePath) {
+                    $cacheFile = Get-Item $kevCachePath
+                    $cacheAgeHours = ((Get-Date) - $cacheFile.LastWriteTime).TotalHours
+                    if ($cacheAgeHours -lt 24) { $useCache = $true }
+                }
+                if ($useCache) {
+                    try {
+                        $kevJson = Get-Content $kevCachePath -Raw -EA Stop | ConvertFrom-Json
+                        $kevSource = "cache ($([math]::Round($cacheAgeHours, 1)) hours old)"
+                    } catch { $kevJson = $null }
+                }
+                if (-not $kevJson) {
+                    try {
+                        $raw = (Invoke-WebRequest -Uri 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json' -UseBasicParsing -TimeoutSec 30 -EA Stop).Content
+                        $kevJson = $raw | ConvertFrom-Json
+                        if ($kevJson.vulnerabilities -and ($kevJson.vulnerabilities | Measure-Object).Count -gt 100) {
+                            try { [System.IO.File]::WriteAllText($kevCachePath, $raw) } catch {}
+                        }
+                        $kevSource = 'live download'
+                    } catch {
+                        if (Test-Path $kevCachePath) {
+                            try {
+                                $kevJson = Get-Content $kevCachePath -Raw -EA Stop | ConvertFrom-Json
+                                $cacheAge = [math]::Round(((Get-Date) - (Get-Item $kevCachePath).LastWriteTime).TotalHours, 1)
+                                $kevSource = "stale cache ($cacheAge hours, download failed)"
+                            } catch { $kevJson = $null }
+                        }
+                        if (-not $kevJson) {
+                            [void]$sb.AppendLine("  KEV check skipped (no internet or timeout): $($_.Exception.Message)")
+                        }
                     }
-                    if ($daysSince -gt 30) { $kevRisk = $true }
-                } else { [void]$sb.AppendLine("  No recent KEV matches for detected products [OK]") }
-              } catch {
-                [void]$sb.AppendLine("  KEV check skipped (no internet or timeout): $($_.Exception.Message)")
-              }
+                }
             }
-            $status = if ($daysSince -le 30 -and -not $kevRisk) {'Pass'} elseif ($daysSince -le 60) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Get-HotFix + CISA KEV @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            if ($kevJson -and $kevJson.vulnerabilities) {
+                $kevVulns = @($kevJson.vulnerabilities)
+                $kevTotal = $kevVulns.Count
+                if ($kevTotal -lt 100) {
+                    [void]$sb.AppendLine("  KEV catalog rejected: only $kevTotal entries (expected 100+, possible corrupt data)")
+                } else {
+                    [void]$sb.AppendLine("  KEV catalog: $kevTotal known exploited vulnerabilities (source: $kevSource)")
+                    if ($kevJson.catalogVersion) { [void]$sb.AppendLine("  Catalog version: $($kevJson.catalogVersion)") }
+                    $msKevEntries = @($kevVulns | Where-Object { $_.vendorProject -eq 'Microsoft' })
+                    $osCaption = (Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).Caption
+                    $detectedProducts = @('Windows')
+                    if (Get-Service MSExchangeIS -EA SilentlyContinue) { $detectedProducts += 'Exchange' }
+                    if (Get-Service MSSQLSERVER -EA SilentlyContinue) { $detectedProducts += 'SQL Server' }
+                    if (Get-Service W3SVC -EA SilentlyContinue) { $detectedProducts += 'Internet Information Services' }
+                    $dotNet = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -EA SilentlyContinue
+                    if ($dotNet) { $detectedProducts += '\.NET' }
+                    $officeKey = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Office' -EA SilentlyContinue | Where-Object { $_.PSChildName -match '^\d+\.\d+$' }
+                    if ($officeKey) { $detectedProducts += 'Office'; $detectedProducts += '365 Apps' }
+                    $edgeVer = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Edge\BLBeacon' -EA SilentlyContinue).version
+                    if ($edgeVer) { $detectedProducts += 'Edge' }
+                    [void]$sb.AppendLine("  Detected products: $($detectedProducts -join ', ')")
+                    $msKevHits = @($msKevEntries | Where-Object {
+                        $p = $_.product
+                        foreach ($dp in $detectedProducts) {
+                            if ($p -match $dp) { return $true }
+                        }
+                        return $false
+                    } | Where-Object { $_.dueDate -and [datetime]$_.dueDate -gt (Get-Date).AddDays(-365) } |
+                        Sort-Object { [datetime]$_.dueDate } -Descending | Select-Object -First 15)
+                    if ($msKevHits.Count -gt 0) {
+                        $overdue = @($msKevHits | Where-Object { [datetime]$_.dueDate -lt (Get-Date) })
+                        $ransomHits = @($msKevHits | Where-Object { $_.knownRansomwareCampaignUse -eq 'Known' })
+                        [void]$sb.AppendLine("  KEV matches for detected products: $($msKevHits.Count) (overdue: $($overdue.Count), ransomware-linked: $($ransomHits.Count))")
+                        if ($ransomHits.Count -gt 0) {
+                            $kevRansomware = $true
+                            [void]$sb.AppendLine("`n  RANSOMWARE-LINKED KEV ENTRIES:")
+                            foreach ($rh in ($ransomHits | Select-Object -First 5)) {
+                                $dueStr = $rh.dueDate
+                                $isOverdue = [datetime]$rh.dueDate -lt (Get-Date)
+                                $flag = if ($isOverdue) { ' [OVERDUE]' } else { '' }
+                                [void]$sb.AppendLine("    $($rh.cveID) | $($rh.product) | $($rh.vulnerabilityName) | Due: $dueStr$flag")
+                            }
+                        }
+                        [void]$sb.AppendLine("`n  Recent KEV entries for detected products:")
+                        foreach ($kh in $msKevHits) {
+                            $dueStr = $kh.dueDate
+                            $isOverdue = [datetime]$kh.dueDate -lt (Get-Date)
+                            $flag = if ($isOverdue) { ' [OVERDUE]' } else { '' }
+                            $rw = if ($kh.knownRansomwareCampaignUse -eq 'Known') { ' [RANSOMWARE]' } else { '' }
+                            [void]$sb.AppendLine("    $($kh.cveID) | $($kh.product) | $($kh.vulnerabilityName) | Due: $dueStr$flag$rw")
+                        }
+                        if ($daysSince -gt 30) { $kevRisk = $true }
+                    } else { [void]$sb.AppendLine("  No recent KEV matches for detected products [OK]") }
+                }
+            }
+            $status = if ($daysSince -le 30 -and -not $kevRisk -and -not $kevRansomware) {'Pass'} elseif ($kevRansomware) {'Fail'} elseif ($daysSince -le 60) {'Partial'} else {'Fail'}
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Get-HotFix + CISA KEV @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME (source: $kevSource)" }
         }
     }
 
