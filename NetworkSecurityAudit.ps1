@@ -1747,17 +1747,70 @@ $script:AutoChecks = @{
             # ASR (Attack Surface Reduction) rules
             if ($pref) {
                 [void]$sb.AppendLine("`nATTACK SURFACE REDUCTION (ASR):")
+                $asrNames = @{
+                    '56a863a9-875e-4185-98a7-b882c64b5ce5'='Block abuse of exploited vulnerable signed drivers'
+                    '7674ba52-37eb-4a4f-a9a1-f0f9a1619a2c'='Block Adobe Reader from creating child processes'
+                    'd4f940ab-401b-4efc-aadc-ad5f3c50688a'='Block all Office applications from creating child processes'
+                    '9e6c4e1f-7d60-472f-ba1a-a39ef669e4b2'='Block credential stealing from LSASS'
+                    'be9ba2d9-53ea-4cdc-84e5-9b1eeee46550'='Block executable content from email client and webmail'
+                    '01443614-cd74-433a-b99e-2ecdc07bfc25'='Block executable files from running unless they meet criteria'
+                    '5beb7efe-fd9a-4556-801d-275e5ffc04cc'='Block execution of potentially obfuscated scripts'
+                    'd3e037e1-3eb8-44c8-a917-57927947596d'='Block JavaScript or VBScript from launching downloaded executable content'
+                    '3b576869-a4ec-4529-8536-b80a7769e899'='Block Office applications from creating executable content'
+                    '75668c1f-73b5-4cf0-bb93-3ecf5cb7cc84'='Block Office applications from injecting code into other processes'
+                    '26190899-1602-49e8-8b27-eb1d0a1ce869'='Block Office communication application from creating child processes'
+                    'e6db77e5-3df2-4cf1-b95a-636979351e5b'='Block persistence through WMI event subscription'
+                    'd1e49aac-8f56-4280-b9ba-993a6d77406c'='Block process creations originating from PSExec and WMI commands'
+                    'b2b3f03d-6a65-4f7b-a9c7-1c7ef74a9ba4'='Block untrusted and unsigned processes that run from USB'
+                    '92e97fa1-2edf-4476-bdd6-9dd0b4dddc7b'='Block Win32 API calls from Office macros'
+                    'c1db55ab-c21a-4637-bb3f-a12568109d35'='Use advanced protection against ransomware'
+                }
+                $highValueRules = @(
+                    '9e6c4e1f-7d60-472f-ba1a-a39ef669e4b2',
+                    'be9ba2d9-53ea-4cdc-84e5-9b1eeee46550',
+                    '5beb7efe-fd9a-4556-801d-275e5ffc04cc',
+                    'd3e037e1-3eb8-44c8-a917-57927947596d',
+                    '3b576869-a4ec-4529-8536-b80a7769e899',
+                    'c1db55ab-c21a-4637-bb3f-a12568109d35'
+                )
                 $asrIds = $pref.AttackSurfaceReductionRules_Ids
                 $asrActions = $pref.AttackSurfaceReductionRules_Actions
                 if ($asrIds -and $asrIds.Count -gt 0) {
                     $blockCount = 0; $auditCount = 0; $offCount = 0
+                    $configuredGuids = @()
                     for ($i = 0; $i -lt $asrIds.Count; $i++) {
+                        $guid = $asrIds[$i].ToLower()
+                        $configuredGuids += $guid
                         $action = if ($i -lt $asrActions.Count) { $asrActions[$i] } else { 0 }
-                        switch ($action) { 1 { $blockCount++ } 2 { $auditCount++ } 6 { $blockCount++ } default { $offCount++ } }
+                        $actionName = switch ($action) { 1 { $blockCount++; 'Block' } 2 { $auditCount++; 'Audit' } 6 { $blockCount++; 'Warn' } default { $offCount++; 'Off' } }
+                        $ruleName = if ($asrNames.ContainsKey($guid)) { $asrNames[$guid] } else { $guid }
+                        $isHigh = $guid -in $highValueRules
+                        $flag = if ($action -eq 0 -and $isHigh) { ' [!] HIGH-VALUE RULE OFF' } elseif ($action -eq 2 -and $isHigh) { ' [i] audit only' } else { '' }
+                        [void]$sb.AppendLine("  $actionName : $ruleName$flag")
                     }
-                    [void]$sb.AppendLine("  Rules configured : $($asrIds.Count) (Block:$blockCount, Audit:$auditCount, Off:$offCount)")
+                    [void]$sb.AppendLine("  Summary: $($asrIds.Count) rules (Block:$blockCount, Audit:$auditCount, Off:$offCount)")
                     if ($blockCount -eq 0) { $issues++; [void]$sb.AppendLine("  [!] No ASR rules in Block mode") }
+                    $missingHigh = @($highValueRules | Where-Object { $_ -notin $configuredGuids })
+                    if ($missingHigh.Count -gt 0) {
+                        [void]$sb.AppendLine("  [!] $($missingHigh.Count) high-value rule(s) not configured:")
+                        foreach ($mh in $missingHigh) {
+                            $mhName = if ($asrNames.ContainsKey($mh)) { $asrNames[$mh] } else { $mh }
+                            [void]$sb.AppendLine("    MISSING: $mhName")
+                        }
+                        $issues++
+                    }
                 } else { $issues++; [void]$sb.AppendLine("  No ASR rules configured [!]") }
+                # Defender exclusions relevant to ASR/CFA
+                try {
+                    $excPaths = $pref.ExclusionPath
+                    $excExts = $pref.ExclusionExtension
+                    $excProcs = $pref.ExclusionProcess
+                    $totalExc = @($excPaths).Count + @($excExts).Count + @($excProcs).Count
+                    if ($totalExc -gt 0) {
+                        [void]$sb.AppendLine("  Defender Exclusions: $totalExc total (Paths:$(@($excPaths).Count), Extensions:$(@($excExts).Count), Processes:$(@($excProcs).Count))")
+                        if (@($excExts) -match '\.(exe|dll|ps1|bat|cmd|vbs|js)$') { [void]$sb.AppendLine("  [!] Executable extensions in exclusions - weakens ASR protection"); $issues++ }
+                    }
+                } catch {}
                 # Controlled Folder Access
                 $cfa = $pref.EnableControlledFolderAccess
                 $cfaStatus = switch ($cfa) { 1 {'Enabled [OK]'} 2 {'Audit Mode'} default {'Disabled [!]'} }
@@ -2736,10 +2789,45 @@ $script:AutoChecks = @{
                 [void]$sb.AppendLine("  No Office macro GPO restrictions detected [!]")
                 [void]$sb.AppendLine("  Recommend: Set VBAWarnings=4 or blockcontentexecutionfrominternet=1 via GPO")
             }
+            # Smart App Control (Win11 22H2+)
+            [void]$sb.AppendLine("`nSMART APP CONTROL:")
+            try {
+                $osBuild = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -EA SilentlyContinue).CurrentBuildNumber
+                if ($osBuild -ge 22621) {
+                    $sacPolicy = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' -EA SilentlyContinue
+                    $sacState = if ($sacPolicy) { $sacPolicy.VerifiedAndReputablePolicyState } else { $null }
+                    $sacDesc = switch ($sacState) { 0 {'Off'} 1 {'On (enforcing) [OK]'} 2 {'Evaluation mode'} default {'Not present/unknown'} }
+                    [void]$sb.AppendLine("  SAC State: $sacDesc")
+                    if ($sacState -eq 0) { [void]$sb.AppendLine("  [i] SAC was turned off - cannot be re-enabled without OS reset") }
+                } else { [void]$sb.AppendLine("  N/A - requires Win11 22H2+ (build 22621+), current build: $osBuild") }
+            } catch { [void]$sb.AppendLine("  Could not query SAC state") }
+            # Windows Recall (Win11 24H2+ build 26100+)
+            [void]$sb.AppendLine("`nWINDOWS RECALL:")
+            try {
+                $osBuild = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -EA SilentlyContinue).CurrentBuildNumber
+                if ($osBuild -ge 26100) {
+                    $recallPolicy = Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI' -EA SilentlyContinue
+                    $recallDisabled = if ($recallPolicy) { $recallPolicy.DisableAIDataAnalysis } else { $null }
+                    $recallUser = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name 'EnableRecall' -EA SilentlyContinue
+                    $recallEnabled = if ($recallUser) { $recallUser.EnableRecall } else { $null }
+                    if ($recallDisabled -eq 1) {
+                        [void]$sb.AppendLine("  Recall: Disabled by policy [OK]")
+                    } elseif ($recallEnabled -eq 0) {
+                        [void]$sb.AppendLine("  Recall: Disabled by user setting")
+                    } elseif ($recallEnabled -eq 1) {
+                        [void]$sb.AppendLine("  Recall: ENABLED [!] - captures periodic screenshots of user activity")
+                        $issues++
+                    } else {
+                        [void]$sb.AppendLine("  Recall: Not configured (default off on most hardware)")
+                    }
+                    $recallTask = Get-ScheduledTask -TaskName '*Recall*' -EA SilentlyContinue
+                    if ($recallTask) { [void]$sb.AppendLine("  Recall Tasks: $($recallTask.Count) scheduled task(s) found") }
+                } else { [void]$sb.AppendLine("  N/A - requires Win11 24H2+ (build 26100+), current build: $osBuild") }
+            } catch { [void]$sb.AppendLine("  Could not query Recall state") }
             if ($issues -eq 0 -and $macroBlocked) { $status = 'Pass' }
             elseif ($issues -eq 0) { $status = 'Partial' }
             else { $status = 'Fail' }
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="AppLocker + WDAC + macro scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="AppLocker + WDAC + SAC + Recall + macro scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
 
@@ -3204,8 +3292,50 @@ $script:AutoChecks = @{
             $vpnRegPaths = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
             $vpnSoft = Get-ItemProperty $vpnRegPaths -EA SilentlyContinue | Where-Object { $_.DisplayName -match 'VPN|AnyConnect|GlobalProtect|FortiClient|Pulse|WireGuard|OpenVPN' }
             if ($vpnSoft) { foreach ($vs in $vpnSoft) { [void]$sb.AppendLine("VPN Software: $($vs.DisplayName) v$($vs.DisplayVersion)") } }
+            # Remote access / RMM tool inventory (CISA/NSA/MS-ISAC advisory coverage)
+            [void]$sb.AppendLine("`nREMOTE ACCESS / RMM TOOLS:")
+            $rmmPatterns = @(
+                @{N='AnyDesk';P='AnyDesk'},@{N='ScreenConnect';P='ScreenConnect|ConnectWise Control'},
+                @{N='TeamViewer';P='TeamViewer'},@{N='Atera';P='Atera'},@{N='Splashtop';P='Splashtop'},
+                @{N='LogMeIn';P='LogMeIn|GoTo'},@{N='SimpleHelp';P='SimpleHelp'},@{N='RustDesk';P='RustDesk'},
+                @{N='Chrome Remote Desktop';P='Chrome Remote Desktop|chromoting'},
+                @{N='UltraVNC';P='UltraVNC|Ultra VNC'},@{N='TightVNC';P='TightVNC'},@{N='RealVNC';P='RealVNC'},
+                @{N='Zoho Assist';P='Zoho Assist|ZohoMeeting'},@{N='BeyondTrust';P='BeyondTrust|Bomgar'},
+                @{N='DattoRMM';P='Datto.*RMM|CentraStage'},@{N='NinjaRMM';P='NinjaRMMAgent|NinjaOne'},
+                @{N='ConnectWise Automate';P='LabTech|ConnectWise Automate'},@{N='Syncro';P='Syncro'},
+                @{N='Level';P='Level\.io'},@{N='Action1';P='Action1'},@{N='NetSupport';P='NetSupport'}
+            )
+            $rmmRegPaths = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
+            $allInstalled = Get-ItemProperty $rmmRegPaths -EA SilentlyContinue | Where-Object { $_.DisplayName }
+            $rmmServices = Get-CimInstance Win32_Service -EA SilentlyContinue | Where-Object { $_.State -eq 'Running' }
+            $foundRmm = @()
+            foreach ($rmm in $rmmPatterns) {
+                $installed = @($allInstalled | Where-Object { $_.DisplayName -match $rmm.P })
+                $svc = @($rmmServices | Where-Object { $_.DisplayName -match $rmm.P -or $_.PathName -match $rmm.P })
+                if ($installed.Count -gt 0 -or $svc.Count -gt 0) {
+                    $ver = if ($installed.Count -gt 0 -and $installed[0].DisplayVersion) { "v$($installed[0].DisplayVersion)" } else { '' }
+                    $pub = if ($installed.Count -gt 0 -and $installed[0].Publisher) { $installed[0].Publisher } else { '' }
+                    $svcState = if ($svc.Count -gt 0) { 'service running' } else { 'installed' }
+                    $foundRmm += [ordered]@{ Name=$rmm.N; Version=$ver; Publisher=$pub; State=$svcState }
+                    [void]$sb.AppendLine("  $($rmm.N) $ver [$svcState] $(if($pub){"($pub)"})")
+                }
+            }
+            $portablePaths = @("$env:TEMP\*\AnyDesk.exe","$env:APPDATA\AnyDesk\AnyDesk.exe","$env:ProgramData\SimpleHelp*\*.exe","$env:TEMP\RustDesk\rustdesk.exe")
+            foreach ($pp in $portablePaths) {
+                $found = Get-Item $pp -EA SilentlyContinue
+                if ($found) {
+                    foreach ($f in $found) {
+                        $sig = Get-AuthenticodeSignature $f.FullName -EA SilentlyContinue
+                        $sigStatus = if ($sig -and $sig.Status -eq 'Valid') { 'signed' } else { 'UNSIGNED [!]' }
+                        [void]$sb.AppendLine("  PORTABLE: $($f.FullName) [$sigStatus]")
+                        $issues++
+                    }
+                }
+            }
+            if ($foundRmm.Count -eq 0) { [void]$sb.AppendLine("  No remote access/RMM tools detected") }
+            elseif ($foundRmm.Count -gt 2) { [void]$sb.AppendLine("  [!] $($foundRmm.Count) remote access tools found - review for unauthorized software"); $issues++ }
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 1) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Remote access scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Remote access + RMM scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
 
