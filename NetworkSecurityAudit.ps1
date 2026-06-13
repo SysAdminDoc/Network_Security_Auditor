@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.8.1 - Professional GUI Tool
+    Network Security Auditor v4.9.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -35,6 +35,8 @@
     Do not auto-relaunch with UAC elevation when the process is not already Administrator.
 .PARAMETER NoRegistryWrite
     In silent mode, skip registry-backed RMM/cache writes while allowing command-based RMM integrations.
+.PARAMETER CloudAssessmentPath
+    Optional Maester or CISA ScubaGear JSON/CSV report path(s) to import into the combined cloud posture summary.
 .PARAMETER Client
     Client name for the report header. Default: domain or computer name.
 .PARAMETER Auditor
@@ -51,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.8.1
+    4.9.0
 #>
 param(
     [switch]$Silent,
@@ -68,16 +70,18 @@ param(
     [switch]$ExportJSONL,
     [switch]$ExportSARIF,
     [switch]$ExportPDF,
+    [switch]$ExportNavigator,
     [switch]$NoRmmWrite,
     [switch]$NoInternet,
     [switch]$NoElevate,
-    [switch]$NoRegistryWrite
+    [switch]$NoRegistryWrite,
+    [string[]]$CloudAssessmentPath = @()
 )
 
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.8.1'
+$script:ProductVersion = '4.9.0'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -102,9 +106,11 @@ if (-not $script:IsAdmin -and -not $NoElevate) {
         if ($ExportJSONL)  { $argList += '-ExportJSONL' }
         if ($ExportSARIF)  { $argList += '-ExportSARIF' }
         if ($ExportPDF)    { $argList += '-ExportPDF' }
+        if ($ExportNavigator) { $argList += '-ExportNavigator' }
         if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
         if ($NoInternet)   { $argList += '-NoInternet' }
         if ($NoRegistryWrite) { $argList += '-NoRegistryWrite' }
+        foreach ($cloudPath in @($CloudAssessmentPath)) { if ($cloudPath) { $argList += '-CloudAssessmentPath'; $argList += "`"$cloudPath`"" } }
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs -WindowStyle Hidden
         exit
     }
@@ -128,10 +134,13 @@ $script:CliExportCSV   = $ExportCSV.IsPresent
 $script:CliExportJSONL = $ExportJSONL.IsPresent
 $script:CliExportSARIF = $ExportSARIF.IsPresent
 $script:CliExportPDF   = $ExportPDF.IsPresent
+$script:CliExportNavigator = $ExportNavigator.IsPresent
 $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 $script:CliNoInternet  = $NoInternet.IsPresent
 $script:CliNoElevate   = $NoElevate.IsPresent
 $script:CliNoRegistryWrite = $NoRegistryWrite.IsPresent
+$script:CliCloudAssessmentPaths = @($CloudAssessmentPath | Where-Object { $_ })
+$script:CloudAssessmentImports = @()
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
@@ -270,6 +279,67 @@ try {
     $lapsCSE = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\GPExtensions\{D76B9641-3288-4f75-942D-087DE603E3EA}' -EA SilentlyContinue
     if ($lapsGPO -or $lapsCSE) { $script:Env['HasLegacyLAPS'] = $true }
 } catch {}
+
+# ── Cloud Assessment Import (Maester / ScubaGear) ───────────────────────────
+function Import-CloudAssessment {
+    param([string[]]$Paths)
+    $results = @()
+    foreach ($p in $Paths) {
+        if (-not (Test-Path $p)) { continue }
+        $ext = [System.IO.Path]::GetExtension($p).ToLower()
+        try {
+            $raw = Get-Content $p -Raw -Encoding UTF8 -EA Stop
+            if ($ext -eq '.json') {
+                $data = $raw | ConvertFrom-Json -EA Stop
+                if ($data.PSObject.Properties['Results'] -and $data.PSObject.Properties['TenantId']) {
+                    $results += [ordered]@{
+                        Source = 'Maester'
+                        Path = $p
+                        TenantId = $data.TenantId
+                        TenantName = if ($data.PSObject.Properties['TenantName']) { $data.TenantName } else { '' }
+                        Timestamp = if ($data.PSObject.Properties['ExecutedAt']) { $data.ExecutedAt } else { (Get-Item $p).LastWriteTime.ToString('o') }
+                        TotalTests = @($data.Results).Count
+                        Passed = @($data.Results | Where-Object { $_.Result -eq 'Passed' }).Count
+                        Failed = @($data.Results | Where-Object { $_.Result -eq 'Failed' }).Count
+                        Skipped = @($data.Results | Where-Object { $_.Result -eq 'Skipped' -or $_.Result -eq 'NotRun' }).Count
+                        Score = 0
+                        Findings = @($data.Results | Where-Object { $_.Result -eq 'Failed' } | ForEach-Object {
+                            [ordered]@{ TestId = $_.TestId; Name = $_.Name; Result = $_.Result; Category = $_.Category; Remediation = $_.Remediation }
+                        })
+                    }
+                    $r = $results[-1]
+                    $assessed = $r.Passed + $r.Failed
+                    if ($assessed -gt 0) { $r.Score = [math]::Round($r.Passed / $assessed * 100) }
+                }
+                elseif ($data -is [array] -or ($data.PSObject.Properties['ReportSummary'])) {
+                    $items = if ($data.PSObject.Properties['ReportSummary']) { @($data.Results) } else { @($data) }
+                    $results += [ordered]@{
+                        Source = 'ScubaGear'
+                        Path = $p
+                        TenantId = ''
+                        TenantName = ''
+                        Timestamp = (Get-Item $p).LastWriteTime.ToString('o')
+                        TotalTests = $items.Count
+                        Passed = @($items | Where-Object { $_.Result -eq 'Pass' -or $_.Result -eq 'Passed' }).Count
+                        Failed = @($items | Where-Object { $_.Result -eq 'Fail' -or $_.Result -eq 'Failed' }).Count
+                        Skipped = @($items | Where-Object { $_.Result -eq 'N/A' -or $_.Result -eq 'Warning' }).Count
+                        Score = 0
+                        Findings = @($items | Where-Object { $_.Result -eq 'Fail' -or $_.Result -eq 'Failed' } | Select-Object -First 50 | ForEach-Object {
+                            [ordered]@{ TestId = if ($_.Requirement) { $_.Requirement } else { '' }; Name = if ($_.PolicyId) { $_.PolicyId } elseif ($_.Control) { $_.Control } else { '' }; Result = $_.Result; Category = if ($_.Baseline) { $_.Baseline } else { '' }; Remediation = if ($_.Criticality) { $_.Criticality } else { '' } }
+                        })
+                    }
+                    $r = $results[-1]
+                    $assessed = $r.Passed + $r.Failed
+                    if ($assessed -gt 0) { $r.Score = [math]::Round($r.Passed / $assessed * 100) }
+                }
+            }
+        } catch { }
+    }
+    return $results
+}
+if ($script:CliCloudAssessmentPaths.Count -gt 0) {
+    $script:CloudAssessmentImports = @(Import-CloudAssessment -Paths $script:CliCloudAssessmentPaths)
+}
 
 # ── Module Installer Functions ───────────────────────────────────────────────
 function Install-AuditPrereqs {
@@ -1784,6 +1854,26 @@ $script:AutoChecks = @{
                 $lmFlag = if ($lmLevel -ge 5) {'[OK]'} elseif ($lmLevel -ge 3) {'[PARTIAL - CIS recommends 5]'} else {'[WEAK - CIS requires 5 (NTLMv2 only)]'; $issues++}
                 [void]$sb.AppendLine("  LmCompatibility  : $lmLevel ($lmDesc) $lmFlag")
             } catch {}
+            # NTLM restriction and audit posture (Server 2025 / Win11 24H2+)
+            try {
+                $msv = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0' -EA SilentlyContinue
+                if ($msv) {
+                    $restrictSend = $msv.RestrictSendingNTLMTraffic
+                    $restrictRecv = $msv.RestrictReceivingNTLMTraffic
+                    $auditRecv = $msv.AuditReceivingNTLMTraffic
+                    $blockV1 = $msv.BlockNTLMv1SSO
+                    $sendDesc = switch ($restrictSend) { 0 {'Allow all'} 1 {'Audit'} 2 {'Deny all domain/remote'} default {'Not configured'} }
+                    $recvDesc = switch ($restrictRecv) { 0 {'Allow all'} 1 {'Deny domain'} 2 {'Deny all'} default {'Not configured'} }
+                    $auditDesc = switch ($auditRecv) { 0 {'Disabled'} 1 {'Audit for domain accounts'} 2 {'Audit all accounts'} default {'Not configured'} }
+                    [void]$sb.AppendLine("  RestrictSendNTLM : $sendDesc $(if($restrictSend -ge 2){'[OK]'}elseif($restrictSend -eq 1){'[Audit only]'})")
+                    [void]$sb.AppendLine("  RestrictRecvNTLM : $recvDesc $(if($restrictRecv -ge 2){'[OK]'}elseif($restrictRecv -ge 1){'[Domain only]'})")
+                    [void]$sb.AppendLine("  AuditRecvNTLM    : $auditDesc $(if($auditRecv -ge 1){'[Auditing enabled]'})")
+                    [void]$sb.AppendLine("  BlockNTLMv1SSO   : $(if($blockV1 -eq 1){'Enabled [OK]'}else{'Not enabled'})")
+                    if ($null -eq $restrictSend -and $null -eq $restrictRecv -and $null -eq $blockV1) {
+                        [void]$sb.AppendLine("  [i] No NTLM restriction policies configured - consider auditing first, then enforcing")
+                    }
+                }
+            } catch {}
             # LLMNR (should be disabled)
             try {
                 $llmnr = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -EA SilentlyContinue).EnableMulticast
@@ -2019,6 +2109,21 @@ $script:AutoChecks = @{
             if ($localEOL) {
                 $eolCount++
                 [void]$sb.AppendLine("[!] LOCAL MACHINE IS END OF LIFE: $localOS")
+                if ($localOS -match 'Windows 10') {
+                    try {
+                        $esuKey = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\ESU' -EA SilentlyContinue
+                        $esuActivation = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\TargetVersionUpgradeExperienceIndicators\NI22H2' -EA SilentlyContinue
+                        if ($esuKey -and $esuKey.EnableESUSubscriptionCheck -eq 1) {
+                            [void]$sb.AppendLine("  ESU Enrollment : Enabled [Partial - covered until Oct 2028]")
+                            $eolCount--
+                        } elseif ($esuActivation -and $esuActivation.GatedBlockId -match 'ESU') {
+                            [void]$sb.AppendLine("  ESU Enrollment : Detected via activation indicator [Partial]")
+                            $eolCount--
+                        } else {
+                            [void]$sb.AppendLine("  ESU Enrollment : Not detected [!] - no Extended Security Updates coverage")
+                        }
+                    } catch { [void]$sb.AppendLine("  ESU Enrollment : Could not query") }
+                }
             } else {
                 [void]$sb.AppendLine("Local OS: $localOS [OK]")
             }
@@ -3049,6 +3154,18 @@ $script:AutoChecks = @{
                 $sb2 = Confirm-SecureBootUEFI -EA Stop
                 [void]$sb.AppendLine("Secure Boot     : $(if($sb2){'ENABLED [OK]'}else{'DISABLED [!]'; $issues++})")
             } catch { [void]$sb.AppendLine("Secure Boot     : Not supported or inaccessible"); $issues++ }
+            # Secure Boot 2023 CA and DBX transition readiness
+            try {
+                $sbServicing = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\Servicing' -EA SilentlyContinue
+                $uefiCa2023 = if ($sbServicing) { $sbServicing.UEFICA2023Status } else { $null }
+                $ca2023Desc = switch ($uefiCa2023) { 0 {'Not applied'} 1 {'Applied - DB updated [OK]'} 2 {'Applied - pending reboot'} default {'Unknown/not present'} }
+                [void]$sb.AppendLine("  2023 CA Status  : $ca2023Desc $(if($uefiCa2023 -ne 1 -and $sb2){'[!] Microsoft 2011 certs expire 2026 - apply KB5025885 update'})")
+                if ($uefiCa2023 -ne 1 -and $sb2) { $issues++ }
+                $windowsUefi = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\Servicing\WindowsUEFICA2023' -EA SilentlyContinue
+                if ($windowsUefi -and $windowsUefi.AvailableUpdates) {
+                    [void]$sb.AppendLine("  Pending Updates : AvailableUpdates=$($windowsUefi.AvailableUpdates)")
+                }
+            } catch {}
             # TPM with version check
             try {
                 $tpm = Get-Tpm -EA Stop
@@ -8877,6 +8994,34 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
         $html += "</div>`n"
     }
 
+    # ── IMPORTED CLOUD ASSESSMENT (Management, All) ─────────────────────────
+    if (($Tier -eq 'Management' -or $Tier -eq 'All') -and $script:CloudAssessmentImports.Count -gt 0) {
+        $html += "<div class='sec' style='border-left:4px solid #38bdf8'><h2 style='color:#38bdf8'>Imported Cloud Assessment <span class='tier-label' style='background:#38bdf822;color:#38bdf8;border:1px solid #38bdf844'>CLOUD</span></h2>`n"
+        $html += "<div class='d'>Cloud posture data imported from external assessment tools (Maester, ScubaGear). These findings complement on-premises checks.</div>`n"
+        foreach ($imp in $script:CloudAssessmentImports) {
+            $impColor = if ($imp.Score -ge 80) { '#22c55e' } elseif ($imp.Score -ge 60) { '#eab308' } elseif ($imp.Score -ge 40) { '#f97316' } else { '#ef4444' }
+            $html += "<div style='background:#1e293b;border-radius:4px;padding:12px;margin:8px 0;border:1px solid #334155'>`n"
+            $html += "<div style='display:flex;align-items:center;gap:12px;margin-bottom:8px'>"
+            $html += "<span style='font-size:15px;font-weight:600;color:#e2e8f0'>$($imp.Source)</span>"
+            $html += "<span style='font-size:22px;font-weight:700;color:$impColor'>$($imp.Score)%</span>"
+            $html += "<span style='color:#94a3b8;font-size:11px'>$($imp.Passed) passed | $($imp.Failed) failed | $($imp.Skipped) skipped of $($imp.TotalTests) tests</span></div>`n"
+            if ($imp.TenantName -or $imp.TenantId) {
+                $tenantLabel = if ($imp.TenantName) { $imp.TenantName } else { $imp.TenantId }
+                $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>Tenant: $([System.Net.WebUtility]::HtmlEncode($tenantLabel)) | Source: $([System.Net.WebUtility]::HtmlEncode($imp.Path)) | $($imp.Timestamp)</div>`n"
+            }
+            if ($imp.Findings.Count -gt 0) {
+                $html += "<table class='tech-table' style='margin-top:8px'><tr><th>Test</th><th>Category</th><th>Name</th></tr>`n"
+                foreach ($f in $imp.Findings | Select-Object -First 25) {
+                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode($f.TestId))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.Category))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.Name))</td></tr>`n"
+                }
+                if ($imp.Findings.Count -gt 25) { $html += "<tr><td colspan='3' style='color:#94a3b8'>... and $($imp.Findings.Count - 25) more findings</td></tr>`n" }
+                $html += "</table>`n"
+            }
+            $html += "</div>`n"
+        }
+        $html += "</div>`n"
+    }
+
     # ── RANSOMWARE PREPAREDNESS (Management, All) ─────────────────────────
     if ($Tier -eq 'Management' -or $Tier -eq 'All') {
         $rwScore = Get-RansomwareScore
@@ -9271,6 +9416,22 @@ function Export-FindingsJSON {
             not_assessed = ($findings | Where-Object { $_.status -eq 'Not Assessed' }).Count
         }
         findings       = $findings
+        cloud_assessments = if ($script:CloudAssessmentImports.Count -gt 0) {
+            @($script:CloudAssessmentImports | ForEach-Object {
+                [ordered]@{
+                    source     = $_.Source
+                    tenant_id  = $_.TenantId
+                    tenant     = $_.TenantName
+                    timestamp  = $_.Timestamp
+                    total      = $_.TotalTests
+                    passed     = $_.Passed
+                    failed     = $_.Failed
+                    skipped    = $_.Skipped
+                    score      = $_.Score
+                    findings   = $_.Findings
+                }
+            })
+        } else { @() }
     }
 
     $export | ConvertTo-Json -Depth 10 | Set-Content $OutPath -Encoding UTF8
@@ -9701,6 +9862,61 @@ function Export-PDF {
     return $null
 }
 
+# ── Phase 5G: MITRE ATT&CK Navigator Layer Export ─────────────────────────
+function Export-AttackNavigator {
+    param([string]$OutPath, [string]$ClientName = '')
+    $target = try { $el['txtScanTarget'].Text } catch { $env:COMPUTERNAME }
+    if (-not $ClientName) { $ClientName = try { $el['txtClient'].Text } catch { $env:COMPUTERNAME } }
+    $techniqueScores = @{}
+    $techniqueComments = @{}
+    foreach ($cn in $script:AuditCategories.Keys) {
+        foreach ($item in $script:AuditCategories[$cn].Items) {
+            $id = $item.ID
+            $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+            $mitreData = if ($script:MitreMap.Contains($id)) { $script:MitreMap[$id] } else { $null }
+            if (-not $mitreData) { continue }
+            $sevScore = switch ($item.Severity) { 'Critical' { 10 } 'High' { 7 } 'Medium' { 5 } 'Low' { 3 } default { 1 } }
+            $statusScore = switch ($sv) { 'Fail' { $sevScore } 'Partial' { [math]::Ceiling($sevScore * 0.5) } 'Pass' { 0 } 'N/A' { 0 } default { 0 } }
+            foreach ($tech in $mitreData.Techniques) {
+                $techBase = ($tech -split '\.')[0]
+                foreach ($t in @($techBase, $tech)) {
+                    if (-not $techniqueScores.ContainsKey($t)) { $techniqueScores[$t] = 0; $techniqueComments[$t] = [System.Collections.Generic.List[string]]::new() }
+                    if ($statusScore -gt $techniqueScores[$t]) { $techniqueScores[$t] = $statusScore }
+                    if ($sv -eq 'Fail' -or $sv -eq 'Partial') { $techniqueComments[$t].Add("$id ($sv): $($item.Text)") }
+                }
+            }
+        }
+    }
+    $techniques = [System.Collections.Generic.List[object]]::new()
+    foreach ($t in $techniqueScores.Keys) {
+        $score = $techniqueScores[$t]
+        $color = if ($score -ge 8) { '#e74c3c' } elseif ($score -ge 5) { '#e67e22' } elseif ($score -ge 3) { '#f1c40f' } elseif ($score -gt 0) { '#95a5a6' } else { '#2ecc71' }
+        $comment = if ($techniqueComments[$t].Count -gt 0) { $techniqueComments[$t] -join '; ' } else { 'All mapped checks passed' }
+        $entry = [ordered]@{ techniqueID = $t; score = $score; color = $color; comment = $comment; enabled = $true; showSubtechniques = ($t -notmatch '\.') }
+        $techniques.Add($entry)
+    }
+    $layer = [ordered]@{
+        name = "NSA - $ClientName - $target"
+        versions = [ordered]@{ 'attack' = '15'; navigator = '4.5'; layer = '4.5' }
+        domain = 'enterprise-attack'
+        description = "Generated by $($script:ProductDisplayName) on $(Get-Date -Format 'yyyy-MM-dd HH:mm'). Score = highest failing check severity (Critical=10, High=7, Medium=5, Low=3). Green = all mapped checks passed."
+        filters = [ordered]@{ platforms = @('Windows') }
+        sorting = 3
+        layout = [ordered]@{ layout = 'side'; showID = $true; showName = $true; showAggregateScores = $true; countUnscored = $false; aggregateFunction = 'max' }
+        hideDisabled = $false
+        techniques = @($techniques)
+        gradient = [ordered]@{ colors = @('#2ecc71','#f1c40f','#e67e22','#e74c3c'); minValue = 0; maxValue = 10 }
+        showTacticRowBackground = $true
+        tacticRowBackground = '#1a1a2e'
+        selectTechniquesAcrossTactics = $true
+        selectSubtechniquesWithParent = $false
+        metadata = @([ordered]@{ name = 'tool'; value = $script:ProductDisplayName }, [ordered]@{ name = 'client'; value = $ClientName }, [ordered]@{ name = 'target'; value = $target })
+    }
+    $layer | ConvertTo-Json -Depth 10 | Set-Content $OutPath -Encoding UTF8
+    Write-Log "ATT&CK Navigator layer exported: $OutPath ($($techniques.Count) techniques)" 'INFO'
+    return $OutPath
+}
+
 # ── Full Audit Button Handler ────────────────────────────────────────────────
 $el['btnFullAudit'].Add_Click({
     if ($script:ScanRunning) { return }
@@ -9989,6 +10205,15 @@ if ($script:SilentMode) {
             $pdfResult = Export-PDF -HtmlPath $outFile -PdfPath $pdfOut
             if ($pdfResult) { Write-Host "[Silent Mode] PDF: $pdfResult" -ForegroundColor Green }
         } catch { Write-Host "[Silent Mode] PDF export failed: $_" -ForegroundColor Yellow }
+    }
+
+    # ATT&CK Navigator layer export
+    if ($script:CliExportNavigator) {
+        $navOut = "${basePath}_navigator.json"
+        try {
+            $null = Export-AttackNavigator -OutPath $navOut -ClientName $clientName
+            Write-Host "[Silent Mode] ATT&CK Navigator: $navOut" -ForegroundColor Green
+        } catch { Write-Host "[Silent Mode] Navigator export failed: $_" -ForegroundColor Yellow }
     }
 
     # Compliance summary JSON (compact RMM dashboard payload)

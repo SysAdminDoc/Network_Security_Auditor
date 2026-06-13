@@ -185,6 +185,27 @@ if ($scriptText -notmatch "if\s*\(\`$ExportSARIF\)[^\r\n]*'-ExportSARIF'") {
 if ($scriptText -notmatch "if\s*\(\`$ExportPDF\)[^\r\n]*'-ExportPDF'") {
     Add-Failure 'Auto-elevation does not preserve -ExportPDF.'
 }
+if ($scriptText -notmatch "if\s*\(\`$ExportNavigator\)[^\r\n]*'-ExportNavigator'") {
+    Add-Failure 'Auto-elevation does not preserve -ExportNavigator.'
+}
+if ($scriptText -notmatch '\[string\[\]\]\$CloudAssessmentPath' -or $scriptText -notmatch 'CloudAssessmentPath.*argList' -or $scriptText -notmatch 'function Import-CloudAssessment') {
+    Add-Failure 'Cloud assessment import must expose -CloudAssessmentPath, preserve it in auto-elevation, and define Import-CloudAssessment.'
+}
+if ($scriptText -notmatch 'RestrictSendingNTLMTraffic' -or $scriptText -notmatch 'RestrictReceivingNTLMTraffic' -or $scriptText -notmatch 'BlockNTLMv1SSO') {
+    Add-Failure 'EP03 must audit NTLM restriction, receive, and NTLMv1 SSO block policies.'
+}
+if ($scriptText -notmatch 'UEFICA2023Status' -or $scriptText -notmatch 'KB5025885') {
+    Add-Failure 'EP08 must check Secure Boot 2023 CA status and reference KB5025885.'
+}
+if ($scriptText -notmatch 'ESU Enrollment' -or $scriptText -notmatch 'EnableESUSubscriptionCheck') {
+    Add-Failure 'EP10 must detect Windows 10 ESU enrollment via registry.'
+}
+if ($scriptText -notmatch 'function Export-AttackNavigator' -or $scriptText -notmatch 'CliExportNavigator' -or $scriptText -notmatch '_navigator\.json') {
+    Add-Failure 'ATT&CK Navigator export must define Export-AttackNavigator, honor CliExportNavigator, and write _navigator.json.'
+}
+if ($scriptText -notmatch 'cloud_assessments' -or $scriptText -notmatch 'CloudAssessmentImports') {
+    Add-Failure 'Structured JSON export must include cloud_assessments from imported cloud assessments.'
+}
 if ($scriptText -notmatch '\[switch\]\$NoRmmWrite' -or $scriptText -notmatch "if\s*\(\`$NoRmmWrite\)[^\r\n]*'-NoRmmWrite'" -or $scriptText -notmatch '\$script:CliNoRmmWrite' -or $scriptText -notmatch 'RMM and registry field writes skipped') {
     Add-Failure 'Silent mode must expose, preserve, and honor -NoRmmWrite.'
 }
