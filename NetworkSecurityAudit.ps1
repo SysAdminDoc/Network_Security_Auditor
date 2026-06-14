@@ -8747,6 +8747,23 @@ $el['btnLoad'].Add_Click({
     if($dlg.ShowDialog()){
         try{
             $j=Get-Content $dlg.FileName -Raw|ConvertFrom-Json
+            $warnings = @()
+            if ($j.Version -and $j.Version -ne $script:ProductVersion) {
+                $warnings += "Saved with v$($j.Version), current is v$($script:ProductVersion)."
+            }
+            if ($j.SchemaVersion -and $j.SchemaVersion -ne $script:SchemaVersion) {
+                $warnings += "Schema $($j.SchemaVersion) differs from current $($script:SchemaVersion)."
+            }
+            $savedIds = @($j.Items.PSObject.Properties.Name)
+            $currentIds = @($script:CheckStates.Keys)
+            $missing = @($currentIds | Where-Object { $_ -notin $savedIds })
+            $unknown = @($savedIds | Where-Object { -not $script:CheckStates.Contains($_) })
+            if ($missing.Count -gt 0) { $warnings += "$($missing.Count) new checks not in saved file: $($missing[0..([Math]::Min(4,$missing.Count-1))] -join ', ')$(if($missing.Count -gt 5){'...'})" }
+            if ($unknown.Count -gt 0) { $warnings += "$($unknown.Count) saved checks not in current tool: $($unknown[0..([Math]::Min(4,$unknown.Count-1))] -join ', ')$(if($unknown.Count -gt 5){'...'})" }
+            if ($warnings.Count -gt 0) {
+                $warnMsg = "Compatibility notes:`n" + ($warnings -join "`n") + "`n`nProceed with loading?"
+                if ([System.Windows.MessageBox]::Show($warnMsg, 'Load Warning', 'YesNo', 'Warning') -ne 'Yes') { return }
+            }
             $st=@{Client=$j.Client;Auditor=$j.Auditor;Date=$j.Date;Theme=$j.Theme;ScanTarget=$j.ScanTarget;Items=@{}}
             foreach($p in $j.Items.PSObject.Properties){
                 $st.Items[$p.Name]=@{
@@ -8756,7 +8773,10 @@ $el['btnLoad'].Add_Click({
                     ScanTime=$p.Value.ScanTime
                 }
             }
-            Set-AuditState $st; $el['StatusText'].Text="Loaded: $($dlg.FileName)"; Write-Log "Audit loaded: $($dlg.FileName) ($($st.Items.Count) items)" 'INFO'
+            Set-AuditState $st
+            $loadMsg = "Loaded: $($dlg.FileName)"
+            if ($warnings.Count -gt 0) { $loadMsg += " ($($warnings.Count) warnings)" }
+            $el['StatusText'].Text=$loadMsg; Write-Log "Audit loaded: $($dlg.FileName) ($($st.Items.Count) items, $($warnings.Count) warnings)" 'INFO'
         } catch { [System.Windows.MessageBox]::Show("Failed: $_",'Error','OK','Error'); Write-Log "Load failed: $_" 'ERROR' }
     }
 })
