@@ -5757,7 +5757,7 @@ $script:SuppressAdvance = $false
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
                     <TextBlock x:Name="ThemeLabel" Text="Theme:" FontSize="12"
                                VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <ComboBox x:Name="ThemeSelector" Width="155" Height="26" FontSize="11.5"/>
+                    <ComboBox x:Name="ThemeSelector" Width="155" Height="26" FontSize="11.5" AutomationProperties.Name="Color theme selector"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <StackPanel Orientation="Vertical" Margin="0,0,12,0">
@@ -5778,20 +5778,20 @@ $script:SuppressAdvance = $false
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
                     <TextBlock x:Name="lblClient" Text="Client" FontSize="10.5" Margin="0,0,0,2"/>
-                    <TextBox x:Name="txtClient" Padding="6,4" FontSize="12"/>
+                    <TextBox x:Name="txtClient" Padding="6,4" FontSize="12" AutomationProperties.Name="Client name"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Margin="8,0">
                     <TextBlock x:Name="lblAuditor" Text="Auditor" FontSize="10.5" Margin="0,0,0,2"/>
-                    <TextBox x:Name="txtAuditor" Padding="6,4" FontSize="12"/>
+                    <TextBox x:Name="txtAuditor" Padding="6,4" FontSize="12" AutomationProperties.Name="Auditor name"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Margin="8,0">
                     <TextBlock x:Name="lblDate" Text="Date" FontSize="10.5" Margin="0,0,0,2"/>
-                    <TextBox x:Name="txtDate" Padding="6,4" FontSize="12" IsReadOnly="True"/>
+                    <TextBox x:Name="txtDate" Padding="6,4" FontSize="12" IsReadOnly="True" AutomationProperties.Name="Audit date"/>
                 </StackPanel>
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="8,0,0,0">
-                    <Button x:Name="btnSave" Content="Save" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand"/>
-                    <Button x:Name="btnLoad" Content="Load" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand"/>
-                    <Button x:Name="btnDiff" Content="Diff" Padding="14,5" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="Compare two saved audits"/>
+                    <Button x:Name="btnSave" Content="Save" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" AutomationProperties.Name="Save audit state"/>
+                    <Button x:Name="btnLoad" Content="Load" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" AutomationProperties.Name="Load saved audit"/>
+                    <Button x:Name="btnDiff" Content="Diff" Padding="14,5" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="Compare two saved audits" AutomationProperties.Name="Compare two saved audits"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -5822,9 +5822,11 @@ $script:SuppressAdvance = $false
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
                     <TextBlock x:Name="lblProfile" Text="Profile:" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <ComboBox x:Name="cboProfile" Width="195" FontSize="10.5" Padding="4,2"
+                              AutomationProperties.Name="Scan profile"
                               ToolTip="Scan profile: Quick, Standard, Full, AD-only, Local-only, or compliance framework"/>
                     <TextBlock x:Name="lblFramework" Text="Framework:" FontSize="10.5" VerticalAlignment="Center" Margin="12,0,4,0"/>
                     <ComboBox x:Name="cboFramework" Width="120" FontSize="10.5" Padding="4,2"
+                              AutomationProperties.Name="Compliance framework"
                               ToolTip="Compliance framework to highlight in reports: All, CIS, NIST 800-171, CMMC, HIPAA, PCI-DSS, E8, Cyber Essentials, SOC 2, ISO 27001, STIG"/>
                 </StackPanel>
                 <Button x:Name="btnFullAudit" Grid.Column="3" Content="Full Audit" Padding="14,4" Margin="8,0,0,0"
@@ -5964,6 +5966,15 @@ function Apply-ButtonTheme([System.Windows.Controls.Button]$btn, [string]$bg, [s
     $tr.Property = [System.Windows.UIElement]::IsMouseOverProperty; $tr.Value = $true
     $tr.Setters.Add((New-Object System.Windows.Setter ([System.Windows.Controls.Border]::BackgroundProperty, (New-Brush $hover), 'bd')))
     $tmpl.Triggers.Add($tr)
+    $trFocus = New-Object System.Windows.Trigger
+    $trFocus.Property = [System.Windows.UIElement]::IsKeyboardFocusedProperty; $trFocus.Value = $true
+    $trFocus.Setters.Add((New-Object System.Windows.Setter ([System.Windows.Controls.Border]::BorderBrushProperty, (New-Brush '#38bdf8'), 'bd')))
+    $trFocus.Setters.Add((New-Object System.Windows.Setter ([System.Windows.Controls.Border]::BorderThicknessProperty, [System.Windows.Thickness]::new(2), 'bd')))
+    $tmpl.Triggers.Add($trFocus)
+    $trDisabled = New-Object System.Windows.Trigger
+    $trDisabled.Property = [System.Windows.UIElement]::IsEnabledProperty; $trDisabled.Value = $false
+    $trDisabled.Setters.Add((New-Object System.Windows.Setter ([System.Windows.UIElement]::OpacityProperty, [double]0.5)))
+    $tmpl.Triggers.Add($trDisabled)
     $btn.Template = $tmpl; $btn.Foreground = [System.Windows.Media.Brushes]::White
 }
 
@@ -7122,17 +7133,22 @@ foreach ($catName in $script:AuditCategories.Keys) {
         $hintBorder.Child = $hintTb; $is.Children.Add($hintBorder)|Out-Null
         $script:HintBlocks[$item.ID] = $hintBorder
 
-        # Toggle hint button
-        $hintBtn = New-Object System.Windows.Controls.TextBlock; $hintBtn.Text="[?] Show Guidance"; $hintBtn.FontSize=10.5; $hintBtn.Cursor=[System.Windows.Input.Cursors]::Hand
-        $hintBtn.Margin=[System.Windows.Thickness]::new(26,0,0,2); $hintBtn.Foreground=New-Brush '#0ea5e9'
+        # Toggle hint button (real Button for keyboard/screen-reader accessibility)
+        $hintBtn = New-Object System.Windows.Controls.Button
+        $hintBtn.Content = "[?] Show Guidance"; $hintBtn.FontSize = 10.5
+        $hintBtn.Margin = [System.Windows.Thickness]::new(26,0,0,2)
+        $hintBtn.Foreground = New-Brush '#0ea5e9'; $hintBtn.Background = [System.Windows.Media.Brushes]::Transparent
+        $hintBtn.BorderThickness = [System.Windows.Thickness]::new(0); $hintBtn.Cursor = [System.Windows.Input.Cursors]::Hand
+        $hintBtn.Padding = [System.Windows.Thickness]::new(0)
         $hintBtn.Tag = $item.ID
-        $hintBtn.Add_MouseLeftButtonDown({
+        [System.Windows.Automation.AutomationProperties]::SetName($hintBtn, "Toggle guidance for $($item.ID)")
+        $hintBtn.Add_Click({
             $id = $this.Tag
             $hb = $script:HintBlocks[$id]
             if ($hb.Visibility -eq [System.Windows.Visibility]::Collapsed) {
-                $hb.Visibility = [System.Windows.Visibility]::Visible; $this.Text = "[-] Hide Guidance"
+                $hb.Visibility = [System.Windows.Visibility]::Visible; $this.Content = "[-] Hide Guidance"
             } else {
-                $hb.Visibility = [System.Windows.Visibility]::Collapsed; $this.Text = "[?] Show Guidance"
+                $hb.Visibility = [System.Windows.Visibility]::Collapsed; $this.Content = "[?] Show Guidance"
             }
         })
         $is.Children.Add($hintBtn)|Out-Null
