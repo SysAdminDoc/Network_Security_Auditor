@@ -261,6 +261,27 @@ if ($scriptText -notmatch 'function Get-AuditExceptions' -or $scriptText -notmat
 if ($scriptText -notmatch 'Mapping limitations:</strong>') {
     Add-Failure 'HTML compliance report must include a mapping-limitations disclaimer.'
 }
+# NSA-005: continuous delta assessment.
+if ($scriptText -notmatch 'function Compare-AuditSnapshot' -or $scriptText -notmatch 'function Convert-AuditStateToSnapshot' -or $scriptText -notmatch 'function Update-ExposureWindows' -or $scriptText -notmatch 'function Invoke-AuditHistory' -or $scriptText -notmatch 'function Get-AuditCatalogHash' -or $scriptText -notmatch 'function Get-FindingFingerprint') {
+    Add-Failure 'Continuous delta must define Compare-AuditSnapshot, Convert-AuditStateToSnapshot, Update-ExposureWindows, Invoke-AuditHistory, Get-AuditCatalogHash, and Get-FindingFingerprint.'
+}
+if ($scriptText -notmatch '\[string\]\$HistoryPath' -or $scriptText -notmatch '\[switch\]\$NoHistory' -or $scriptText -notmatch '\[switch\]\$AlertPreview' -or $scriptText -notmatch '\$script:CliNoHistory' -or $scriptText -notmatch "if \(\`$NoHistory\)\s*\{\s*\`$argList \+= '-NoHistory'") {
+    Add-Failure 'Continuous delta must expose -HistoryPath/-NoHistory/-AlertPreview, store CliNoHistory, and preserve -NoHistory in auto-elevation.'
+}
+if ($scriptText -notmatch 'continuous = if \(\$script:HistoryResult\)' -or $scriptText -notmatch 'NewFailure=@\(\); Resolved=@\(\)') {
+    Add-Failure 'Structured JSON must emit a continuous block and Compare-AuditSnapshot must classify NewFailure/Resolved/etc.'
+}
+# NSA-005: GUI Diff uses the shared engine; HTML report shows the delta.
+if ($scriptText -notmatch 'function Convert-SaveStateToSnapshot' -or $scriptText -notmatch '\$snap1 = Convert-SaveStateToSnapshot' -or $scriptText -notmatch '\$delta = Compare-AuditSnapshot -Previous \$snap1') {
+    Add-Failure 'GUI Diff must use Convert-SaveStateToSnapshot + Compare-AuditSnapshot (shared engine).'
+}
+if ($scriptText -notmatch 'Change Since Baseline') {
+    Add-Failure 'HTML report must render a Change Since Baseline delta section.'
+}
+# Delta key extraction must handle OrderedDictionary (live snapshots) not just Hashtable.
+if ($scriptText -notmatch 'System\.Collections\.IDictionary') {
+    Add-Failure 'Snapshot comparison must extract keys via [System.Collections.IDictionary] to support live OrderedDictionary snapshots.'
+}
 if ($scriptText -notmatch '\[switch\]\$NoInternet' -or $scriptText -notmatch "if\s*\(\`$NoInternet\)[^\r\n]*'-NoInternet'" -or $scriptText -notmatch '\$script:CliNoInternet' -or $scriptText -notmatch 'KEV lookup skipped \(-NoInternet' -or $scriptText -notmatch 'Egress port probe skipped \(-NoInternet\)' -or $scriptText -notmatch 'External DNS test skipped \(-NoInternet\)') {
     Add-Failure 'Internet-touching checks must expose, preserve, and honor -NoInternet.'
 }

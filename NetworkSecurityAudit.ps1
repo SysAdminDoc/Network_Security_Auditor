@@ -82,7 +82,13 @@ param(
     [string[]]$CloudAssessmentPath = @(),
     [switch]$Dashboard,
     [string]$InputDir = '',
-    [int]$StaleDays = 30
+    [int]$StaleDays = 30,
+    [string]$HistoryPath = '',
+    [string]$BaselinePath = '',
+    [switch]$NoHistory,
+    [int]$TrendDays = 90,
+    [switch]$AlertPreview,
+    [int]$HistoryRetentionDays = 365
 )
 
 $script:ProductName = 'Network Security Auditor'
@@ -122,6 +128,12 @@ if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
         if ($NoInternet)   { $argList += '-NoInternet' }
         if ($NoRegistryWrite) { $argList += '-NoRegistryWrite' }
         if ($WriteManifestOnly) { $argList += '-WriteManifestOnly' }
+        if ($HistoryPath)  { $argList += '-HistoryPath'; $argList += "`"$HistoryPath`"" }
+        if ($BaselinePath) { $argList += '-BaselinePath'; $argList += "`"$BaselinePath`"" }
+        if ($NoHistory)    { $argList += '-NoHistory' }
+        if ($AlertPreview) { $argList += '-AlertPreview' }
+        if ($TrendDays -ne 90) { $argList += '-TrendDays'; $argList += $TrendDays }
+        if ($HistoryRetentionDays -ne 365) { $argList += '-HistoryRetentionDays'; $argList += $HistoryRetentionDays }
         foreach ($cloudPath in @($CloudAssessmentPath)) { if ($cloudPath) { $argList += '-CloudAssessmentPath'; $argList += "`"$cloudPath`"" } }
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs -WindowStyle Hidden
         exit
@@ -155,6 +167,12 @@ $script:CliNoInternet  = $NoInternet.IsPresent
 $script:CliNoElevate   = $NoElevate.IsPresent
 $script:CliNoRegistryWrite = $NoRegistryWrite.IsPresent
 $script:CliWriteManifestOnly = $WriteManifestOnly.IsPresent
+$script:CliHistoryPath  = $HistoryPath
+$script:CliBaselinePath = $BaselinePath
+$script:CliNoHistory    = $NoHistory.IsPresent
+$script:CliTrendDays    = $TrendDays
+$script:CliAlertPreview = $AlertPreview.IsPresent
+$script:CliHistoryRetentionDays = $HistoryRetentionDays
 $script:CliCloudAssessmentPaths = @($CloudAssessmentPath | Where-Object { $_ })
 $script:CloudAssessmentImports = @()
 
@@ -8981,6 +8999,323 @@ $window.Add_PreviewKeyDown({
     }
 })
 
+# ── Continuous Delta Assessment (NSA-005) ────────────────────────────────────
+# A compact snapshot plus a pure comparison engine shared by silent mode, the
+# GUI diff, and history. The engine takes two plain snapshot objects (no GUI
+# coupling) so it is fully unit-testable.
+
+function Get-StringSha256 {
+    param([string]$Text)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$Text)
+        return ([System.BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-','').ToLower()
+    } finally { $sha.Dispose() }
+}
+
+# Hash of the check catalog (IDs + severity + weight). Changes here can produce
+# false deltas, so history records carry it to flag definition drift.
+function Get-AuditCatalogHash {
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($cn in ($script:AuditCategories.Keys | Sort-Object)) {
+        foreach ($item in $script:AuditCategories[$cn].Items) {
+            [void]$parts.Add("$($item.ID):$($item.Severity):$($item.Weight)")
+        }
+    }
+    return Get-StringSha256 (($parts | Sort-Object) -join '|')
+}
+
+# Hash of scoring policy (risk tiers + framework membership). Drift here also
+# invalidates trend comparisons.
+function Get-AuditPolicyHash {
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($id in ($script:RiskTiers.Keys | Sort-Object)) { [void]$parts.Add("rt:$id=$($script:RiskTiers[$id])") }
+    foreach ($fw in ($script:FrameworkChecks.Keys | Sort-Object)) { [void]$parts.Add("fw:$fw=$(@($script:FrameworkChecks[$fw]).Count)") }
+    return Get-StringSha256 (($parts | Sort-Object) -join '|')
+}
+
+function Get-FindingFingerprint {
+    param([string]$Status, [string]$Findings, [string]$Evidence)
+    $norm = (("$Status|$Findings|$Evidence") -replace '\s+',' ').Trim().ToLower()
+    return Get-StringSha256 $norm
+}
+
+# Builds a compact snapshot from the current GUI/scan state. RunId/SnapshotId are
+# passed in (the runtime has no clock primitive inside helpers) so the function
+# stays deterministic and testable.
+function Convert-AuditStateToSnapshot {
+    param([string]$RunId, [string]$SnapshotId, [string]$TimestampIso, [string]$Client = '', [string]$Target = '')
+    $risk = Get-RiskScore
+    $rw = Get-RansomwareScore
+    $findings = [ordered]@{}
+    foreach ($cn in $script:AuditCategories.Keys) {
+        foreach ($item in $script:AuditCategories[$cn].Items) {
+            $id = $item.ID
+            $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+            $fTxt = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
+            $eTxt = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
+            $findings[$id] = [ordered]@{
+                status      = $sv
+                severity    = $item.Severity
+                fingerprint = Get-FindingFingerprint -Status $sv -Findings $fTxt -Evidence $eTxt
+            }
+        }
+    }
+    $fwScores = @{}
+    try { $s = Get-FrameworkScores -Framework 'All'; foreach ($k in $s.Keys) { $fwScores[$k] = $s[$k].Score } } catch {}
+    return [ordered]@{
+        schema_version = $script:SchemaVersion
+        tool_version   = $script:ProductVersion
+        run_id         = $RunId
+        snapshot_id    = $SnapshotId
+        timestamp      = $TimestampIso
+        client         = $Client
+        target         = $Target
+        catalog_hash   = Get-AuditCatalogHash
+        policy_hash    = Get-AuditPolicyHash
+        score          = [ordered]@{ overall = $risk.Pct; grade = $risk.Grade; ransomware = $rw.Overall; ransomware_grade = $rw.Grade }
+        framework_scores = $fwScores
+        findings       = $findings
+    }
+}
+
+# Converts a loaded GUI save file (Get-AuditState shape, with .Items) into the
+# snapshot shape so the GUI Diff can reuse Compare-AuditSnapshot. Severity comes
+# from the live catalog. Pure over the parsed save object.
+function Convert-SaveStateToSnapshot {
+    param($SaveState)
+    $findings = [ordered]@{}
+    foreach ($cn in $script:AuditCategories.Keys) {
+        foreach ($item in $script:AuditCategories[$cn].Items) {
+            $id = $item.ID
+            $d = if ($SaveState -and $SaveState.Items -and $SaveState.Items.PSObject.Properties[$id]) { $SaveState.Items.$id } else { $null }
+            $st = if ($d -and $d.Status) { [string]$d.Status } else { 'Not Assessed' }
+            $fTxt = if ($d) { [string]$d.Findings } else { '' }
+            $eTxt = if ($d) { [string]$d.Evidence } else { '' }
+            $findings[$id] = [ordered]@{ status = $st; severity = $item.Severity; fingerprint = (Get-FindingFingerprint -Status $st -Findings $fTxt -Evidence $eTxt) }
+        }
+    }
+    return [ordered]@{
+        schema_version = if ($SaveState -and $SaveState.SchemaVersion) { [string]$SaveState.SchemaVersion } else { $script:SchemaVersion }
+        run_id   = if ($SaveState -and $SaveState.Date) { [string]$SaveState.Date } else { '' }
+        client   = if ($SaveState) { [string]$SaveState.Client } else { '' }
+        target   = if ($SaveState) { [string]$SaveState.ScanTarget } else { '' }
+        findings = $findings
+    }
+}
+
+# Pure comparison of two snapshots. Returns categorized id lists, score deltas,
+# and critical counts. Unavailable/skipped current states never count as
+# remediations. Validates schema compatibility before comparing.
+function Compare-AuditSnapshot {
+    param($Previous, $Current)
+    $unavailable = @('N/A','Not Assessed','Skipped','Unavailable','NotLicensed','NotPermitted','NotConfigured','Error','')
+    $rank = @{ 'Pass' = 0; 'Partial' = 1; 'Fail' = 2 }
+    $states = [ordered]@{
+        NewFailure=@(); Resolved=@(); Worsened=@(); Improved=@();
+        UnchangedFail=@(); UnchangedPass=@(); UpdatedEvidence=@(); Unavailable=@(); AbsentFromCurrentRun=@()
+    }
+    $schemaCompatible = $true
+    if ($Previous -and $Previous.schema_version -and $Current -and $Current.schema_version) {
+        $schemaCompatible = ([string]$Previous.schema_version -eq [string]$Current.schema_version)
+    }
+    $prevFindings = if ($Previous -and $Previous.findings) { $Previous.findings } else { @{} }
+    $currFindings = if ($Current -and $Current.findings) { $Current.findings } else { @{} }
+    $keysOf = { param($map) if ($null -eq $map) { @() } elseif ($map -is [System.Collections.IDictionary]) { @($map.Keys) } else { @($map.PSObject.Properties.Name) } }
+    $getEntry = { param($map, $key) if ($null -eq $map) { $null } elseif ($map -is [System.Collections.IDictionary]) { $map[$key] } elseif ($map.PSObject.Properties[$key]) { $map.$key } else { $null } }
+    $prevKeys = & $keysOf $prevFindings
+    $currKeys = & $keysOf $currFindings
+
+    $allIds = @($prevKeys + $currKeys | Select-Object -Unique)
+    $newCrit = 0; $resolvedCrit = 0
+    foreach ($id in $allIds) {
+        $p = & $getEntry $prevFindings $id
+        $c = & $getEntry $currFindings $id
+        if (-not $c) { $states.AbsentFromCurrentRun += $id; continue }
+        $cs = [string]$c.status
+        if ($unavailable -contains $cs) { $states.Unavailable += $id; continue }
+        $isCritical = ([string]$c.severity -eq 'Critical')
+        if (-not $p -or ($unavailable -contains [string]$p.status)) {
+            # No prior comparable state
+            if ($cs -eq 'Fail') { $states.NewFailure += $id; if ($isCritical) { $newCrit++ } }
+            elseif ($cs -eq 'Pass') { $states.UnchangedPass += $id }
+            else { $states.UnchangedFail += $id }
+            continue
+        }
+        $ps = [string]$p.status
+        $pr = $rank[$ps]; $cr = $rank[$cs]
+        if ($null -eq $pr) { $pr = 1 }; if ($null -eq $cr) { $cr = 1 }
+        if ($cr -gt $pr) {
+            if ($cs -eq 'Fail' -and $ps -ne 'Fail') { $states.NewFailure += $id; if ($isCritical) { $newCrit++ } }
+            else { $states.Worsened += $id }
+        }
+        elseif ($cr -lt $pr) {
+            if ($cs -eq 'Pass') { $states.Resolved += $id; if ($isCritical) { $resolvedCrit++ } }
+            else { $states.Improved += $id }
+        }
+        else {
+            # Same rank
+            if ($cs -eq 'Pass') { $states.UnchangedPass += $id }
+            elseif ([string]$p.fingerprint -ne [string]$c.fingerprint) { $states.UpdatedEvidence += $id }
+            else { $states.UnchangedFail += $id }
+        }
+    }
+
+    $scoreDelta = [ordered]@{ overall = $null; ransomware = $null }
+    if ($Previous -and $Previous.score -and $Current -and $Current.score) {
+        $scoreDelta.overall = [int]$Current.score.overall - [int]$Previous.score.overall
+        $scoreDelta.ransomware = [int]$Current.score.ransomware - [int]$Previous.score.ransomware
+    }
+    return [ordered]@{
+        schema_compatible = $schemaCompatible
+        previous_run_id   = if ($Previous) { $Previous.run_id } else { $null }
+        current_run_id    = if ($Current) { $Current.run_id } else { $null }
+        states            = $states
+        counts            = [ordered]@{
+            new_failure=@($states.NewFailure).Count; resolved=@($states.Resolved).Count
+            worsened=@($states.Worsened).Count; improved=@($states.Improved).Count
+            unchanged_fail=@($states.UnchangedFail).Count; unchanged_pass=@($states.UnchangedPass).Count
+            updated_evidence=@($states.UpdatedEvidence).Count; unavailable=@($states.Unavailable).Count
+            absent=@($states.AbsentFromCurrentRun).Count
+        }
+        new_criticals     = $newCrit
+        resolved_criticals = $resolvedCrit
+        score_delta       = $scoreDelta
+    }
+}
+
+# Carries first-seen timestamps forward for findings that are still failing so an
+# exposure window survives across runs. $Now/$NowIso are passed in to keep the
+# function deterministic and testable.
+function Update-ExposureWindows {
+    param($PrevExposure, $CurrentSnapshot, [datetime]$Now, [string]$NowIso)
+    $getEntry = { param($map, $key) if ($null -eq $map) { $null } elseif ($map -is [System.Collections.IDictionary]) { $map[$key] } elseif ($map.PSObject.Properties[$key]) { $map.$key } else { $null } }
+    $findings = if ($CurrentSnapshot -and $CurrentSnapshot.findings) { $CurrentSnapshot.findings } else { @{} }
+    $keys = if ($findings -is [System.Collections.IDictionary]) { @($findings.Keys) } else { @($findings.PSObject.Properties.Name) }
+    $exposure = [ordered]@{}
+    foreach ($id in $keys) {
+        $f = & $getEntry $findings $id
+        if ([string]$f.status -ne 'Fail') { continue }
+        $firstSeen = $NowIso
+        $pe = & $getEntry $PrevExposure $id
+        if ($pe -and $pe.first_seen) { $firstSeen = [string]$pe.first_seen }
+        $days = 0
+        try { $days = [math]::Max(0, [math]::Round(($Now - [datetime]$firstSeen).TotalDays)) } catch { $days = 0 }
+        $exposure[$id] = [ordered]@{ first_seen = $firstSeen; last_seen = $NowIso; days = $days; severity = [string]$f.severity }
+    }
+    return $exposure
+}
+
+# Builds a preview alert payload (never sent). Suitable for a webhook body.
+function Get-AuditAlertPayload {
+    param($Delta, $CurrentSnapshot, $Exposure, [string]$NowIso)
+    $worst = 0; $worstCrit = 0
+    if ($Exposure) {
+        $vals = if ($Exposure -is [System.Collections.IDictionary]) { $Exposure.Values } else { $Exposure.PSObject.Properties.Value }
+        foreach ($e in $vals) {
+            if ([int]$e.days -gt $worst) { $worst = [int]$e.days }
+            if ([string]$e.severity -eq 'Critical' -and [int]$e.days -gt $worstCrit) { $worstCrit = [int]$e.days }
+        }
+    }
+    return [ordered]@{
+        type        = 'security_audit_delta'
+        timestamp   = $NowIso
+        client      = if ($CurrentSnapshot) { $CurrentSnapshot.client } else { '' }
+        target      = if ($CurrentSnapshot) { $CurrentSnapshot.target } else { '' }
+        run_id      = if ($CurrentSnapshot) { $CurrentSnapshot.run_id } else { '' }
+        score       = if ($CurrentSnapshot -and $CurrentSnapshot.score) { $CurrentSnapshot.score.overall } else { $null }
+        grade       = if ($CurrentSnapshot -and $CurrentSnapshot.score) { $CurrentSnapshot.score.grade } else { '' }
+        score_delta = if ($Delta) { $Delta.score_delta.overall } else { $null }
+        new_criticals = if ($Delta) { $Delta.new_criticals } else { 0 }
+        resolved_criticals = if ($Delta) { $Delta.resolved_criticals } else { 0 }
+        new_failures = if ($Delta) { $Delta.counts.new_failure } else { 0 }
+        resolved    = if ($Delta) { $Delta.counts.resolved } else { 0 }
+        worst_exposure_days = $worst
+        worst_critical_exposure_days = $worstCrit
+    }
+}
+
+# Orchestrates a history run: build the current snapshot, compare to the baseline,
+# compute exposure, append a run record to history.jsonl, persist the snapshot and
+# baseline, prune to retention, and return everything for reporting. Honors
+# -NoHistory. Stores the result in $script:HistoryResult for the JSON export.
+function Invoke-AuditHistory {
+    param([string]$Client, [string]$Target, [string]$OutputDir, [string]$OutputBase = '')
+    $script:HistoryResult = $null
+    if ($script:CliNoHistory) { return $null }
+    $now = Get-Date
+    $nowIso = $now.ToString('o')
+    $runId = $now.ToString('yyyyMMddHHmmssfff')
+    $safeClient = ($Client -replace '[^\w\.-]','_'); if (-not $safeClient) { $safeClient = 'client' }
+    $histDir = if ($script:CliHistoryPath) { $script:CliHistoryPath } else { Join-Path $OutputDir ("SecurityAudit_{0}_history" -f $safeClient) }
+    $snapDir = Join-Path $histDir 'snapshots'
+    $baseDir = Join-Path $histDir 'baselines'
+    foreach ($d in @($histDir, $snapDir, $baseDir)) { if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null } }
+    $baselineFile = if ($script:CliBaselinePath) { $script:CliBaselinePath } else { Join-Path $baseDir 'latest.snapshot.json' }
+    $historyFile = Join-Path $histDir 'history.jsonl'
+
+    $snapshot = Convert-AuditStateToSnapshot -RunId $runId -SnapshotId $runId -TimestampIso $nowIso -Client $Client -Target $Target
+
+    $baseline = $null; $prevExposure = $null; $baselineAgeDays = $null; $schemaOk = $true
+    if (Test-Path $baselineFile) {
+        try { $baseline = Get-Content -LiteralPath $baselineFile -Raw -EA Stop | ConvertFrom-Json -EA Stop } catch { $baseline = $null }
+        if ($baseline) {
+            if ($baseline.exposure) { $prevExposure = $baseline.exposure }
+            if ($baseline.schema_version -and ([string]$baseline.schema_version -ne [string]$snapshot.schema_version)) { $schemaOk = $false }
+            if ($baseline.timestamp) { try { $baselineAgeDays = [math]::Round(($now - [datetime]$baseline.timestamp).TotalDays) } catch {} }
+        }
+    }
+
+    $delta = if ($baseline -and $schemaOk) { Compare-AuditSnapshot -Previous $baseline -Current $snapshot } else { $null }
+    $exposure = Update-ExposureWindows -PrevExposure $prevExposure -CurrentSnapshot $snapshot -Now $now -NowIso $nowIso
+    $snapshot['exposure'] = $exposure
+    $snapshot['previous_run_id'] = if ($baseline) { $baseline.run_id } else { $null }
+    $payload = Get-AuditAlertPayload -Delta $delta -CurrentSnapshot $snapshot -Exposure $exposure -NowIso $nowIso
+
+    # Persist snapshot + baseline
+    try {
+        $snapshot | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $snapDir "$runId.snapshot.json") -Encoding UTF8
+        $snapshot | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $baselineFile -Encoding UTF8
+    } catch {}
+
+    # Append run summary to history.jsonl
+    $histRec = [ordered]@{
+        type='run_summary'; run_id=$runId; snapshot_id=$runId
+        previous_run_id = if ($baseline) { $baseline.run_id } else { $null }
+        timestamp=$nowIso; client=$Client; target=$Target
+        catalog_hash=$snapshot.catalog_hash; policy_hash=$snapshot.policy_hash
+        schema_compatible=$schemaOk
+        output_paths = if ($OutputBase) { [ordered]@{ html="$OutputBase.html"; findings_json="${OutputBase}_findings.json"; summary_json="${OutputBase}_summary.json" } } else { $null }
+        snapshot_path = (Join-Path $snapDir "$runId.snapshot.json")
+        write_results_in = if ($OutputBase) { "${OutputBase}_findings.json#writes" } else { $null }
+        score=$snapshot.score.overall; grade=$snapshot.score.grade; ransomware=$snapshot.score.ransomware
+        score_delta = if ($delta) { $delta.score_delta.overall } else { $null }
+        new_criticals = if ($delta) { $delta.new_criticals } else { $null }
+        resolved_criticals = if ($delta) { $delta.resolved_criticals } else { $null }
+        counts = if ($delta) { $delta.counts } else { $null }
+        worst_exposure_days = $payload.worst_exposure_days
+        worst_critical_exposure_days = $payload.worst_critical_exposure_days
+        baseline_age_days = $baselineAgeDays
+    }
+    try { Add-Content -LiteralPath $historyFile -Value ($histRec | ConvertTo-Json -Depth 6 -Compress) -Encoding UTF8 } catch {}
+
+    # Retention: prune snapshot files older than the retention window (0/negative = keep all)
+    $pruned = 0
+    if ($script:CliHistoryRetentionDays -gt 0 -and (Test-Path $snapDir)) {
+        $cutoff = $now.AddDays(-$script:CliHistoryRetentionDays)
+        foreach ($old in @(Get-ChildItem -LiteralPath $snapDir -Filter '*.snapshot.json' -File -EA SilentlyContinue | Where-Object { $_.LastWriteTime -lt $cutoff })) {
+            try { Remove-Item -LiteralPath $old.FullName -Force -EA Stop; $pruned++ } catch {}
+        }
+    }
+
+    $script:HistoryResult = [ordered]@{
+        run_id=$runId; history_dir=$histDir; baseline_age_days=$baselineAgeDays
+        schema_compatible=$schemaOk; had_baseline=[bool]$baseline
+        delta=$delta; exposure=$exposure; alert_payload=$payload; pruned_snapshots=$pruned
+    }
+    return $script:HistoryResult
+}
+
 # ── Save / Load ──────────────────────────────────────────────────────────────
 function Get-AuditState {
     $state = @{
@@ -9094,58 +9429,61 @@ $el['btnDiff'].Add_Click({
 
     try {
         $j1=Get-Content $dlg1.FileName -Raw|ConvertFrom-Json; $j2=Get-Content $dlg2.FileName -Raw|ConvertFrom-Json
+        # Unified comparison engine (shared with silent mode / history).
+        $snap1 = Convert-SaveStateToSnapshot $j1
+        $snap2 = Convert-SaveStateToSnapshot $j2
+        $delta = Compare-AuditSnapshot -Previous $snap1 -Current $snap2
+
+        # Label/severity lookup + remediation-status change tracking from the save files.
+        $meta = @{}; foreach ($cn in $script:AuditCategories.Keys) { foreach ($it in $script:AuditCategories[$cn].Items) { $meta[$it.ID] = @{ Text=$it.Text; Severity=$it.Severity } } }
+        $remChanged = 0
+        foreach ($id in $meta.Keys) {
+            $r1=if($j1.Items.PSObject.Properties[$id]){$j1.Items.$id.RemStatus}else{'Open'}
+            $r2=if($j2.Items.PSObject.Properties[$id]){$j2.Items.$id.RemStatus}else{'Open'}
+            if ($r1 -ne $r2) { $remChanged++ }
+        }
+
+        $c = $delta.counts
         $sb=[System.Text.StringBuilder]::new()
         [void]$sb.AppendLine("AUDIT COMPARISON REPORT")
         [void]$sb.AppendLine("=" * 60)
         [void]$sb.AppendLine("Audit 1: $($j1.Client) - $($j1.Date) (v$($j1.Version))")
         [void]$sb.AppendLine("Audit 2: $($j2.Client) - $($j2.Date) (v$($j2.Version))")
+        if (-not $delta.schema_compatible) { [void]$sb.AppendLine("WARNING: schema versions differ - comparison may be unreliable.") }
         [void]$sb.AppendLine("")
-
-        $improved = 0; $worsened = 0; $newFindings = 0; $resolved = 0; $remChanged = 0
-        $detailSb = [System.Text.StringBuilder]::new()
-        foreach ($cn in ($script:AuditCategories.Keys | Sort-Object)) {
-            $catChanges = @()
-            foreach ($it in $script:AuditCategories[$cn].Items) {
-                $id=$it.ID
-                $s1=if($j1.Items.PSObject.Properties[$id]){$j1.Items.$id.Status}else{'Not Assessed'}
-                $s2=if($j2.Items.PSObject.Properties[$id]){$j2.Items.$id.Status}else{'Not Assessed'}
-                $r1=if($j1.Items.PSObject.Properties[$id]){$j1.Items.$id.RemStatus}else{'Open'}
-                $r2=if($j2.Items.PSObject.Properties[$id]){$j2.Items.$id.RemStatus}else{'Open'}
-                if ($s1 -ne $s2 -or $r1 -ne $r2) {
-                    $delta = ''
-                    if ($s1 -ne $s2) {
-                        $statusRank = @{'Pass'=3;'Partial'=2;'N/A'=1;'Fail'=0;'Not Assessed'=-1}
-                        $r1v = if ($statusRank.Contains($s1)) { $statusRank[$s1] } else { -1 }
-                        $r2v = if ($statusRank.Contains($s2)) { $statusRank[$s2] } else { -1 }
-                        if ($r2v -gt $r1v) { $delta = ' [IMPROVED]'; $improved++ }
-                        elseif ($r2v -lt $r1v -and $s2 -eq 'Fail') { $delta = ' [WORSENED]'; $worsened++ }
-                        elseif ($s1 -eq 'Not Assessed' -and $s2 -eq 'Fail') { $delta = ' [NEW FAILURE]'; $newFindings++ }
-                        elseif ($s1 -eq 'Fail' -and $s2 -eq 'Pass') { $delta = ' [RESOLVED]'; $resolved++ }
-                    }
-                    $line = "  [$id] $($it.Text) ($($it.Severity))$delta"
-                    if ($s1 -ne $s2) { $line += "`n    Status: $s1 -> $s2" }
-                    if ($r1 -ne $r2) { $line += "`n    Remediation: $r1 -> $r2"; $remChanged++ }
-                    $catChanges += $line
-                }
-            }
-            if ($catChanges.Count -gt 0) {
-                [void]$detailSb.AppendLine("$cn ($($catChanges.Count) changes):")
-                foreach ($cc in $catChanges) { [void]$detailSb.AppendLine($cc); [void]$detailSb.AppendLine("") }
+        [void]$sb.AppendLine("SUMMARY:")
+        [void]$sb.AppendLine("  New failures:  $($c.new_failure)")
+        [void]$sb.AppendLine("  Resolved:      $($c.resolved)")
+        [void]$sb.AppendLine("  Worsened:      $($c.worsened)")
+        [void]$sb.AppendLine("  Improved:      $($c.improved)")
+        [void]$sb.AppendLine("  Updated evid.: $($c.updated_evidence)")
+        [void]$sb.AppendLine("  Unavailable:   $($c.unavailable)")
+        [void]$sb.AppendLine("  Rem. changed:  $remChanged")
+        [void]$sb.AppendLine("  New criticals: $($delta.new_criticals) | Resolved criticals: $($delta.resolved_criticals)")
+        [void]$sb.AppendLine("")
+        $changeGroups = [ordered]@{ 'NEW FAILURE'=$delta.states.NewFailure; 'RESOLVED'=$delta.states.Resolved; 'WORSENED'=$delta.states.Worsened; 'IMPROVED'=$delta.states.Improved; 'UPDATED EVIDENCE'=$delta.states.UpdatedEvidence }
+        $totalChanges = ($changeGroups.Values | ForEach-Object { @($_).Count } | Measure-Object -Sum).Sum + $remChanged
+        if ($totalChanges -eq 0) { [void]$sb.AppendLine("No status changes detected between audits.") }
+        else {
+            [void]$sb.AppendLine("DETAILS:"); [void]$sb.AppendLine("-" * 40)
+            foreach ($grp in $changeGroups.Keys) {
+                $ids = @($changeGroups[$grp])
+                if ($ids.Count -eq 0) { continue }
+                [void]$sb.AppendLine("$grp ($($ids.Count)):")
+                foreach ($id in $ids) { [void]$sb.AppendLine("  [$id] $($meta[$id].Text) ($($meta[$id].Severity))") }
+                [void]$sb.AppendLine("")
             }
         }
-        $totalChanges = $improved + $worsened + $newFindings + $resolved + $remChanged
-        [void]$sb.AppendLine("SUMMARY:")
-        [void]$sb.AppendLine("  Improved:      $improved")
-        [void]$sb.AppendLine("  Worsened:      $worsened")
-        [void]$sb.AppendLine("  New failures:  $newFindings")
-        [void]$sb.AppendLine("  Resolved:      $resolved")
-        [void]$sb.AppendLine("  Rem. changed:  $remChanged")
-        [void]$sb.AppendLine("")
-        if ($totalChanges -eq 0) { [void]$sb.AppendLine("No changes detected between audits.") }
-        else { [void]$sb.AppendLine("DETAILS:"); [void]$sb.AppendLine("-" * 40); [void]$sb.Append($detailSb.ToString()) }
+
+        # Export delta JSON next to the second (newer) audit.
+        $deltaOut = $dlg2.FileName -replace '\.json$','_delta.json'
+        try {
+            ([ordered]@{ schema_version=$script:SchemaVersion; tool_version=$script:ProductVersion; audit1=@{client=$j1.Client;date=$j1.Date}; audit2=@{client=$j2.Client;date=$j2.Date}; delta=$delta } | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $deltaOut -Encoding UTF8
+            [void]$sb.AppendLine("Delta JSON written: $deltaOut")
+        } catch {}
 
         [System.Windows.MessageBox]::Show($sb.ToString(), "Audit Diff - $totalChanges changes", 'OK', 'Information')
-        Write-Log "Diff comparison: $improved improved, $worsened worsened, $newFindings new, $resolved resolved" 'INFO'
+        Write-Log "Diff comparison: $($c.new_failure) new, $($c.resolved) resolved, $($c.worsened) worsened, $($c.improved) improved" 'INFO'
     } catch { [System.Windows.MessageBox]::Show("Diff failed: $_",'Error','OK','Error') }
 })
 
@@ -9509,6 +9847,28 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 <span class="ck-n">[ ]</span> = unchecked
 </div>
 "@
+
+    # ── CHANGE SINCE BASELINE (continuous delta, NSA-005) ────────────────────
+    if ($script:HistoryResult -and $script:HistoryResult.had_baseline -and $script:HistoryResult.delta) {
+        $hd = $script:HistoryResult.delta; $hc = $hd.counts
+        $sd = $hd.score_delta.overall
+        $sdColor = if ($null -eq $sd) { '#94a3b8' } elseif ($sd -gt 0) { '#22c55e' } elseif ($sd -lt 0) { '#ef4444' } else { '#94a3b8' }
+        $sdStr = if ($null -eq $sd) { 'n/a' } elseif ($sd -gt 0) { "+$sd" } else { "$sd" }
+        $html += "<div class='sec'><h2>Change Since Baseline</h2>`n"
+        $html += "<div class='d'>Compared against the previous run (baseline age $($script:HistoryResult.baseline_age_days) days).</div>`n"
+        if (-not $hd.schema_compatible) { $html += "<div class='d' style='color:#f59e0b'>Catalog/schema changed since baseline; some deltas may reflect definition changes.</div>`n" }
+        $html += "<div style='display:flex;flex-wrap:wrap;gap:10px;margin:10px 0'>"
+        $html += "<div style='padding:8px 14px;border:1px solid #334155;border-radius:8px'>Score delta <strong style='color:$sdColor'>$sdStr</strong></div>"
+        $html += "<div style='padding:8px 14px;border:1px solid #334155;border-radius:8px'>New failures <strong style='color:#ef4444'>$($hc.new_failure)</strong></div>"
+        $html += "<div style='padding:8px 14px;border:1px solid #334155;border-radius:8px'>Resolved <strong style='color:#22c55e'>$($hc.resolved)</strong></div>"
+        $html += "<div style='padding:8px 14px;border:1px solid #334155;border-radius:8px'>Worsened <strong style='color:#f97316'>$($hc.worsened)</strong></div>"
+        $html += "<div style='padding:8px 14px;border:1px solid #334155;border-radius:8px'>Improved <strong style='color:#84cc16'>$($hc.improved)</strong></div>"
+        $html += "<div style='padding:8px 14px;border:1px solid #334155;border-radius:8px'>Unchanged <strong>$($hc.unchanged_pass + $hc.unchanged_fail)</strong></div>"
+        $html += "<div style='padding:8px 14px;border:1px solid #334155;border-radius:8px'>Unavailable <strong style='color:#94a3b8'>$($hc.unavailable)</strong></div>"
+        $html += "</div>"
+        $html += "<div class='d'>New criticals: <strong style='color:#ef4444'>$($hd.new_criticals)</strong> &middot; Resolved criticals: <strong style='color:#22c55e'>$($hd.resolved_criticals)</strong></div>`n"
+        $html += "</div>`n"
+    }
 
     # ── EXECUTIVE SUMMARY (Executive, Management, All) ───────────────────────
     if ($Tier -ne 'Technical') {
@@ -10305,6 +10665,17 @@ function Export-FindingsJSON {
         exceptions     = Get-AuditExceptions -Findings $findings
         framework_controls = if ($script:CliProfile -and $script:FrameworkMeta -and $script:FrameworkMeta.Contains($script:CliProfile)) {
             Get-FrameworkControlSummary -Framework $script:CliProfile -Findings $findings
+        } else { $null }
+        continuous = if ($script:HistoryResult) {
+            [ordered]@{
+                run_id              = $script:HistoryResult.run_id
+                had_baseline        = $script:HistoryResult.had_baseline
+                baseline_age_days   = $script:HistoryResult.baseline_age_days
+                schema_compatible   = $script:HistoryResult.schema_compatible
+                delta               = $script:HistoryResult.delta
+                exposure            = $script:HistoryResult.exposure
+                alert_payload       = $script:HistoryResult.alert_payload
+            }
         } else { $null }
         findings       = $findings
         cloud_assessments = if ($script:CloudAssessmentImports.Count -gt 0) {
@@ -11332,6 +11703,33 @@ if ($script:SilentMode) {
         Write-Host "[Silent Mode] Privacy mode active - hostnames, IPs, and identities will be redacted in exports" -ForegroundColor Cyan
     }
 
+    # ── Continuous delta assessment (NSA-005): runs before exports so the JSON
+    #    continuous block and console summary reflect the same comparison. ──
+    if (-not $script:CliNoHistory) {
+        $histTarget = try { if ($el['txtScanTarget'].Text) { $el['txtScanTarget'].Text } else { 'localhost' } } catch { 'localhost' }
+        $histResult = Invoke-AuditHistory -Client $clientName -Target $histTarget -OutputDir (Split-Path -Parent $basePath) -OutputBase $basePath
+        if ($histResult) {
+            Write-Host ""
+            Write-Host "[Silent Mode] CONTINUOUS DELTA" -ForegroundColor Cyan
+            if (-not $histResult.had_baseline) {
+                Write-Host "[Silent Mode]   Baseline established (first run). History: $($histResult.history_dir)"
+            } elseif (-not $histResult.schema_compatible) {
+                Write-Host "[Silent Mode]   Baseline schema/catalog changed - delta skipped; new baseline written." -ForegroundColor Yellow
+            } else {
+                $d = $histResult.delta
+                Write-Host "[Silent Mode]   vs baseline (age $($histResult.baseline_age_days)d): score delta $($d.score_delta.overall), new criticals $($d.new_criticals), resolved criticals $($d.resolved_criticals)"
+                Write-Host "[Silent Mode]   New fail: $($d.counts.new_failure) | Resolved: $($d.counts.resolved) | Worsened: $($d.counts.worsened) | Improved: $($d.counts.improved) | Unavailable: $($d.counts.unavailable)"
+            }
+            $critExp = @($histResult.exposure.GetEnumerator() | Where-Object { $_.Value.severity -eq 'Critical' } | Sort-Object { $_.Value.days } -Descending)
+            if ($critExp.Count -gt 0) { Write-Host "[Silent Mode]   Worst critical exposure: $($critExp[0].Value.days)d ($($critExp[0].Key))" }
+            if ($histResult.pruned_snapshots -gt 0) { Write-Host "[Silent Mode]   Pruned $($histResult.pruned_snapshots) snapshot(s) past retention ($($script:CliHistoryRetentionDays)d)" }
+            if ($script:CliAlertPreview) {
+                Write-Host "[Silent Mode]   Alert payload preview (not sent):" -ForegroundColor Cyan
+                Write-Host (($histResult.alert_payload | ConvertTo-Json -Depth 5) -split "`n" | ForEach-Object { "    $_" }) -Separator "`n"
+            }
+        }
+    }
+
     # HTML Report (always generated)
     try {
         $null = Export-HTMLReport -outPath $outFile -Tier $script:CliReport
@@ -11515,7 +11913,15 @@ if ($script:SilentMode) {
                 Set-ItemProperty -Path $rmmPath -Name 'ComplianceFlags' -Value $complianceStr -Force
                 Set-ItemProperty -Path $rmmPath -Name 'FailCount' -Value $failCountForRmm -Force
                 Set-ItemProperty -Path $rmmPath -Name 'ReportPath' -Value $outFile -Force
-                Set-ItemProperty -Path $rmmPath -Name 'SummaryPath' -Value $summaryOut -Force } }
+                Set-ItemProperty -Path $rmmPath -Name 'SummaryPath' -Value $summaryOut -Force
+                if ($script:HistoryResult) {
+                    $hr = $script:HistoryResult; $ap = $hr.alert_payload
+                    Set-ItemProperty -Path $rmmPath -Name 'ScoreDelta' -Value ([int]$ap.score_delta) -Force
+                    Set-ItemProperty -Path $rmmPath -Name 'NewCriticals' -Value ([int]$ap.new_criticals) -Force
+                    Set-ItemProperty -Path $rmmPath -Name 'ResolvedCriticals' -Value ([int]$ap.resolved_criticals) -Force
+                    Set-ItemProperty -Path $rmmPath -Name 'WorstExposureDays' -Value ([int]$ap.worst_critical_exposure_days) -Force
+                    Set-ItemProperty -Path $rmmPath -Name 'BaselineAgeDays' -Value ([int]$hr.baseline_age_days) -Force
+                } } }
     )
     foreach ($wi in $writeIntents) {
         if (-not (& $wi.Detect)) { continue }   # platform/provider not present on this host

@@ -88,6 +88,29 @@ and a stale-scan flag, with a critical-findings-by-category rollup. It links bac
 to each client's individual HTML report when one sits next to its JSON, writes a
 companion CSV, and embeds only aggregate scores — never finding evidence or notes.
 
+### Continuous Delta Assessment
+
+Run the same scan on a schedule and the tool tracks change over time. Each silent
+run writes a compact snapshot, compares it to the previous baseline, and records a
+run summary to `history.jsonl`:
+
+```powershell
+# Recurring scan with history (delta vs. the last run is computed automatically)
+.\NetworkSecurityAudit.ps1 -Silent -ScanProfile Full -HistoryPath "C:\MSP\Acme\history"
+
+# Preview the delta alert/webhook payload without sending anything
+.\NetworkSecurityAudit.ps1 -Silent -HistoryPath "C:\MSP\Acme\history" -AlertPreview
+```
+
+Each run reports new/resolved/worsened/improved findings, new and resolved
+criticals, a score delta, and a critical-finding exposure window (how long each
+critical has been failing). The HTML report gains a "Change Since Baseline"
+section, the findings JSON gains a `continuous` block (delta, exposure, and a
+preview alert payload), and RMM fields gain `ScoreDelta`, `NewCriticals`,
+`ResolvedCriticals`, `WorstExposureDays`, and `BaselineAgeDays`. The GUI **Diff**
+button uses the same comparison engine and writes a `*_delta.json`. Snapshots are
+pruned past `-HistoryRetentionDays`; `-NoHistory` turns the whole feature off.
+
 ---
 
 ## Features
@@ -490,6 +513,16 @@ arguments, the WinRM-bootstrap WMI call, and so on). The lint gate must report
                      up. Default: folder of -OutputPath, else Desktop
 -StaleDays           Dashboard mode: scans older than this many days are
                      flagged stale. Default: 30
+-HistoryPath         Continuous mode: directory for history.jsonl, snapshots,
+                     and the baseline. Default: a per-client folder next to the
+                     report output
+-BaselinePath        Explicit baseline snapshot to compare this run against.
+                     Default: the history folder's latest snapshot
+-NoHistory           Disable continuous delta/history entirely
+-TrendDays           Trend window in days for history reporting. Default: 90
+-AlertPreview        Print the delta alert/webhook payload (never sends it)
+-HistoryRetentionDays Prune snapshot files older than this. 0 = keep all.
+                     Default: 365
 ```
 
 ---

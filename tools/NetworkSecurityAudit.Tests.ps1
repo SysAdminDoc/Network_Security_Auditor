@@ -276,6 +276,81 @@ Describe 'Evidence-grade compliance helpers (real functions via AST)' {
     }
 }
 
+Describe 'Continuous delta engine (real functions via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Compare-AuditSnapshot','Update-ExposureWindows','Get-AuditAlertPayload') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        function script:F { param($s,$sev,$fp) [ordered]@{ status=$s; severity=$sev; fingerprint=$fp } }
+    }
+    It 'classifies every transition type and counts criticals' {
+        # current snapshot is an OrderedDictionary (as in production); baseline is JSON-roundtripped
+        $prev = @{ schema_version='2.1'; run_id='R1'; score=@{overall=60;ransomware=50}; findings=@{
+            IA01=(F 'Pass' 'Critical' 'a'); IA02=(F 'Fail' 'Critical' 'b'); IA03=(F 'Pass' 'High' 'c')
+            IA04=(F 'Fail' 'High' 'd'); IA05=(F 'Fail' 'Medium' 'e'); IA06=(F 'Pass' 'Low' 'f'); EP01=(F 'Pass' 'High' 'h') } } | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+        $curr = [ordered]@{ schema_version='2.1'; run_id='R2'; score=[ordered]@{overall=72;ransomware=58}; findings=[ordered]@{
+            IA01=(F 'Fail' 'Critical' 'a2'); IA02=(F 'Pass' 'Critical' 'b2'); IA03=(F 'Partial' 'High' 'c2')
+            IA04=(F 'Partial' 'High' 'd2'); IA05=(F 'Fail' 'Medium' 'e2'); IA06=(F 'Pass' 'Low' 'f'); EP09=(F 'Fail' 'High' 'z') } }
+        $d = Compare-AuditSnapshot -Previous $prev -Current $curr
+        $d.states.NewFailure | Should -Contain 'IA01'
+        $d.states.NewFailure | Should -Contain 'EP09'
+        $d.states.Resolved   | Should -Be @('IA02')
+        $d.states.Worsened   | Should -Be @('IA03')
+        $d.states.Improved   | Should -Be @('IA04')
+        $d.states.UpdatedEvidence | Should -Be @('IA05')
+        $d.states.UnchangedPass   | Should -Be @('IA06')
+        $d.states.AbsentFromCurrentRun | Should -Be @('EP01')
+        $d.new_criticals      | Should -Be 1
+        $d.resolved_criticals | Should -Be 1
+        $d.score_delta.overall | Should -Be 12
+    }
+    It 'flags a schema-version mismatch as incompatible' {
+        $prev = [ordered]@{ schema_version='2.0'; findings=[ordered]@{} }
+        $curr = [ordered]@{ schema_version='2.1'; findings=[ordered]@{} }
+        (Compare-AuditSnapshot -Previous $prev -Current $curr).schema_compatible | Should -BeFalse
+    }
+    It 'carries the exposure first-seen timestamp forward for still-failing findings' {
+        $prevExp = @{ IA01 = @{ first_seen='2026-06-01T00:00:00.0000000'; days=0; severity='Critical' } }
+        $snap = [ordered]@{ findings=[ordered]@{ IA01=(F 'Fail' 'Critical' 'x'); IA02=(F 'Pass' 'High' 'y') } }
+        $now = [datetime]'2026-06-11T00:00:00'
+        $exp = Update-ExposureWindows -PrevExposure $prevExp -CurrentSnapshot $snap -Now $now -NowIso $now.ToString('o')
+        $exp.Keys | Should -Be @('IA01')                    # IA02 passing -> no exposure
+        $exp.IA01.first_seen | Should -Be '2026-06-01T00:00:00.0000000'
+        $exp.IA01.days | Should -Be 10                       # 10 days of exposure carried forward
+    }
+    It 'builds an alert payload with worst critical exposure (never sent)' {
+        $exp = @{ IA01=@{days=10;severity='Critical'}; IA02=@{days=40;severity='High'} }
+        $p = Get-AuditAlertPayload -Delta (@{score_delta=@{overall=5};new_criticals=1;resolved_criticals=0;counts=@{new_failure=1;resolved=0}}) -CurrentSnapshot (@{client='Acme';target='DC';run_id='R';score=@{overall=70;grade='C'}}) -Exposure $exp -NowIso 'now'
+        $p.worst_exposure_days | Should -Be 40
+        $p.worst_critical_exposure_days | Should -Be 10
+        $p.new_criticals | Should -Be 1
+    }
+
+    It 'converts two save files and diffs them through the shared engine' {
+        # Load the catalog-dependent converter + fingerprint helper with a minimal catalog
+        $ast2 = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Convert-SaveStateToSnapshot','Get-StringSha256','Get-FindingFingerprint') {
+            $fn = $ast2.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        $script:AuditCategories = @{ 'Identity' = @{ Items = @(
+            @{ ID='IA01'; Text='Priv groups'; Severity='Critical' }
+            @{ ID='IA02'; Text='MFA'; Severity='High' }) } }
+        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.0'
+        $save1 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-01'; ScanTarget='DC'; Items=@{ IA01=@{Status='Fail';Findings='x';Evidence='y'}; IA02=@{Status='Pass'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
+        $save2 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-14'; ScanTarget='DC'; Items=@{ IA01=@{Status='Pass'}; IA02=@{Status='Fail'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
+        $s1 = Convert-SaveStateToSnapshot $save1
+        $s2 = Convert-SaveStateToSnapshot $save2
+        @($s1.findings.Keys) | Should -Contain 'IA01'
+        $d = Compare-AuditSnapshot -Previous $s1 -Current $s2
+        $d.states.Resolved   | Should -Be @('IA01')   # IA01 Fail -> Pass
+        $d.states.NewFailure | Should -Be @('IA02')   # IA02 Pass -> Fail
+        $d.resolved_criticals | Should -Be 1          # IA01 is Critical
+    }
+}
+
 Describe 'Lint cleanliness (PSScriptAnalyzer)' {
     It 'has zero analyzer findings under the project settings' -Skip:(-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
         $settings = Join-Path $script:RepoRoot 'PSScriptAnalyzerSettings.psd1'
