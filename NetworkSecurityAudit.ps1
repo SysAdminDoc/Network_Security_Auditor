@@ -10832,6 +10832,21 @@ if ($script:SilentMode) {
     }
 
     $idList = @($ids)
+    $skippedByProfile = $script:AutoChecks.Count - $idsBeforeRiskFilter.Count
+    $skippedByRisk = $idsBeforeRiskFilter.Count - $idList.Count
+    $adChecks = @($idList | Where-Object { $script:AutoChecks[$_].Type -eq 'AD' }).Count
+    $localChecks = $idList.Count - $adChecks
+    Write-Host ""
+    Write-Host "[Silent Mode] SCAN MANIFEST" -ForegroundColor Cyan
+    Write-Host "[Silent Mode]   Profile:     $profName ($($idList.Count) checks: $localChecks local, $adChecks AD)"
+    Write-Host "[Silent Mode]   Read-only:   $($script:ReadOnlyMode)"
+    Write-Host "[Silent Mode]   Internet:    $(if($script:CliNoInternet){'Disabled (-NoInternet)'}else{'Enabled (KEV download, DNS probes)'})"
+    if ($skippedByProfile -gt 0) { Write-Host "[Silent Mode]   Skipped:     $skippedByProfile checks (not in profile)" }
+    if ($skippedByRisk -gt 0)    { Write-Host "[Silent Mode]   Skipped:     $skippedByRisk checks (risk tier 3, read-only mode)" }
+    Write-Host "[Silent Mode]   RMM writes:  $(if($script:CliNoRmmWrite){'Disabled (-NoRmmWrite)'}else{'Enabled (auto-detect platform)'})"
+    Write-Host "[Silent Mode]   Reg writes:  $(if($script:CliNoRegistryWrite){'Disabled (-NoRegistryWrite)'}else{'Enabled (HKLM:\SOFTWARE\NetworkSecurityAudit)'})"
+    Write-Host "[Silent Mode]   Output dir:  $outputDir"
+    Write-Host ""
     Write-Host "[Silent Mode] Scanning $($idList.Count) checks..."
 
     $completed = 0; $failed = 0
