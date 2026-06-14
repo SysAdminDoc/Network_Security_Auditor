@@ -9624,6 +9624,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
         $fwTarget = $script:ComplianceTarget
         $html += "<div class='sec'><h2>Compliance Framework Mapping</h2>`n"
         $html += "<div class='d'>Each finding maps to controls across $frameworkCount frameworks. Active target: <strong style='color:#38bdf8'>$(if($fwTarget -eq 'All'){'All Frameworks'}else{$script:FrameworkMeta[$fwTarget].Name})</strong></div>`n"
+        $html += "<div class='d' style='border-left:3px solid #f59e0b;padding-left:10px;margin:8px 0;color:#cbd5e1'><strong style='color:#f59e0b'>Mapping limitations:</strong> These mappings are assessment support, not certification. Framework scores exclude N/A controls. Some controls (physical security, backup/DR documentation, and policy/process) rely on heuristic or checklist evidence and require manual validation; automated checks collect machine-verifiable evidence only.</div>`n"
         # Determine which columns to show based on framework target
         $showFw = if ($fwTarget -eq 'All') { @($script:FrameworkMeta.Keys) } else { @($fwTarget) }
         $html += "<div class='comp-matrix'><table><tr><th style='width:55px'>ID</th><th style='width:160px'>Check Item</th><th style='width:60px'>Status</th>"
@@ -10081,6 +10082,73 @@ function Invoke-AutoSave {
     return $outFile
 }
 
+# ── Evidence-Grade Compliance Helpers (NSA-008) ───────────────────────────────
+# Pure helpers over an already-built findings array (the same shape Export-FindingsJSON
+# emits): no GUI/runtime coupling so they can be unit-tested in isolation.
+
+# Surfaces accepted-risk / deferred findings as formal exceptions with the
+# control mappings, owner, expiration, and rationale an auditor needs.
+function Get-AuditExceptions {
+    param([object[]]$Findings)
+    $out = @()
+    foreach ($f in @($Findings)) {
+        $status = if ($f.remediation) { [string]$f.remediation.status } else { '' }
+        if ($status -ne 'Accepted Risk' -and $status -ne 'Deferred') { continue }
+        $controls = @()
+        if ($f.compliance) {
+            foreach ($p in $f.compliance.PSObject.Properties) {
+                if ($p.Value) { $controls += [ordered]@{ framework = $p.Name; control = ([string]$p.Value) } }
+            }
+        }
+        $out += [ordered]@{
+            id          = $f.id
+            label       = $f.text
+            severity    = $f.severity
+            status      = $f.status
+            disposition = $status
+            owner       = if ($f.remediation) { [string]$f.remediation.assigned } else { '' }
+            expiration  = if ($f.remediation) { [string]$f.remediation.due } else { '' }
+            rationale   = [string]$f.notes
+            controls    = $controls
+        }
+    }
+    return @($out)
+}
+
+# Builds a single-framework control summary: every mapped check, its status,
+# observed evidence, and pass/fail/na rollup that excludes N/A from the score.
+function Get-FrameworkControlSummary {
+    param([string]$Framework, [object[]]$Findings)
+    $ids = if ($script:FrameworkChecks -and $script:FrameworkChecks.Contains($Framework)) { $script:FrameworkChecks[$Framework] } else { @() }
+    $byId = @{}
+    foreach ($f in @($Findings)) { if ($f.id) { $byId[[string]$f.id] = $f } }
+    $controls = @(); $pass=0; $fail=0; $partial=0; $na=0; $notAssessed=0
+    foreach ($id in $ids) {
+        $f = if ($byId.Contains($id)) { $byId[$id] } else { $null }
+        $st = if ($f) { [string]$f.status } else { 'Not Assessed' }
+        switch ($st) { 'Pass' {$pass++} 'Fail' {$fail++} 'Partial' {$partial++} 'N/A' {$na++} default {$notAssessed++} }
+        $ctrl = if ($f -and $f.compliance -and $f.compliance.PSObject.Properties[$Framework]) { [string]$f.compliance.$Framework } else { '' }
+        $controls += [ordered]@{
+            check_id      = $id
+            control       = $ctrl
+            status        = $st
+            severity      = if ($f) { $f.severity } else { '' }
+            observed_fact = if ($f) { [string]$f.evidence } else { '' }
+            narrative     = if ($f) { [string]$f.findings } else { '' }
+        }
+    }
+    $assessed = $pass + $fail + $partial
+    $score = if ($assessed -gt 0) { [math]::Round(($pass + $partial * 0.5) / $assessed * 100) } else { 0 }
+    return [ordered]@{
+        framework          = $Framework
+        score              = $score
+        score_excludes_na  = $true
+        pass = $pass; fail = $fail; partial = $partial; na = $na; not_assessed = $notAssessed
+        total = @($ids).Count; assessed = $assessed
+        controls = $controls
+    }
+}
+
 # ── Phase 5A: Enhanced Structured JSON Export ─────────────────────────────────
 # Per-finding JSON with full compliance, ATT&CK, D3FEND, remediation metadata
 function Export-FindingsJSON {
@@ -10147,6 +10215,7 @@ function Export-FindingsJSON {
                 weight        = $item.Weight
                 status        = $sv
                 text          = $item.Text
+                assessment_method = 'Automated'
                 findings      = ConvertTo-RedactedText $rawFindings
                 evidence      = ConvertTo-RedactedText $rawEvidence
                 notes         = ConvertTo-RedactedText $rawNotes
@@ -10174,7 +10243,9 @@ function Export-FindingsJSON {
                 score     = $s.Score
                 compliant = ($s.Score -ge 80)
                 pass      = $s.Pass; fail = $s.Fail; partial = $s.Partial
+                na        = $s.NA
                 total     = $s.Total; assessed = $s.Assessed
+                score_excludes_na = $true
             }
         }
     } catch {}
@@ -10225,6 +10296,16 @@ function Export-FindingsJSON {
             na       = ($findings | Where-Object { $_.status -eq 'N/A' }).Count
             not_assessed = ($findings | Where-Object { $_.status -eq 'Not Assessed' }).Count
         }
+        evidence_model = [ordered]@{
+            observed_fact = 'The "evidence" field on each finding is the machine-collected observed fact.'
+            narrative     = 'The "findings" field is the human-readable narrative/assessment summary.'
+            note          = 'Framework scores exclude N/A controls from the denominator.'
+        }
+        mapping_limitations = 'Compliance mappings are assessment support, not certification. Some controls (physical security, backup/DR documentation, and policy/process) rely on heuristic or checklist evidence and require manual validation; automated checks collect machine-verifiable evidence only.'
+        exceptions     = Get-AuditExceptions -Findings $findings
+        framework_controls = if ($script:CliProfile -and $script:FrameworkMeta -and $script:FrameworkMeta.Contains($script:CliProfile)) {
+            Get-FrameworkControlSummary -Framework $script:CliProfile -Findings $findings
+        } else { $null }
         findings       = $findings
         cloud_assessments = if ($script:CloudAssessmentImports.Count -gt 0) {
             @($script:CloudAssessmentImports | ForEach-Object {

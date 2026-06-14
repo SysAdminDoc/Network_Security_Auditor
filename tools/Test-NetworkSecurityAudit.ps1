@@ -254,6 +254,13 @@ if ($scriptText -notmatch 'writes\s*=\s*\[ordered\]@\{' -or $scriptText -notmatc
 if ($scriptText -notmatch '\[switch\]\$Dashboard' -or $scriptText -notmatch 'function Export-MultiClientDashboard' -or $scriptText -notmatch "if \(\`$Dashboard\)\s*\{" -or $scriptText -notmatch "export_type -ne 'structured_findings'") {
     Add-Failure 'Dashboard mode must expose -Dashboard, define Export-MultiClientDashboard, gate on $Dashboard, and filter to structured_findings exports.'
 }
+# NSA-008: evidence-grade compliance output.
+if ($scriptText -notmatch 'function Get-AuditExceptions' -or $scriptText -notmatch 'function Get-FrameworkControlSummary' -or $scriptText -notmatch 'exceptions     = Get-AuditExceptions' -or $scriptText -notmatch 'framework_controls = if' -or $scriptText -notmatch 'mapping_limitations' -or $scriptText -notmatch 'evidence_model' -or $scriptText -notmatch "assessment_method = 'Automated'" -or $scriptText -notmatch 'score_excludes_na') {
+    Add-Failure 'Evidence-grade output must define Get-AuditExceptions/Get-FrameworkControlSummary and emit exceptions, framework_controls, evidence_model, mapping_limitations, assessment_method, and score_excludes_na.'
+}
+if ($scriptText -notmatch 'Mapping limitations:</strong>') {
+    Add-Failure 'HTML compliance report must include a mapping-limitations disclaimer.'
+}
 if ($scriptText -notmatch '\[switch\]\$NoInternet' -or $scriptText -notmatch "if\s*\(\`$NoInternet\)[^\r\n]*'-NoInternet'" -or $scriptText -notmatch '\$script:CliNoInternet' -or $scriptText -notmatch 'KEV lookup skipped \(-NoInternet' -or $scriptText -notmatch 'Egress port probe skipped \(-NoInternet\)' -or $scriptText -notmatch 'External DNS test skipped \(-NoInternet\)') {
     Add-Failure 'Internet-touching checks must expose, preserve, and honor -NoInternet.'
 }

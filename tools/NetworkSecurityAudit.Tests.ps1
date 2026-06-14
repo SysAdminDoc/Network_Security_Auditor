@@ -240,6 +240,42 @@ Describe 'Write gate behavior (real functions via AST)' {
     }
 }
 
+Describe 'Evidence-grade compliance helpers (real functions via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Get-AuditExceptions','Get-FrameworkControlSummary') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        $script:FrameworkChecks = @{ HIPAA = @('IA01','EP02','PS01') }
+        $script:SampleFindings = @(
+            [pscustomobject]@{ id='IA01'; text='Priv groups'; severity='Critical'; status='Fail'; evidence='12 DAs'; findings='Too many admins'; notes='Accept until Q3'; compliance=[pscustomobject]@{ HIPAA='164.308'; CIS='5.1' }; remediation=[pscustomobject]@{ status='Accepted Risk'; assigned='Jane'; due='2026-09-30' } }
+            [pscustomobject]@{ id='EP02'; text='BitLocker'; severity='Critical'; status='N/A'; evidence='No TPM'; findings='N/A'; notes=''; compliance=[pscustomobject]@{ HIPAA='164.312' }; remediation=[pscustomobject]@{ status='Open'; assigned=''; due='' } }
+            [pscustomobject]@{ id='PS01'; text='Physical'; severity='Medium'; status='Pass'; evidence='Locked'; findings='OK'; notes=''; compliance=[pscustomobject]@{ HIPAA='164.310' }; remediation=[pscustomobject]@{ status='Deferred'; assigned='Bob'; due='2026-12-01' } }
+        )
+    }
+    It 'extracts accepted-risk and deferred findings as exceptions with owner/expiration/rationale' {
+        $ex = Get-AuditExceptions -Findings $script:SampleFindings
+        @($ex).Count | Should -Be 2
+        $ia = $ex | Where-Object { $_.id -eq 'IA01' }
+        $ia.disposition | Should -Be 'Accepted Risk'
+        $ia.owner | Should -Be 'Jane'
+        $ia.expiration | Should -Be '2026-09-30'
+        $ia.rationale | Should -Be 'Accept until Q3'
+        $ia.controls.framework | Should -Contain 'HIPAA'
+    }
+    It 'builds a single-framework control summary that excludes N/A from the score' {
+        $fc = Get-FrameworkControlSummary -Framework 'HIPAA' -Findings $script:SampleFindings
+        $fc.framework | Should -Be 'HIPAA'
+        @($fc.controls).Count | Should -Be 3
+        $fc.na | Should -Be 1
+        $fc.assessed | Should -Be 2
+        $fc.score | Should -Be 50   # 1 pass of 2 assessed; N/A excluded
+        $fc.score_excludes_na | Should -BeTrue
+        ($fc.controls | Where-Object { $_.check_id -eq 'IA01' }).observed_fact | Should -Be '12 DAs'
+    }
+}
+
 Describe 'Lint cleanliness (PSScriptAnalyzer)' {
     It 'has zero analyzer findings under the project settings' -Skip:(-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
         $settings = Join-Path $script:RepoRoot 'PSScriptAnalyzerSettings.psd1'

@@ -360,7 +360,7 @@ Automatic platform detection and field population:
 | Format | File | Use Case |
 |--------|------|----------|
 | HTML | `SecurityAudit_*.html` | Human-readable report with all three tiers |
-| JSON | `*_findings.json` | Per-finding structured data with compliance, ATT&CK, and D3FEND metadata |
+| JSON | `*_findings.json` | Per-finding structured data with compliance, ATT&CK, and D3FEND metadata, an `exceptions` list (accepted-risk/deferred items with owner, expiration, and rationale), per-framework control summaries, observed-fact/narrative separation, and write disclosure |
 | JSONL | `*_siem.jsonl` | One event per finding for Splunk/Elastic/Sentinel with truncation and D3FEND fields |
 | Run Log JSONL | `*_runlog.jsonl` | Per-check timing, timeout, skip reason, error, and slow-check metadata |
 | CSV | `*.csv` | Pivot table analysis with compliance, ATT&CK, and D3FEND columns |
