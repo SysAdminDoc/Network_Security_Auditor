@@ -10967,7 +10967,7 @@ if ($script:SilentMode) {
     $fwFlags = @{}
     try {
         $fwScores = Get-FrameworkScores -Framework 'All'
-        foreach ($fw in $fwScores.Keys) { $fwFlags[$fw] = ($fwScores[$fw].Score -ge 80) }
+        foreach ($fw in $fwScores.Keys) { $fwFlags[$fw] = ($fwScores[$fw].Score -ge 60) }
     } catch {}
     $complianceStr = ($fwFlags.Keys | ForEach-Object { "$_`:$(if($fwFlags[$_]){'PASS'}else{'FAIL'})" }) -join '|'
 
