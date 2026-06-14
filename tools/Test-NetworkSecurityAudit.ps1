@@ -377,6 +377,11 @@ foreach ($tn in $themeNames) {
     }
 }
 
+# ── Exit code contract ────────────────────────────────────────────────────
+if ($scriptText -notmatch 'exit\s+\$exitCode' -or $scriptText -notmatch 'Score\s*-ge\s*60\b') {
+    Add-Failure 'Silent mode exit code contract: framework compliance threshold must use 60% and exit via $exitCode.'
+}
+
 if ($failures.Count -gt 0) {
     Write-Host 'NetworkSecurityAudit validation FAILED' -ForegroundColor Red
     foreach ($failure in $failures) { Write-Host " - $failure" -ForegroundColor Red }
