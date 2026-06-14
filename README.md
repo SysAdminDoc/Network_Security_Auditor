@@ -1,13 +1,3 @@
-<!-- codex-branding:start -->
-<p align="center"><img src="icon.png" width="128" alt="Network Security Auditor"></p>
-
-<p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-4.9.0-58A6FF?style=for-the-badge">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-4ade80?style=for-the-badge">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-PowerShell-58A6FF?style=for-the-badge">
-</p>
-<!-- codex-branding:end -->
-
 # Network Security Auditor
 
 A single-file PowerShell security audit tool. Runs 69 automated checks across 8 security domains, maps findings to 11 compliance frameworks, MITRE ATT&CK, and MITRE D3FEND, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
