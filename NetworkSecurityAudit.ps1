@@ -11155,6 +11155,16 @@ if ($script:SilentMode) {
     Write-Host "  RunLog:   $runLogOut"
     if ($script:CliExportCSV -or $script:SilentMode) { Write-Host "  CSV:      $csvOut" }
     Write-Host "  Summary:  $summaryOut"
+    Write-Host ""
+    Write-Host "[Silent Mode] Write summary:" -ForegroundColor Cyan
+    if ($script:CliNoRmmWrite) {
+        Write-Host "  RMM/Registry writes: SKIPPED (-NoRmmWrite)" -ForegroundColor DarkGray
+    } elseif ($script:CliNoRegistryWrite) {
+        Write-Host "  Registry writes: SKIPPED (-NoRegistryWrite)" -ForegroundColor DarkGray
+        Write-Host "  Command-based RMM: attempted (if platform detected)" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  Generic registry: HKLM:\SOFTWARE\NetworkSecurityAudit" -ForegroundColor DarkGray
+    }
 
     exit $exitCode
 }
