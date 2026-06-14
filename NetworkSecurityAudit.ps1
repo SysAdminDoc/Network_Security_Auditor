@@ -5926,7 +5926,7 @@ $el = @{}
 $el['txtDate'].Text = (Get-Date -Format 'yyyy-MM-dd')
 
 # ── Initialize Scan Profile ComboBox ─────────────────────────────────────────
-$profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
+$profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
 foreach ($pn in $profileOrder) {
     $el['cboProfile'].Items.Add($script:ScanProfiles[$pn].Label) | Out-Null
 }
@@ -6744,7 +6744,7 @@ function Start-ScanBatch([string]$filterType) {
     }
     elseif ($filterType -eq 'Profile') {
         # Get selected profile from ComboBox
-        $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
+        $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
         $selIdx = $el['cboProfile'].SelectedIndex
         if ($selIdx -lt 0) { $selIdx = 2 }
         $profName = $profileOrder[$selIdx]
@@ -8564,7 +8564,7 @@ $el['btnPreflight'].Add_Click({
 
 $el['btnScanAll'].Add_Click({
     if ($script:ScanRunning) { return }
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
     $selIdx = $el['cboProfile'].SelectedIndex
     if ($selIdx -lt 0) { $selIdx = 2 }
     $profName = $profileOrder[$selIdx]
@@ -8935,7 +8935,7 @@ function Export-HTMLReport([string]$outPath, [switch]$OpenAfter, [string]$Tier =
     $totalFindings = $critFindings.Count + $highFindings.Count + $medFindings.Count
 
     # Profile info
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
     $selIdx = $el['cboProfile'].SelectedIndex; if ($selIdx -lt 0) { $selIdx = 2 }
     $profName = $profileOrder[$selIdx]
     $roMode = if ($script:ReadOnlyMode) { 'Yes (safe mode)' } else { 'No' }
@@ -10780,7 +10780,7 @@ if ($script:SilentMode) {
     $el['txtAuditor'].Text = $auditorName
 
     # Set profile
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
     $idx = $profileOrder.IndexOf($script:CliProfile)
     if ($idx -ge 0) { $el['cboProfile'].SelectedIndex = $idx }
 
