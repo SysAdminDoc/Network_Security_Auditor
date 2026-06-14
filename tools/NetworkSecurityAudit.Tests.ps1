@@ -152,6 +152,92 @@ Describe 'Export serialization' {
         $round.findings[0].id | Should -Be 'IA01'
         $round.findings[0].compliance.STIG | Should -Be 'V-1000'
     }
+
+    It 'serializes a representative write-manifest disclosure to valid JSON' {
+        $writes = [ordered]@{
+            read_only           = $true
+            write_manifest_only = $false
+            no_rmm_write        = $false
+            no_registry_write   = $false
+            intended_count      = 1
+            any_attempted       = $true
+            any_succeeded       = $true
+            manifest = @(
+                [ordered]@{
+                    action_id = 'registry.generic'; provider = 'Generic registry'
+                    destination = 'HKLM:\SOFTWARE\NetworkSecurityAudit'; risk_tier = 1
+                    requires_admin = $true; allowed = $true; attempted = $true
+                    succeeded = $true; skip_reason = ''; error = ''
+                    rollback_hint = 'Remove the HKLM:\SOFTWARE\NetworkSecurityAudit key.'
+                }
+            )
+        }
+        { $writes | ConvertTo-Json -Depth 6 | ConvertFrom-Json } | Should -Not -Throw
+        $round = $writes | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+        $round.any_attempted | Should -BeTrue
+        $round.manifest[0].provider | Should -Be 'Generic registry'
+    }
+}
+
+Describe 'Write gate behavior (real functions via AST)' {
+    BeforeAll {
+        # Extract the actual function bodies from the script and load them in
+        # isolation so we exercise the real safety-critical code, not a copy,
+        # without running the auto-elevating GUI/silent entry points.
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Register-AuditWrite','Block-IfReadOnly') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+    BeforeEach {
+        $script:WriteManifest = [System.Collections.Generic.List[object]]::new()
+        $script:CliWriteManifestOnly = $false
+        $script:ReadOnlyMode = $false
+    }
+
+    It 'executes an allowed write and records success' {
+        $script:__ran1 = $false
+        $e = Register-AuditWrite -ActionId 't' -Provider 'P' -Destination 'D' -Allowed $true -Action { $script:__ran1 = $true }
+        $script:__ran1 | Should -BeTrue
+        $e.attempted | Should -BeTrue
+        $e.succeeded | Should -BeTrue
+    }
+    It 'previews (does not execute) under -WriteManifestOnly' {
+        $script:CliWriteManifestOnly = $true
+        $script:__ran2 = $false
+        $e = Register-AuditWrite -ActionId 't' -Provider 'P' -Destination 'D' -Allowed $true -Action { $script:__ran2 = $true }
+        $e.allowed   | Should -BeFalse
+        $e.attempted | Should -BeFalse
+        $script:__ran2 | Should -BeFalse
+        $e.skip_reason | Should -Be 'WriteManifestOnly preview'
+    }
+    It 'records error text when the action throws' {
+        $e = Register-AuditWrite -ActionId 't' -Provider 'P' -Destination 'D' -Allowed $true -Action { throw 'boom' }
+        $e.attempted | Should -BeTrue
+        $e.succeeded | Should -BeFalse
+        $e.error | Should -Match 'boom'
+    }
+    It 'does not execute a gate-blocked (Allowed=$false) write' {
+        $script:__ran4 = $false
+        $e = Register-AuditWrite -ActionId 't' -Provider 'P' -Destination 'D' -Allowed $false -SkipReason '-NoRmmWrite' -Action { $script:__ran4 = $true }
+        $e.attempted | Should -BeFalse
+        $script:__ran4 | Should -BeFalse
+        $e.skip_reason | Should -Be '-NoRmmWrite'
+    }
+    It 'blocks host-modifying setup in read-only mode' {
+        $script:ReadOnlyMode = $true
+        $b = Block-IfReadOnly -ActionId 'setup.winrm' -Provider 'WinRM setup' -Destination 'localhost' -ActionLabel 'WinRM configuration'
+        $b.Success | Should -BeFalse
+        $b.Blocked | Should -BeTrue
+        @($script:WriteManifest).Count | Should -Be 1
+        $script:WriteManifest[0].allowed | Should -BeFalse
+    }
+    It 'allows host-modifying setup to proceed when not read-only' {
+        $script:ReadOnlyMode = $false
+        $b = Block-IfReadOnly -ActionId 'setup.winrm' -Provider 'WinRM setup' -Destination 'localhost' -ActionLabel 'WinRM configuration'
+        $b | Should -BeNullOrEmpty
+    }
 }
 
 Describe 'Lint cleanliness (PSScriptAnalyzer)' {

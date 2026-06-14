@@ -234,11 +234,21 @@ if ($scriptText -notmatch 'REMOTE ACCESS.*RMM TOOLS' -or $scriptText -notmatch '
 if ($scriptText -notmatch 'highValueRules' -or $scriptText -notmatch 'Block credential stealing from LSASS' -or $scriptText -notmatch 'ExclusionPath' -or $scriptText -notmatch 'MISSING:') {
     Add-Failure 'EP01 ASR section must list individual rules, flag missing high-value rules, and report Defender exclusions.'
 }
-if ($scriptText -notmatch '\[switch\]\$NoRmmWrite' -or $scriptText -notmatch "if\s*\(\`$NoRmmWrite\)[^\r\n]*'-NoRmmWrite'" -or $scriptText -notmatch '\$script:CliNoRmmWrite' -or $scriptText -notmatch 'RMM and registry field writes skipped') {
-    Add-Failure 'Silent mode must expose, preserve, and honor -NoRmmWrite.'
+if ($scriptText -notmatch '\[switch\]\$NoRmmWrite' -or $scriptText -notmatch "if\s*\(\`$NoRmmWrite\)[^\r\n]*'-NoRmmWrite'" -or $scriptText -notmatch '\$script:CliNoRmmWrite' -or $scriptText -notmatch '\$gateBlocked[^\r\n]*\$script:CliNoRmmWrite') {
+    Add-Failure 'Silent mode must expose, preserve, and honor -NoRmmWrite via the write gate.'
 }
-if ($scriptText -notmatch '\[switch\]\$NoRegistryWrite' -or $scriptText -notmatch "if\s*\(\`$NoRegistryWrite\)[^\r\n]*'-NoRegistryWrite'" -or $scriptText -notmatch '\$script:CliNoRegistryWrite' -or $scriptText -notmatch 'Registry-backed RMM/cache writes skipped') {
-    Add-Failure 'Silent mode must expose, preserve, and honor -NoRegistryWrite.'
+if ($scriptText -notmatch '\[switch\]\$NoRegistryWrite' -or $scriptText -notmatch "if\s*\(\`$NoRegistryWrite\)[^\r\n]*'-NoRegistryWrite'" -or $scriptText -notmatch '\$script:CliNoRegistryWrite' -or $scriptText -notmatch '\$gateBlocked[^\r\n]*CliNoRegistryWrite') {
+    Add-Failure 'Silent mode must expose, preserve, and honor -NoRegistryWrite via the write gate.'
+}
+# NSA-003: unified write manifest, -WriteManifestOnly preview, and read-only setup gate.
+if ($scriptText -notmatch '\[switch\]\$WriteManifestOnly' -or $scriptText -notmatch "if\s*\(\`$WriteManifestOnly\)[^\r\n]*'-WriteManifestOnly'" -or $scriptText -notmatch '\$script:CliWriteManifestOnly' -or $scriptText -notmatch 'function Register-AuditWrite' -or $scriptText -notmatch '\$script:WriteManifest') {
+    Add-Failure 'Write manifest must expose -WriteManifestOnly, preserve it in auto-elevation, store CliWriteManifestOnly, and define Register-AuditWrite/$script:WriteManifest.'
+}
+if ($scriptText -notmatch 'function Block-IfReadOnly' -or $scriptText -notmatch 'Block-IfReadOnly -ActionId .setup\.winrm' -or $scriptText -notmatch 'Block-IfReadOnly -ActionId .setup\.auditpolicies') {
+    Add-Failure 'Host-modifying setup functions (WinRM, audit policies) must be gated by Block-IfReadOnly.'
+}
+if ($scriptText -notmatch 'writes\s*=\s*\[ordered\]@\{' -or $scriptText -notmatch 'any_attempted' -or $scriptText -notmatch 'write_manifest_only') {
+    Add-Failure 'Structured JSON export must disclose write status (writes.any_attempted, write_manifest_only, manifest).'
 }
 if ($scriptText -notmatch '\[switch\]\$NoInternet' -or $scriptText -notmatch "if\s*\(\`$NoInternet\)[^\r\n]*'-NoInternet'" -or $scriptText -notmatch '\$script:CliNoInternet' -or $scriptText -notmatch 'KEV lookup skipped \(-NoInternet' -or $scriptText -notmatch 'Egress port probe skipped \(-NoInternet\)' -or $scriptText -notmatch 'External DNS test skipped \(-NoInternet\)') {
     Add-Failure 'Internet-touching checks must expose, preserve, and honor -NoInternet.'

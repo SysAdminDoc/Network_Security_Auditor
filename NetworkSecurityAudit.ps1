@@ -78,6 +78,7 @@ param(
     [switch]$NoInternet,
     [switch]$NoElevate,
     [switch]$NoRegistryWrite,
+    [switch]$WriteManifestOnly,
     [string[]]$CloudAssessmentPath = @()
 )
 
@@ -116,6 +117,7 @@ if (-not $script:IsAdmin -and -not $NoElevate) {
         if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
         if ($NoInternet)   { $argList += '-NoInternet' }
         if ($NoRegistryWrite) { $argList += '-NoRegistryWrite' }
+        if ($WriteManifestOnly) { $argList += '-WriteManifestOnly' }
         foreach ($cloudPath in @($CloudAssessmentPath)) { if ($cloudPath) { $argList += '-CloudAssessmentPath'; $argList += "`"$cloudPath`"" } }
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs -WindowStyle Hidden
         exit
@@ -148,8 +150,75 @@ $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 $script:CliNoInternet  = $NoInternet.IsPresent
 $script:CliNoElevate   = $NoElevate.IsPresent
 $script:CliNoRegistryWrite = $NoRegistryWrite.IsPresent
+$script:CliWriteManifestOnly = $WriteManifestOnly.IsPresent
 $script:CliCloudAssessmentPaths = @($CloudAssessmentPath | Where-Object { $_ })
 $script:CloudAssessmentImports = @()
+
+# ── Unified Write Manifest ───────────────────────────────────────────────────
+# Every persistent side effect (RMM field write, registry cache, host-modifying
+# setup action) is funneled through Register-AuditWrite so the tool can disclose
+# exactly what it intended to write, what it skipped, and what succeeded/failed.
+# -WriteManifestOnly turns the whole tool into a preview: intents are recorded
+# but never executed. Precedence: -WriteManifestOnly implies no RMM/registry/
+# setup writes regardless of the individual -No*Write flags.
+$script:WriteManifest = [System.Collections.Generic.List[object]]::new()
+function Register-AuditWrite {
+    [CmdletBinding()]
+    param(
+        [string]$ActionId,
+        [string]$Provider,
+        [string]$Destination,
+        [int]$RiskTier = 1,
+        [bool]$RequiresAdmin = $true,
+        [bool]$Allowed = $true,
+        [string]$SkipReason = '',
+        [string]$RollbackHint = '',
+        [scriptblock]$Action
+    )
+    $entry = [ordered]@{
+        action_id      = $ActionId
+        provider       = $Provider
+        destination    = $Destination
+        risk_tier      = $RiskTier
+        requires_admin = $RequiresAdmin
+        allowed        = $Allowed
+        attempted      = $false
+        succeeded      = $false
+        skip_reason    = $SkipReason
+        error          = ''
+        rollback_hint  = $RollbackHint
+    }
+    if ($script:CliWriteManifestOnly) {
+        $entry.allowed = $false
+        if (-not $entry.skip_reason) { $entry.skip_reason = 'WriteManifestOnly preview' }
+    }
+    elseif ($Allowed -and $Action) {
+        $entry.attempted = $true
+        try { & $Action | Out-Null; $entry.succeeded = $true }
+        catch { $entry.error = $_.Exception.Message }
+    }
+    [void]$script:WriteManifest.Add($entry)
+    return $entry
+}
+
+# Guard for host-modifying setup actions. Returns a blocked result hashtable when
+# the tool is in read-only mode (the default) or -WriteManifestOnly preview, and
+# records the blocked intent in the write manifest. Setup that changes host/service
+# state must not run unless the user explicitly passes -ReadOnly:$false.
+function Block-IfReadOnly {
+    param(
+        [string]$ActionId,
+        [string]$Provider,
+        [string]$Destination,
+        [string]$ActionLabel
+    )
+    if ($script:ReadOnlyMode -or $script:CliWriteManifestOnly) {
+        $reason = if ($script:CliWriteManifestOnly) { 'WriteManifestOnly preview' } else { 'read-only mode' }
+        Register-AuditWrite -ActionId $ActionId -Provider $Provider -Destination $Destination -RiskTier 3 -RequiresAdmin $true -Allowed $false -SkipReason $reason -RollbackHint 'N/A (not performed)' | Out-Null
+        return @{ Success = $false; Blocked = $true; Message = "$ActionLabel blocked ($reason). Re-run with -ReadOnly:`$false to apply host changes." }
+    }
+    return $null
+}
 
 # ── Version Staleness Check ───────────────────────────────────────────────
 $script:NewVersionAvailable = $null
@@ -477,6 +546,8 @@ function Install-AuditPrereqs {
 
 function Enable-AuditWinRM {
     [CmdletBinding()]param([string]$Target, [PSCredential]$Credential)
+    $blocked = Block-IfReadOnly -ActionId 'setup.winrm' -Provider 'WinRM setup' -Destination $Target -ActionLabel 'WinRM configuration'
+    if ($blocked) { return $blocked }
     $isLocal = ($Target -eq 'localhost' -or $Target -eq '127.0.0.1' -or $Target -eq $env:COMPUTERNAME)
 
     if ($isLocal) {
@@ -573,6 +644,8 @@ function Find-DomainControllers {
 
 function Enable-RemoteRegistry {
     [CmdletBinding()]param([string]$Target, [PSCredential]$Credential)
+    $blocked = Block-IfReadOnly -ActionId 'setup.remoteregistry' -Provider 'Remote Registry setup' -Destination $Target -ActionLabel 'Remote Registry service configuration'
+    if ($blocked) { return $blocked }
     $isLocal = ($Target -eq 'localhost' -or $Target -eq '127.0.0.1' -or $Target -eq $env:COMPUTERNAME)
     try {
         if ($isLocal) {
@@ -630,6 +703,8 @@ function Set-PSGalleryTrust {
 
 function Enable-RemoteWMI {
     [CmdletBinding()]param()
+    $blocked = Block-IfReadOnly -ActionId 'setup.remotewmi' -Provider 'WMI firewall setup' -Destination 'Windows Management Instrumentation (WMI) firewall rules' -ActionLabel 'WMI firewall rule enablement'
+    if ($blocked) { return $blocked }
     try {
         $rules = Get-NetFirewallRule -DisplayGroup 'Windows Management Instrumentation (WMI)' -EA SilentlyContinue
         $disabled = $rules | Where-Object { $_.Enabled -ne 'True' }
@@ -644,6 +719,8 @@ function Enable-RemoteWMI {
 
 function Enable-EventLogRemote {
     [CmdletBinding()]param()
+    $blocked = Block-IfReadOnly -ActionId 'setup.eventlogremote' -Provider 'Event Log firewall setup' -Destination 'Remote Event Log Management firewall rules' -ActionLabel 'Remote Event Log firewall rule enablement'
+    if ($blocked) { return $blocked }
     try {
         $rules = Get-NetFirewallRule -DisplayGroup 'Remote Event Log Management' -EA SilentlyContinue
         $disabled = $rules | Where-Object { $_.Enabled -ne 'True' }
@@ -7894,6 +7971,20 @@ function Start-AsyncTurnkey {
     Close-RunnerPopup  # Safety: ensure runner is closed if dialog errored early
     $sel = $dlgResult.Selections
 
+    # Read-only mode blocks host-modifying turnkey selections (WinRM, firewall,
+    # remote registry, audit policy). Module/tooling and discovery selections are
+    # unaffected. The user must pass -ReadOnly:$false to apply host changes.
+    if ($script:ReadOnlyMode -and $sel) {
+        $modifyingKeys = @('WinRM','RemoteRegistry','FW_WinRM','FW_WMI','FW_EventLog','FW_FilePrinter','AuditPolicies')
+        foreach ($mk in $modifyingKeys) {
+            if ($sel.Contains($mk) -and $sel[$mk]) {
+                $sel[$mk] = $false
+                Write-Log "Read-only mode: turnkey '$mk' setup blocked (re-run with -ReadOnly:`$false to apply)" 'WARN'
+                Register-AuditWrite -ActionId "setup.turnkey.$mk" -Provider 'Turnkey setup' -Destination $mk -RiskTier 3 -RequiresAdmin $true -Allowed $false -SkipReason 'read-only mode' -RollbackHint 'N/A (not performed)' | Out-Null
+            }
+        }
+    }
+
     Write-Log "=== TURNKEY SETUP STARTING ===" 'INFO'
     Write-Log "OS: $($script:Env.OSCaption) | Computer: $($script:Env.ComputerName)" 'INFO'
     Write-Log "Admin: $($script:Env.IsAdmin) | PS: $($script:Env.PSVersion)" 'INFO'
@@ -9908,6 +9999,16 @@ function Export-FindingsJSON {
         compliance_frameworks = $fwStatus
         run_log_summary = Get-RunLogSummary
         run_log = @($script:RunLog)
+        writes = [ordered]@{
+            read_only           = $script:ReadOnlyMode
+            write_manifest_only = $script:CliWriteManifestOnly
+            no_rmm_write        = $script:CliNoRmmWrite
+            no_registry_write   = $script:CliNoRegistryWrite
+            intended_count      = @($script:WriteManifest).Count
+            any_attempted       = [bool](@($script:WriteManifest | Where-Object { $_.attempted }).Count -gt 0)
+            any_succeeded       = [bool](@($script:WriteManifest | Where-Object { $_.succeeded }).Count -gt 0)
+            manifest            = @($script:WriteManifest)
+        }
         findings_count = [ordered]@{
             total    = $findings.Count
             pass     = ($findings | Where-Object { $_.status -eq 'Pass' }).Count
@@ -10721,6 +10822,8 @@ $el['btnConfigWinRM'].Add_Click({
 
 # ── Enable Required Audit Policies (standalone - for manual button use) ────
 function Enable-AuditPolicies {
+    $blocked = Block-IfReadOnly -ActionId 'setup.auditpolicies' -Provider 'Audit policy setup' -Destination 'Local audit policy (auditpol)' -ActionLabel 'Audit policy configuration'
+    if ($blocked) { Write-Log $blocked.Message 'WARN'; return $blocked }
     if (-not $script:Env.IsAdmin) {
         Write-Log "Cannot configure audit policies without admin privileges" 'WARN'
         return @{ Success=$false; Message='Admin privileges required' }
@@ -10856,8 +10959,13 @@ if ($script:SilentMode) {
     Write-Host "[Silent Mode]   Internet:    $(if($script:CliNoInternet){'Disabled (-NoInternet)'}else{'Enabled (KEV download, DNS probes)'})"
     if ($skippedByProfile -gt 0) { Write-Host "[Silent Mode]   Skipped:     $skippedByProfile checks (not in profile)" }
     if ($skippedByRisk -gt 0)    { Write-Host "[Silent Mode]   Skipped:     $skippedByRisk checks (risk tier 3, read-only mode)" }
-    Write-Host "[Silent Mode]   RMM writes:  $(if($script:CliNoRmmWrite){'Disabled (-NoRmmWrite)'}else{'Enabled (auto-detect platform)'})"
-    Write-Host "[Silent Mode]   Reg writes:  $(if($script:CliNoRegistryWrite){'Disabled (-NoRegistryWrite)'}else{'Enabled (HKLM:\SOFTWARE\NetworkSecurityAudit)'})"
+    if ($script:CliWriteManifestOnly) {
+        Write-Host "[Silent Mode]   RMM writes:  Preview only (-WriteManifestOnly: nothing will be written)"
+        Write-Host "[Silent Mode]   Reg writes:  Preview only (-WriteManifestOnly: nothing will be written)"
+    } else {
+        Write-Host "[Silent Mode]   RMM writes:  $(if($script:CliNoRmmWrite){'Disabled (-NoRmmWrite)'}else{'Enabled (auto-detect platform)'})"
+        Write-Host "[Silent Mode]   Reg writes:  $(if($script:CliNoRegistryWrite){'Disabled (-NoRegistryWrite)'}else{'Enabled (HKLM:\SOFTWARE\NetworkSecurityAudit)'})"
+    }
     Write-Host "[Silent Mode]   Output dir:  $outputDir"
     Write-Host ""
     Write-Host "[Silent Mode] Scanning $($idList.Count) checks..."
@@ -11046,83 +11154,68 @@ if ($script:SilentMode) {
     } catch {}
     $complianceStr = ($fwFlags.Keys | ForEach-Object { "$_`:$(if($fwFlags[$_]){'PASS'}else{'FAIL'})" }) -join '|'
 
-    if ($script:CliNoRmmWrite) {
-        Write-Host "[Silent Mode] RMM and registry field writes skipped (-NoRmmWrite)" -ForegroundColor Cyan
-    }
-    else {
-        # ── RMM Platform Detection & Custom Field Writing ──
-        # NinjaRMM
-        if (Get-Command 'Ninja-Property-Set' -EA SilentlyContinue) {
-            try {
+    # ── RMM / Registry writes via the unified write gate ──
+    # Each intent declares how it is detected and gated. The gate decides whether
+    # the write is allowed (honoring -NoRmmWrite / -NoRegistryWrite /
+    # -WriteManifestOnly) and records the outcome in $script:WriteManifest so the
+    # post-run summary and the report can disclose exactly what happened.
+    $failCountForRmm = @($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
+    $scanDateStr = Get-Date -Format 'yyyy-MM-dd'
+    $writeIntents = @(
+        @{ ActionId='rmm.ninja'; Provider='NinjaRMM'; Destination='Ninja custom fields'; Gate='rmm'; RiskTier=1; RequiresAdmin=$false
+           Detect={ [bool](Get-Command 'Ninja-Property-Set' -EA SilentlyContinue) }
+           RollbackHint='Clear the NinjaRMM custom fields from the device record.'
+           Action={
                 Ninja-Property-Set 'securityAuditGrade' $riskData.Grade
                 Ninja-Property-Set 'securityAuditScore' $riskData.Pct
-                Ninja-Property-Set 'securityAuditDate' (Get-Date -Format 'yyyy-MM-dd')
-                Ninja-Property-Set 'securityAuditFindings' ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
+                Ninja-Property-Set 'securityAuditDate' $scanDateStr
+                Ninja-Property-Set 'securityAuditFindings' $failCountForRmm
                 Ninja-Property-Set 'ransomwareScore' $rwData.Overall
                 Ninja-Property-Set 'ransomwareGrade' $rwData.Grade
-                Ninja-Property-Set 'complianceStatus' $complianceStr
-                Write-Host "[Silent Mode] NinjaRMM custom fields updated" -ForegroundColor Cyan
-            } catch { Write-Host "[Silent Mode] NinjaRMM field write failed: $_" -ForegroundColor Yellow }
-        }
-
-        if ($script:CliNoRegistryWrite) {
-            Write-Host "[Silent Mode] Registry-backed RMM/cache writes skipped (-NoRegistryWrite)" -ForegroundColor Cyan
-        }
-
-        # Datto RMM (UDF)
-        if (-not $script:CliNoRegistryWrite -and (Test-Path 'HKLM:\SOFTWARE\CentraStage' -EA SilentlyContinue)) {
-            try {
+                Ninja-Property-Set 'complianceStatus' $complianceStr } }
+        @{ ActionId='rmm.datto'; Provider='Datto RMM'; Destination='HKLM:\SOFTWARE\CentraStage UDFs'; Gate='registry'; RiskTier=1; RequiresAdmin=$true
+           Detect={ Test-Path 'HKLM:\SOFTWARE\CentraStage' -EA SilentlyContinue }
+           RollbackHint='Remove Custom1-Custom5 values under HKLM:\SOFTWARE\CentraStage.'
+           Action={
                 New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom1' -Value $riskData.Grade -Force -EA SilentlyContinue | Out-Null
                 New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom2' -Value "$($riskData.Pct)%" -Force -EA SilentlyContinue | Out-Null
-                New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom3' -Value (Get-Date -Format 'yyyy-MM-dd') -Force -EA SilentlyContinue | Out-Null
+                New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom3' -Value $scanDateStr -Force -EA SilentlyContinue | Out-Null
                 New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom4' -Value "RW:$($rwData.Overall)% ($($rwData.Grade))" -Force -EA SilentlyContinue | Out-Null
-                New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom5' -Value $complianceStr -Force -EA SilentlyContinue | Out-Null
-                Write-Host "[Silent Mode] Datto RMM UDFs updated" -ForegroundColor Cyan
-            } catch { Write-Host "[Silent Mode] Datto UDF write failed: $_" -ForegroundColor Yellow }
-        }
-
-        # ConnectWise Automate (LabTech) - write to registry EDFs
-        if (-not $script:CliNoRegistryWrite -and (Test-Path 'HKLM:\SOFTWARE\LabTech\Service' -EA SilentlyContinue)) {
-            try {
+                New-ItemProperty -Path 'HKLM:\SOFTWARE\CentraStage' -Name 'Custom5' -Value $complianceStr -Force -EA SilentlyContinue | Out-Null } }
+        @{ ActionId='rmm.cwautomate'; Provider='ConnectWise Automate'; Destination='HKLM:\SOFTWARE\LabTech\Service\SecurityAudit'; Gate='registry'; RiskTier=1; RequiresAdmin=$true
+           Detect={ Test-Path 'HKLM:\SOFTWARE\LabTech\Service' -EA SilentlyContinue }
+           RollbackHint='Remove the SecurityAudit key under HKLM:\SOFTWARE\LabTech\Service.'
+           Action={
                 $ltPath = 'HKLM:\SOFTWARE\LabTech\Service\SecurityAudit'
                 if (-not (Test-Path $ltPath)) { New-Item -Path $ltPath -Force | Out-Null }
                 Set-ItemProperty -Path $ltPath -Name 'Grade' -Value $riskData.Grade -Force
                 Set-ItemProperty -Path $ltPath -Name 'Score' -Value $riskData.Pct -Force
-                Set-ItemProperty -Path $ltPath -Name 'Date' -Value (Get-Date -Format 'yyyy-MM-dd') -Force
+                Set-ItemProperty -Path $ltPath -Name 'Date' -Value $scanDateStr -Force
                 Set-ItemProperty -Path $ltPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
                 Set-ItemProperty -Path $ltPath -Name 'Compliance' -Value $complianceStr -Force
-                Set-ItemProperty -Path $ltPath -Name 'ReportPath' -Value $outFile -Force
-                Write-Host "[Silent Mode] ConnectWise Automate EDFs updated" -ForegroundColor Cyan
-            } catch { Write-Host "[Silent Mode] CW Automate EDF write failed: $_" -ForegroundColor Yellow }
-        }
-
-        # Syncro RMM - write via Syncro module if available
-        if (Get-Command 'Set-SyncroCustomField' -EA SilentlyContinue) {
-            try {
+                Set-ItemProperty -Path $ltPath -Name 'ReportPath' -Value $outFile -Force } }
+        @{ ActionId='rmm.syncro'; Provider='Syncro RMM'; Destination='Syncro custom fields'; Gate='rmm'; RiskTier=1; RequiresAdmin=$false
+           Detect={ [bool](Get-Command 'Set-SyncroCustomField' -EA SilentlyContinue) }
+           RollbackHint='Clear the Syncro asset custom fields.'
+           Action={
                 Set-SyncroCustomField -Name 'SecurityAuditGrade' -Value $riskData.Grade
                 Set-SyncroCustomField -Name 'SecurityAuditScore' -Value "$($riskData.Pct)%"
                 Set-SyncroCustomField -Name 'RansomwareScore' -Value "$($rwData.Overall)% ($($rwData.Grade))"
-                Set-SyncroCustomField -Name 'ComplianceStatus' -Value $complianceStr
-                Write-Host "[Silent Mode] Syncro RMM custom fields updated" -ForegroundColor Cyan
-            } catch { Write-Host "[Silent Mode] Syncro field write failed: $_" -ForegroundColor Yellow }
-        }
-
-        # HaloPSA - write custom asset fields via registry cache
-        if (-not $script:CliNoRegistryWrite -and (Test-Path 'HKLM:\SOFTWARE\HaloPSA' -EA SilentlyContinue)) {
-            try {
+                Set-SyncroCustomField -Name 'ComplianceStatus' -Value $complianceStr } }
+        @{ ActionId='rmm.halopsa'; Provider='HaloPSA'; Destination='HKLM:\SOFTWARE\HaloPSA\SecurityAudit'; Gate='registry'; RiskTier=1; RequiresAdmin=$true
+           Detect={ Test-Path 'HKLM:\SOFTWARE\HaloPSA' -EA SilentlyContinue }
+           RollbackHint='Remove the SecurityAudit key under HKLM:\SOFTWARE\HaloPSA.'
+           Action={
                 $haloPath = 'HKLM:\SOFTWARE\HaloPSA\SecurityAudit'
                 if (-not (Test-Path $haloPath)) { New-Item -Path $haloPath -Force | Out-Null }
                 Set-ItemProperty -Path $haloPath -Name 'Grade' -Value $riskData.Grade -Force
                 Set-ItemProperty -Path $haloPath -Name 'Score' -Value $riskData.Pct -Force
                 Set-ItemProperty -Path $haloPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
-                Set-ItemProperty -Path $haloPath -Name 'Compliance' -Value $complianceStr -Force
-                Write-Host "[Silent Mode] HaloPSA fields updated" -ForegroundColor Cyan
-            } catch { Write-Host "[Silent Mode] HaloPSA field write failed: $_" -ForegroundColor Yellow }
-        }
-
-        # Generic RMM output: write summary to well-known registry path
-        if (-not $script:CliNoRegistryWrite) {
-            try {
+                Set-ItemProperty -Path $haloPath -Name 'Compliance' -Value $complianceStr -Force } }
+        @{ ActionId='registry.generic'; Provider='Generic registry'; Destination='HKLM:\SOFTWARE\NetworkSecurityAudit'; Gate='registry'; RiskTier=1; RequiresAdmin=$true
+           Detect={ $true }
+           RollbackHint='Remove the HKLM:\SOFTWARE\NetworkSecurityAudit key.'
+           Action={
                 $rmmPath = 'HKLM:\SOFTWARE\NetworkSecurityAudit'
                 if (-not (Test-Path $rmmPath)) { New-Item -Path $rmmPath -Force | Out-Null }
                 Set-ItemProperty -Path $rmmPath -Name 'LastScanDate' -Value (Get-Date -Format 'o') -Force
@@ -11131,12 +11224,20 @@ if ($script:SilentMode) {
                 Set-ItemProperty -Path $rmmPath -Name 'RansomwareScore' -Value $rwData.Overall -Force
                 Set-ItemProperty -Path $rmmPath -Name 'RansomwareGrade' -Value $rwData.Grade -Force
                 Set-ItemProperty -Path $rmmPath -Name 'ComplianceFlags' -Value $complianceStr -Force
-                Set-ItemProperty -Path $rmmPath -Name 'FailCount' -Value ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count -Force
+                Set-ItemProperty -Path $rmmPath -Name 'FailCount' -Value $failCountForRmm -Force
                 Set-ItemProperty -Path $rmmPath -Name 'ReportPath' -Value $outFile -Force
-                Set-ItemProperty -Path $rmmPath -Name 'SummaryPath' -Value $summaryOut -Force
-                Write-Host "[Silent Mode] Registry audit data updated (HKLM\SOFTWARE\NetworkSecurityAudit)" -ForegroundColor Cyan
-            } catch { Write-Host "[Silent Mode] Registry write failed: $_" -ForegroundColor Yellow }
-        }
+                Set-ItemProperty -Path $rmmPath -Name 'SummaryPath' -Value $summaryOut -Force } }
+    )
+    foreach ($wi in $writeIntents) {
+        if (-not (& $wi.Detect)) { continue }   # platform/provider not present on this host
+        $gateBlocked = if ($wi.Gate -eq 'registry') { $script:CliNoRmmWrite -or $script:CliNoRegistryWrite } else { $script:CliNoRmmWrite }
+        $allowed = -not $gateBlocked
+        $skipReason = if ($gateBlocked) { if ($wi.Gate -eq 'registry' -and $script:CliNoRegistryWrite -and -not $script:CliNoRmmWrite) { '-NoRegistryWrite' } else { '-NoRmmWrite' } } else { '' }
+        $entry = Register-AuditWrite -ActionId $wi.ActionId -Provider $wi.Provider -Destination $wi.Destination -RiskTier $wi.RiskTier -RequiresAdmin $wi.RequiresAdmin -Allowed $allowed -SkipReason $skipReason -RollbackHint $wi.RollbackHint -Action $wi.Action
+        if ($entry.succeeded)        { Write-Host "[Silent Mode] $($wi.Provider) updated ($($wi.Destination))" -ForegroundColor Cyan }
+        elseif ($entry.attempted)    { Write-Host "[Silent Mode] $($wi.Provider) write failed: $($entry.error)" -ForegroundColor Yellow }
+        elseif ($script:CliWriteManifestOnly) { Write-Host "[Silent Mode] $($wi.Provider) write previewed only (-WriteManifestOnly)" -ForegroundColor Cyan }
+        else                         { Write-Host "[Silent Mode] $($wi.Provider) write skipped ($($entry.skip_reason))" -ForegroundColor Cyan }
     }
 
     # ── Exit Codes for RMM Alerting ──
@@ -11169,14 +11270,24 @@ if ($script:SilentMode) {
     if ($script:CliExportCSV -or $script:SilentMode) { Write-Host "  CSV:      $csvOut" }
     Write-Host "  Summary:  $summaryOut"
     Write-Host ""
-    Write-Host "[Silent Mode] Write summary:" -ForegroundColor Cyan
-    if ($script:CliNoRmmWrite) {
-        Write-Host "  RMM/Registry writes: SKIPPED (-NoRmmWrite)" -ForegroundColor DarkGray
-    } elseif ($script:CliNoRegistryWrite) {
-        Write-Host "  Registry writes: SKIPPED (-NoRegistryWrite)" -ForegroundColor DarkGray
-        Write-Host "  Command-based RMM: attempted (if platform detected)" -ForegroundColor DarkGray
-    } else {
-        Write-Host "  Generic registry: HKLM:\SOFTWARE\NetworkSecurityAudit" -ForegroundColor DarkGray
+    $modeNote = if ($script:CliWriteManifestOnly) { ' (-WriteManifestOnly preview: nothing was written)' } else { '' }
+    Write-Host "[Silent Mode] Write summary$modeNote`:" -ForegroundColor Cyan
+    if (@($script:WriteManifest).Count -eq 0) {
+        Write-Host "  No persistent writes were intended for this host (no RMM platform detected)." -ForegroundColor DarkGray
+    }
+    else {
+        $written = @($script:WriteManifest | Where-Object { $_.succeeded })
+        $failedW = @($script:WriteManifest | Where-Object { $_.attempted -and -not $_.succeeded })
+        $skippedW = @($script:WriteManifest | Where-Object { -not $_.attempted })
+        Write-Host "  Intended: $(@($script:WriteManifest).Count) | Written: $($written.Count) | Skipped: $($skippedW.Count) | Failed: $($failedW.Count)"
+        foreach ($w in $script:WriteManifest) {
+            $state = if ($w.succeeded) { 'WROTE  ' } elseif ($w.attempted) { 'FAILED ' } else { 'SKIPPED' }
+            $color = if ($w.succeeded) { 'Green' } elseif ($w.attempted) { 'Yellow' } else { 'DarkGray' }
+            $detail = "  [$state] $($w.provider): $($w.destination)"
+            if (-not $w.attempted -and $w.skip_reason) { $detail += " ($($w.skip_reason))" }
+            if ($w.error) { $detail += " - $($w.error)" }
+            Write-Host $detail -ForegroundColor $color
+        }
     }
 
     exit $exitCode

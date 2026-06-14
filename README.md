@@ -369,7 +369,9 @@ Optional for full coverage:
 
 ## Trust and Safety
 
-- The default scan mode is read-only for audit checks; higher-risk setup actions require explicit user action or `-ReadOnly:$false`.
+- The default scan mode is read-only. In read-only mode the tool refuses to run any host-modifying setup (WinRM/PSRemoting, Remote Registry, firewall rules, audit policy); those require an explicit `-ReadOnly:$false` plus user action.
+- Every persistent side effect (RMM field write, registry cache, setup action) is routed through a single write gate and recorded in a write manifest. Silent mode prints a post-run write summary (intended / written / skipped / failed), and the structured JSON export discloses `writes.any_attempted` and the full manifest, so a report always states whether anything was written.
+- Use `-WriteManifestOnly` to dry-run the side effects: the tool reports every write it *would* perform and performs none of them.
 - The tool reads local Windows security state, event logs, registry policy keys, service status, installed patch data, and AD data when the host has RSAT/domain access.
 - Internet access is limited to documented lookup/probe paths such as the CISA KEV catalog, DNS filtering tests, and egress checks.
 - Use `-NoInternet` to skip public internet downloads, external DNS tests, and outbound egress probes.
@@ -440,6 +442,10 @@ arguments, the WinRM-bootstrap WMI call, and so on). The lint gate must report
                      Default: $true
 -NoRmmWrite          Silent mode only: skip RMM and registry field writes
 -NoRegistryWrite     Silent mode only: skip registry-backed RMM/cache writes
+-WriteManifestOnly   Preview every intended RMM/registry/setup write without
+                     performing any of them. Implies -NoRmmWrite and
+                     -NoRegistryWrite; the write manifest still lists what
+                     would have been written.
 -NoInternet          Skip public internet downloads and probe checks
 -NoElevate           Do not auto-relaunch with UAC elevation
 -Client              Client name for report header.
