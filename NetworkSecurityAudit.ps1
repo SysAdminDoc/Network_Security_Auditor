@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.9.0 - Professional GUI Tool
+    Network Security Auditor v4.10.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -53,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.9.0
+    4.10.0
 #>
 param(
     [switch]$Silent,
@@ -84,7 +84,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.9.0'
+$script:ProductVersion = '4.10.0'
 $script:SchemaVersion = '2.1'
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -2541,8 +2541,8 @@ $script:AutoChecks = @{
                     $gppFiles = @('Groups.xml','Services.xml','Scheduledtasks.xml','DataSources.xml','Drives.xml')
                     $gppFound = @()
                     foreach ($gppFile in $gppFiles) {
-                        $matches = Get-ChildItem $sysvolPath -Recurse -Filter $gppFile -EA SilentlyContinue | Select-String 'cpassword' -EA SilentlyContinue
-                        if ($matches) { $gppFound += "$gppFile ($($matches.Count) entries)" }
+                        $gppMatches = Get-ChildItem $sysvolPath -Recurse -Filter $gppFile -EA SilentlyContinue | Select-String 'cpassword' -EA SilentlyContinue
+                        if ($gppMatches) { $gppFound += "$gppFile ($($gppMatches.Count) entries)" }
                     }
                     if ($gppFound.Count -gt 0) {
                         $issues += 2
@@ -6238,7 +6238,7 @@ function Start-RunLogEntry {
         [string]$Label,
         [string]$Type,
         [string]$Target,
-        [string]$Profile
+        [string]$ProfileName
     )
     $now = Get-Date
     $script:CurrentRunLogEntry = [ordered]@{
@@ -6246,7 +6246,7 @@ function Start-RunLogEntry {
         label = $Label
         type = $Type
         target = $Target
-        profile = $Profile
+        profile = $ProfileName
         start_time = $now.ToString('o')
         end_time = $null
         duration_ms = $null
@@ -6311,7 +6311,7 @@ function Add-SkippedRunLogEntry {
         [string]$Id,
         [string]$Reason,
         [string]$Target = '',
-        [string]$Profile = ''
+        [string]$ProfileName = ''
     )
     $check = if ($script:AutoChecks.Contains($Id)) { $script:AutoChecks[$Id] } else { @{ Label=$Id; Type='' } }
     $now = Get-Date
@@ -6320,7 +6320,7 @@ function Add-SkippedRunLogEntry {
         label = $check.Label
         type = $check.Type
         target = $Target
-        profile = $Profile
+        profile = $ProfileName
         start_time = $now.ToString('o')
         end_time = $now.ToString('o')
         duration_ms = 0
@@ -6567,7 +6567,7 @@ function Start-AsyncCheck([string]$id) {
     $script:CurrentScanId = $id
     $script:CurrentScanStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     $script:CurrentScanHeartbeat = 0  # tracks last heartbeat second
-    Start-RunLogEntry -Id $id -Label $check.Label -Type $check.Type -Target $target -Profile $script:CurrentScanProfile
+    Start-RunLogEntry -Id $id -Label $check.Label -Type $check.Type -Target $target -ProfileName $script:CurrentScanProfile
 
     $progressPrefix = if ($script:ScanBatchMode -eq 'Batch') { "[$($script:ScanBatchDone)/$($script:ScanBatchTotal)] " } else { "" }
     $el['StatusText'].Text = "${progressPrefix}Scanning [$id] $($check.Label)..."
@@ -6784,7 +6784,7 @@ function Start-ScanBatch([string]$filterType) {
             foreach ($runId in @($ids)) { [void]$runIds.Add($runId) }
             foreach ($skippedId in $idsBeforeRiskFilter) {
                 if (-not $runIds.Contains($skippedId)) {
-                    Add-SkippedRunLogEntry -Id $skippedId -Reason 'ReadOnlyRiskTier3' -Target $scanTargetForLog -Profile $profileNameForLog
+                    Add-SkippedRunLogEntry -Id $skippedId -Reason 'ReadOnlyRiskTier3' -Target $scanTargetForLog -ProfileName $profileNameForLog
                 }
             }
         }
@@ -10839,7 +10839,7 @@ if ($script:SilentMode) {
         foreach ($runId in @($ids)) { [void]$runIds.Add($runId) }
         foreach ($skippedId in $idsBeforeRiskFilter) {
             if (-not $runIds.Contains($skippedId)) {
-                Add-SkippedRunLogEntry -Id $skippedId -Reason 'ReadOnlyRiskTier3' -Target 'localhost' -Profile $profName
+                Add-SkippedRunLogEntry -Id $skippedId -Reason 'ReadOnlyRiskTier3' -Target 'localhost' -ProfileName $profName
             }
         }
     }
@@ -10868,7 +10868,7 @@ if ($script:SilentMode) {
     foreach ($id in $idList) {
         $check = $script:AutoChecks[$id]
         if (-not $check) { continue }
-        Start-RunLogEntry -Id $id -Label $check.Label -Type $check.Type -Target 'localhost' -Profile $profName
+        Start-RunLogEntry -Id $id -Label $check.Label -Type $check.Type -Target 'localhost' -ProfileName $profName
         try {
             # Run each check in an isolated runspace with timeout protection
             $checkPS = [PowerShell]::Create()

@@ -8,6 +8,7 @@ on:
 jobs:
   validate:
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-2022, windows-2025]
     runs-on: ${{ matrix.os }}
@@ -23,6 +24,50 @@ jobs:
           Write-Host "OS         : $([System.Environment]::OSVersion.VersionString)"
           Write-Host "OS Build   : $((Get-CimInstance Win32_OperatingSystem).BuildNumber)"
 
-      - name: Validate NetworkSecurityAudit
+      - name: Install analysis modules
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer | Where-Object { $_.Version -ge '1.21.0' })) {
+            Install-Module PSScriptAnalyzer -MinimumVersion 1.21.0 -Force -Scope CurrentUser
+          }
+          if (-not (Get-Module -ListAvailable Pester | Where-Object { $_.Version -ge '5.5.0' })) {
+            Install-Module Pester -MinimumVersion 5.5.0 -Force -SkipPublisherCheck -Scope CurrentUser
+          }
+
+      - name: Static validation gate
         shell: powershell
         run: .\tools\Test-NetworkSecurityAudit.ps1
+
+      - name: PSScriptAnalyzer
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $results = Invoke-ScriptAnalyzer -Path .\NetworkSecurityAudit.ps1 -Settings .\PSScriptAnalyzerSettings.psd1
+          if ($results) {
+            $results | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+            throw "PSScriptAnalyzer reported $(@($results).Count) finding(s)."
+          }
+          Write-Host 'PSScriptAnalyzer: 0 findings.'
+
+      - name: Pester tests
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module Pester -MinimumVersion 5.5.0
+          $cfg = New-PesterConfiguration
+          $cfg.Run.Path = '.\tools\NetworkSecurityAudit.Tests.ps1'
+          $cfg.Run.Exit = $true
+          $cfg.Output.Verbosity = 'Detailed'
+          $cfg.TestResult.Enabled = $true
+          $cfg.TestResult.OutputPath = 'pester-results.xml'
+          Invoke-Pester -Configuration $cfg
+
+      - name: Upload Pester results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pester-results-${{ matrix.os }}
+          path: pester-results.xml
+          if-no-files-found: ignore

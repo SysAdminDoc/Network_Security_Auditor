@@ -6,8 +6,9 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.9.0-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.10.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
+[![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
 
@@ -400,13 +401,27 @@ gh attestation verify NetworkSecurityAudit.ps1 --owner SysAdminDoc
 
 ## Development Validation
 
-Maintainers can run the static validation gate without executing audit checks:
+The quality gate is static and never executes a real audit check or modifies the
+host. It runs in GitHub Actions on every push and pull request across
+`windows-2022` and `windows-2025`, and can be run locally:
 
 ```powershell
+# 1. Static validation gate (parser, catalog/profile/framework/risk/D3FEND IDs,
+#    version surfaces, export pass-through). Requires nothing but PowerShell.
 .\tools\Test-NetworkSecurityAudit.ps1
+
+# 2. Lint (PSScriptAnalyzer with the project rule set in PSScriptAnalyzerSettings.psd1)
+Invoke-ScriptAnalyzer -Path .\NetworkSecurityAudit.ps1 -Settings .\PSScriptAnalyzerSettings.psd1
+
+# 3. Pester suite (wraps the gate, adds catalog/version/export/lint assertions)
+Invoke-Pester -Path .\tools\NetworkSecurityAudit.Tests.ps1
 ```
 
-The same validation runs in GitHub Actions on push and pull request.
+`PSScriptAnalyzerSettings.psd1` enforces syntax, correctness, and security rules;
+it documents each excluded rule as an intentional single-file design choice
+(console `Write-Host` output, graceful empty-catch guards, runspace credential
+arguments, the WinRM-bootstrap WMI call, and so on). The lint gate must report
+**zero** findings.
 
 ---
 
@@ -539,9 +554,11 @@ This is a single-file tool by design. One `.ps1` file, no modules, no config fil
 ```
 NetworkSecurityAudit.ps1                    # The entire tool (~11,200 lines)
 README.md                                   # This file
+PSScriptAnalyzerSettings.psd1               # Lint rule set (correctness/security gate)
 tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
+tools/NetworkSecurityAudit.Tests.ps1        # Pester v5 quality-gate suite
 tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
-.github/workflows/powershell-validation.yml # CI validation on push/PR
+.github/workflows/powershell-validation.yml # CI: static gate + lint + Pester on push/PR
 .github/workflows/release.yml               # Release workflow with checksums and attestation
 ```
 
