@@ -5827,7 +5827,7 @@ $script:SuppressAdvance = $false
                     <TextBlock x:Name="lblFramework" Text="Framework:" FontSize="10.5" VerticalAlignment="Center" Margin="12,0,4,0"/>
                     <ComboBox x:Name="cboFramework" Width="120" FontSize="10.5" Padding="4,2"
                               AutomationProperties.Name="Compliance framework"
-                              ToolTip="Compliance framework to highlight in reports: All, CIS, NIST 800-171, CMMC, HIPAA, PCI-DSS, E8, Cyber Essentials, SOC 2, ISO 27001, STIG"/>
+                              ToolTip="Compliance framework to highlight in reports: All, CIS, NIST 800-171, CMMC, HIPAA, PCI-DSS, E8, Cyber Essentials, SOC 2, ISO 27001, STIG, FedRAMP"/>
                 </StackPanel>
                 <Button x:Name="btnFullAudit" Grid.Column="3" Content="Full Audit" Padding="14,4" Margin="8,0,0,0"
                         FontSize="11.5" FontWeight="Bold" Cursor="Hand"
