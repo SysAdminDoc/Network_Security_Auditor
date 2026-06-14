@@ -5694,7 +5694,7 @@ $script:ScanBatchTotal = 0
 $script:ScanBatchDone = 0
 $script:ScanBatchMode = $null      # 'Batch','Single','Preflight' or $null
 $script:ScanBatchStopwatch = $null # [Stopwatch] for total batch time
-$script:ScanBatchTally = $null     # @{Pass=0;Fail=0;Partial=0;Error=0}
+$script:ScanBatchTally = $null     # @{Pass=0;Fail=0;Partial=0;Error=0;NA=0}
 $script:CurrentScanStopwatch = $null  # [Stopwatch] for per-check time
 $script:CurrentScanHeartbeat = 0      # last heartbeat second logged
 $script:ConsoleLineCount = 0
@@ -6676,7 +6676,9 @@ function Process-ScanQueue {
     if ($script:ScanQueue.Count -gt 0) {
         $nextId = $script:ScanQueue.Dequeue()
         $script:ScanBatchDone++
-        $el['lblScanProgress'].Text = "$($script:ScanBatchDone) / $($script:ScanBatchTotal)"
+        $checkLabel = if ($script:AutoChecks.Contains($nextId)) { $script:AutoChecks[$nextId].Label } else { $nextId }
+        $el['lblScanProgress'].Text = "$($script:ScanBatchDone)/$($script:ScanBatchTotal) $nextId"
+        $el['lblScanProgress'].ToolTip = "$nextId - $checkLabel ($($script:ScanBatchDone) of $($script:ScanBatchTotal))"
         Start-AsyncCheck $nextId
     }
     else {
@@ -6691,7 +6693,10 @@ function Process-ScanQueue {
                 $batchElapsed = if ($totalSecs -ge 60) { " in $([math]::Floor($totalSecs / 60))m $([math]::Round($totalSecs % 60))s" } else { " in ${totalSecs}s" }
             }
             $t = $script:ScanBatchTally
-            $tally = "Pass:$($t.Pass) Fail:$($t.Fail) Warn:$($t.Partial) Err:$($t.Error)"
+            $naCount = if ($t.Contains('N/A')) { $t['N/A'] } else { 0 }
+            $tally = "Pass:$($t.Pass) Fail:$($t.Fail) Partial:$($t.Partial)"
+            if ($naCount -gt 0) { $tally += " N/A:$naCount" }
+            if ($t.Error -gt 0) { $tally += " Err:$($t.Error)" }
             Write-Log "=== SCAN COMPLETE: $($script:ScanBatchTotal) checks${batchElapsed} | $tally ===" 'INFO'
             $el['StatusText'].Text = "Scan complete: $($script:ScanBatchTotal) checks${batchElapsed} | $tally"
         }
@@ -6800,7 +6805,7 @@ function Start-ScanBatch([string]$filterType) {
     $script:ScanBatchTotal = $idList.Count
     $script:ScanBatchDone = 0
     $script:ScanBatchStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-    $script:ScanBatchTally = @{ Pass=0; Fail=0; Partial=0; Error=0 }
+    $script:ScanBatchTally = @{ Pass=0; Fail=0; Partial=0; Error=0; 'N/A'=0 }
     $el['btnFullAudit'].IsEnabled = $false
     $el['btnScanAll'].IsEnabled = $false; $el['btnScanAD'].IsEnabled = $false; $el['btnScanLocal'].IsEnabled = $false
     $el['btnPreflight'].IsEnabled = $false
