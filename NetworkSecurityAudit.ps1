@@ -9011,6 +9011,31 @@ tr:nth-child(even) td{background:rgba(15,23,42,0.3)}
 .scan-info{background:#0f172a;border-radius:6px;padding:10px 12px;margin:8px 0;border:1px solid #334155;font-size:12px;color:#94a3b8}
 .scan-info strong{color:#0ea5e9}
 
+/* Sticky table headers */
+thead th{position:sticky;top:0;z-index:2}
+
+/* Focus & accessibility */
+a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid #38bdf8;outline-offset:2px;border-radius:2px}
+
+/* Check anchors */
+[id^="chk-"]{scroll-margin-top:60px}
+
+/* Responsive breakpoints */
+@media(max-width:900px){
+body{padding:12px;max-width:100%}
+.stats{grid-template-columns:repeat(2,1fr)}
+.cat-grid{grid-template-columns:1fr}
+.road-grid{grid-template-columns:1fr}
+table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.score-ring{width:100px;height:100px}
+}
+@media(max-width:600px){
+body{padding:8px;font-size:12px}
+.stats{grid-template-columns:1fr}
+.hdr h1{font-size:18px}
+th,td{padding:4px 6px;font-size:11px}
+}
+
 /* Footer */
 .ftr{text-align:center;color:#475569;font-size:11px;margin-top:24px;padding-top:16px;border-top:1px solid #334155}
 
@@ -9108,6 +9133,20 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 "@
     }
     $html += "</div>`n"
+
+    # ── STATUS LEGEND ────────────────────────────────────────────────────────
+    $html += @"
+<div class="scan-info" style="margin-bottom:14px;font-size:11px">
+<strong style="color:#e2e8f0">Status Legend:</strong>
+<span class="s-pass">Pass</span> = meets requirements |
+<span class="s-partial">Partial</span> = partially compliant |
+<span class="s-fail">Fail</span> = non-compliant |
+<span class="s-na">N/A</span> = not applicable |
+<span class="s-not">Not Assessed</span> = not yet evaluated |
+<span class="ck-y">[X]</span> = checked |
+<span class="ck-n">[ ]</span> = unchecked
+</div>
+"@
 
     # ── EXECUTIVE SUMMARY (Executive, Management, All) ───────────────────────
     if ($Tier -ne 'Technical') {
@@ -9507,8 +9546,8 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                 $tierLbl = $script:RiskTierLabels[$riskTier]
                 $tierHtml = "<span class='tier-badge $tierCls'>T$riskTier $tierLbl</span>"
 
-                # ID column with scan indicators
-                $idHtml = "<strong>$id</strong>"
+                # ID column with scan indicators and deep-link anchor
+                $idHtml = "<a id='chk-$id' style='text-decoration:none;color:inherit'><strong>$id</strong></a>"
                 $hasAuto = $script:AutoCheckIDs.Contains($id)
                 $wasScanned = $script:ScanTimestamps.Contains($id)
                 if ($hasAuto) { $idHtml += "<span class='scan-auto'>AUTO</span>" }
