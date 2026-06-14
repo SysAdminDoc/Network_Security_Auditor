@@ -8793,33 +8793,55 @@ $el['btnDiff'].Add_Click({
         $sb=[System.Text.StringBuilder]::new()
         [void]$sb.AppendLine("AUDIT COMPARISON REPORT")
         [void]$sb.AppendLine("=" * 60)
-        [void]$sb.AppendLine("Audit 1: $($j1.Client) - $($j1.Date) (Auditor: $($j1.Auditor))")
-        [void]$sb.AppendLine("Audit 2: $($j2.Client) - $($j2.Date) (Auditor: $($j2.Auditor))")
+        [void]$sb.AppendLine("Audit 1: $($j1.Client) - $($j1.Date) (v$($j1.Version))")
+        [void]$sb.AppendLine("Audit 2: $($j2.Client) - $($j2.Date) (v$($j2.Version))")
         [void]$sb.AppendLine("")
-        [void]$sb.AppendLine("CHANGES:")
-        [void]$sb.AppendLine("-" * 40)
 
-        $changes = 0
-        foreach ($cn in $script:AuditCategories.Keys) {
+        $improved = 0; $worsened = 0; $newFindings = 0; $resolved = 0; $remChanged = 0
+        $detailSb = [System.Text.StringBuilder]::new()
+        foreach ($cn in ($script:AuditCategories.Keys | Sort-Object)) {
+            $catChanges = @()
             foreach ($it in $script:AuditCategories[$cn].Items) {
                 $id=$it.ID
-                $s1=if($j1.Items.PSObject.Properties[$id]){$j1.Items.$id.Status}else{'N/A'}
-                $s2=if($j2.Items.PSObject.Properties[$id]){$j2.Items.$id.Status}else{'N/A'}
-                $r1=if($j1.Items.PSObject.Properties[$id]){$j1.Items.$id.RemStatus}else{''}
-                $r2=if($j2.Items.PSObject.Properties[$id]){$j2.Items.$id.RemStatus}else{''}
+                $s1=if($j1.Items.PSObject.Properties[$id]){$j1.Items.$id.Status}else{'Not Assessed'}
+                $s2=if($j2.Items.PSObject.Properties[$id]){$j2.Items.$id.Status}else{'Not Assessed'}
+                $r1=if($j1.Items.PSObject.Properties[$id]){$j1.Items.$id.RemStatus}else{'Open'}
+                $r2=if($j2.Items.PSObject.Properties[$id]){$j2.Items.$id.RemStatus}else{'Open'}
                 if ($s1 -ne $s2 -or $r1 -ne $r2) {
-                    $changes++
-                    [void]$sb.AppendLine("[$id] $($it.Text)")
-                    if ($s1 -ne $s2) { [void]$sb.AppendLine("  Status: $s1 -> $s2") }
-                    if ($r1 -ne $r2) { [void]$sb.AppendLine("  Remediation: $r1 -> $r2") }
-                    [void]$sb.AppendLine("")
+                    $delta = ''
+                    if ($s1 -ne $s2) {
+                        $statusRank = @{'Pass'=3;'Partial'=2;'N/A'=1;'Fail'=0;'Not Assessed'=-1}
+                        $r1v = if ($statusRank.Contains($s1)) { $statusRank[$s1] } else { -1 }
+                        $r2v = if ($statusRank.Contains($s2)) { $statusRank[$s2] } else { -1 }
+                        if ($r2v -gt $r1v) { $delta = ' [IMPROVED]'; $improved++ }
+                        elseif ($r2v -lt $r1v -and $s2 -eq 'Fail') { $delta = ' [WORSENED]'; $worsened++ }
+                        elseif ($s1 -eq 'Not Assessed' -and $s2 -eq 'Fail') { $delta = ' [NEW FAILURE]'; $newFindings++ }
+                        elseif ($s1 -eq 'Fail' -and $s2 -eq 'Pass') { $delta = ' [RESOLVED]'; $resolved++ }
+                    }
+                    $line = "  [$id] $($it.Text) ($($it.Severity))$delta"
+                    if ($s1 -ne $s2) { $line += "`n    Status: $s1 -> $s2" }
+                    if ($r1 -ne $r2) { $line += "`n    Remediation: $r1 -> $r2"; $remChanged++ }
+                    $catChanges += $line
                 }
             }
+            if ($catChanges.Count -gt 0) {
+                [void]$detailSb.AppendLine("$cn ($($catChanges.Count) changes):")
+                foreach ($cc in $catChanges) { [void]$detailSb.AppendLine($cc); [void]$detailSb.AppendLine("") }
+            }
         }
-        if ($changes -eq 0) { [void]$sb.AppendLine("No changes detected between audits.") }
-        else { [void]$sb.AppendLine("Total changes: $changes") }
+        $totalChanges = $improved + $worsened + $newFindings + $resolved + $remChanged
+        [void]$sb.AppendLine("SUMMARY:")
+        [void]$sb.AppendLine("  Improved:      $improved")
+        [void]$sb.AppendLine("  Worsened:      $worsened")
+        [void]$sb.AppendLine("  New failures:  $newFindings")
+        [void]$sb.AppendLine("  Resolved:      $resolved")
+        [void]$sb.AppendLine("  Rem. changed:  $remChanged")
+        [void]$sb.AppendLine("")
+        if ($totalChanges -eq 0) { [void]$sb.AppendLine("No changes detected between audits.") }
+        else { [void]$sb.AppendLine("DETAILS:"); [void]$sb.AppendLine("-" * 40); [void]$sb.Append($detailSb.ToString()) }
 
-        [System.Windows.MessageBox]::Show($sb.ToString(), "Audit Diff - $changes changes", 'OK', 'Information')
+        [System.Windows.MessageBox]::Show($sb.ToString(), "Audit Diff - $totalChanges changes", 'OK', 'Information')
+        Write-Log "Diff comparison: $improved improved, $worsened worsened, $newFindings new, $resolved resolved" 'INFO'
     } catch { [System.Windows.MessageBox]::Show("Diff failed: $_",'Error','OK','Error') }
 })
 
