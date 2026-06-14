@@ -68,6 +68,26 @@ The tool auto-elevates to admin, detects your environment (domain/workgroup/hybr
 .\NetworkSecurityAudit.ps1 -Silent -ExportJSON -ExportCSV -ExportJSONL
 ```
 
+### Multi-Client Dashboard
+
+Roll up many scans into one static HTML dashboard (no server, no scan, no host
+changes). Point it at a folder of `*_findings.json` exports collected from your
+fleet or RMM output share:
+
+```powershell
+# Build a dashboard from a folder of findings exports
+.\NetworkSecurityAudit.ps1 -Dashboard -InputDir "C:\MSP\ScanArchive" -OutputPath "C:\MSP\dashboard.html"
+
+# Flag scans older than 14 days as stale
+.\NetworkSecurityAudit.ps1 -Dashboard -InputDir "C:\MSP\ScanArchive" -StaleDays 14
+```
+
+The dashboard shows each client's latest grade/score, ransomware readiness,
+critical-finding count, compliance-framework coverage, a per-client score trend,
+and a stale-scan flag, with a critical-findings-by-category rollup. It links back
+to each client's individual HTML report when one sits next to its JSON, writes a
+companion CSV, and embeds only aggregate scores — never finding evidence or notes.
+
 ---
 
 ## Features
@@ -463,6 +483,13 @@ arguments, the WinRM-bootstrap WMI call, and so on). The lint gate must report
 -PrivacyMode         Redact hostnames, IPs, and identities in all exports
 -CloudAssessmentPath Path(s) to Maester or CISA ScubaGear JSON results
                      to import and include in reports
+-Dashboard           Generate a static multi-client rollup dashboard from a
+                     folder of findings JSON exports, then exit (no scan,
+                     no elevation, no host changes)
+-InputDir            Dashboard mode: folder of *_findings.json exports to roll
+                     up. Default: folder of -OutputPath, else Desktop
+-StaleDays           Dashboard mode: scans older than this many days are
+                     flagged stale. Default: 30
 ```
 
 ---

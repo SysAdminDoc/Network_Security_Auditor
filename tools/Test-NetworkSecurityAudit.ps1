@@ -250,13 +250,17 @@ if ($scriptText -notmatch 'function Block-IfReadOnly' -or $scriptText -notmatch 
 if ($scriptText -notmatch 'writes\s*=\s*\[ordered\]@\{' -or $scriptText -notmatch 'any_attempted' -or $scriptText -notmatch 'write_manifest_only') {
     Add-Failure 'Structured JSON export must disclose write status (writes.any_attempted, write_manifest_only, manifest).'
 }
+# NSA-010: static multi-client dashboard mode.
+if ($scriptText -notmatch '\[switch\]\$Dashboard' -or $scriptText -notmatch 'function Export-MultiClientDashboard' -or $scriptText -notmatch "if \(\`$Dashboard\)\s*\{" -or $scriptText -notmatch "export_type -ne 'structured_findings'") {
+    Add-Failure 'Dashboard mode must expose -Dashboard, define Export-MultiClientDashboard, gate on $Dashboard, and filter to structured_findings exports.'
+}
 if ($scriptText -notmatch '\[switch\]\$NoInternet' -or $scriptText -notmatch "if\s*\(\`$NoInternet\)[^\r\n]*'-NoInternet'" -or $scriptText -notmatch '\$script:CliNoInternet' -or $scriptText -notmatch 'KEV lookup skipped \(-NoInternet' -or $scriptText -notmatch 'Egress port probe skipped \(-NoInternet\)' -or $scriptText -notmatch 'External DNS test skipped \(-NoInternet\)') {
     Add-Failure 'Internet-touching checks must expose, preserve, and honor -NoInternet.'
 }
 if ($scriptText -notmatch 'NetworkSecurityAudit_kev_cache' -or $scriptText -notmatch 'knownRansomwareCampaignUse' -or $scriptText -notmatch 'RANSOMWARE-LINKED KEV' -or $scriptText -notmatch 'catalogVersion') {
     Add-Failure 'EP04 KEV check must cache catalog, surface ransomware-linked entries, and validate catalog version.'
 }
-if ($scriptText -notmatch '\[switch\]\$NoElevate' -or $scriptText -notmatch '\$script:ElevationSkipped' -or $scriptText -notmatch 'Auto-elevation skipped \(-NoElevate\)' -or $scriptText -notmatch 'if \(-not \$script:IsAdmin -and -not \$NoElevate\)') {
+if ($scriptText -notmatch '\[switch\]\$NoElevate' -or $scriptText -notmatch '\$script:ElevationSkipped' -or $scriptText -notmatch 'Auto-elevation skipped \(-NoElevate\)' -or $scriptText -notmatch 'if \(-not \$script:IsAdmin -and -not \$NoElevate') {
     Add-Failure 'Auto-elevation must be suppressible with -NoElevate.'
 }
 if ($scriptText -notmatch "Framework -eq 'STIG'" -or $scriptText -notmatch 'STIG:') {

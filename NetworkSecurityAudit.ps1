@@ -79,7 +79,10 @@ param(
     [switch]$NoElevate,
     [switch]$NoRegistryWrite,
     [switch]$WriteManifestOnly,
-    [string[]]$CloudAssessmentPath = @()
+    [string[]]$CloudAssessmentPath = @(),
+    [switch]$Dashboard,
+    [string]$InputDir = '',
+    [int]$StaleDays = 30
 )
 
 $script:ProductName = 'Network Security Auditor'
@@ -94,7 +97,8 @@ $script:ProductSubtitle = "Windows Security Assessment Tool v$($script:ProductVe
 # ── Auto-Elevate to Administrator ────────────────────────────────────────────
 $script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 $script:ElevationSkipped = (-not $script:IsAdmin -and $NoElevate.IsPresent)
-if (-not $script:IsAdmin -and -not $NoElevate) {
+# Dashboard mode only reads JSON files and writes HTML/CSV; never elevate for it.
+if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
     try {
         $argList = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"")
         # Pass through all CLI parameters on re-launch
@@ -218,6 +222,210 @@ function Block-IfReadOnly {
         return @{ Success = $false; Blocked = $true; Message = "$ActionLabel blocked ($reason). Re-run with -ReadOnly:`$false to apply host changes." }
     }
     return $null
+}
+
+# ── Static Multi-Client Dashboard (NSA-010) ──────────────────────────────────
+# Reads a folder of structured findings JSON exports and emits a single static
+# HTML rollup (plus CSV) across clients/endpoints. No server, no host changes,
+# no embedded evidence text - only aggregate scores, grades, and counts.
+function Export-MultiClientDashboard {
+    param(
+        [string]$SourceDir,
+        [string]$OutPath,
+        [int]$StaleAfterDays = 30,
+        [string]$CsvPath = ''
+    )
+    function Convert-DashHtml { param([string]$s) if ($null -eq $s) { return '' }; ($s -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;') }
+
+    if (-not (Test-Path -LiteralPath $SourceDir)) {
+        Write-Host "[Dashboard] Source directory not found: $SourceDir" -ForegroundColor Red
+        return $null
+    }
+    Write-Host "[Dashboard] Scanning '$SourceDir' for structured findings exports..." -ForegroundColor Cyan
+    $jsonFiles = @(Get-ChildItem -LiteralPath $SourceDir -Recurse -Filter '*.json' -File -EA SilentlyContinue)
+    $records = New-Object System.Collections.Generic.List[object]
+    $parsed = 0; $skipped = 0
+    foreach ($jf in $jsonFiles) {
+        try {
+            $doc = Get-Content -LiteralPath $jf.FullName -Raw -EA Stop | ConvertFrom-Json -EA Stop
+        } catch { $skipped++; continue }
+        if (-not $doc -or $doc.export_type -ne 'structured_findings') { $skipped++; continue }
+        $parsed++
+        $ts = $null
+        if ($doc.timestamp) { try { $ts = [datetime]$doc.timestamp } catch { $ts = $null } }
+        $critical = 0; $totalFail = 0
+        foreach ($f in @($doc.findings)) {
+            if ($f.status -eq 'Fail') {
+                $totalFail++
+                if ($f.severity -eq 'Critical') { $critical++ }
+            }
+        }
+        $fwCompliant = 0; $fwTotal = 0
+        if ($doc.compliance_frameworks) {
+            foreach ($p in $doc.compliance_frameworks.PSObject.Properties) {
+                $fwTotal++
+                if ($p.Value.compliant) { $fwCompliant++ }
+            }
+        }
+        $htmlReport = $jf.FullName -replace '_findings\.json$','.html'
+        if (-not (Test-Path -LiteralPath $htmlReport)) { $htmlReport = '' }
+        $staleDays = if ($ts) { [math]::Round(((Get-Date) - $ts).TotalDays) } else { $null }
+        $records.Add([pscustomobject]@{
+            Client      = if ($doc.client) { [string]$doc.client } else { 'Unknown' }
+            Target      = if ($doc.target) { [string]$doc.target } else { '' }
+            Timestamp   = $ts
+            ScorePct    = [int]($doc.score.overall)
+            Grade       = [string]$doc.score.grade
+            RansomScore = [int]($doc.score.ransomware.score)
+            RansomGrade = [string]$doc.score.ransomware.grade
+            Critical    = $critical
+            TotalFail   = $totalFail
+            FwCompliant = $fwCompliant
+            FwTotal     = $fwTotal
+            StaleDays   = $staleDays
+            Stale       = ($null -ne $staleDays -and $staleDays -gt $StaleAfterDays)
+            ReportPath  = $htmlReport
+            Findings    = @($doc.findings)
+            ToolVersion = [string]$doc.tool_version
+        })
+    }
+
+    if ($records.Count -eq 0) {
+        Write-Host "[Dashboard] No structured findings exports found ($($jsonFiles.Count) JSON files scanned, $skipped skipped)." -ForegroundColor Yellow
+        return $null
+    }
+
+    # Latest scan per client + per-client trend
+    $byClient = $records | Group-Object Client
+    $latestRows = New-Object System.Collections.Generic.List[object]
+    foreach ($g in $byClient) {
+        $ordered = @($g.Group | Sort-Object { if ($_.Timestamp) { $_.Timestamp } else { [datetime]::MinValue } })
+        $latest = $ordered[-1]
+        $trend = @($ordered | ForEach-Object { $_.ScorePct })
+        $latest | Add-Member -NotePropertyName Trend -NotePropertyValue $trend -Force
+        $latest | Add-Member -NotePropertyName ScanCount -NotePropertyValue $g.Count -Force
+        $latestRows.Add($latest)
+    }
+    $latestRows = @($latestRows | Sort-Object ScorePct)
+
+    # Aggregate criticals by category across latest scans
+    $catCritical = @{}
+    foreach ($r in $latestRows) {
+        foreach ($f in @($r.Findings)) {
+            if ($f.status -eq 'Fail' -and $f.severity -eq 'Critical') {
+                $c = if ($f.category) { [string]$f.category } else { 'Uncategorized' }
+                if (-not $catCritical.Contains($c)) { $catCritical[$c] = 0 }
+                $catCritical[$c]++
+            }
+        }
+    }
+
+    $totalClients = $latestRows.Count
+    $avgScore = if ($totalClients -gt 0) { [int]([math]::Round((($latestRows | Measure-Object ScorePct -Average).Average))) } else { 0 }
+    $totalCriticals = ($latestRows | Measure-Object Critical -Sum).Sum
+    $staleCount = @($latestRows | Where-Object { $_.Stale }).Count
+    $generated = Get-Date -Format 'yyyy-MM-dd HH:mm'
+
+    function Get-GradeColor { param([string]$g) switch ($g) { 'A' {'#a6e3a1'} 'B' {'#94e2d5'} 'C' {'#f9e2af'} 'D' {'#fab387'} default {'#f38ba8'} } }
+    function Get-ScoreColor { param([int]$p) if ($p -ge 80) {'#a6e3a1'} elseif ($p -ge 60) {'#f9e2af'} else {'#f38ba8'} }
+
+    $rowsHtml = New-Object System.Text.StringBuilder
+    foreach ($r in $latestRows) {
+        $gColor = Get-GradeColor $r.Grade
+        $sColor = Get-ScoreColor $r.ScorePct
+        $lastScan = if ($r.Timestamp) { $r.Timestamp.ToString('yyyy-MM-dd') } else { 'unknown' }
+        $staleBadge = if ($r.Stale) { "<span class='badge stale'>STALE $($r.StaleDays)d</span>" } else { "<span class='badge fresh'>$($r.StaleDays)d</span>" }
+        $clientCell = Convert-DashHtml $r.Client
+        if ($r.ReportPath) { $clientCell = "<a href='$([uri]$r.ReportPath)'>$clientCell</a>" }
+        $fwCell = "$($r.FwCompliant)/$($r.FwTotal)"
+        # mini trend bars
+        $trendBars = ''
+        foreach ($tp in $r.Trend) { $h = [math]::Max(2,[int]($tp * 0.28)); $tc = Get-ScoreColor $tp; $trendBars += "<span class='tbar' style='height:${h}px;background:$tc' title='$tp%'></span>" }
+        [void]$rowsHtml.Append("<tr><td>$clientCell<div class='sub'>$(Convert-DashHtml $r.Target)</div></td><td style='color:$gColor;font-weight:700'>$($r.Grade)</td><td style='color:$sColor;font-weight:700'>$($r.ScorePct)%</td><td>$($r.RansomScore)% ($($r.RansomGrade))</td><td style='color:$(if($r.Critical -gt 0){'#f38ba8'}else{'#a6e3a1'});font-weight:700'>$($r.Critical)</td><td>$fwCell</td><td><div class='trend'>$trendBars</div><div class='sub'>$($r.ScanCount) scans</div></td><td>$lastScan</td><td>$staleBadge</td></tr>")
+    }
+
+    $catHtml = New-Object System.Text.StringBuilder
+    foreach ($kv in ($catCritical.GetEnumerator() | Sort-Object Value -Descending)) {
+        $w = [math]::Min(100, $kv.Value * 12)
+        [void]$catHtml.Append("<div class='catrow'><span class='catname'>$(Convert-DashHtml $kv.Key)</span><span class='catbarwrap'><span class='catbar' style='width:${w}%'></span></span><span class='catval'>$($kv.Value)</span></div>")
+    }
+    if ($catCritical.Count -eq 0) { [void]$catHtml.Append("<div class='sub'>No critical failures across the latest scans.</div>") }
+
+    $html = @"
+<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>$($script:ProductName) - Multi-Client Dashboard</title>
+<style>
+:root{--bg:#1e1e2e;--panel:#181825;--card:#313244;--text:#cdd6f4;--sub:#9399b2;--accent:#89b4fa;--border:#45475a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Segoe UI,system-ui,Arial,sans-serif;font-size:14px}
+.wrap{max-width:1200px;margin:0 auto;padding:24px}
+h1{font-size:22px;margin:0 0 4px}.muted{color:var(--sub);font-size:12px;margin-bottom:20px}
+.cards{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px}
+.card{flex:1 1 160px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+.card .n{font-size:28px;font-weight:700}.card .l{color:var(--sub);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:24px}
+.panel h2{font-size:15px;margin:0 0 12px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--sub);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+td .sub{color:var(--sub);font-size:11px;margin-top:2px}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.badge{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600}
+.badge.stale{background:#f38ba8;color:#1e1e2e}.badge.fresh{background:#313244;color:var(--sub)}
+.trend{display:flex;align-items:flex-end;gap:2px;height:30px}.tbar{display:inline-block;width:5px;border-radius:1px}
+.catrow{display:flex;align-items:center;gap:10px;margin:6px 0}.catname{flex:0 0 220px;font-size:12px}
+.catbarwrap{flex:1;background:var(--card);border-radius:4px;height:14px;overflow:hidden}.catbar{display:block;height:14px;background:#f38ba8}
+.catval{flex:0 0 32px;text-align:right;font-weight:700;color:#f38ba8}
+footer{color:var(--sub);font-size:11px;margin-top:24px;text-align:center}
+</style></head><body><div class='wrap'>
+<h1>Multi-Client Security Dashboard</h1>
+<div class='muted'>$($script:ProductName) v$($script:ProductVersion) &middot; Generated $generated &middot; Source: $(Convert-DashHtml $SourceDir)</div>
+<div class='cards'>
+<div class='card'><div class='n'>$totalClients</div><div class='l'>Clients</div></div>
+<div class='card'><div class='n'>$($records.Count)</div><div class='l'>Total Scans</div></div>
+<div class='card'><div class='n' style='color:$(Get-ScoreColor $avgScore)'>$avgScore%</div><div class='l'>Avg Latest Score</div></div>
+<div class='card'><div class='n' style='color:$(if($totalCriticals -gt 0){'#f38ba8'}else{'#a6e3a1'})'>$totalCriticals</div><div class='l'>Critical Findings</div></div>
+<div class='card'><div class='n' style='color:$(if($staleCount -gt 0){'#fab387'}else{'#a6e3a1'})'>$staleCount</div><div class='l'>Stale Scans (&gt;$StaleAfterDays d)</div></div>
+</div>
+<div class='panel'><h2>Clients (latest scan, lowest score first)</h2>
+<table><thead><tr><th>Client / Target</th><th>Grade</th><th>Score</th><th>Ransomware</th><th>Criticals</th><th>Frameworks</th><th>Trend</th><th>Last Scan</th><th>Freshness</th></tr></thead>
+<tbody>$($rowsHtml.ToString())</tbody></table></div>
+<div class='panel'><h2>Critical Findings by Category (across latest scans)</h2>$($catHtml.ToString())</div>
+<footer>Generated by $($script:ProductName) v$($script:ProductVersion). Aggregate scores only - no finding evidence or notes are embedded.</footer>
+</div></body></html>
+"@
+
+    $html | Set-Content -LiteralPath $OutPath -Encoding UTF8
+    Write-Host "[Dashboard] Wrote dashboard: $OutPath ($totalClients clients, $($records.Count) scans, $skipped non-matching files skipped)" -ForegroundColor Green
+
+    if ($CsvPath) {
+        $csvRows = $latestRows | ForEach-Object {
+            [pscustomobject][ordered]@{
+                Client = $_.Client; Target = $_.Target
+                LastScan = if ($_.Timestamp) { $_.Timestamp.ToString('o') } else { '' }
+                Grade = $_.Grade; ScorePct = $_.ScorePct
+                RansomwareScore = $_.RansomScore; RansomwareGrade = $_.RansomGrade
+                Criticals = $_.Critical; TotalFailures = $_.TotalFail
+                FrameworksCompliant = $_.FwCompliant; FrameworksTotal = $_.FwTotal
+                ScanCount = $_.ScanCount; StaleDays = $_.StaleDays; Stale = $_.Stale
+                ReportPath = $_.ReportPath
+            }
+        }
+        $csvRows | Export-Csv -LiteralPath $CsvPath -NoTypeInformation -Encoding UTF8
+        Write-Host "[Dashboard] Wrote CSV: $CsvPath" -ForegroundColor Green
+    }
+    return $OutPath
+}
+
+if ($Dashboard) {
+    $dashSrc = if ($InputDir) { $InputDir }
+               elseif ($script:CliOutput) { Split-Path -Parent $script:CliOutput }
+               else { [Environment]::GetFolderPath('Desktop') }
+    $dashOut = if ($script:CliOutput -and $script:CliOutput.ToLower().EndsWith('.html')) { $script:CliOutput }
+               else { Join-Path $dashSrc 'NSA_Dashboard.html' }
+    $dashCsv = $dashOut -replace '\.html$','.csv'
+    Write-Host ""
+    Write-Host "$($script:ProductName) v$($script:ProductVersion) - Dashboard Mode" -ForegroundColor Cyan
+    $written = Export-MultiClientDashboard -SourceDir $dashSrc -OutPath $dashOut -StaleAfterDays $StaleDays -CsvPath $dashCsv
+    if ($written) { exit 0 } else { exit 1 }
 }
 
 # ── Version Staleness Check ───────────────────────────────────────────────
