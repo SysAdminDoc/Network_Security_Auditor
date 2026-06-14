@@ -547,10 +547,12 @@ Audit state (all check statuses, findings, evidence, notes, remediation tracking
 This is a single-file tool by design. One `.ps1` file, no modules, no config files, no build process. Download it and run it.
 
 ```
-NetworkSecurityAudit.ps1    # The entire tool (~11,000 lines)
-README.md                   # This file
-tools/                      # Maintainer-only validation scripts
-.github/workflows/          # CI validation
+NetworkSecurityAudit.ps1                    # The entire tool (~11,200 lines)
+README.md                                   # This file
+tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
+tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
+.github/workflows/powershell-validation.yml # CI validation on push/PR
+.github/workflows/release.yml               # Release workflow with checksums and attestation
 ```
 
 ---
