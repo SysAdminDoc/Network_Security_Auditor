@@ -10557,15 +10557,28 @@ function Export-IntuneCompliance {
         }
     }
     $riskData = Get-RiskScore
+    $rwData = Get-RansomwareScore
     $target = try { $el['txtScanTarget'].Text } catch { $env:COMPUTERNAME }
+    $client = try { $el['txtClient'].Text } catch { '' }
+    $auditor = try { $el['txtAuditor'].Text } catch { '' }
     $output = [ordered]@{
         SchemaVersion = $script:SchemaVersion
         Tool = $script:ProductShortName
         ToolVersion = $script:ProductVersion
         Timestamp = Get-Date -Format 'o'
         Target = $target
+        Client = $client
+        Auditor = $auditor
+        Environment = [ordered]@{
+            Hostname = $env:COMPUTERNAME
+            OS = $script:Env.OSCaption
+            Domain = $script:Env.IsDomainJoined
+            Admin = $script:Env.IsAdmin
+        }
         SecurityAuditGrade = $riskData.Grade
         SecurityAuditScore = $riskData.Pct
+        RansomwareGrade = $rwData.Grade
+        RansomwareScore = $rwData.Overall
         OverallCompliant = ($riskData.Grade -in @('A','B'))
         CriticalFailures = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
         Checks = $checks
