@@ -407,6 +407,9 @@ if ($scriptText -notmatch 'ESC16' -or $scriptText -notmatch 'CertificateMappingM
 if ($scriptText -notmatch 'ADMINISTRATOR PROTECTION' -or $scriptText -notmatch 'TypeOfAdminApprovalMode') {
     Add-Failure 'EP05 must check Windows 11 Administrator Protection posture.'
 }
+if ($scriptText -notmatch 'SMB OVER QUIC' -or $scriptText -notmatch 'EnableSMBQUIC') {
+    Add-Failure 'EP03 must check SMB over QUIC posture on Server 2025/Win11 24H2+.'
+}
 if ($scriptText -notmatch "Pass','Fail','Partial','N/A") {
     Add-Failure 'Auto-check status mapping must preserve N/A results for non-applicable checks.'
 }

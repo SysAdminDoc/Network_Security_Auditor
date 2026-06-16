@@ -2454,6 +2454,45 @@ $script:AutoChecks = @{
             } else {
                 [void]$sb.AppendLine("  CVE-2025-33073 local protocol posture: no signing/coercion exposure indicators found [OK]")
             }
+            # SMB over QUIC (Windows Server 2025+ / Windows 11 24H2+)
+            [void]$sb.AppendLine("`nSMB OVER QUIC:")
+            try {
+                $buildNum = [int](Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).BuildNumber
+                if ($buildNum -ge 26100) {
+                    $quicServer = $null; $quicClient = $null
+                    try { $quicServer = (Get-SmbServerConfiguration -EA SilentlyContinue).EnableSMBQUIC } catch {}
+                    try { $quicClient = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -EA SilentlyContinue).EnableSMBQUIC } catch {}
+                    if ($null -ne $quicServer) {
+                        [void]$sb.AppendLine("  SMB over QUIC Srv: $(if($quicServer){'Enabled'}else{'Disabled'})")
+                    } else {
+                        [void]$sb.AppendLine("  SMB over QUIC Srv: Not configured (default: depends on SKU)")
+                    }
+                    if ($null -ne $quicClient) {
+                        [void]$sb.AppendLine("  SMB over QUIC Cli: $(if($quicClient -eq 1){'Enabled'}else{'Disabled'})")
+                    }
+                    # Client access control (restrict which clients can connect via QUIC)
+                    try {
+                        $quicCert = (Get-SmbServerConfiguration -EA SilentlyContinue).SmbOverQuicCertificate
+                        if ($quicServer -and $quicCert) {
+                            [void]$sb.AppendLine("  QUIC Certificate : Configured")
+                        } elseif ($quicServer) {
+                            [void]$sb.AppendLine("  [i] SMB over QUIC enabled but no certificate configured")
+                        }
+                    } catch {}
+                    try {
+                        $cacPolicy = Get-SmbClientAccessControlEntry -EA SilentlyContinue
+                        if ($cacPolicy) {
+                            [void]$sb.AppendLine("  Client Access Ctl: $($cacPolicy.Count) rule(s) configured [OK]")
+                        } elseif ($quicServer) {
+                            [void]$sb.AppendLine("  Client Access Ctl: No rules (any authenticated client can connect via QUIC)")
+                        }
+                    } catch {
+                        [void]$sb.AppendLine("  Client Access Ctl: Cmdlet unavailable (pre-26100 or not configured)")
+                    }
+                } else {
+                    [void]$sb.AppendLine("  N/A: Requires Windows Server 2025 / Windows 11 24H2+ (build $buildNum)")
+                }
+            } catch { [void]$sb.AppendLine("  Could not query SMB over QUIC state") }
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 2) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="SMB/protocol hardening scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
