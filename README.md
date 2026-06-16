@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.10.0-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.10.1-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
@@ -272,7 +272,7 @@ Every check maps to one or more controls across 11 frameworks. Framework-specifi
 
 ### MITRE ATT&CK Mapping
 
-All 69 checks map to ATT&CK Enterprise techniques (v15.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.
+All 69 checks map to ATT&CK Enterprise techniques (v19.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.
 
 ### MITRE D3FEND Mapping
 
@@ -392,8 +392,8 @@ Automatic platform detection and field population:
 | Intune | `*_intune.json` | Device compliance discovery script for Conditional Access |
 | Compliance Summary | `*_summary.json` | Compact RMM dashboard payload |
 | ATT&CK Navigator | `*_navigator.json` | MITRE ATT&CK Navigator v4.5 layer with technique scoring |
-| OCSF | `*_ocsf.jsonl` | OCSF v1.3 Security Finding events for vendor-neutral SIEM/MDR |
-| OSCAL | `*_oscal.json` | NIST OSCAL v1.1.2 assessment results for GRC and FedRAMP |
+| OCSF | `*_ocsf.jsonl` | OCSF v1.8.0 Security Finding events for vendor-neutral SIEM/MDR |
+| OSCAL | `*_oscal.json` | NIST OSCAL v1.2.2 assessment results for GRC and FedRAMP |
 
 ---
 
@@ -501,8 +501,8 @@ arguments, the WinRM-bootstrap WMI call, and so on). The lint gate must report
 -ExportSARIF         Also export SARIF 2.1.0 for GitHub/Azure DevOps
 -ExportPDF           Also export PDF via Edge/Chrome headless
 -ExportNavigator     Also export MITRE ATT&CK Navigator layer JSON
--ExportOCSF          Also export OCSF v1.3 security finding JSONL
--ExportOSCAL         Also export NIST OSCAL v1.1.2 assessment results JSON
+-ExportOCSF          Also export OCSF v1.8.0 security finding JSONL
+-ExportOSCAL         Also export NIST OSCAL v1.2.2 assessment results JSON
 -PrivacyMode         Redact hostnames, IPs, and identities in all exports
 -CloudAssessmentPath Path(s) to Maester or CISA ScubaGear JSON results
                      to import and include in reports

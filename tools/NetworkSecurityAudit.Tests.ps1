@@ -131,6 +131,31 @@ Describe 'Version surface consistency' {
     }
 }
 
+Describe 'External export version contracts' {
+    It 'pins current external taxonomy and schema versions' {
+        $expected = [ordered]@{
+            AttackEnterprise = '19.1'
+            AttackNavigator = '4.5'
+            AttackNavigatorApp = '5.3.2'
+            D3FEND = '1.4.0'
+            OCSF = '1.8.0'
+            OSCAL = '1.2.2'
+        }
+        foreach ($key in $expected.Keys) {
+            $script:Text | Should -Match "(?m)^\s*$key\s*=\s*'$([regex]::Escape($expected[$key]))'" -Because "$key export contract drifted"
+        }
+    }
+
+    It 'exports source-version metadata from the central manifest' {
+        $script:Text | Should -Match '\$script:ExternalVersionSources\s*=\s*\[ordered\]@\{'
+        $script:Text | Should -Match 'function Get-ExternalVersionManifest'
+        $script:Text | Should -Match 'source_version'
+        $script:Text | Should -Match 'source_url'
+        $script:Text | Should -Match 'reviewed_on'
+        $script:Text | Should -Match 'external_versions = Get-ExternalVersionManifest'
+    }
+}
+
 Describe 'Export serialization' {
     It 'serializes a representative finding object to valid JSON' {
         $sample = [ordered]@{
@@ -338,7 +363,7 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $script:AuditCategories = @{ 'Identity' = @{ Items = @(
             @{ ID='IA01'; Text='Priv groups'; Severity='Critical' }
             @{ ID='IA02'; Text='MFA'; Severity='High' }) } }
-        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.0'
+        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.1'
         $save1 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-01'; ScanTarget='DC'; Items=@{ IA01=@{Status='Fail';Findings='x';Evidence='y'}; IA02=@{Status='Pass'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $save2 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-14'; ScanTarget='DC'; Items=@{ IA01=@{Status='Pass'}; IA02=@{Status='Fail'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $s1 = Convert-SaveStateToSnapshot $save1

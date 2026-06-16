@@ -176,6 +176,25 @@ foreach ($evk in $evKeys) {
         Add-Failure "ExternalVersions manifest missing key: $evk"
     }
 }
+$expectedExternalVersions = [ordered]@{
+    AttackEnterprise = '19.1'
+    AttackNavigator = '4.5'
+    AttackNavigatorApp = '5.3.2'
+    D3FEND = '1.4.0'
+    OCSF = '1.8.0'
+    OSCAL = '1.2.2'
+}
+foreach ($evk in $expectedExternalVersions.Keys) {
+    $expectedExternalVersion = [regex]::Escape($expectedExternalVersions[$evk])
+    if ($scriptText -notmatch "(?m)^\s*$evk\s*=\s*'$expectedExternalVersion'") {
+        Add-Failure "ExternalVersions manifest has stale $evk version; expected $($expectedExternalVersions[$evk])."
+    }
+}
+foreach ($requiredSource in 'ExternalVersionSources','Get-ExternalVersionManifest','source_version','source_url','reviewed_on','external_versions = Get-ExternalVersionManifest') {
+    if ($scriptText -notmatch [regex]::Escape($requiredSource)) {
+        Add-Failure "External version source metadata missing: $requiredSource"
+    }
+}
 
 $staleVersionPatterns = @(
     'Network Security Audit Checklist v4\.1',

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.10.0 - Professional GUI Tool
+    Network Security Auditor v4.10.1 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -53,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.10.0
+    4.10.1
 #>
 param(
     [switch]$Silent,
@@ -94,14 +94,67 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.10.0'
+$script:ProductVersion = '4.10.1'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
-    AttackEnterprise = '15.1'
+    AttackEnterprise = '19.1'
     AttackNavigator  = '4.5'
+    AttackNavigatorApp = '5.3.2'
     D3FEND          = '1.4.0'
-    OCSF            = '1.3.0'
-    OSCAL           = '1.1.3'
+    OCSF            = '1.8.0'
+    OSCAL           = '1.2.2'
+}
+$script:ExternalVersionSources = [ordered]@{
+    AttackEnterprise = [ordered]@{
+        SourceVersion = 'v19.1'
+        SourceUrl = 'https://github.com/mitre-attack/attack-stix-data/releases/tag/v19.1'
+        ReleaseDate = '2026-05-12'
+        ReviewedOn = '2026-06-16'
+    }
+    AttackNavigator = [ordered]@{
+        SourceVersion = 'layer-format-v4.5'
+        SourceUrl = 'https://github.com/mitre-attack/attack-navigator/blob/master/layers/spec/v4.5/layerformat.md'
+        ReleaseDate = ''
+        ReviewedOn = '2026-06-16'
+    }
+    AttackNavigatorApp = [ordered]@{
+        SourceVersion = 'v5.3.2'
+        SourceUrl = 'https://github.com/mitre-attack/attack-navigator/releases/tag/v5.3.2'
+        ReleaseDate = '2026-04-21'
+        ReviewedOn = '2026-06-16'
+    }
+    D3FEND = [ordered]@{
+        SourceVersion = '1.4.0'
+        SourceUrl = 'https://d3fend.mitre.org/'
+        ReleaseDate = ''
+        ReviewedOn = '2026-06-16'
+    }
+    OCSF = [ordered]@{
+        SourceVersion = '1.8.0'
+        SourceUrl = 'https://github.com/ocsf/ocsf-schema/releases/tag/1.8.0'
+        ReleaseDate = '2026-03-18'
+        ReviewedOn = '2026-06-16'
+    }
+    OSCAL = [ordered]@{
+        SourceVersion = 'v1.2.2'
+        SourceUrl = 'https://github.com/usnistgov/OSCAL/releases/tag/v1.2.2'
+        ReleaseDate = '2026-04-30'
+        ReviewedOn = '2026-06-16'
+    }
+}
+function Get-ExternalVersionManifest {
+    $manifest = [ordered]@{}
+    foreach ($key in $script:ExternalVersions.Keys) {
+        $src = if ($script:ExternalVersionSources.Contains($key)) { $script:ExternalVersionSources[$key] } else { [ordered]@{} }
+        $manifest[$key] = [ordered]@{
+            version        = $script:ExternalVersions[$key]
+            source_version = if ($src.SourceVersion) { $src.SourceVersion } else { $script:ExternalVersions[$key] }
+            source_url     = if ($src.SourceUrl) { $src.SourceUrl } else { '' }
+            release_date   = if ($src.ReleaseDate) { $src.ReleaseDate } else { '' }
+            reviewed_on    = if ($src.ReviewedOn) { $src.ReviewedOn } else { '' }
+        }
+    }
+    return $manifest
 }
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
@@ -5513,7 +5566,7 @@ function Get-FrameworkScores {
 # ── End Phase 3A ─────────────────────────────────────────────────────────────
 
 # ── Phase 4A: MITRE ATT&CK Mapping ──────────────────────────────────────────
-# Maps all 69 checks to ATT&CK Enterprise techniques (v15.1)
+# Maps all 69 checks to ATT&CK Enterprise techniques (v19.1)
 # Format: CheckID -> @{ Tactics=@('TA00xx',...); Techniques=@('T1xxx',...); Desc='short attack context' }
 $script:MitreMap = @{
     # ── Identity & Access ──
@@ -6208,7 +6261,6 @@ $script:SuppressAdvance = $false
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $window = [Windows.Markup.XamlReader]::Load($reader)
 
-# codex-branding:start
                 try {
                     $brandingIconPath = Join-Path $PSScriptRoot 'icon.ico'
                     if (Test-Path $brandingIconPath) {
@@ -6216,7 +6268,6 @@ $window = [Windows.Markup.XamlReader]::Load($reader)
                     }
                 } catch {
                 }
-                # codex-branding:end
 $el = @{}
 @(
     'RootGrid','HeaderBar','InfoBar','ScanBar','FooterBar','MainTabs',
@@ -10113,7 +10164,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
         # D3FEND defensive coverage summary
         $d3Cov = Get-D3FendCoverage
         $html += "<div style='margin-top:16px'><strong style='font-size:13px;color:#22c55e'>MITRE D3FEND Coverage</strong>"
-        $html += "<div style='font-size:11px;color:#94a3b8;margin-bottom:8px'>Defensive technique coverage mapped against D3FEND v1.4.0 stages. Higher coverage = more defensive controls are implemented or partially implemented.</div>`n"
+        $html += "<div style='font-size:11px;color:#94a3b8;margin-bottom:8px'>Defensive technique coverage mapped against D3FEND v$($script:ExternalVersions.D3FEND) stages. Higher coverage = more defensive controls are implemented or partially implemented.</div>`n"
         $html += "<div class='mitre-grid'>`n"
         foreach ($stage in $script:D3FendStages.Keys) {
             $dmeta = $script:D3FendStages[$stage]
@@ -10570,7 +10621,7 @@ function Export-FindingsJSON {
             if ($script:D3FendMap.Contains($id)) {
                 $d3 = $script:D3FendMap[$id]
                 $d3fendObj = @{
-                    Version = '1.4.0'
+                    Version = $script:ExternalVersions.D3FEND
                     Stages = $d3.Stages
                     Techniques = $d3.Techniques
                     Labels = $d3.Labels
@@ -10630,6 +10681,7 @@ function Export-FindingsJSON {
         schema_version = $script:SchemaVersion
         tool           = $script:ProductShortName
         tool_version   = $script:ProductVersion
+        external_versions = Get-ExternalVersionManifest
         export_type    = 'structured_findings'
         privacy_redacted = $privacyFlag
         timestamp      = $scanTs
@@ -10749,6 +10801,7 @@ function Export-FindingsJSONL {
                 event_type      = 'security_audit_finding'
                 source          = $script:ProductShortName
                 source_version  = $script:ProductVersion
+                external_versions = Get-ExternalVersionManifest
                 client          = Get-RedactedIdentity $ClientName 'CLIENT'
                 auditor         = Get-RedactedIdentity $AuditorName 'AUDITOR'
                 host            = Get-RedactedIdentity $scanTarget 'HOST'
@@ -10786,7 +10839,7 @@ function Export-FindingsJSONL {
                 mitre_tactics   = if ($mitreData) { $mitreData.Tactics -join ',' } else { '' }
                 mitre_techniques = if ($mitreData) { $mitreData.Techniques -join ',' } else { '' }
                 mitre_context   = if ($mitreData) { $mitreData.Desc } else { '' }
-                d3fend_version  = if ($d3fendData) { '1.4.0' } else { '' }
+                d3fend_version  = if ($d3fendData) { $script:ExternalVersions.D3FEND } else { '' }
                 d3fend_stages   = if ($d3fendData) { $d3fendData.Stages -join ',' } else { '' }
                 d3fend_techniques = if ($d3fendData) { $d3fendData.Techniques -join ',' } else { '' }
                 d3fend_labels   = if ($d3fendData) { $d3fendData.Labels -join ',' } else { '' }
@@ -10802,7 +10855,7 @@ function Export-FindingsJSONL {
                     elseif ($p -match 'HIPAA (.+)') { $evt.hipaa = $Matches[1].Trim() }
                 }
             }
-            $lines.Add(($evt | ConvertTo-Json -Depth 3 -Compress))
+            $lines.Add(($evt | ConvertTo-Json -Depth 6 -Compress))
         }
     }
 
@@ -10894,6 +10947,7 @@ function Export-OCSFFindings {
                     check_id    = $id
                     category    = $cn
                     weight      = $item.Weight
+                    external_versions = Get-ExternalVersionManifest
                     client      = (Get-RedactedIdentity $ClientName 'CLIENT')
                     d3fend     = if ($d3fendData) { [ordered]@{ stages = $d3fendData.Stages; techniques = $d3fendData.Techniques } } else { $null }
                 }
@@ -10908,7 +10962,7 @@ function Export-OCSFFindings {
 }
 
 # ── Phase 5A3: OSCAL Assessment Results Export ───────────────────────────────
-# NIST OSCAL v1.1.2 assessment-results model for GRC and FedRAMP workflows
+# NIST OSCAL assessment-results export for GRC and FedRAMP workflows
 function Export-OSCALResults {
     param([string]$OutPath, [string]$ClientName = '', [string]$AuditorName = '')
     if (-not $ClientName) { $ClientName = try { $el['txtClient'].Text } catch { $env:COMPUTERNAME } }
@@ -11029,6 +11083,10 @@ function Export-OSCALResults {
                 props = @(
                     [ordered]@{ name = 'tool-name'; value = $script:ProductName }
                     [ordered]@{ name = 'tool-version'; value = $script:ProductVersion }
+                    [ordered]@{ name = 'attack-enterprise-version'; value = $script:ExternalVersions.AttackEnterprise }
+                    [ordered]@{ name = 'attack-enterprise-source-version'; value = $script:ExternalVersionSources.AttackEnterprise.SourceVersion }
+                    [ordered]@{ name = 'oscal-source-version'; value = $script:ExternalVersionSources.OSCAL.SourceVersion }
+                    [ordered]@{ name = 'oscal-source-url'; value = $script:ExternalVersionSources.OSCAL.SourceUrl }
                 )
             }
             results = @(
@@ -11139,9 +11197,13 @@ function Export-FindingsCSV {
                 ISO_27001        = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.ISO27001 } else { '' })
                 STIG             = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.STIG } else { '' })
                 FedRAMP          = ConvertTo-CsvSafeText $(if ($fwData) { $fwData.FedRAMP } else { '' })
+                ATTACK_Version   = ConvertTo-CsvSafeText $script:ExternalVersions.AttackEnterprise
+                ATTACK_SourceVersion = ConvertTo-CsvSafeText $script:ExternalVersionSources.AttackEnterprise.SourceVersion
+                OCSF_Version     = ConvertTo-CsvSafeText $script:ExternalVersions.OCSF
+                OSCAL_Version    = ConvertTo-CsvSafeText $script:ExternalVersions.OSCAL
                 MITRE_Tactics    = ConvertTo-CsvSafeText $(if ($mitreData) { $mitreData.Tactics -join '; ' } else { '' })
                 MITRE_Techniques = ConvertTo-CsvSafeText $(if ($mitreData) { $mitreData.Techniques -join '; ' } else { '' })
-                D3FEND_Version   = ConvertTo-CsvSafeText $(if ($d3fendData) { '1.4.0' } else { '' })
+                D3FEND_Version   = ConvertTo-CsvSafeText $(if ($d3fendData) { $script:ExternalVersions.D3FEND } else { '' })
                 D3FEND_Stages    = ConvertTo-CsvSafeText $(if ($d3fendData) { $d3fendData.Stages -join '; ' } else { '' })
                 D3FEND_Techniques = ConvertTo-CsvSafeText $(if ($d3fendData) { $d3fendData.Techniques -join '; ' } else { '' })
                 D3FEND_Labels    = ConvertTo-CsvSafeText $(if ($d3fendData) { $d3fendData.Labels -join '; ' } else { '' })
@@ -11209,6 +11271,7 @@ function Export-ComplianceSummary {
         schema_version = $script:SchemaVersion
         tool           = $script:ProductShortName
         tool_version   = $script:ProductVersion
+        external_versions = Get-ExternalVersionManifest
         export_type    = 'compliance_summary'
         timestamp      = Get-Date -Format 'o'
         client         = (Get-RedactedIdentity $ClientName 'CLIENT')
@@ -11255,7 +11318,7 @@ function Export-SARIF {
                     severity = $item.Severity
                     category = $cn
                     weight = $item.Weight
-                    d3fend_version = if ($d3fendData) { '1.4.0' } else { '' }
+                    d3fend_version = if ($d3fendData) { $script:ExternalVersions.D3FEND } else { '' }
                     d3fend_stages = if ($d3fendData) { $d3fendData.Stages } else { @() }
                     d3fend_techniques = if ($d3fendData) { $d3fendData.Techniques } else { @() }
                     d3fend_labels = if ($d3fendData) { $d3fendData.Labels } else { @() }
@@ -11281,7 +11344,7 @@ function Export-SARIF {
                     properties = @{
                         status = $sv
                         category = $cn
-                        d3fend_version = if ($d3fendData) { '1.4.0' } else { '' }
+                        d3fend_version = if ($d3fendData) { $script:ExternalVersions.D3FEND } else { '' }
                         d3fend_stages = if ($d3fendData) { $d3fendData.Stages } else { @() }
                         d3fend_techniques = if ($d3fendData) { $d3fendData.Techniques } else { @() }
                         d3fend_labels = if ($d3fendData) { $d3fendData.Labels } else { @() }
@@ -11300,6 +11363,7 @@ function Export-SARIF {
                     version = $script:ProductVersion
                     informationUri = 'https://github.com/SysAdminDoc/Network_Security_Auditor'
                     rules = $rules
+                    properties = @{ external_versions = Get-ExternalVersionManifest }
                 }
             }
             results = $results
@@ -11339,6 +11403,7 @@ function Export-IntuneCompliance {
         SchemaVersion = $script:SchemaVersion
         Tool = $script:ProductShortName
         ToolVersion = $script:ProductVersion
+        ExternalVersions = Get-ExternalVersionManifest
         Timestamp = Get-Date -Format 'o'
         Target = (Get-RedactedIdentity $target 'HOST')
         Client = (Get-RedactedIdentity $client 'CLIENT')
@@ -11451,7 +11516,14 @@ function Export-AttackNavigator {
         tacticRowBackground = '#1a1a2e'
         selectTechniquesAcrossTactics = $true
         selectSubtechniquesWithParent = $false
-        metadata = @([ordered]@{ name = 'tool'; value = $script:ProductDisplayName }, [ordered]@{ name = 'client'; value = (Get-RedactedIdentity $ClientName 'CLIENT') }, [ordered]@{ name = 'target'; value = (Get-RedactedIdentity $target 'HOST') })
+        metadata = @(
+            [ordered]@{ name = 'tool'; value = $script:ProductDisplayName }
+            [ordered]@{ name = 'client'; value = (Get-RedactedIdentity $ClientName 'CLIENT') }
+            [ordered]@{ name = 'target'; value = (Get-RedactedIdentity $target 'HOST') }
+            [ordered]@{ name = 'attack-enterprise-source-version'; value = $script:ExternalVersionSources.AttackEnterprise.SourceVersion }
+            [ordered]@{ name = 'navigator-app-version'; value = $script:ExternalVersions.AttackNavigatorApp }
+            [ordered]@{ name = 'layer-format-source'; value = $script:ExternalVersionSources.AttackNavigator.SourceUrl }
+        )
     }
     $layer | ConvertTo-Json -Depth 10 | Set-Content $OutPath -Encoding UTF8
     Write-Log "ATT&CK Navigator layer exported: $OutPath ($($techniques.Count) techniques)" 'INFO'
