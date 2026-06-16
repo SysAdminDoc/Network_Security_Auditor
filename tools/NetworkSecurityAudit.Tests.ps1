@@ -298,6 +298,83 @@ Describe 'Graph wrapper offline fixtures' {
     }
 }
 
+Describe 'Cloud Graph profile manifest' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Convert-CloudAssessmentStatus','Get-CloudAssessmentStatusSummary','Get-GraphObjectProperty','Convert-GraphAuditErrorStatus','Invoke-GraphAuditRequest','Get-GraphStringArray','Get-CloudMockResponses','New-CloudAssessmentFinding','New-CloudUnavailableFinding','Invoke-CloudSecureScoreAssessment','Invoke-CloudConditionalAccessAssessment','Invoke-CloudGuestLifecycleAssessment','Invoke-CloudProfileAssessment') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+    BeforeEach {
+        $script:ProductVersion = '4.10.7'
+        $script:CloudCheckManifest = [ordered]@{
+            'CL01' = [ordered]@{ Name='Microsoft Secure Score'; PermissionScopes=@('SecurityEvents.Read.All'); RoleHints=@('Security Reader'); LicensePrerequisites='Secure Score'; ApiVersion='v1.0'; Endpoint='/security/secureScores?$top=1'; OutputFields=@('currentScore'); SkipStates=@('NotConfigured'); PrivacyClassification='Tenant'; Implemented=$true }
+            'CL02' = [ordered]@{ Name='Conditional Access policy baseline'; PermissionScopes=@('Policy.Read.All'); RoleHints=@('Conditional Access Reader'); LicensePrerequisites='Entra ID P1/P2'; ApiVersion='v1.0'; Endpoint='/identity/conditionalAccess/policies?$select=id,displayName,state,conditions,grantControls,sessionControls'; OutputFields=@('displayName'); SkipStates=@('NotConfigured'); PrivacyClassification='TenantPolicy'; Implemented=$true }
+            'CL06' = [ordered]@{ Name='Stale users and guests'; PermissionScopes=@('User.Read.All','AuditLog.Read.All'); RoleHints=@('Global Reader'); LicensePrerequisites='signInActivity'; ApiVersion='v1.0'; Endpoint='/users?$select=displayName,userPrincipalName,userType,accountEnabled,createdDateTime,signInActivity'; OutputFields=@('displayName'); SkipStates=@('NotConfigured'); PrivacyClassification='UserPII'; Implemented=$true }
+        }
+    }
+
+    It 'declares CL01 through CL10 with required metadata fields' {
+        foreach ($n in 1..10) {
+            $id = 'CL{0:d2}' -f $n
+            $script:Text | Should -Match "'$id'\s*=\s*\[ordered\]@\{"
+        }
+        foreach ($field in 'PermissionScopes','RoleHints','LicensePrerequisites','ApiVersion','Endpoint','OutputFields','SkipStates','PrivacyClassification') {
+            $script:Text | Should -Match $field
+        }
+        $script:Text | Should -Match 'Cloud\s*=\s*@\{'
+        $script:Text | Should -Match "Invoke-CloudProfileAssessment"
+    }
+
+    It 'builds secure score, Conditional Access, and guest lifecycle findings from mock Graph responses' {
+        $mock = @{
+            CL01 = @(
+                [ordered]@{ StatusCode=200; Body=[ordered]@{ value=@([ordered]@{ currentScore=62; maxScore=100; createdDateTime='2026-06-16T12:00:00Z'; azureTenantId='tenant-1' }) } }
+            )
+            CL02 = @(
+                [ordered]@{ StatusCode=200; Body=[ordered]@{ value=@(
+                    [ordered]@{
+                        displayName='Require MFA all users'
+                        state='enabled'
+                        conditions=[ordered]@{ users=[ordered]@{ includeUsers=@('All'); excludeUsers=@('breakglass') }; clientAppTypes=@('all') }
+                        grantControls=[ordered]@{ builtInControls=@('mfa') }
+                    }
+                ) } }
+            )
+            CL06 = @(
+                [ordered]@{ StatusCode=200; Body=[ordered]@{ value=@(
+                    [ordered]@{
+                        displayName='Guest One'
+                        userPrincipalName='guest_one#EXT#@example.com'
+                        userType='Guest'
+                        accountEnabled=$true
+                        createdDateTime='2025-01-01T00:00:00Z'
+                        signInActivity=[ordered]@{ lastSuccessfulSignInDateTime='2025-02-01T00:00:00Z' }
+                        sponsor='Jane Sponsor'
+                        owner='Ops Owner'
+                    }
+                ) } }
+            )
+        }
+
+        $assessment = Invoke-CloudProfileAssessment -MockResponsesById $mock
+        $assessment.Source | Should -Be 'MicrosoftGraph'
+        $assessment.TenantId | Should -Be 'tenant-1'
+        $assessment.SecureScore.percent | Should -Be 62
+        $assessment.Findings.TestId | Should -Contain 'CL01'
+        $assessment.Findings.TestId | Should -Contain 'CL02'
+        $assessment.Findings.TestId | Should -Contain 'CL06'
+        ($assessment.Findings | Where-Object TestId -eq 'CL02').Evidence | Should -Match 'Missing required policies'
+        ($assessment.Findings | Where-Object TestId -eq 'CL02').Evidence | Should -Match 'Dangerous exclusions'
+        ($assessment.Findings | Where-Object TestId -eq 'CL06').Evidence | Should -Match 'age='
+        ($assessment.Findings | Where-Object TestId -eq 'CL06').Evidence | Should -Match 'last_sign_in='
+        ($assessment.Findings | Where-Object TestId -eq 'CL06').Evidence | Should -Match 'sponsor='
+        ($assessment.Findings | Where-Object TestId -eq 'CL06').Evidence | Should -Match 'owner='
+        @($assessment.Findings | Where-Object { -not $_.SourceTimestamp -or @($_.PermissionScopes).Count -eq 0 }).Count | Should -Be 0
+    }
+}
+
 Describe 'Privacy redaction coverage' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
@@ -496,7 +573,7 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $script:AuditCategories = @{ 'Identity' = @{ Items = @(
             @{ ID='IA01'; Text='Priv groups'; Severity='Critical' }
             @{ ID='IA02'; Text='MFA'; Severity='High' }) } }
-        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.6'
+        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.7'
         $save1 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-01'; ScanTarget='DC'; Items=@{ IA01=@{Status='Fail';Findings='x';Evidence='y'}; IA02=@{Status='Pass'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $save2 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-14'; ScanTarget='DC'; Items=@{ IA01=@{Status='Pass'}; IA02=@{Status='Fail'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $s1 = Convert-SaveStateToSnapshot $save1

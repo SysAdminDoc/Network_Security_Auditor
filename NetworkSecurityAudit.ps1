@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.10.6 - Professional GUI Tool
+    Network Security Auditor v4.10.7 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -15,7 +15,7 @@
     Run in headless mode (no GUI). Auto-scans, exports, and exits.
     Designed for RMM deployment via ConnectWise, Datto, NinjaRMM, etc.
 .PARAMETER ScanProfile
-    Scan profile to use: Quick, Standard, Full, ADOnly, LocalOnly,
+    Scan profile to use: Quick, Standard, Full, ADOnly, LocalOnly, Cloud,
     HIPAA, PCI, CMMC, E8, CyberEssentials, SOC2, ISO27001, STIG.
     Default: Full (all 69 checks). Quick runs ~22 critical checks.
     Framework profiles run checks mapped to that compliance framework.
@@ -53,11 +53,11 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.10.6
+    4.10.7
 #>
 param(
     [switch]$Silent,
-    [ValidateSet('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')]
+    [ValidateSet('Quick','Standard','Full','ADOnly','LocalOnly','Cloud','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')]
     [string]$ScanProfile = 'Full',
     [string]$OutputPath = '',
     [ValidateSet('Executive','Management','Technical','All')]
@@ -94,7 +94,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.10.6'
+$script:ProductVersion = '4.10.7'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.1'
@@ -727,6 +727,81 @@ try {
 } catch {}
 
 # ── Cloud Assessment Import (Maester / ScubaGear) ───────────────────────────
+$script:CloudCheckManifest = [ordered]@{
+    'CL01' = [ordered]@{
+        Name='Microsoft Secure Score'; PermissionScopes=@('SecurityEvents.Read.All'); RoleHints=@('Security Reader','Global Reader')
+        LicensePrerequisites='Microsoft Secure Score availability'; ApiVersion='v1.0'; Endpoint='/security/secureScores?$top=1'
+        OutputFields=@('currentScore','maxScore','createdDateTime','azureTenantId'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='Tenant'
+        Implemented=$true
+    }
+    'CL02' = [ordered]@{
+        Name='Conditional Access policy baseline'; PermissionScopes=@('Policy.Read.All'); RoleHints=@('Security Reader','Global Reader','Conditional Access Reader')
+        LicensePrerequisites='Entra ID P1/P2 for Conditional Access'; ApiVersion='v1.0'; Endpoint='/identity/conditionalAccess/policies?$select=id,displayName,state,conditions,grantControls,sessionControls'
+        OutputFields=@('displayName','state','conditions','grantControls','exclusions'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='TenantPolicy'
+        Implemented=$true
+    }
+    'CL03' = [ordered]@{
+        Name='Authentication methods and MFA registration'; PermissionScopes=@('UserAuthenticationMethod.Read.All','AuditLog.Read.All'); RoleHints=@('Authentication Administrator','Global Reader')
+        LicensePrerequisites='Entra authentication method reporting availability'; ApiVersion='v1.0'; Endpoint='/reports/authenticationMethods/userRegistrationDetails'
+        OutputFields=@('userPrincipalName','isMfaRegistered','isMfaCapable','methodsRegistered'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='UserPII'
+        Implemented=$false
+    }
+    'CL04' = [ordered]@{
+        Name='Legacy authentication and sign-in risk'; PermissionScopes=@('AuditLog.Read.All'); RoleHints=@('Security Reader','Reports Reader')
+        LicensePrerequisites='Sign-in logs and relevant Entra reporting retention'; ApiVersion='v1.0'; Endpoint='/auditLogs/signIns'
+        OutputFields=@('createdDateTime','userPrincipalName','clientAppUsed','riskDetail','conditionalAccessStatus'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='UserPII'
+        Implemented=$false
+    }
+    'CL05' = [ordered]@{
+        Name='Privileged role assignments and PIM posture'; PermissionScopes=@('RoleManagement.Read.Directory','Directory.Read.All'); RoleHints=@('Privileged Role Administrator','Global Reader')
+        LicensePrerequisites='PIM data requires Entra ID P2'; ApiVersion='v1.0'; Endpoint='/roleManagement/directory/roleAssignmentScheduleInstances'
+        OutputFields=@('principalId','roleDefinitionId','assignmentType','startDateTime','endDateTime'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='UserPII'
+        Implemented=$false
+    }
+    'CL06' = [ordered]@{
+        Name='Stale users and guests'; PermissionScopes=@('User.Read.All','AuditLog.Read.All'); RoleHints=@('Global Reader','User Administrator','Reports Reader')
+        LicensePrerequisites='signInActivity requires compatible Entra licensing'; ApiVersion='v1.0'; Endpoint='/users?$select=displayName,userPrincipalName,userType,accountEnabled,createdDateTime,signInActivity'
+        OutputFields=@('displayName','userPrincipalName','userType','accountEnabled','createdDateTime','signInActivity','sponsor','owner'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='UserPII'
+        Implemented=$true
+    }
+    'CL07' = [ordered]@{
+        Name='Risky users'; PermissionScopes=@('IdentityRiskyUser.Read.All'); RoleHints=@('Security Reader','Global Reader')
+        LicensePrerequisites='Identity Protection licensing'; ApiVersion='v1.0'; Endpoint='/identityProtection/riskyUsers'
+        OutputFields=@('userPrincipalName','riskLevel','riskState','riskLastUpdatedDateTime'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='UserPII'
+        Implemented=$false
+    }
+    'CL08' = [ordered]@{
+        Name='Apps and consent grants'; PermissionScopes=@('Application.Read.All','Directory.Read.All'); RoleHints=@('Application Administrator','Global Reader')
+        LicensePrerequisites='Directory app registration visibility'; ApiVersion='v1.0'; Endpoint='/applications'
+        OutputFields=@('displayName','appId','owners','passwordCredentials','requiredResourceAccess'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='TenantApp'
+        Implemented=$false
+    }
+    'CL09' = [ordered]@{
+        Name='Intune compliance posture'; PermissionScopes=@('DeviceManagementConfiguration.Read.All','DeviceManagementManagedDevices.Read.All'); RoleHints=@('Intune Reader','Global Reader')
+        LicensePrerequisites='Intune licensing'; ApiVersion='v1.0'; Endpoint='/deviceManagement/deviceCompliancePolicies'
+        OutputFields=@('displayName','platforms','assignments','managedDeviceCount','noncompliantDeviceCount'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='DevicePII'
+        Implemented=$false
+    }
+    'CL10' = [ordered]@{
+        Name='Security alerts summary'; PermissionScopes=@('SecurityAlert.Read.All'); RoleHints=@('Security Reader','Global Reader')
+        LicensePrerequisites='Microsoft security alerts availability'; ApiVersion='v1.0'; Endpoint='/security/alerts_v2'
+        OutputFields=@('title','severity','status','createdDateTime','serviceSource','mitreTechniques'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='SecurityAlert'
+        Implemented=$false
+    }
+    'CL11' = [ordered]@{
+        Name='Directory audit timeline'; PermissionScopes=@('AuditLog.Read.All'); RoleHints=@('Security Reader','Reports Reader')
+        LicensePrerequisites='Directory audit log retention'; ApiVersion='v1.0'; Endpoint='/auditLogs/directoryAudits'
+        OutputFields=@('activityDateTime','activityDisplayName','initiatedBy','targetResources'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='UserPII'
+        Implemented=$false
+    }
+    'CL12' = [ordered]@{
+        Name='Device inventory and join health'; PermissionScopes=@('Device.Read.All','DeviceManagementManagedDevices.Read.All'); RoleHints=@('Global Reader','Intune Reader')
+        LicensePrerequisites='Intune licensing for managed-device details'; ApiVersion='v1.0'; Endpoint='/devices'
+        OutputFields=@('displayName','operatingSystem','trustType','isCompliant','approximateLastSignInDateTime'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='DevicePII'
+        Implemented=$false
+    }
+}
+
 function Convert-CloudAssessmentStatus {
     param([object]$Value)
 
@@ -882,6 +957,250 @@ function Invoke-GraphAuditRequest {
         Status=$finalStatus; Data=$items; Error=$graphError
         SourceTimestamp=(Get-Date).ToUniversalTime().ToString('o'); PermissionScopes=@($PermissionScopes); Pages=$pages; Retried=$retries; Requests=$requests
     }
+}
+
+function Get-GraphStringArray {
+    param([object]$Value)
+    $items = @()
+    if ($null -eq $Value) { return $items }
+    foreach ($v in @($Value)) {
+        if ($null -ne $v -and [string]$v -ne '') { $items += [string]$v }
+    }
+    return $items
+}
+
+function Get-CloudMockResponses {
+    param([hashtable]$MockResponsesById, [string]$CheckId)
+    if ($MockResponsesById -and $MockResponsesById.ContainsKey($CheckId)) { return @($MockResponsesById[$CheckId]) }
+    return @()
+}
+
+function New-CloudAssessmentFinding {
+    param(
+        [string]$TestId,
+        [string]$Name,
+        [string]$Status,
+        [string]$Category,
+        [string]$Remediation,
+        [string]$Evidence,
+        [string]$SourceTimestamp,
+        [string[]]$PermissionScopes,
+        [string]$ApiVersion,
+        [string]$Endpoint,
+        [string]$PrivacyClassification
+    )
+
+    [ordered]@{
+        TestId = $TestId
+        Name = $Name
+        Result = $Status
+        Status = (Convert-CloudAssessmentStatus $Status)
+        Category = $Category
+        Remediation = $Remediation
+        Evidence = $Evidence
+        SourceTimestamp = $SourceTimestamp
+        PermissionScopes = @($PermissionScopes)
+        ApiVersion = $ApiVersion
+        Endpoint = $Endpoint
+        PrivacyClassification = $PrivacyClassification
+    }
+}
+
+function New-CloudUnavailableFinding {
+    param(
+        [string]$CheckId,
+        [object]$Meta,
+        [object]$GraphResult
+    )
+    $message = ''
+    if ($GraphResult -and (Get-GraphObjectProperty $GraphResult 'Error')) {
+        $message = [string](Get-GraphObjectProperty (Get-GraphObjectProperty $GraphResult 'Error') 'message')
+    }
+    if (-not $message) { $message = "Graph check $CheckId could not run." }
+    $status = if ($GraphResult) { [string](Get-GraphObjectProperty $GraphResult 'Status') } else { 'Error' }
+    New-CloudAssessmentFinding -TestId $CheckId -Name $Meta.Name -Status $status -Category 'Microsoft Graph' `
+        -Remediation $message -Evidence "$CheckId unavailable: $message" `
+        -SourceTimestamp ([string](Get-GraphObjectProperty $GraphResult 'SourceTimestamp')) `
+        -PermissionScopes @($Meta.PermissionScopes) -ApiVersion $Meta.ApiVersion -Endpoint $Meta.Endpoint -PrivacyClassification $Meta.PrivacyClassification
+}
+
+function Invoke-CloudSecureScoreAssessment {
+    param([hashtable]$MockResponsesById = @{})
+    $meta = $script:CloudCheckManifest['CL01']
+    $graph = Invoke-GraphAuditRequest -Uri $meta.Endpoint -ApiVersion $meta.ApiVersion -PermissionScopes @($meta.PermissionScopes) -MaxPages 1 -MockResponses (Get-CloudMockResponses -MockResponsesById $MockResponsesById -CheckId 'CL01')
+    if ($graph.Status -ne 'Pass') {
+        return [ordered]@{ Finding = (New-CloudUnavailableFinding -CheckId 'CL01' -Meta $meta -GraphResult $graph); TenantId = ''; SecureScore = $null }
+    }
+
+    $scoreRecord = @($graph.Data | Select-Object -First 1)[0]
+    if (-not $scoreRecord) {
+        $finding = New-CloudAssessmentFinding -TestId 'CL01' -Name 'Microsoft Secure Score not returned' -Status 'NotConfigured' -Category 'Cloud Security' `
+            -Remediation 'Verify Microsoft Secure Score is available for this tenant and the signed-in identity can read it.' `
+            -Evidence 'Graph returned no secureScores records.' -SourceTimestamp $graph.SourceTimestamp -PermissionScopes @($meta.PermissionScopes) `
+            -ApiVersion $meta.ApiVersion -Endpoint $meta.Endpoint -PrivacyClassification $meta.PrivacyClassification
+        return [ordered]@{ Finding = $finding; TenantId = ''; SecureScore = $null }
+    }
+
+    $current = 0.0
+    $max = 0.0
+    [void][double]::TryParse([string](Get-GraphObjectProperty $scoreRecord 'currentScore'), [ref]$current)
+    [void][double]::TryParse([string](Get-GraphObjectProperty $scoreRecord 'maxScore'), [ref]$max)
+    $pct = if ($max -gt 0) { [math]::Round(($current / $max) * 100, 1) } else { 0 }
+    $created = [string](Get-GraphObjectProperty $scoreRecord 'createdDateTime')
+    $tenantId = [string](Get-GraphObjectProperty $scoreRecord 'azureTenantId')
+    $status = if ($pct -ge 70) { 'Pass' } else { 'Fail' }
+    $name = "Secure Score $current/$max ($pct%)"
+    $evidence = "Secure Score currentScore=$current maxScore=$max percent=$pct createdDateTime=$created"
+    $remediation = if ($status -eq 'Pass') { 'Secure Score meets the 70 percent baseline used by this tool.' } else { 'Review Secure Score improvement actions and prioritize identity, device, and app control gaps.' }
+    $finding = New-CloudAssessmentFinding -TestId 'CL01' -Name $name -Status $status -Category 'Cloud Security' -Remediation $remediation -Evidence $evidence `
+        -SourceTimestamp $graph.SourceTimestamp -PermissionScopes @($meta.PermissionScopes) -ApiVersion $meta.ApiVersion -Endpoint $meta.Endpoint -PrivacyClassification $meta.PrivacyClassification
+    $secure = [ordered]@{ current_score=$current; max_score=$max; percent=$pct; created=$created; source_timestamp=$graph.SourceTimestamp; permission_scopes=@($meta.PermissionScopes) }
+    return [ordered]@{ Finding = $finding; TenantId = $tenantId; SecureScore = $secure }
+}
+
+function Invoke-CloudConditionalAccessAssessment {
+    param([hashtable]$MockResponsesById = @{})
+    $meta = $script:CloudCheckManifest['CL02']
+    $graph = Invoke-GraphAuditRequest -Uri $meta.Endpoint -ApiVersion $meta.ApiVersion -PermissionScopes @($meta.PermissionScopes) -MockResponses (Get-CloudMockResponses -MockResponsesById $MockResponsesById -CheckId 'CL02')
+    if ($graph.Status -ne 'Pass') {
+        return New-CloudUnavailableFinding -CheckId 'CL02' -Meta $meta -GraphResult $graph
+    }
+
+    $policies = @($graph.Data)
+    $enabled = 0
+    $hasAdminMfa = $false
+    $hasAllUserMfa = $false
+    $hasLegacyBlock = $false
+    $dangerousExclusions = @()
+    foreach ($policy in $policies) {
+        $state = ([string](Get-GraphObjectProperty $policy 'state')).ToLowerInvariant()
+        if ($state -ne 'enabled') { continue }
+        $enabled++
+        $displayName = [string](Get-GraphObjectProperty $policy 'displayName')
+        $conditions = Get-GraphObjectProperty $policy 'conditions'
+        $users = Get-GraphObjectProperty $conditions 'users'
+        $grant = Get-GraphObjectProperty $policy 'grantControls'
+        $builtIns = Get-GraphStringArray (Get-GraphObjectProperty $grant 'builtInControls')
+        $includeUsers = Get-GraphStringArray (Get-GraphObjectProperty $users 'includeUsers')
+        $includeRoles = Get-GraphStringArray (Get-GraphObjectProperty $users 'includeRoles')
+        $excludeUsers = Get-GraphStringArray (Get-GraphObjectProperty $users 'excludeUsers')
+        $excludeGroups = Get-GraphStringArray (Get-GraphObjectProperty $users 'excludeGroups')
+        $excludeRoles = Get-GraphStringArray (Get-GraphObjectProperty $users 'excludeRoles')
+        $clientApps = Get-GraphStringArray (Get-GraphObjectProperty $conditions 'clientAppTypes')
+
+        $hasMfa = @($builtIns | Where-Object { $_ -ieq 'mfa' }).Count -gt 0
+        $hasBlock = @($builtIns | Where-Object { $_ -ieq 'block' }).Count -gt 0
+        if ($hasMfa -and ($includeRoles.Count -gt 0 -or @($includeUsers | Where-Object { $_ -ieq 'All' }).Count -gt 0)) { $hasAdminMfa = $true }
+        if ($hasMfa -and @($includeUsers | Where-Object { $_ -ieq 'All' }).Count -gt 0) { $hasAllUserMfa = $true }
+        if ($hasBlock -and @($clientApps | Where-Object { $_ -match 'exchangeActiveSync|other|all' }).Count -gt 0) { $hasLegacyBlock = $true }
+
+        $exclusionCount = $excludeUsers.Count + $excludeGroups.Count + $excludeRoles.Count
+        if ($exclusionCount -gt 0) {
+            $dangerousExclusions += "$displayName excludes users=$($excludeUsers.Count), groups=$($excludeGroups.Count), roles=$($excludeRoles.Count)"
+        }
+    }
+
+    $missing = @()
+    if (-not $hasAdminMfa) { $missing += 'Require MFA for administrator roles' }
+    if (-not $hasAllUserMfa) { $missing += 'Require MFA for all users' }
+    if (-not $hasLegacyBlock) { $missing += 'Block legacy authentication clients' }
+    $status = if ($missing.Count -gt 0 -or $dangerousExclusions.Count -gt 0) { 'Fail' } else { 'Pass' }
+    $evidence = "Policies=$($policies.Count) enabled=$enabled; Missing required policies: $(if($missing.Count){$missing -join '; '}else{'none'}); Dangerous exclusions: $(if($dangerousExclusions.Count){$dangerousExclusions -join '; '}else{'none'})"
+    $name = if ($status -eq 'Pass') { 'Conditional Access baseline policies present without broad exclusions' } else { 'Conditional Access baseline gaps or exclusions found' }
+    $remediation = 'Implement required Conditional Access baselines, document any exclusions, and review break-glass exclusions separately.'
+    New-CloudAssessmentFinding -TestId 'CL02' -Name $name -Status $status -Category 'Conditional Access' -Remediation $remediation -Evidence $evidence `
+        -SourceTimestamp $graph.SourceTimestamp -PermissionScopes @($meta.PermissionScopes) -ApiVersion $meta.ApiVersion -Endpoint $meta.Endpoint -PrivacyClassification $meta.PrivacyClassification
+}
+
+function Invoke-CloudGuestLifecycleAssessment {
+    param([hashtable]$MockResponsesById = @{})
+    $meta = $script:CloudCheckManifest['CL06']
+    $graph = Invoke-GraphAuditRequest -Uri $meta.Endpoint -ApiVersion $meta.ApiVersion -PermissionScopes @($meta.PermissionScopes) -MockResponses (Get-CloudMockResponses -MockResponsesById $MockResponsesById -CheckId 'CL06')
+    if ($graph.Status -ne 'Pass') {
+        return New-CloudUnavailableFinding -CheckId 'CL06' -Meta $meta -GraphResult $graph
+    }
+
+    $now = Get-Date
+    $guests = @($graph.Data | Where-Object { ([string](Get-GraphObjectProperty $_ 'userType')) -ieq 'Guest' })
+    $staleDetails = @()
+    foreach ($guest in $guests) {
+        $createdRaw = [string](Get-GraphObjectProperty $guest 'createdDateTime')
+        $created = $null
+        if ($createdRaw) { try { $created = [datetime]::Parse($createdRaw) } catch {} }
+        $ageDays = if ($created) { [int][math]::Max(0, ($now - $created).TotalDays) } else { -1 }
+        $signIn = Get-GraphObjectProperty $guest 'signInActivity'
+        $lastRaw = [string](Get-GraphObjectProperty $signIn 'lastSuccessfulSignInDateTime')
+        if (-not $lastRaw) { $lastRaw = [string](Get-GraphObjectProperty $signIn 'lastSignInDateTime') }
+        $last = $null
+        if ($lastRaw) { try { $last = [datetime]::Parse($lastRaw) } catch {} }
+        $inactiveDays = if ($last) { [int][math]::Max(0, ($now - $last).TotalDays) } else { -1 }
+        $enabledValue = Get-GraphObjectProperty $guest 'accountEnabled'
+        $enabled = if ($null -eq $enabledValue) { $true } else { [bool]$enabledValue }
+        $isStale = $enabled -and (($ageDays -ge 180 -and -not $last) -or ($inactiveDays -ge 90 -and $inactiveDays -ne -1))
+        if ($isStale) {
+            $display = [string](Get-GraphObjectProperty $guest 'displayName')
+            $upn = [string](Get-GraphObjectProperty $guest 'userPrincipalName')
+            $sponsor = [string](Get-GraphObjectProperty $guest 'sponsor')
+            if (-not $sponsor) { $sponsor = [string](Get-GraphObjectProperty $guest 'sponsors') }
+            $owner = [string](Get-GraphObjectProperty $guest 'owner')
+            if (-not $owner) { $owner = [string](Get-GraphObjectProperty $guest 'manager') }
+            if (-not $sponsor) { $sponsor = 'unknown' }
+            if (-not $owner) { $owner = 'unknown' }
+            $ageText = if ($ageDays -ge 0) { "$ageDays" } else { 'unknown' }
+            $lastText = if ($lastRaw) { $lastRaw } else { 'never_or_unavailable' }
+            $staleDetails += "$display <$upn> age=${ageText}d last_sign_in=$lastText sponsor=$sponsor owner=$owner"
+        }
+    }
+
+    $status = if ($staleDetails.Count -gt 0) { 'Fail' } else { 'Pass' }
+    $name = if ($staleDetails.Count -gt 0) { "Guest lifecycle review found $($staleDetails.Count) stale guest(s)" } else { "Guest lifecycle review found no stale guests across $($guests.Count) guest account(s)" }
+    $evidence = "Guests=$($guests.Count); Stale guests: $(if($staleDetails.Count){$staleDetails -join '; '}else{'none'})"
+    $remediation = 'Disable or remove stale guest accounts, document sponsors/owners, and review guest access on a recurring cadence.'
+    New-CloudAssessmentFinding -TestId 'CL06' -Name $name -Status $status -Category 'Guest Lifecycle' -Remediation $remediation -Evidence $evidence `
+        -SourceTimestamp $graph.SourceTimestamp -PermissionScopes @($meta.PermissionScopes) -ApiVersion $meta.ApiVersion -Endpoint $meta.Endpoint -PrivacyClassification $meta.PrivacyClassification
+}
+
+function Invoke-CloudProfileAssessment {
+    param([hashtable]$MockResponsesById = @{})
+
+    $results = @()
+    $tenantId = ''
+    $secureScore = $null
+    $secure = Invoke-CloudSecureScoreAssessment -MockResponsesById $MockResponsesById
+    if ($secure.Finding) { $results += $secure.Finding }
+    if ($secure.TenantId) { $tenantId = $secure.TenantId }
+    if ($secure.SecureScore) { $secureScore = $secure.SecureScore }
+    $results += Invoke-CloudConditionalAccessAssessment -MockResponsesById $MockResponsesById
+    $results += Invoke-CloudGuestLifecycleAssessment -MockResponsesById $MockResponsesById
+
+    $statusSummary = Get-CloudAssessmentStatusSummary -Items $results -StatusSelector { param($x) $x.Status }
+    $statusCounts = $statusSummary.Counts
+    $assessment = [ordered]@{
+        Source = 'MicrosoftGraph'
+        Path = 'Microsoft Graph'
+        TenantId = $tenantId
+        TenantName = ''
+        Timestamp = (Get-Date).ToUniversalTime().ToString('o')
+        TotalTests = @($results).Count
+        Passed = $statusCounts.Pass
+        Failed = $statusCounts.Fail
+        Skipped = $statusCounts.Skipped
+        NotLicensed = $statusCounts.NotLicensed
+        NotPermitted = $statusCounts.NotPermitted
+        NotConfigured = $statusCounts.NotConfigured
+        Errors = $statusCounts.Error
+        Other = $statusCounts.Other
+        Unavailable = $statusSummary.Unavailable
+        StatusBreakdown = $statusCounts
+        Score = 0
+        Findings = @($results)
+        SecureScore = $secureScore
+        ImplementedChecks = @($script:CloudCheckManifest.Keys | Where-Object { $script:CloudCheckManifest[$_].Implemented })
+        ManifestVersion = $script:ProductVersion
+    }
+    $assessed = $assessment.Passed + $assessment.Failed
+    if ($assessed -gt 0) { $assessment.Score = [math]::Round($assessment.Passed / $assessed * 100) }
+    return $assessment
 }
 
 function Import-CloudAssessment {
@@ -5526,6 +5845,12 @@ $script:ScanProfiles = @{
         Description = 'Only local machine checks - no AD/domain required.'
         IDs = @()  # Populated dynamically by Type filter
     }
+    Cloud = @{
+        Label = 'Microsoft Graph Cloud Assessment (CL01/CL02/CL06 live)'
+        Description = 'Runs Graph-backed cloud assessment checks without requiring an on-prem domain.'
+        IDs = @()
+        CloudProfile = $true
+    }
     # ── Framework-Specific Profiles ──
     HIPAA = @{
         Label = 'HIPAA Assessment (49 checks)'
@@ -6688,7 +7013,7 @@ $el = @{}
 $el['txtDate'].Text = (Get-Date -Format 'yyyy-MM-dd')
 
 # ── Initialize Scan Profile ComboBox ─────────────────────────────────────────
-$profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
+$profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','Cloud','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
 foreach ($pn in $profileOrder) {
     $el['cboProfile'].Items.Add($script:ScanProfiles[$pn].Label) | Out-Null
 }
@@ -7506,14 +7831,33 @@ function Start-ScanBatch([string]$filterType) {
     }
     elseif ($filterType -eq 'Profile') {
         # Get selected profile from ComboBox
-        $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
+        $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','Cloud','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
         $selIdx = $el['cboProfile'].SelectedIndex
         if ($selIdx -lt 0) { $selIdx = 2 }
         $profName = $profileOrder[$selIdx]
         $profileNameForLog = $profName
         $prof = $script:ScanProfiles[$profName]
 
-        if ($profName -eq 'ADOnly') {
+        if ($profName -eq 'Cloud') {
+            $script:CurrentScanProfile = 'Cloud'
+            $el['StatusText'].Text = 'Running Microsoft Graph cloud assessment...'
+            Write-Log "Scan profile: Cloud ($($prof.Label))" 'INFO'
+            Start-RunLogEntry -Id 'CLOUD' -Label 'Microsoft Graph Cloud Assessment' -Type 'Cloud' -Target 'Microsoft Graph' -ProfileName 'Cloud'
+            try {
+                $cloudAssessment = Invoke-CloudProfileAssessment
+                $script:CloudAssessmentImports = @($script:CloudAssessmentImports) + @($cloudAssessment)
+                Complete-RunLogEntry -Id 'CLOUD' -Status 'Pass'
+                Write-Log "Cloud assessment completed: $($cloudAssessment.Passed) passed | $($cloudAssessment.Failed) failed | $($cloudAssessment.Unavailable) unavailable" 'INFO'
+                $el['StatusText'].Text = "Cloud assessment completed: $($cloudAssessment.Score)%"
+            }
+            catch {
+                Complete-RunLogEntry -Id 'CLOUD' -Status 'Error' -ErrorMessage $_.Exception.Message
+                Write-Log "Cloud assessment error: $($_.Exception.Message)" 'ERROR'
+                $el['StatusText'].Text = "Cloud assessment error: $($_.Exception.Message)"
+            }
+            return
+        }
+        elseif ($profName -eq 'ADOnly') {
             $ids = $ids | Where-Object { $script:AutoChecks[$_].Type -eq 'AD' }
         }
         elseif ($profName -eq 'LocalOnly') {
@@ -9340,7 +9684,7 @@ $el['btnPreflight'].Add_Click({
 
 $el['btnScanAll'].Add_Click({
     if ($script:ScanRunning) { return }
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','Cloud','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
     $selIdx = $el['cboProfile'].SelectedIndex
     if ($selIdx -lt 0) { $selIdx = 2 }
     $profName = $profileOrder[$selIdx]
@@ -10031,7 +10375,7 @@ function Export-HTMLReport([string]$outPath, [switch]$OpenAfter, [string]$Tier =
     $totalFindings = $critFindings.Count + $highFindings.Count + $medFindings.Count
 
     # Profile info
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','Cloud','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
     $selIdx = $el['cboProfile'].SelectedIndex; if ($selIdx -lt 0) { $selIdx = 2 }
     $profName = $profileOrder[$selIdx]
     $roMode = if ($script:ReadOnlyMode) { 'Yes (safe mode)' } else { 'No' }
@@ -10608,8 +10952,8 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 
     # ── IMPORTED CLOUD ASSESSMENT (Management, All) ─────────────────────────
     if (($Tier -eq 'Management' -or $Tier -eq 'All') -and $script:CloudAssessmentImports.Count -gt 0) {
-        $html += "<div class='sec' style='border-left:4px solid #38bdf8'><h2 style='color:#38bdf8'>Imported Cloud Assessment <span class='tier-label' style='background:#38bdf822;color:#38bdf8;border:1px solid #38bdf844'>CLOUD</span></h2>`n"
-        $html += "<div class='d'>Cloud posture data imported from external assessment tools (Maester, ScubaGear). These findings complement on-premises checks.</div>`n"
+        $html += "<div class='sec' style='border-left:4px solid #38bdf8'><h2 style='color:#38bdf8'>Cloud Assessment <span class='tier-label' style='background:#38bdf822;color:#38bdf8;border:1px solid #38bdf844'>CLOUD</span></h2>`n"
+        $html += "<div class='d'>Cloud posture data imported from external assessment tools or collected from Microsoft Graph. These findings complement on-premises checks.</div>`n"
         foreach ($imp in $script:CloudAssessmentImports) {
             $impColor = if ($imp.Score -ge 80) { '#22c55e' } elseif ($imp.Score -ge 60) { '#eab308' } elseif ($imp.Score -ge 40) { '#f97316' } else { '#ef4444' }
             $html += "<div style='background:#1e293b;border-radius:4px;padding:12px;margin:8px 0;border:1px solid #334155'>`n"
@@ -10629,13 +10973,17 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
             if ($provenanceBits.Count -gt 0) {
                 $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>$($provenanceBits -join ' | ')</div>`n"
             }
+            if ($imp.SecureScore) {
+                $html += "<div style='color:#bae6fd;font-size:11px;margin-bottom:6px'>Secure Score: $($imp.SecureScore.current_score)/$($imp.SecureScore.max_score) ($($imp.SecureScore.percent)%) | Source timestamp: $([System.Net.WebUtility]::HtmlEncode($imp.SecureScore.source_timestamp)) | Scopes: $([System.Net.WebUtility]::HtmlEncode((@($imp.SecureScore.permission_scopes) -join ', ')))</div>`n"
+            }
             if ($imp.Findings.Count -gt 0) {
-                $html += "<table class='tech-table' style='margin-top:8px'><tr><th>Test</th><th>Status</th><th>Category</th><th>Name</th></tr>`n"
+                $html += "<table class='tech-table' style='margin-top:8px'><tr><th>Test</th><th>Status</th><th>Category</th><th>Name</th><th>Evidence</th></tr>`n"
                 foreach ($f in $imp.Findings | Select-Object -First 25) {
                     $statusColor = if ($f.Status -eq 'Fail') { '#f87171' } elseif ($f.Status -eq 'Error') { '#f97316' } else { '#facc15' }
-                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.TestId)))</td><td style='color:$statusColor'>$([System.Net.WebUtility]::HtmlEncode($f.Status))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.Category)))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.Name)))</td></tr>`n"
+                    $fEvidence = if ($f.Evidence) { $f.Evidence } else { $f.Remediation }
+                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.TestId)))</td><td style='color:$statusColor'>$([System.Net.WebUtility]::HtmlEncode($f.Status))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.Category)))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.Name)))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $fEvidence)))</td></tr>`n"
                 }
-                if ($imp.Findings.Count -gt 25) { $html += "<tr><td colspan='4' style='color:#94a3b8'>... and $($imp.Findings.Count - 25) more findings</td></tr>`n" }
+                if ($imp.Findings.Count -gt 25) { $html += "<tr><td colspan='5' style='color:#94a3b8'>... and $($imp.Findings.Count - 25) more findings</td></tr>`n" }
                 $html += "</table>`n"
             }
             $html += "</div>`n"
@@ -11191,6 +11539,9 @@ function Export-FindingsJSON {
                     other = $_.Other
                     status_breakdown = $_.StatusBreakdown
                     score      = $_.Score
+                    secure_score = $_.SecureScore
+                    implemented_checks = @($_.ImplementedChecks)
+                    manifest_version = $_.ManifestVersion
                     findings   = @($_.Findings | ForEach-Object {
                         [ordered]@{
                             TestId      = ConvertTo-RedactedText $_.TestId
@@ -11199,6 +11550,12 @@ function Export-FindingsJSON {
                             Status      = $_.Status
                             Category    = ConvertTo-RedactedText $_.Category
                             Remediation = ConvertTo-RedactedText $_.Remediation
+                            Evidence    = ConvertTo-RedactedText $_.Evidence
+                            SourceTimestamp = $_.SourceTimestamp
+                            PermissionScopes = @($_.PermissionScopes)
+                            ApiVersion = $_.ApiVersion
+                            Endpoint = $_.Endpoint
+                            PrivacyClassification = $_.PrivacyClassification
                         }
                     })
                 }
@@ -12073,7 +12430,7 @@ if ($script:SilentMode) {
     $el['txtAuditor'].Text = $auditorName
 
     # Set profile
-    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
+    $profileOrder = @('Quick','Standard','Full','ADOnly','LocalOnly','Cloud','HIPAA','PCI','CMMC','E8','CyberEssentials','SOC2','ISO27001','STIG','FedRAMP')
     $idx = $profileOrder.IndexOf($script:CliProfile)
     if ($idx -ge 0) { $el['cboProfile'].SelectedIndex = $idx }
 
@@ -12114,6 +12471,9 @@ if ($script:SilentMode) {
     elseif ($profName -eq 'LocalOnly') {
         $ids = $ids | Where-Object { $script:AutoChecks[$_].Type -eq 'Local' }
     }
+    elseif ($profName -eq 'Cloud') {
+        $ids = @()
+    }
     elseif ($prof.IDs.Count -gt 0) {
         $profileSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
         foreach ($profileId in $prof.IDs) { $profileSet.Add($profileId) | Out-Null }
@@ -12138,13 +12498,14 @@ if ($script:SilentMode) {
     }
 
     $idList = @($ids)
-    $skippedByProfile = $script:AutoChecks.Count - $idsBeforeRiskFilter.Count
+    $skippedByProfile = if ($profName -eq 'Cloud') { 0 } else { $script:AutoChecks.Count - $idsBeforeRiskFilter.Count }
     $skippedByRisk = $idsBeforeRiskFilter.Count - $idList.Count
     $adChecks = @($idList | Where-Object { $script:AutoChecks[$_].Type -eq 'AD' }).Count
-    $localChecks = $idList.Count - $adChecks
+    $cloudChecks = if ($profName -eq 'Cloud') { @($script:CloudCheckManifest.Keys | Where-Object { $script:CloudCheckManifest[$_].Implemented }).Count } else { 0 }
+    $localChecks = if ($profName -eq 'Cloud') { 0 } else { $idList.Count - $adChecks }
     Write-Host ""
     Write-Host "[Silent Mode] SCAN MANIFEST" -ForegroundColor Cyan
-    Write-Host "[Silent Mode]   Profile:     $profName ($($idList.Count) checks: $localChecks local, $adChecks AD)"
+    Write-Host "[Silent Mode]   Profile:     $profName ($($idList.Count + $cloudChecks) checks: $localChecks local, $adChecks AD, $cloudChecks cloud)"
     Write-Host "[Silent Mode]   Read-only:   $($script:ReadOnlyMode)"
     Write-Host "[Silent Mode]   Internet:    $(if($script:CliNoInternet){'Disabled (-NoInternet)'}else{'Enabled (KEV download, DNS probes)'})"
     if ($skippedByProfile -gt 0) { Write-Host "[Silent Mode]   Skipped:     $skippedByProfile checks (not in profile)" }
@@ -12158,11 +12519,31 @@ if ($script:SilentMode) {
     }
     Write-Host "[Silent Mode]   Output dir:  $outputDir"
     Write-Host ""
-    Write-Host "[Silent Mode] Scanning $($idList.Count) checks..."
+    if ($profName -eq 'Cloud') {
+        Write-Host "[Silent Mode] Running Microsoft Graph cloud assessment..."
+    } else {
+        Write-Host "[Silent Mode] Scanning $($idList.Count) checks..."
+    }
 
     $completed = 0; $failed = 0
     $silentTimeoutMs = 90000  # 90 second timeout per check (matches GUI)
     $silentBatchStart = [System.Diagnostics.Stopwatch]::StartNew()
+    if ($profName -eq 'Cloud') {
+        Start-RunLogEntry -Id 'CLOUD' -Label 'Microsoft Graph Cloud Assessment' -Type 'Cloud' -Target 'Microsoft Graph' -ProfileName 'Cloud'
+        try {
+            $cloudAssessment = Invoke-CloudProfileAssessment
+            $script:CloudAssessmentImports = @($script:CloudAssessmentImports) + @($cloudAssessment)
+            Complete-RunLogEntry -Id 'CLOUD' -Status 'Pass'
+            $completed = $cloudAssessment.TotalTests
+            $failed = $cloudAssessment.Failed + $cloudAssessment.Errors
+            Write-Host "[Silent Mode] Cloud assessment: $($cloudAssessment.Passed) passed | $($cloudAssessment.Failed) failed | $($cloudAssessment.Unavailable) unavailable | score $($cloudAssessment.Score)%"
+        }
+        catch {
+            $failed++
+            Complete-RunLogEntry -Id 'CLOUD' -Status 'Error' -ErrorMessage $_.Exception.Message
+            Write-Host "[Silent Mode] Cloud assessment error: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
     foreach ($id in $idList) {
         $check = $script:AutoChecks[$id]
         if (-not $check) { continue }
@@ -12216,7 +12597,8 @@ if ($script:SilentMode) {
         }
     }
 
-    Write-Host "[Silent Mode] Completed: $completed | Failed: $failed | Total: $($idList.Count)"
+    $totalRunCount = if ($profName -eq 'Cloud') { $cloudChecks } else { $idList.Count }
+    Write-Host "[Silent Mode] Completed: $completed | Failed: $failed | Total: $totalRunCount"
 
     # Export report
     $outFile = $script:CliOutput
@@ -12235,7 +12617,11 @@ if ($script:SilentMode) {
 
     # ── Continuous delta assessment (NSA-005): runs before exports so the JSON
     #    continuous block and console summary reflect the same comparison. ──
-    if (-not $script:CliNoHistory) {
+    if ($profName -eq 'Cloud' -and -not $script:CliNoHistory) {
+        Write-Host ""
+        Write-Host "[Silent Mode] CONTINUOUS DELTA skipped for Cloud profile (cloud-specific history is not enabled yet)." -ForegroundColor DarkYellow
+    }
+    if (-not $script:CliNoHistory -and $profName -ne 'Cloud') {
         $histTarget = try { if ($el['txtScanTarget'].Text) { $el['txtScanTarget'].Text } else { 'localhost' } } catch { 'localhost' }
         $histResult = Invoke-AuditHistory -Client $clientName -Target $histTarget -OutputDir (Split-Path -Parent $basePath) -OutputBase $basePath
         if ($histResult) {
@@ -12472,18 +12858,33 @@ if ($script:SilentMode) {
     # 3 = Compliance failure (any framework below 60%)
     $failCount = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
     $anyFwCritical = ($fwFlags.Values | Where-Object { $_ -eq $false }).Count -gt 0
-    $exitCode = if ($riskData.Grade -in @('D','F') -or $rwData.Overall -lt 40) { 1 }
-                elseif ($failCount -gt 0 -and $anyFwCritical) { 3 }
-                elseif ($failCount -gt 0) { 2 }
-                else { 0 }
+    $cloudSummary = if ($profName -eq 'Cloud') { @($script:CloudAssessmentImports | Where-Object { $_.Source -eq 'MicrosoftGraph' } | Select-Object -Last 1)[0] } else { $null }
+    if ($profName -eq 'Cloud') {
+        $exitCode = if ($cloudSummary -and ($cloudSummary.Failed -gt 0 -or $cloudSummary.Errors -gt 0)) { 2 } else { 0 }
+    } else {
+        $exitCode = if ($riskData.Grade -in @('D','F') -or $rwData.Overall -lt 40) { 1 }
+                    elseif ($failCount -gt 0 -and $anyFwCritical) { 3 }
+                    elseif ($failCount -gt 0) { 2 }
+                    else { 0 }
+    }
 
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host "  AUDIT COMPLETE" -ForegroundColor Cyan
     Write-Host "============================================" -ForegroundColor Cyan
-    Write-Host "  Grade: $($riskData.Grade) ($($riskData.Pct)%)" -ForegroundColor $(if($riskData.Pct -ge 80){'Green'}elseif($riskData.Pct -ge 60){'Yellow'}else{'Red'})
-    Write-Host "  Ransomware: $($rwData.Grade) ($($rwData.Overall)%)" -ForegroundColor $(if($rwData.Overall -ge 80){'Green'}elseif($rwData.Overall -ge 60){'Yellow'}else{'Red'})
-    Write-Host "  Compliance: $complianceStr"
+    if ($profName -eq 'Cloud') {
+        $cloudScore = if ($cloudSummary) { $cloudSummary.Score } else { 0 }
+        Write-Host "  Cloud Score: $cloudScore%" -ForegroundColor $(if($cloudScore -ge 80){'Green'}elseif($cloudScore -ge 60){'Yellow'}else{'Red'})
+        if ($cloudSummary) {
+            Write-Host "  Cloud Findings: $($cloudSummary.Passed) passed | $($cloudSummary.Failed) failed | $($cloudSummary.Unavailable) unavailable"
+        } else {
+            Write-Host "  Cloud Findings: unavailable"
+        }
+    } else {
+        Write-Host "  Grade: $($riskData.Grade) ($($riskData.Pct)%)" -ForegroundColor $(if($riskData.Pct -ge 80){'Green'}elseif($riskData.Pct -ge 60){'Yellow'}else{'Red'})
+        Write-Host "  Ransomware: $($rwData.Grade) ($($rwData.Overall)%)" -ForegroundColor $(if($rwData.Overall -ge 80){'Green'}elseif($rwData.Overall -ge 60){'Yellow'}else{'Red'})
+        Write-Host "  Compliance: $complianceStr"
+    }
     Write-Host "  Exit code: $exitCode (0=clean, 1=critical, 2=findings, 3=compliance-fail)" -ForegroundColor $(switch($exitCode){0{'Green'}1{'Red'}2{'Yellow'}3{'Magenta'}})
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host ""

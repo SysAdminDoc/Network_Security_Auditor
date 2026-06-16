@@ -115,6 +115,7 @@ $frameworkChecksBlock = Get-TextBetween -Text $scriptText -StartPattern '\$scrip
 $frameworkCheckIds = @(Get-UniqueMatches -Text $frameworkChecksBlock -Pattern "'([A-Z]{2}\d{2})'")
 $d3fendBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:D3FendMap\s*=\s*@\{' -EndPattern '\$script:D3FendStages'
 $d3fendIds = @(Get-UniqueMatches -Text $d3fendBlock -Pattern "(?m)^\s*'([A-Z]{2}\d{2})'\s*=\s*@\{")
+$cloudManifestBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:CloudCheckManifest\s*=\s*\[ordered\]@\{' -EndPattern 'function Convert-CloudAssessmentStatus'
 
 if (@($catalogIds).Count -ne 69) { Add-Failure "Expected 69 audit catalog IDs, found $(@($catalogIds).Count)" }
 if (@($autoCheckIds).Count -ne 69) { Add-Failure "Expected 69 auto-check IDs, found $(@($autoCheckIds).Count)" }
@@ -127,6 +128,24 @@ $profileUnknown = @($profileIds | Where-Object { $_ -notin $catalogIds } | Sort-
 if (@($profileUnknown).Count -gt 0) { Add-Failure "ScanProfiles reference unknown IDs: $($profileUnknown -join ', ')" }
 $frameworkChecksUnknown = @($frameworkCheckIds | Where-Object { $_ -notin $catalogIds } | Sort-Object)
 if (@($frameworkChecksUnknown).Count -gt 0) { Add-Failure "FrameworkChecks reference unknown IDs: $($frameworkChecksUnknown -join ', ')" }
+
+foreach ($n in 1..10) {
+    $cloudId = 'CL{0:d2}' -f $n
+    if ($cloudManifestBlock -notmatch "'$cloudId'\s*=\s*\[ordered\]@\{") {
+        Add-Failure "CloudCheckManifest missing $cloudId."
+    }
+}
+foreach ($field in 'PermissionScopes','RoleHints','LicensePrerequisites','ApiVersion','Endpoint','OutputFields','SkipStates','PrivacyClassification') {
+    if ($cloudManifestBlock -notmatch $field) { Add-Failure "CloudCheckManifest missing required field $field." }
+}
+if ($scriptText -notmatch "ValidateSet\('Quick','Standard','Full','ADOnly','LocalOnly','Cloud'" -or
+    $scriptText -notmatch "Cloud\s*=\s*@\{" -or
+    $scriptText -notmatch 'Invoke-CloudProfileAssessment' -or
+    $scriptText -notmatch '/security/secureScores' -or
+    $scriptText -notmatch '/identity/conditionalAccess/policies' -or
+    $scriptText -notmatch '/users\?\$select=displayName,userPrincipalName,userType,accountEnabled,createdDateTime,signInActivity') {
+    Add-Failure 'Cloud profile must be selectable and implement Secure Score, Conditional Access, and guest lifecycle Graph checks.'
+}
 
 $readmeFrameworkLabels = [ordered]@{
     CIS = 'CIS'

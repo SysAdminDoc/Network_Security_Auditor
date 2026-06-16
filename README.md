@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.10.6-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.10.7-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
@@ -481,7 +481,7 @@ not require tenant credentials.
 ```
 -Silent              Run headless (no GUI). Auto-scans, exports, exits.
 -ScanProfile         Quick | Standard | Full | ADOnly | LocalOnly |
-                     HIPAA | PCI | CMMC | E8 | CyberEssentials |
+                     Cloud | HIPAA | PCI | CMMC | E8 | CyberEssentials |
                      SOC2 | ISO27001 | STIG | FedRAMP
                      Default: Full (all 69 checks)
 -OutputPath          Report output path. Default: Desktop
@@ -537,6 +537,12 @@ reported separately from true `Fail` findings. When `-PrivacyMode` is used,
 imported cloud tenant names, tenant IDs, source paths, and token-like values are
 pseudonymized in report/export provenance.
 
+`-ScanProfile Cloud` runs the Microsoft Graph cloud assessment path without an
+on-premises domain. It currently emits CL01 Secure Score, CL02 Conditional
+Access baseline gaps/exclusions, and CL06 stale guest lifecycle evidence; CL01
+through CL12 are declared in the cloud manifest with permissions, license
+prerequisites, endpoints, output fields, skip states, and privacy classes.
+
 ---
 
 ## Scan Profiles
@@ -548,6 +554,7 @@ pseudonymized in report/export provenance.
 | **Full** | 69 | ~60 min | Comprehensive audit |
 | **ADOnly** | ~14 | ~10 min | Domain-focused checks only |
 | **LocalOnly** | ~55 | ~45 min | Endpoint-only (no AD required) |
+| **Cloud** | 3 live / 12 manifest | ~5 min | Microsoft Graph cloud assessment |
 | **HIPAA** | 49 | ~30 min | Healthcare compliance |
 | **PCI** | 51 | ~35 min | Payment card compliance |
 | **CMMC** | 69 | ~60 min | Defense contractor compliance |
