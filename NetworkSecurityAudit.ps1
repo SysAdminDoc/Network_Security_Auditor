@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.10.3 - Professional GUI Tool
+    Network Security Auditor v4.10.4 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -53,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.10.3
+    4.10.4
 #>
 param(
     [switch]$Silent,
@@ -94,7 +94,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.10.3'
+$script:ProductVersion = '4.10.4'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.1'
@@ -718,6 +718,42 @@ try {
 } catch {}
 
 # ── Cloud Assessment Import (Maester / ScubaGear) ───────────────────────────
+function Convert-CloudAssessmentStatus {
+    param([object]$Value)
+
+    $raw = if ($null -eq $Value) { '' } else { [string]$Value }
+    $key = ($raw -replace '[\s_\-/]', '').ToLowerInvariant()
+    switch -Regex ($key) {
+        '^(pass|passed|success|succeeded|ok)$' { return 'Pass' }
+        '^(fail|failed|failure)$' { return 'Fail' }
+        '^(notlicensed|unlicensed|licenserequired|licensemissing|nolicense)$' { return 'NotLicensed' }
+        '^(notpermitted|permissiondenied|accessdenied|unauthorized|forbidden|missingpermission|insufficientprivileges)$' { return 'NotPermitted' }
+        '^(notconfigured|notenabled|disabled|missingconfiguration|notsetup)$' { return 'NotConfigured' }
+        '^(skipped|skip|notrun|na|notapplicable|warning|warn)$' { return 'Skipped' }
+        '^(error|exception|errored|timeout|throttled|queryfailed)$' { return 'Error' }
+        default { if ($raw) { return 'Other' } else { return 'Skipped' } }
+    }
+}
+
+function Get-CloudAssessmentStatusSummary {
+    param(
+        [object[]]$Items,
+        [scriptblock]$StatusSelector
+    )
+
+    $counts = [ordered]@{
+        Pass = 0; Fail = 0; NotLicensed = 0; NotPermitted = 0
+        NotConfigured = 0; Skipped = 0; Error = 0; Other = 0
+    }
+    foreach ($item in @($Items)) {
+        $status = Convert-CloudAssessmentStatus (& $StatusSelector $item)
+        if (-not $counts.Contains($status)) { $status = 'Other' }
+        $counts[$status]++
+    }
+    $unavailable = $counts.NotLicensed + $counts.NotPermitted + $counts.NotConfigured + $counts.Error + $counts.Other
+    return [ordered]@{ Counts = $counts; Unavailable = $unavailable }
+}
+
 function Import-CloudAssessment {
     param([string[]]$Paths)
     $results = @()
@@ -729,6 +765,8 @@ function Import-CloudAssessment {
             if ($ext -eq '.json') {
                 $data = $raw | ConvertFrom-Json -EA Stop
                 if ($data.PSObject.Properties['Results'] -and $data.PSObject.Properties['TenantId']) {
+                    $statusSummary = Get-CloudAssessmentStatusSummary -Items @($data.Results) -StatusSelector { param($x) $x.Result }
+                    $statusCounts = $statusSummary.Counts
                     $results += [ordered]@{
                         Source = 'Maester'
                         Path = $p
@@ -736,12 +774,19 @@ function Import-CloudAssessment {
                         TenantName = if ($data.PSObject.Properties['TenantName']) { $data.TenantName } else { '' }
                         Timestamp = if ($data.PSObject.Properties['ExecutedAt']) { $data.ExecutedAt } else { (Get-Item $p).LastWriteTime.ToString('o') }
                         TotalTests = @($data.Results).Count
-                        Passed = @($data.Results | Where-Object { $_.Result -eq 'Passed' }).Count
-                        Failed = @($data.Results | Where-Object { $_.Result -eq 'Failed' }).Count
-                        Skipped = @($data.Results | Where-Object { $_.Result -eq 'Skipped' -or $_.Result -eq 'NotRun' }).Count
+                        Passed = $statusCounts.Pass
+                        Failed = $statusCounts.Fail
+                        Skipped = $statusCounts.Skipped
+                        NotLicensed = $statusCounts.NotLicensed
+                        NotPermitted = $statusCounts.NotPermitted
+                        NotConfigured = $statusCounts.NotConfigured
+                        Errors = $statusCounts.Error
+                        Other = $statusCounts.Other
+                        Unavailable = $statusSummary.Unavailable
+                        StatusBreakdown = $statusCounts
                         Score = 0
-                        Findings = @($data.Results | Where-Object { $_.Result -eq 'Failed' } | ForEach-Object {
-                            [ordered]@{ TestId = $_.TestId; Name = $_.Name; Result = $_.Result; Category = $_.Category; Remediation = $_.Remediation }
+                        Findings = @($data.Results | Where-Object { (Convert-CloudAssessmentStatus $_.Result) -ne 'Pass' -and (Convert-CloudAssessmentStatus $_.Result) -ne 'Skipped' } | ForEach-Object {
+                            [ordered]@{ TestId = $_.TestId; Name = $_.Name; Result = $_.Result; Status = (Convert-CloudAssessmentStatus $_.Result); Category = $_.Category; Remediation = $_.Remediation }
                         })
                     }
                     $r = $results[-1]
@@ -750,6 +795,8 @@ function Import-CloudAssessment {
                 }
                 elseif ($data -is [array] -or ($data.PSObject.Properties['ReportSummary'])) {
                     $items = if ($data.PSObject.Properties['ReportSummary']) { @($data.Results) } else { @($data) }
+                    $statusSummary = Get-CloudAssessmentStatusSummary -Items $items -StatusSelector { param($x) $x.Result }
+                    $statusCounts = $statusSummary.Counts
                     $results += [ordered]@{
                         Source = 'ScubaGear'
                         Path = $p
@@ -757,12 +804,19 @@ function Import-CloudAssessment {
                         TenantName = ''
                         Timestamp = (Get-Item $p).LastWriteTime.ToString('o')
                         TotalTests = $items.Count
-                        Passed = @($items | Where-Object { $_.Result -eq 'Pass' -or $_.Result -eq 'Passed' }).Count
-                        Failed = @($items | Where-Object { $_.Result -eq 'Fail' -or $_.Result -eq 'Failed' }).Count
-                        Skipped = @($items | Where-Object { $_.Result -eq 'N/A' -or $_.Result -eq 'Warning' }).Count
+                        Passed = $statusCounts.Pass
+                        Failed = $statusCounts.Fail
+                        Skipped = $statusCounts.Skipped
+                        NotLicensed = $statusCounts.NotLicensed
+                        NotPermitted = $statusCounts.NotPermitted
+                        NotConfigured = $statusCounts.NotConfigured
+                        Errors = $statusCounts.Error
+                        Other = $statusCounts.Other
+                        Unavailable = $statusSummary.Unavailable
+                        StatusBreakdown = $statusCounts
                         Score = 0
-                        Findings = @($items | Where-Object { $_.Result -eq 'Fail' -or $_.Result -eq 'Failed' } | Select-Object -First 50 | ForEach-Object {
-                            [ordered]@{ TestId = if ($_.Requirement) { $_.Requirement } else { '' }; Name = if ($_.PolicyId) { $_.PolicyId } elseif ($_.Control) { $_.Control } else { '' }; Result = $_.Result; Category = if ($_.Baseline) { $_.Baseline } else { '' }; Remediation = if ($_.Criticality) { $_.Criticality } else { '' } }
+                        Findings = @($items | Where-Object { (Convert-CloudAssessmentStatus $_.Result) -ne 'Pass' -and (Convert-CloudAssessmentStatus $_.Result) -ne 'Skipped' } | Select-Object -First 50 | ForEach-Object {
+                            [ordered]@{ TestId = if ($_.Requirement) { $_.Requirement } else { '' }; Name = if ($_.PolicyId) { $_.PolicyId } elseif ($_.Control) { $_.Control } else { '' }; Result = $_.Result; Status = (Convert-CloudAssessmentStatus $_.Result); Category = if ($_.Baseline) { $_.Baseline } else { '' }; Remediation = if ($_.Criticality) { $_.Criticality } else { '' } }
                         })
                     }
                     $r = $results[-1]
@@ -10432,17 +10486,21 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
             $html += "<div style='display:flex;align-items:center;gap:12px;margin-bottom:8px'>"
             $html += "<span style='font-size:15px;font-weight:600;color:#e2e8f0'>$($imp.Source)</span>"
             $html += "<span style='font-size:22px;font-weight:700;color:$impColor'>$($imp.Score)%</span>"
-            $html += "<span style='color:#94a3b8;font-size:11px'>$($imp.Passed) passed | $($imp.Failed) failed | $($imp.Skipped) skipped of $($imp.TotalTests) tests</span></div>`n"
+            $html += "<span style='color:#94a3b8;font-size:11px'>$($imp.Passed) passed | $($imp.Failed) failed | $($imp.Skipped) skipped | $($imp.Unavailable) unavailable of $($imp.TotalTests) tests</span></div>`n"
+            if ($imp.StatusBreakdown) {
+                $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>Unavailable: NotLicensed=$($imp.StatusBreakdown.NotLicensed) | NotPermitted=$($imp.StatusBreakdown.NotPermitted) | NotConfigured=$($imp.StatusBreakdown.NotConfigured) | Error=$($imp.StatusBreakdown.Error) | Other=$($imp.StatusBreakdown.Other)</div>`n"
+            }
             if ($imp.TenantName -or $imp.TenantId) {
                 $tenantLabel = if ($imp.TenantName) { $imp.TenantName } else { $imp.TenantId }
                 $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>Tenant: $([System.Net.WebUtility]::HtmlEncode($tenantLabel)) | Source: $([System.Net.WebUtility]::HtmlEncode($imp.Path)) | $($imp.Timestamp)</div>`n"
             }
             if ($imp.Findings.Count -gt 0) {
-                $html += "<table class='tech-table' style='margin-top:8px'><tr><th>Test</th><th>Category</th><th>Name</th></tr>`n"
+                $html += "<table class='tech-table' style='margin-top:8px'><tr><th>Test</th><th>Status</th><th>Category</th><th>Name</th></tr>`n"
                 foreach ($f in $imp.Findings | Select-Object -First 25) {
-                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode($f.TestId))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.Category))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.Name))</td></tr>`n"
+                    $statusColor = if ($f.Status -eq 'Fail') { '#f87171' } elseif ($f.Status -eq 'Error') { '#f97316' } else { '#facc15' }
+                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode($f.TestId))</td><td style='color:$statusColor'>$([System.Net.WebUtility]::HtmlEncode($f.Status))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.Category))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.Name))</td></tr>`n"
                 }
-                if ($imp.Findings.Count -gt 25) { $html += "<tr><td colspan='3' style='color:#94a3b8'>... and $($imp.Findings.Count - 25) more findings</td></tr>`n" }
+                if ($imp.Findings.Count -gt 25) { $html += "<tr><td colspan='4' style='color:#94a3b8'>... and $($imp.Findings.Count - 25) more findings</td></tr>`n" }
                 $html += "</table>`n"
             }
             $html += "</div>`n"
@@ -10984,6 +11042,13 @@ function Export-FindingsJSON {
                     passed     = $_.Passed
                     failed     = $_.Failed
                     skipped    = $_.Skipped
+                    unavailable = $_.Unavailable
+                    not_licensed = $_.NotLicensed
+                    not_permitted = $_.NotPermitted
+                    not_configured = $_.NotConfigured
+                    errors = $_.Errors
+                    other = $_.Other
+                    status_breakdown = $_.StatusBreakdown
                     score      = $_.Score
                     findings   = $_.Findings
                 }

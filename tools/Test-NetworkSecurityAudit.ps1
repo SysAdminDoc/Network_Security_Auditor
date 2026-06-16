@@ -222,6 +222,9 @@ if ($scriptText -notmatch "if\s*\(\`$ExportNavigator\)[^\r\n]*'-ExportNavigator'
 if ($scriptText -notmatch '\[string\[\]\]\$CloudAssessmentPath' -or $scriptText -notmatch 'CloudAssessmentPath.*argList' -or $scriptText -notmatch 'function Import-CloudAssessment') {
     Add-Failure 'Cloud assessment import must expose -CloudAssessmentPath, preserve it in auto-elevation, and define Import-CloudAssessment.'
 }
+if ($scriptText -notmatch 'function Convert-CloudAssessmentStatus' -or $scriptText -notmatch 'NotLicensed' -or $scriptText -notmatch 'NotPermitted' -or $scriptText -notmatch 'NotConfigured' -or $scriptText -notmatch 'status_breakdown' -or $readmeText -notmatch 'NotLicensed.*NotPermitted.*NotConfigured.*Skipped.*Error') {
+    Add-Failure 'Cloud assessment imports must distinguish unavailable cloud statuses from true failures.'
+}
 if ($scriptText -notmatch 'RestrictSendingNTLMTraffic' -or $scriptText -notmatch 'RestrictReceivingNTLMTraffic' -or $scriptText -notmatch 'BlockNTLMv1SSO') {
     Add-Failure 'EP03 must audit NTLM restriction, receive, and NTLMv1 SSO block policies.'
 }

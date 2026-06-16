@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.10.3-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.10.4-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
@@ -528,6 +528,10 @@ arguments, the WinRM-bootstrap WMI call, and so on). The lint gate must report
 -HistoryRetentionDays Prune snapshot files older than this. 0 = keep all.
                      Default: 365
 ```
+
+Imported cloud assessment results preserve unavailable status semantics:
+`NotLicensed`, `NotPermitted`, `NotConfigured`, `Skipped`, and `Error` are
+reported separately from true `Fail` findings.
 
 ---
 

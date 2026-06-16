@@ -204,6 +204,55 @@ Describe 'Export serialization' {
     }
 }
 
+Describe 'Cloud assessment import semantics' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Convert-CloudAssessmentStatus','Get-CloudAssessmentStatusSummary','Import-CloudAssessment') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+    It 'keeps cloud unavailable states separate from true failures' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("nsa-maester-{0}.json" -f ([guid]::NewGuid().ToString('N')))
+        try {
+            $fixture = [ordered]@{
+                TenantId = 'tenant-1'
+                TenantName = 'Acme'
+                ExecutedAt = '2026-06-16T12:00:00Z'
+                Results = @(
+                    [ordered]@{ TestId='CL01'; Name='Secure Score'; Result='Passed'; Category='Cloud'; Remediation='' }
+                    [ordered]@{ TestId='CL02'; Name='Conditional Access'; Result='Failed'; Category='Identity'; Remediation='Enable baseline CA' }
+                    [ordered]@{ TestId='CL03'; Name='MFA registration'; Result='NotLicensed'; Category='Identity'; Remediation='Requires Entra ID P1/P2' }
+                    [ordered]@{ TestId='CL04'; Name='Risky users'; Result='NotPermitted'; Category='Identity'; Remediation='Grant read permission' }
+                    [ordered]@{ TestId='CL05'; Name='Legacy auth'; Result='NotConfigured'; Category='Identity'; Remediation='No policy found' }
+                    [ordered]@{ TestId='CL06'; Name='Guest lifecycle'; Result='Skipped'; Category='Identity'; Remediation='' }
+                    [ordered]@{ TestId='CL07'; Name='Alerts'; Result='Error'; Category='Security'; Remediation='Retry later' }
+                )
+            }
+            $fixture | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $tmp -Encoding UTF8
+            $imp = @(Import-CloudAssessment -Paths @($tmp))[0]
+
+            $imp.Passed | Should -Be 1
+            $imp.Failed | Should -Be 1
+            $imp.NotLicensed | Should -Be 1
+            $imp.NotPermitted | Should -Be 1
+            $imp.NotConfigured | Should -Be 1
+            $imp.Errors | Should -Be 1
+            $imp.Unavailable | Should -Be 4
+            $imp.Score | Should -Be 50
+            $imp.StatusBreakdown['Skipped'] | Should -Be 1
+            $imp.Findings.Status | Should -Contain 'Fail'
+            $imp.Findings.Status | Should -Contain 'NotLicensed'
+            $imp.Findings.Status | Should -Contain 'NotPermitted'
+            $imp.Findings.Status | Should -Contain 'NotConfigured'
+            $imp.Findings.Status | Should -Contain 'Error'
+        }
+        finally {
+            Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 Describe 'Write gate behavior (real functions via AST)' {
     BeforeAll {
         # Extract the actual function bodies from the script and load them in
@@ -363,7 +412,7 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $script:AuditCategories = @{ 'Identity' = @{ Items = @(
             @{ ID='IA01'; Text='Priv groups'; Severity='Critical' }
             @{ ID='IA02'; Text='MFA'; Severity='High' }) } }
-        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.3'
+        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.4'
         $save1 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-01'; ScanTarget='DC'; Items=@{ IA01=@{Status='Fail';Findings='x';Evidence='y'}; IA02=@{Status='Pass'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $save2 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-14'; ScanTarget='DC'; Items=@{ IA01=@{Status='Pass'}; IA02=@{Status='Fail'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $s1 = Convert-SaveStateToSnapshot $save1
