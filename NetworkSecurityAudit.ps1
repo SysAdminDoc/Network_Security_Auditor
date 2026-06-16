@@ -73,6 +73,7 @@ param(
     [switch]$ExportNavigator,
     [switch]$ExportOCSF,
     [switch]$ExportOSCAL,
+    [switch]$ExportSIEM,
     [switch]$PrivacyMode,
     [switch]$NoRmmWrite,
     [switch]$NoInternet,
@@ -229,6 +230,7 @@ $script:CliExportPDF   = $ExportPDF.IsPresent
 $script:CliExportNavigator = $ExportNavigator.IsPresent
 $script:CliExportOCSF  = $ExportOCSF.IsPresent
 $script:CliExportOSCAL = $ExportOSCAL.IsPresent
+$script:CliExportSIEM  = $ExportSIEM.IsPresent
 $script:CliPrivacyMode = $PrivacyMode.IsPresent
 $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 $script:CliNoInternet  = $NoInternet.IsPresent
@@ -13186,6 +13188,172 @@ function Export-AttackNavigator {
     return $OutPath
 }
 
+# ── SIEM Content Pack Export (NSA-014) ──────────────────────────────────────
+# Generates platform-specific field mappings and ingestion configs alongside JSONL.
+function Export-SIEMContentPack {
+    param([string]$OutDir, [string]$ClientName = '', [string]$AuditorName = '')
+    if (-not $ClientName) { $ClientName = try { $el['txtClient'].Text } catch { $env:COMPUTERNAME } }
+    if (-not $AuditorName) { $AuditorName = try { $el['txtAuditor'].Text } catch { 'System' } }
+    $outDir = if ($OutDir) { $OutDir } else { [Environment]::GetFolderPath('Desktop') }
+    if (-not (Test-Path $outDir)) { New-Item -Path $outDir -ItemType Directory -Force | Out-Null }
+
+    $fieldMap = [ordered]@{
+        schema_version = $script:SchemaVersion
+        tool = $script:ProductShortName; tool_version = $script:ProductVersion
+        description = 'SIEM field mapping reference for Network Security Auditor JSONL events'
+        event_type = 'network_security_audit'
+        fields = [ordered]@{
+            check_id       = [ordered]@{ type = 'keyword'; description = 'Unique check identifier (e.g. EP01, IA03)'; indexed = $true }
+            category       = [ordered]@{ type = 'keyword'; description = 'Security domain category'; indexed = $true }
+            severity       = [ordered]@{ type = 'keyword'; description = 'Finding severity: Critical, High, Medium, Low'; indexed = $true }
+            weight         = [ordered]@{ type = 'integer'; description = 'Risk weight 1-10'; indexed = $true }
+            status         = [ordered]@{ type = 'keyword'; description = 'Pass, Fail, Partial, N/A, Not Assessed'; indexed = $true }
+            text           = [ordered]@{ type = 'text'; description = 'Check title/description'; indexed = $false }
+            findings       = [ordered]@{ type = 'text'; description = 'Detailed finding narrative'; indexed = $false }
+            evidence       = [ordered]@{ type = 'text'; description = 'Machine-collected evidence'; indexed = $false }
+            client         = [ordered]@{ type = 'keyword'; description = 'Client/organization name'; indexed = $true }
+            target         = [ordered]@{ type = 'keyword'; description = 'Scanned hostname'; indexed = $true }
+            timestamp      = [ordered]@{ type = 'date'; description = 'Scan timestamp ISO 8601'; indexed = $true }
+            score          = [ordered]@{ type = 'integer'; description = 'Overall risk score 0-100'; indexed = $true }
+            grade          = [ordered]@{ type = 'keyword'; description = 'Letter grade A-F'; indexed = $true }
+            mitre_tactics  = [ordered]@{ type = 'keyword'; description = 'MITRE ATT&CK tactics array'; indexed = $true }
+            mitre_techniques = [ordered]@{ type = 'keyword'; description = 'MITRE ATT&CK technique IDs'; indexed = $true }
+            compliance     = [ordered]@{ type = 'text'; description = 'Mapped compliance framework controls'; indexed = $false }
+            remediation_status = [ordered]@{ type = 'keyword'; description = 'Open, In Progress, Resolved, Accepted'; indexed = $true }
+            assessment_method  = [ordered]@{ type = 'keyword'; description = 'Automated, Heuristic, Checklist, InterviewRequired, ExternalRequired'; indexed = $true }
+        }
+    }
+
+    $fieldMapPath = Join-Path $outDir 'nsa_field_mapping.json'
+    $fieldMap | ConvertTo-Json -Depth 5 | Set-Content $fieldMapPath -Encoding UTF8
+
+    $splunkProps = @(
+        '[nsa:audit]'
+        'SHOULD_LINEMERGE = false'
+        'LINE_BREAKER = ([\r\n]+)'
+        'NO_BINARY_CHECK = true'
+        'KV_MODE = json'
+        'TIME_FORMAT = %Y-%m-%dT%H:%M:%S'
+        'TIME_PREFIX = "timestamp"\s*:\s*"'
+        'MAX_TIMESTAMP_LOOKAHEAD = 32'
+        'TRUNCATE = 0'
+    ) -join "`n"
+    $splunkPropsPath = Join-Path $outDir 'splunk_props.conf'
+    $splunkProps | Set-Content $splunkPropsPath -Encoding UTF8
+
+    $splunkTransforms = @(
+        '[nsa_severity_lookup]'
+        'filename = nsa_severity.csv'
+        ''
+        '[nsa_status_lookup]'
+        'filename = nsa_status.csv'
+    ) -join "`n"
+    $splunkTransformsPath = Join-Path $outDir 'splunk_transforms.conf'
+    $splunkTransforms | Set-Content $splunkTransformsPath -Encoding UTF8
+
+    $elasticTemplate = [ordered]@{
+        index_patterns = @('nsa-audit-*')
+        template = [ordered]@{
+            settings = [ordered]@{ number_of_shards = 1; number_of_replicas = 0 }
+            mappings = [ordered]@{
+                properties = [ordered]@{
+                    check_id = [ordered]@{ type = 'keyword' }
+                    category = [ordered]@{ type = 'keyword' }
+                    severity = [ordered]@{ type = 'keyword' }
+                    weight = [ordered]@{ type = 'integer' }
+                    status = [ordered]@{ type = 'keyword' }
+                    text = [ordered]@{ type = 'text' }
+                    findings = [ordered]@{ type = 'text' }
+                    evidence = [ordered]@{ type = 'text' }
+                    client = [ordered]@{ type = 'keyword' }
+                    target = [ordered]@{ type = 'keyword' }
+                    timestamp = [ordered]@{ type = 'date' }
+                    score = [ordered]@{ type = 'integer' }
+                    grade = [ordered]@{ type = 'keyword' }
+                    mitre_tactics = [ordered]@{ type = 'keyword' }
+                    mitre_techniques = [ordered]@{ type = 'keyword' }
+                    remediation_status = [ordered]@{ type = 'keyword' }
+                    assessment_method = [ordered]@{ type = 'keyword' }
+                }
+            }
+        }
+    }
+    $elasticPath = Join-Path $outDir 'elastic_index_template.json'
+    $elasticTemplate | ConvertTo-Json -Depth 5 | Set-Content $elasticPath -Encoding UTF8
+
+    $sentinelTable = [ordered]@{
+        '$schema' = 'https://schema.management.azure.com/schemas/2021-04-01/customTableDefinition.json'
+        properties = [ordered]@{
+            tableName = 'NetworkSecurityAudit_CL'
+            description = 'Network Security Auditor findings imported via JSONL'
+            columns = @(
+                [ordered]@{ name = 'TimeGenerated'; type = 'datetime'; description = 'Scan timestamp' }
+                [ordered]@{ name = 'CheckId_s'; type = 'string'; description = 'Check identifier' }
+                [ordered]@{ name = 'Category_s'; type = 'string'; description = 'Security category' }
+                [ordered]@{ name = 'Severity_s'; type = 'string'; description = 'Severity level' }
+                [ordered]@{ name = 'Status_s'; type = 'string'; description = 'Check status' }
+                [ordered]@{ name = 'Score_d'; type = 'int'; description = 'Overall score' }
+                [ordered]@{ name = 'Grade_s'; type = 'string'; description = 'Letter grade' }
+                [ordered]@{ name = 'Client_s'; type = 'string'; description = 'Client name' }
+                [ordered]@{ name = 'Target_s'; type = 'string'; description = 'Target hostname' }
+                [ordered]@{ name = 'Findings_s'; type = 'string'; description = 'Finding narrative' }
+                [ordered]@{ name = 'MitreTactics_s'; type = 'string'; description = 'ATT&CK tactics' }
+                [ordered]@{ name = 'MitreTechniques_s'; type = 'string'; description = 'ATT&CK techniques' }
+            )
+        }
+    }
+    $sentinelPath = Join-Path $outDir 'sentinel_table_definition.json'
+    $sentinelTable | ConvertTo-Json -Depth 5 | Set-Content $sentinelPath -Encoding UTF8
+
+    $wazuhDecoder = @(
+        '<decoder name="nsa_audit">'
+        '  <prematch>^{\"event_type\":\"network_security_audit\"</prematch>'
+        '  <plugin_decoder>JSON_Decoder</plugin_decoder>'
+        '</decoder>'
+    ) -join "`n"
+    $wazuhDecoderPath = Join-Path $outDir 'wazuh_decoder.xml'
+    $wazuhDecoder | Set-Content $wazuhDecoderPath -Encoding UTF8
+
+    $wazuhRules = @(
+        '<group name="nsa,security_audit">'
+        '  <rule id="100100" level="3">'
+        '    <decoded_as>nsa_audit</decoded_as>'
+        '    <description>Network Security Auditor finding</description>'
+        '  </rule>'
+        '  <rule id="100101" level="10">'
+        '    <if_sid>100100</if_sid>'
+        '    <field name="status">Fail</field>'
+        '    <field name="severity">Critical</field>'
+        '    <description>NSA Critical failure: $(check_id) - $(text)</description>'
+        '  </rule>'
+        '  <rule id="100102" level="7">'
+        '    <if_sid>100100</if_sid>'
+        '    <field name="status">Fail</field>'
+        '    <field name="severity">High</field>'
+        '    <description>NSA High-severity failure: $(check_id) - $(text)</description>'
+        '  </rule>'
+        '  <rule id="100103" level="5">'
+        '    <if_sid>100100</if_sid>'
+        '    <field name="status">Fail</field>'
+        '    <description>NSA finding failure: $(check_id) - $(text)</description>'
+        '  </rule>'
+        '</group>'
+    ) -join "`n"
+    $wazuhRulesPath = Join-Path $outDir 'wazuh_rules.xml'
+    $wazuhRules | Set-Content $wazuhRulesPath -Encoding UTF8
+
+    Write-Log "SIEM content pack exported to: $outDir (5 files: field map, Splunk props/transforms, Elastic template, Sentinel table, Wazuh decoder/rules)" 'INFO'
+    return [ordered]@{
+        field_mapping = $fieldMapPath
+        splunk_props = $splunkPropsPath
+        splunk_transforms = $splunkTransformsPath
+        elastic_template = $elasticPath
+        sentinel_table = $sentinelPath
+        wazuh_decoder = $wazuhDecoderPath
+        wazuh_rules = $wazuhRulesPath
+    }
+}
+
 # ── Full Audit Button Handler ────────────────────────────────────────────────
 $el['btnFullAudit'].Add_Click({
     if ($script:ScanRunning) { return }
@@ -13622,6 +13790,15 @@ if ($script:SilentMode) {
             $null = Export-AttackNavigator -OutPath $navOut -ClientName $clientName
             Write-Host "[Silent Mode] ATT&CK Navigator: $navOut" -ForegroundColor Green
         } catch { Write-Host "[Silent Mode] Navigator export failed: $_" -ForegroundColor Yellow }
+    }
+
+    # SIEM content pack export
+    if ($script:CliExportSIEM) {
+        $siemDir = "${basePath}_siem_pack"
+        try {
+            $null = Export-SIEMContentPack -OutDir $siemDir -ClientName $clientName -AuditorName $auditorName
+            Write-Host "[Silent Mode] SIEM content pack: $siemDir" -ForegroundColor Green
+        } catch { Write-Host "[Silent Mode] SIEM content pack export failed: $_" -ForegroundColor Yellow }
     }
 
     # Compliance summary JSON (compact RMM dashboard payload)
