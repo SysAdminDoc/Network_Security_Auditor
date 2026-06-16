@@ -1,0 +1,334 @@
+<Window x:Class="NetworkSecurityAuditor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:NetworkSecurityAuditor.ViewModels"
+        xmlns:models="clr-namespace:NetworkSecurityAuditor.Models"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        Title="Network Security Auditor v5.0.0"
+        Width="1400" Height="900"
+        MinWidth="1000" MinHeight="700"
+        Background="{StaticResource WindowBg}"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <!-- Status enum values for ComboBox -->
+        <ObjectDataProvider x:Key="CheckStatusValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="models:CheckStatus" />
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="240" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Left Sidebar -->
+        <Border Grid.Column="0" Grid.Row="0"
+                Background="{StaticResource PanelBg}"
+                Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Score Display -->
+                <Border Grid.Row="0" Background="{StaticResource SurfaceBg}" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding Grade}" FontSize="56" FontWeight="Bold"
+                                   HorizontalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock HorizontalAlignment="Center" FontSize="22" Foreground="{StaticResource TextSecondary}">
+                            <TextBlock.Text>
+                                <Binding Path="OverallScore" StringFormat="{}{0}/100" />
+                            </TextBlock.Text>
+                        </TextBlock>
+                        <TextBlock Text="Overall Score" HorizontalAlignment="Center"
+                                   FontSize="11" Foreground="{StaticResource BorderDim}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Ransomware Readiness -->
+                <Border Grid.Row="1" Background="{StaticResource SurfaceBg}" CornerRadius="8" Padding="12" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Ransomware Readiness" FontSize="11" Foreground="{StaticResource BorderDim}"
+                                   HorizontalAlignment="Center" Margin="0,0,0,4" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding RansomwareGrade}" FontSize="24" FontWeight="Bold"
+                                       Foreground="{StaticResource TextPrimary}" Margin="0,0,8,0" />
+                            <TextBlock FontSize="18" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,0,2">
+                                <TextBlock.Text>
+                                    <Binding Path="RansomwareScore" StringFormat="{}{0}/100" />
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Category List -->
+                <DockPanel Grid.Row="2" Margin="0,0,0,12">
+                    <TextBlock DockPanel.Dock="Top" Text="CATEGORIES" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource BorderDim}" Margin="0,0,0,6" />
+                    <ListBox ItemsSource="{Binding Categories}"
+                             SelectedItem="{Binding SelectedCategory}"
+                             Style="{StaticResource DarkListBox}"
+                             ItemContainerStyle="{StaticResource DarkListBoxItem}" />
+                </DockPanel>
+
+                <!-- Scan Profile -->
+                <TextBlock Grid.Row="3" Text="SCAN PROFILE" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{StaticResource BorderDim}" Margin="0,0,0,4" />
+                <ComboBox Grid.Row="4" ItemsSource="{Binding AvailableProfiles}"
+                          SelectedItem="{Binding SelectedProfile}"
+                          Style="{StaticResource DarkComboBox}"
+                          Margin="0,0,0,12" />
+
+                <!-- Scan Buttons -->
+                <Button Grid.Row="5" Content="Start Scan"
+                        Command="{Binding StartScanCommand}"
+                        Style="{StaticResource AccentButton}"
+                        Margin="0,0,0,6" />
+                <Button Grid.Row="6" Content="Stop Scan"
+                        Command="{Binding StopScanCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Margin="0,0,0,12" />
+
+                <!-- Export Buttons -->
+                <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Content="HTML" Command="{Binding ExportHtmlCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="0,0,6,0"
+                            Padding="12,6" FontSize="11" />
+                    <Button Content="JSON" Command="{Binding ExportJsonCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            Padding="12,6" FontSize="11" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content Area -->
+        <ScrollViewer Grid.Column="1" Grid.Row="0"
+                      VerticalScrollBarVisibility="Auto"
+                      Background="{StaticResource WindowBg}"
+                      Padding="16">
+            <ItemsControl ItemsSource="{Binding FilteredChecks}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:CheckItemViewModel}">
+                        <Border Background="{StaticResource CardBg}" CornerRadius="8"
+                                Margin="0,0,0,8" Padding="16"
+                                BorderBrush="{StaticResource SurfaceBg}" BorderThickness="1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Row 0: Header -->
+                                <TextBlock Grid.Row="0" Grid.Column="0"
+                                           Text="{Binding Id}" FontFamily="Cascadia Code, Consolas"
+                                           FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource Accent}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0" />
+
+                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                           Text="{Binding Label}" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimary}"
+                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+
+                                <!-- Severity Badge -->
+                                <Border Grid.Row="0" Grid.Column="2"
+                                        CornerRadius="4" Padding="8,2" Margin="8,0"
+                                        VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#33585b70" />
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding SeverityLabel}" FontSize="10"
+                                               FontWeight="Bold" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+
+                                <!-- Status Dropdown -->
+                                <ComboBox Grid.Row="0" Grid.Column="3"
+                                          ItemsSource="{Binding Source={StaticResource CheckStatusValues}}"
+                                          SelectedItem="{Binding Status}"
+                                          Width="120" VerticalAlignment="Center"
+                                          Style="{StaticResource DarkComboBox}" />
+
+                                <!-- Status Indicator Bar -->
+                                <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4"
+                                        Height="3" CornerRadius="2" Margin="0,8,0,8">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#585b70" />
+                                        </Style>
+                                    </Border.Style>
+                                </Border>
+
+                                <!-- Row 2: Findings + Evidence -->
+                                <Grid Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Findings"
+                                               FontSize="11" Foreground="{StaticResource BorderDim}"
+                                               Margin="0,0,0,2" />
+                                    <TextBox Grid.Row="1" Grid.Column="0"
+                                             Text="{Binding Findings, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource DarkTextBox}"
+                                             AcceptsReturn="True" TextWrapping="Wrap"
+                                             MinHeight="40" MaxHeight="120"
+                                             VerticalScrollBarVisibility="Auto"
+                                             Margin="0,0,8,0" />
+
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Evidence"
+                                               FontSize="11" Foreground="{StaticResource BorderDim}"
+                                               Margin="0,0,0,2" />
+                                    <TextBox Grid.Row="1" Grid.Column="1"
+                                             Text="{Binding Evidence}"
+                                             Style="{StaticResource DarkTextBox}"
+                                             IsReadOnly="True" TextWrapping="Wrap"
+                                             MinHeight="40" MaxHeight="120"
+                                             VerticalScrollBarVisibility="Auto" />
+                                </Grid>
+
+                                <!-- Row 3: Notes -->
+                                <Grid Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Notes"
+                                               FontSize="11" Foreground="{StaticResource BorderDim}"
+                                               Margin="0,4,0,2" />
+                                    <TextBox Grid.Row="1" Grid.Column="0"
+                                             Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource DarkTextBox}"
+                                             AcceptsReturn="True" TextWrapping="Wrap"
+                                             MinHeight="28" MaxHeight="60"
+                                             VerticalScrollBarVisibility="Auto"
+                                             Margin="0,0,8,0" />
+
+                                    <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                VerticalAlignment="Bottom" Margin="0,0,8,0">
+                                        <TextBlock Text="Assignee" FontSize="11"
+                                                   Foreground="{StaticResource BorderDim}" Margin="0,0,0,2" />
+                                        <TextBox Text="{Binding RemediationAssignee, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource DarkTextBox}" Width="140" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="2"
+                                                VerticalAlignment="Bottom">
+                                        <TextBlock Text="Due Date" FontSize="11"
+                                                   Foreground="{StaticResource BorderDim}" Margin="0,0,0,2" />
+                                        <DatePicker SelectedDate="{Binding RemediationDueDate}"
+                                                    Width="130"
+                                                    Background="{StaticResource InputBg}"
+                                                    Foreground="{StaticResource TextPrimary}"
+                                                    BorderBrush="{StaticResource BorderDim}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Running Indicator -->
+                                <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0" Grid.ColumnSpan="4"
+                                        Background="#881e1e2e" CornerRadius="8"
+                                        Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                        <TextBlock Text="Scanning..." FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Accent}" HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Status Bar -->
+        <Border Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1"
+                Background="{StaticResource SurfaceBg}"
+                Padding="12,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="{Binding ScanStatus}"
+                           Foreground="{StaticResource TextSecondary}" FontSize="12"
+                           VerticalAlignment="Center" />
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBlock Foreground="{StaticResource ProgressGood}" FontSize="12" Margin="0,0,12,0"
+                               VerticalAlignment="Center">
+                        <TextBlock.Text>
+                            <Binding Path="PassCount" StringFormat="Pass: {0}" />
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <TextBlock Foreground="{StaticResource ProgressMid}" FontSize="12" Margin="0,0,12,0"
+                               VerticalAlignment="Center">
+                        <TextBlock.Text>
+                            <Binding Path="PartialCount" StringFormat="Partial: {0}" />
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <TextBlock Foreground="{StaticResource ProgressBad}" FontSize="12" Margin="0,0,12,0"
+                               VerticalAlignment="Center">
+                        <TextBlock.Text>
+                            <Binding Path="FailCount" StringFormat="Fail: {0}" />
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <TextBlock Foreground="{StaticResource BorderDim}" FontSize="12"
+                               VerticalAlignment="Center">
+                        <TextBlock.Text>
+                            <Binding Path="NaCount" StringFormat="N/A: {0}" />
+                        </TextBlock.Text>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
