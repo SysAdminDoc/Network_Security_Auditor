@@ -166,6 +166,17 @@ if (@($allVersions | Select-Object -Unique).Count -ne 1) {
     Add-Failure "Version drift detected: $($allVersions -join ', ')"
 }
 
+# External version manifest
+if ($scriptText -notmatch '\$script:ExternalVersions\s*=\s*\[ordered\]@\{') {
+    Add-Failure 'ExternalVersions manifest not defined.'
+}
+$evKeys = @('AttackEnterprise','AttackNavigator','D3FEND','OCSF','OSCAL')
+foreach ($evk in $evKeys) {
+    if ($scriptText -notmatch "(?m)^\s*$evk\s*=\s*'[0-9]") {
+        Add-Failure "ExternalVersions manifest missing key: $evk"
+    }
+}
+
 $staleVersionPatterns = @(
     'Network Security Audit Checklist v4\.1',
     'SMB Security Assessment Tool v4\.1',
