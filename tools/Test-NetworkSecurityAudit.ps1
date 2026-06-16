@@ -251,6 +251,9 @@ if ($scriptText -notmatch 'function Export-AttackNavigator' -or $scriptText -not
 if ($scriptText -notmatch 'cloud_assessments' -or $scriptText -notmatch 'CloudAssessmentImports') {
     Add-Failure 'Structured JSON export must include cloud_assessments from imported cloud assessments.'
 }
+if ($scriptText -notmatch 'source_path\s*=' -or $scriptText -notmatch 'provenance\s*=\s*\[ordered\]@' -or $scriptText -notmatch "Tag = 'TENANT'" -or $scriptText -notmatch "Tag = 'PATH'" -or $scriptText -notmatch '\[SECRET-REDACTED\]') {
+    Add-Failure 'Cloud assessment provenance must include redacted source paths, tenants, and token-like values under privacy mode.'
+}
 if ($scriptText -notmatch 'LAPS DELEGATION AUDIT' -or $scriptText -notmatch 'ms-Mcs-AdmPwd' -or $scriptText -notmatch 'msLAPS-EncryptedPassword' -or $scriptText -notmatch 'schemaIDGUID') {
     Add-Failure 'IA06 must audit LAPS password read/decrypt delegation via schema GUID ACL inspection.'
 }

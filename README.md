@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.10.5-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.10.6-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
@@ -533,7 +533,9 @@ not require tenant credentials.
 
 Imported cloud assessment results preserve unavailable status semantics:
 `NotLicensed`, `NotPermitted`, `NotConfigured`, `Skipped`, and `Error` are
-reported separately from true `Fail` findings.
+reported separately from true `Fail` findings. When `-PrivacyMode` is used,
+imported cloud tenant names, tenant IDs, source paths, and token-like values are
+pseudonymized in report/export provenance.
 
 ---
 

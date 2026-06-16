@@ -298,6 +298,45 @@ Describe 'Graph wrapper offline fixtures' {
     }
 }
 
+Describe 'Privacy redaction coverage' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Get-PrivacyHash','Initialize-PrivacyReplacements','ConvertTo-RedactedText','Get-RedactedIdentity') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+    BeforeEach {
+        $script:CliPrivacyMode = $true
+        $script:CliClient = ''
+        $script:PrivacyMap = @{}
+        $script:PrivacyReplacements = @()
+        $script:CloudAssessmentImports = @(
+            [ordered]@{
+                TenantName = 'Acme Tenant'
+                TenantId   = 'tenant-123'
+                Path       = 'C:\Reports\Acme Tenant\maester.json'
+            }
+        )
+    }
+
+    It 'redacts imported cloud tenants, paths, token values, and IP addresses' {
+        Initialize-PrivacyReplacements
+        $redacted = ConvertTo-RedactedText 'Acme Tenant tenant-123 10.1.2.3 access_token=abc123 Bearer eyJhbGciOiJub25l'
+        $pathRedacted = ConvertTo-RedactedText $script:CloudAssessmentImports[0].Path
+
+        $redacted | Should -Not -Match 'Acme Tenant'
+        $redacted | Should -Not -Match 'tenant-123'
+        $redacted | Should -Not -Match 'abc123'
+        $redacted | Should -Match '\[TENANT-[0-9a-f]{8}\]'
+        $redacted | Should -Match '\[IP-[0-9a-f]{8}\]'
+        $redacted | Should -Match 'access_token=\[SECRET-REDACTED\]'
+        $redacted | Should -Match 'Bearer \[SECRET-REDACTED\]'
+        $pathRedacted | Should -Match '^\[PATH-[0-9a-f]{8}\]$'
+        (Get-RedactedIdentity $script:CloudAssessmentImports[0].TenantId 'TENANT') | Should -Match '^\[TENANT-[0-9a-f]{8}\]$'
+    }
+}
+
 Describe 'Write gate behavior (real functions via AST)' {
     BeforeAll {
         # Extract the actual function bodies from the script and load them in
@@ -457,7 +496,7 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $script:AuditCategories = @{ 'Identity' = @{ Items = @(
             @{ ID='IA01'; Text='Priv groups'; Severity='Critical' }
             @{ ID='IA02'; Text='MFA'; Severity='High' }) } }
-        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.5'
+        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.6'
         $save1 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-01'; ScanTarget='DC'; Items=@{ IA01=@{Status='Fail';Findings='x';Evidence='y'}; IA02=@{Status='Pass'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $save2 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-14'; ScanTarget='DC'; Items=@{ IA01=@{Status='Pass'}; IA02=@{Status='Fail'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $s1 = Convert-SaveStateToSnapshot $save1

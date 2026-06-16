@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.10.5 - Professional GUI Tool
+    Network Security Auditor v4.10.6 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -53,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.10.5
+    4.10.6
 #>
 param(
     [switch]$Silent,
@@ -94,7 +94,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.10.5'
+$script:ProductVersion = '4.10.6'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.1'
@@ -554,6 +554,13 @@ function Initialize-PrivacyReplacements {
     $clientName = try { $el['txtClient'].Text } catch { '' }
     if (-not $clientName) { $clientName = $script:CliClient }
     if ($clientName) { $targets += @{ Original = $clientName; Tag = 'CLIENT' } }
+    if (Get-Variable -Name CloudAssessmentImports -Scope Script -ErrorAction SilentlyContinue) {
+        foreach ($cloudImport in @($script:CloudAssessmentImports)) {
+            if ($cloudImport.Path) { $targets += @{ Original = $cloudImport.Path; Tag = 'PATH' } }
+            if ($cloudImport.TenantName) { $targets += @{ Original = $cloudImport.TenantName; Tag = 'TENANT' } }
+            if ($cloudImport.TenantId) { $targets += @{ Original = $cloudImport.TenantId; Tag = 'TENANT' } }
+        }
+    }
     foreach ($t in $targets) {
         $hash = Get-PrivacyHash $t.Original
         $script:PrivacyReplacements += @{ Pattern = [regex]::Escape($t.Original); Replacement = "[$($t.Tag)-$hash]" }
@@ -568,6 +575,8 @@ function ConvertTo-RedactedText {
     foreach ($r in $script:PrivacyReplacements) {
         $text = [regex]::Replace($text, $r.Pattern, $r.Replacement, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
     }
+    $text = [regex]::Replace($text, '(?i)\b(access_token|refresh_token|id_token|client_secret|client_assertion|token|secret)=([^&\s]+)', { param($m) "$($m.Groups[1].Value)=[SECRET-REDACTED]" })
+    $text = [regex]::Replace($text, '(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*', 'Bearer [SECRET-REDACTED]')
     $text = [regex]::Replace($text, '\b(?:\d{1,3}\.){3}\d{1,3}\b', { param($m) "[IP-$(Get-PrivacyHash $m.Value)]" })
     return $text
 }
@@ -10611,15 +10620,20 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
             if ($imp.StatusBreakdown) {
                 $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>Unavailable: NotLicensed=$($imp.StatusBreakdown.NotLicensed) | NotPermitted=$($imp.StatusBreakdown.NotPermitted) | NotConfigured=$($imp.StatusBreakdown.NotConfigured) | Error=$($imp.StatusBreakdown.Error) | Other=$($imp.StatusBreakdown.Other)</div>`n"
             }
-            if ($imp.TenantName -or $imp.TenantId) {
-                $tenantLabel = if ($imp.TenantName) { $imp.TenantName } else { $imp.TenantId }
-                $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>Tenant: $([System.Net.WebUtility]::HtmlEncode($tenantLabel)) | Source: $([System.Net.WebUtility]::HtmlEncode($imp.Path)) | $($imp.Timestamp)</div>`n"
+            $tenantLabel = if ($imp.TenantName) { Get-RedactedIdentity $imp.TenantName 'TENANT' } elseif ($imp.TenantId) { Get-RedactedIdentity $imp.TenantId 'TENANT' } else { '' }
+            $sourcePath = Get-RedactedIdentity $imp.Path 'PATH'
+            $provenanceBits = @()
+            if ($tenantLabel) { $provenanceBits += "Tenant: $([System.Net.WebUtility]::HtmlEncode($tenantLabel))" }
+            if ($sourcePath) { $provenanceBits += "Source: $([System.Net.WebUtility]::HtmlEncode($sourcePath))" }
+            if ($imp.Timestamp) { $provenanceBits += "Timestamp: $([System.Net.WebUtility]::HtmlEncode($imp.Timestamp))" }
+            if ($provenanceBits.Count -gt 0) {
+                $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>$($provenanceBits -join ' | ')</div>`n"
             }
             if ($imp.Findings.Count -gt 0) {
                 $html += "<table class='tech-table' style='margin-top:8px'><tr><th>Test</th><th>Status</th><th>Category</th><th>Name</th></tr>`n"
                 foreach ($f in $imp.Findings | Select-Object -First 25) {
                     $statusColor = if ($f.Status -eq 'Fail') { '#f87171' } elseif ($f.Status -eq 'Error') { '#f97316' } else { '#facc15' }
-                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode($f.TestId))</td><td style='color:$statusColor'>$([System.Net.WebUtility]::HtmlEncode($f.Status))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.Category))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.Name))</td></tr>`n"
+                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.TestId)))</td><td style='color:$statusColor'>$([System.Net.WebUtility]::HtmlEncode($f.Status))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.Category)))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.Name)))</td></tr>`n"
                 }
                 if ($imp.Findings.Count -gt 25) { $html += "<tr><td colspan='4' style='color:#94a3b8'>... and $($imp.Findings.Count - 25) more findings</td></tr>`n" }
                 $html += "</table>`n"
@@ -11156,9 +11170,15 @@ function Export-FindingsJSON {
             @($script:CloudAssessmentImports | ForEach-Object {
                 [ordered]@{
                     source     = $_.Source
-                    tenant_id  = $_.TenantId
-                    tenant     = $_.TenantName
+                    tenant_id  = Get-RedactedIdentity $_.TenantId 'TENANT'
+                    tenant     = Get-RedactedIdentity $_.TenantName 'TENANT'
                     timestamp  = $_.Timestamp
+                    provenance = [ordered]@{
+                        source           = $_.Source
+                        source_path      = Get-RedactedIdentity $_.Path 'PATH'
+                        timestamp        = $_.Timestamp
+                        privacy_redacted = $privacyFlag
+                    }
                     total      = $_.TotalTests
                     passed     = $_.Passed
                     failed     = $_.Failed
@@ -11171,7 +11191,16 @@ function Export-FindingsJSON {
                     other = $_.Other
                     status_breakdown = $_.StatusBreakdown
                     score      = $_.Score
-                    findings   = $_.Findings
+                    findings   = @($_.Findings | ForEach-Object {
+                        [ordered]@{
+                            TestId      = ConvertTo-RedactedText $_.TestId
+                            Name        = ConvertTo-RedactedText $_.Name
+                            Result      = $_.Result
+                            Status      = $_.Status
+                            Category    = ConvertTo-RedactedText $_.Category
+                            Remediation = ConvertTo-RedactedText $_.Remediation
+                        }
+                    })
                 }
             })
         } else { @() }
