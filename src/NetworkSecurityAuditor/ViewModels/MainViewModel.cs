@@ -107,53 +107,53 @@ public partial class MainViewModel : ViewModelBase
             ScanProfile = SelectedProfile
         };
 
-        var totalChecks = Checks.Count;
+        var allChecks = CheckRegistry.GetAllChecks();
+        var runner = new CheckRunner(allChecks);
         var completed = 0;
+        var checkLookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+
+        var progress = new Progress<(string checkId, CheckResult result)>(update =>
+        {
+            if (checkLookup.TryGetValue(update.checkId, out var vm))
+            {
+                vm.Status = update.result.Status;
+                vm.Findings = update.result.Findings;
+                vm.Evidence = update.result.Evidence;
+                vm.IsRunning = false;
+            }
+
+            completed++;
+            UpdateScoreCounts();
+        });
+
+        foreach (var vm in Checks) vm.IsRunning = false;
 
         try
         {
-            foreach (var checkVm in Checks)
+            var profileIds = ScanProfiles.Resolve(options.ScanProfile);
+            foreach (var id in profileIds)
             {
-                if (_scanCts.Token.IsCancellationRequested) break;
-
-                checkVm.IsRunning = true;
-                ScanStatus = $"Running {checkVm.Id}: {checkVm.Label} ({completed + 1}/{totalChecks})";
-
-                ISecurityCheck check = new StubCheck(checkVm.Id);
-
-                try
+                if (checkLookup.TryGetValue(id, out var vm))
                 {
-                    var result = await check.ExecuteAsync(Environment, options, _scanCts.Token);
-                    checkVm.Status = result.Status;
-                    checkVm.Findings = result.Findings;
-                    checkVm.Evidence = result.Evidence;
+                    vm.IsRunning = true;
+                    ScanStatus = $"Running {id}: {vm.Label} ({completed + 1}/{profileIds.Length})";
                 }
-                catch (OperationCanceledException)
-                {
-                    checkVm.Status = CheckStatus.NA;
-                    checkVm.Findings = "Scan cancelled by user.";
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    checkVm.Status = CheckStatus.NA;
-                    checkVm.Findings = $"Error: {ex.Message}";
-                }
-                finally
-                {
-                    checkVm.IsRunning = false;
-                    completed++;
-                }
-
-                UpdateScoreCounts();
             }
+
+            await runner.RunAsync(Environment, options, progress, _scanCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // User cancelled
         }
         finally
         {
+            foreach (var vm in Checks) vm.IsRunning = false;
             IsScanning = false;
+            var total = ScanProfiles.Resolve(options.ScanProfile).Length;
             ScanStatus = _scanCts.Token.IsCancellationRequested
-                ? $"Scan cancelled ({completed}/{totalChecks} completed)"
-                : $"Scan complete ({completed}/{totalChecks} checks)";
+                ? $"Scan cancelled ({completed}/{total} completed)"
+                : $"Scan complete ({completed}/{total} checks)";
             _scanCts.Dispose();
             _scanCts = null;
 

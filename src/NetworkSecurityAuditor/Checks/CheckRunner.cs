@@ -109,12 +109,8 @@ public sealed class CheckRunner
         return applicable;
     }
 
-    /// <summary>
-    /// AD checks by convention use category prefixes that require domain membership.
-    /// </summary>
     private static bool IsAdCheck(string checkId)
     {
-        // AD-prefixed checks, and specific checks that require AD
-        return checkId.StartsWith("AD", StringComparison.OrdinalIgnoreCase);
+        return CheckCatalog.All.TryGetValue(checkId, out var meta) && meta.Type == CheckType.AD;
     }
 }
