@@ -93,7 +93,10 @@ param(
     [string]$TargetsCsv = '',
     [int]$ThrottleLimit = 5,
     [int]$PerHostTimeout = 600,
-    [PSCredential]$Credential = $null
+    [PSCredential]$Credential = $null,
+    [switch]$Remediate,
+    [switch]$RemediateDryRun,
+    [string[]]$RemediateChecks = @()
 )
 
 $script:ProductName = 'Network Security Auditor'
@@ -446,6 +449,156 @@ if ($Silent.IsPresent -and $TargetsCsv -and (Test-Path $TargetsCsv -ErrorAction 
     $fleetExitCode = if ($aggData.hosts_failed -gt 0 -or $aggData.hosts_timedout -gt 0) { 2 } elseif ($aggData.avg_score -lt 60) { 1 } else { 0 }
     exit $fleetExitCode
 }
+
+# ── Remediation Engine (NSA-007) ────────────────────────────────────────────
+# Safe, reversible remediations with dry-run preview, before/after evidence,
+# and a JSON rollback manifest. Requires -ReadOnly:$false AND -Remediate.
+# -RemediateDryRun shows what would change without applying.
+# -RemediateChecks limits which remediations run (empty = all applicable).
+$script:RemediationCatalog = @{
+    'NA07' = @{
+        Label = 'Disable LLMNR'
+        Description = 'Disables Link-Local Multicast Name Resolution to prevent poisoning attacks.'
+        RiskTier = 3
+        Check = { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -EA SilentlyContinue).EnableMulticast -ne 0 }
+        Before = { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -EA SilentlyContinue).EnableMulticast }
+        Apply = {
+            $path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient'
+            if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
+            Set-ItemProperty -Path $path -Name 'EnableMulticast' -Value 0 -Type DWord -Force
+        }
+        After = { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -EA SilentlyContinue).EnableMulticast }
+        Rollback = @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient'; Name = 'EnableMulticast'; Type = 'DWord' }
+    }
+    'CF04' = @{
+        Label = 'Disable SMBv1'
+        Description = 'Disables the SMBv1 protocol to mitigate EternalBlue-class attacks.'
+        RiskTier = 3
+        Check = {
+            $feat = Get-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -EA SilentlyContinue
+            $feat -and $feat.State -eq 'Enabled'
+        }
+        Before = { (Get-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -EA SilentlyContinue).State }
+        Apply = { Disable-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -NoRestart -ErrorAction Stop | Out-Null }
+        After = { (Get-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -EA SilentlyContinue).State }
+        Rollback = @{ Feature = 'SMB1Protocol'; Action = 'Enable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart' }
+    }
+    'CF05' = @{
+        Label = 'Require SMB signing (server)'
+        Description = 'Enables required SMB signing on the server side to prevent relay attacks.'
+        RiskTier = 3
+        Check = { (Get-SmbServerConfiguration -EA SilentlyContinue).RequireSecuritySignature -ne $true }
+        Before = { (Get-SmbServerConfiguration -EA SilentlyContinue).RequireSecuritySignature }
+        Apply = { Set-SmbServerConfiguration -RequireSecuritySignature $true -Force -ErrorAction Stop }
+        After = { (Get-SmbServerConfiguration -EA SilentlyContinue).RequireSecuritySignature }
+        Rollback = @{ Command = 'Set-SmbServerConfiguration -RequireSecuritySignature $false -Force' }
+    }
+    'LM01' = @{
+        Label = 'Increase Security event log size'
+        Description = 'Sets the Security event log to 256 MB to retain more audit evidence.'
+        RiskTier = 3
+        Check = {
+            $log = Get-WinEvent -ListLog 'Security' -EA SilentlyContinue
+            $log -and $log.MaximumSizeInBytes -lt 268435456
+        }
+        Before = { (Get-WinEvent -ListLog 'Security' -EA SilentlyContinue).MaximumSizeInBytes }
+        Apply = {
+            $log = Get-WinEvent -ListLog 'Security' -EA SilentlyContinue
+            if ($log) { $log.MaximumSizeInBytes = 268435456; $log.SaveChanges() }
+        }
+        After = { (Get-WinEvent -ListLog 'Security' -EA SilentlyContinue).MaximumSizeInBytes }
+        Rollback = @{ Log = 'Security'; Field = 'MaximumSizeInBytes' }
+    }
+    'LM03' = @{
+        Label = 'Enable PowerShell script block logging'
+        Description = 'Enables detailed script block logging for PowerShell to support forensic analysis.'
+        RiskTier = 3
+        Check = { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging' -Name 'EnableScriptBlockLogging' -EA SilentlyContinue).EnableScriptBlockLogging -ne 1 }
+        Before = { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging' -Name 'EnableScriptBlockLogging' -EA SilentlyContinue).EnableScriptBlockLogging }
+        Apply = {
+            $path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging'
+            if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
+            Set-ItemProperty -Path $path -Name 'EnableScriptBlockLogging' -Value 1 -Type DWord -Force
+        }
+        After = { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging' -Name 'EnableScriptBlockLogging' -EA SilentlyContinue).EnableScriptBlockLogging }
+        Rollback = @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging'; Name = 'EnableScriptBlockLogging'; Type = 'DWord' }
+    }
+    'LM04' = @{
+        Label = 'Enable PowerShell module logging'
+        Description = 'Enables module logging for PowerShell to capture pipeline execution details.'
+        RiskTier = 3
+        Check = { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging' -Name 'EnableModuleLogging' -EA SilentlyContinue).EnableModuleLogging -ne 1 }
+        Before = { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging' -Name 'EnableModuleLogging' -EA SilentlyContinue).EnableModuleLogging }
+        Apply = {
+            $path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging'
+            if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
+            Set-ItemProperty -Path $path -Name 'EnableModuleLogging' -Value 1 -Type DWord -Force
+        }
+        After = { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging' -Name 'EnableModuleLogging' -EA SilentlyContinue).EnableModuleLogging }
+        Rollback = @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging'; Name = 'EnableModuleLogging'; Type = 'DWord' }
+    }
+}
+
+function Invoke-AuditRemediation {
+    [CmdletBinding()]
+    param(
+        [switch]$DryRun,
+        [string[]]$CheckIds = @()
+    )
+    $manifest = [System.Collections.Generic.List[object]]::new()
+    $catalog = $script:RemediationCatalog
+    $targets = if ($CheckIds.Count -gt 0) { $CheckIds } else { $catalog.Keys | Sort-Object }
+    foreach ($id in $targets) {
+        if (-not $catalog.Contains($id)) { continue }
+        $rem = $catalog[$id]
+        $entry = [ordered]@{
+            check_id = $id; label = $rem.Label; description = $rem.Description
+            applicable = $false; dry_run = [bool]$DryRun
+            before_value = $null; after_value = $null; applied = $false; error = $null
+        }
+        try {
+            $needsRemediation = & $rem.Check
+            $entry.applicable = [bool]$needsRemediation
+            if (-not $needsRemediation) { $manifest.Add($entry); continue }
+            $entry.before_value = & $rem.Before
+            if ($DryRun) {
+                $manifest.Add($entry); continue
+            }
+            & $rem.Apply
+            $entry.after_value = & $rem.After
+            $entry.applied = $true
+        } catch {
+            $entry.error = $_.Exception.Message
+        }
+        $manifest.Add($entry)
+    }
+    # Write rollback manifest
+    $rollbackEntries = @($manifest | Where-Object { $_.applied })
+    $rollbackData = [ordered]@{
+        tool = $script:ProductShortName; tool_version = $script:ProductVersion
+        timestamp = (Get-Date -Format 'o'); dry_run = [bool]$DryRun
+        entries = @(foreach ($e in $rollbackEntries) {
+            $rem = $catalog[$e.check_id]
+            [ordered]@{
+                check_id = $e.check_id; label = $e.label
+                before_value = $e.before_value; after_value = $e.after_value
+                rollback = $rem.Rollback
+            }
+        })
+        summary = [ordered]@{
+            total = $manifest.Count
+            applicable = @($manifest | Where-Object { $_.applicable }).Count
+            applied = $rollbackEntries.Count
+            skipped_not_applicable = @($manifest | Where-Object { -not $_.applicable }).Count
+            errors = @($manifest | Where-Object { $_.error }).Count
+        }
+    }
+    return @{ Manifest = @($manifest); Rollback = $rollbackData }
+}
+
+$script:CliRemediate = $Remediate.IsPresent
+$script:CliRemediateDryRun = $RemediateDryRun.IsPresent
+$script:CliRemediateChecks = @($RemediateChecks)
 
 # ── Unified Write Manifest ───────────────────────────────────────────────────
 # Every persistent side effect (RMM field write, registry cache, host-modifying
@@ -13346,6 +13499,32 @@ if ($script:SilentMode) {
             if ($script:CliAlertPreview) {
                 Write-Host "[Silent Mode]   Alert payload preview (not sent):" -ForegroundColor Cyan
                 Write-Host (($histResult.alert_payload | ConvertTo-Json -Depth 5) -split "`n" | ForEach-Object { "    $_" }) -Separator "`n"
+            }
+        }
+    }
+
+    # ── Remediation (if requested) ──
+    $script:RemediationResult = $null
+    if ($script:CliRemediate -or $script:CliRemediateDryRun) {
+        if ($script:ReadOnlyMode -and -not $script:CliRemediateDryRun) {
+            Write-Host "[Silent Mode] Remediation blocked: -ReadOnly is true. Use -ReadOnly:`$false -Remediate to apply fixes." -ForegroundColor Yellow
+        } else {
+            $isDryRun = $script:CliRemediateDryRun -or $script:ReadOnlyMode
+            Write-Host ""
+            Write-Host "[Silent Mode] REMEDIATION $(if($isDryRun){'DRY RUN'}else{'APPLYING'})" -ForegroundColor $(if($isDryRun){'Cyan'}else{'Yellow'})
+            $remResult = Invoke-AuditRemediation -DryRun:$isDryRun -CheckIds $script:CliRemediateChecks
+            $script:RemediationResult = $remResult
+            foreach ($e in $remResult.Manifest) {
+                $stateLabel = if (-not $e.applicable) { 'N/A' } elseif ($e.applied) { 'APPLIED' } elseif ($e.dry_run -and $e.applicable) { 'WOULD APPLY' } elseif ($e.error) { 'ERROR' } else { 'SKIPPED' }
+                $color = switch -Wildcard ($stateLabel) { 'APPLIED' { 'Green' } 'WOULD*' { 'Cyan' } 'ERROR' { 'Red' } default { 'DarkGray' } }
+                Write-Host "  [$stateLabel] $($e.check_id): $($e.label)$(if($e.before_value -ne $null){" (was: $($e.before_value))"})$(if($e.after_value -ne $null){" (now: $($e.after_value))"})$(if($e.error){" - $($e.error)"})" -ForegroundColor $color
+            }
+            $s = $remResult.Rollback.summary
+            Write-Host "[Silent Mode]   Total: $($s.total) | Applicable: $($s.applicable) | Applied: $($s.applied) | Errors: $($s.errors)"
+            if (-not $isDryRun -and $s.applied -gt 0) {
+                $rollbackPath = "${basePath}_rollback.json"
+                $remResult.Rollback | ConvertTo-Json -Depth 5 | Set-Content $rollbackPath -Encoding UTF8
+                Write-Host "[Silent Mode]   Rollback manifest: $rollbackPath" -ForegroundColor Green
             }
         }
     }
