@@ -2698,6 +2698,33 @@ $script:AutoChecks = @{
                     foreach ($wp in ($writablePaths | Select-Object -First 10)) { [void]$sb.AppendLine("    $wp") }
                 } else { [void]$sb.AppendLine("  No user-writable directories in system PATH [OK]") }
             } catch { [void]$sb.AppendLine("  PATH analysis: Could not check") }
+            # Windows 11 Administrator Protection (24H2+): replaces split-token UAC with
+            # just-in-time elevation via a temporary admin shadow account.
+            [void]$sb.AppendLine("`nADMINISTRATOR PROTECTION:")
+            try {
+                $buildNum = [int](Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).BuildNumber
+                $caption = $script:Env.OSCaption
+                $isWin11_24H2Plus = ($buildNum -ge 26100 -and $caption -match 'Windows 11')
+                if ($isWin11_24H2Plus) {
+                    $apKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+                    $apValue = (Get-ItemProperty $apKey -EA SilentlyContinue).TypeOfAdminApprovalMode
+                    $uacEnabled = (Get-ItemProperty $apKey -EA SilentlyContinue).EnableLUA
+                    if ($apValue -eq 2) {
+                        [void]$sb.AppendLine("  Administrator Protection: Enabled (TypeOfAdminApprovalMode=2) [OK]")
+                        [void]$sb.AppendLine("  Elevation uses just-in-time shadow admin account instead of split token")
+                    } elseif ($apValue -eq 1) {
+                        [void]$sb.AppendLine("  TypeOfAdminApprovalMode=1 (standard Admin Approval Mode, not Administrator Protection)")
+                        [void]$sb.AppendLine("  [i] Consider enabling Administrator Protection for stronger elevation isolation")
+                    } else {
+                        [void]$sb.AppendLine("  TypeOfAdminApprovalMode not set or default")
+                        if ($uacEnabled -eq 1) {
+                            [void]$sb.AppendLine("  [i] UAC is active but Administrator Protection is not enabled; consider Group Policy 'Admin Approval Mode for the Built-in Administrator account' = 3 (AP with prompt)")
+                        }
+                    }
+                } else {
+                    [void]$sb.AppendLine("  N/A: Requires Windows 11 24H2+ (current build: $buildNum)")
+                }
+            } catch { [void]$sb.AppendLine("  Could not query Administrator Protection state") }
             $status = if ($issues -eq 0 -and $admins.Count -le 3) {'Pass'} elseif ($issues -gt 2) {'Fail'} else {'Partial'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Local admin + privesc scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }

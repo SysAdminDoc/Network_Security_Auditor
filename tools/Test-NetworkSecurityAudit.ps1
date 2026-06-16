@@ -404,6 +404,9 @@ if ($scriptText -notmatch 'ESC9' -or $scriptText -notmatch 'CT_FLAG_NO_SECURITY_
 if ($scriptText -notmatch 'ESC16' -or $scriptText -notmatch 'CertificateMappingMethods') {
     Add-Failure 'CF01 ADCS scan must cover ESC16 certificate mapping methods.'
 }
+if ($scriptText -notmatch 'ADMINISTRATOR PROTECTION' -or $scriptText -notmatch 'TypeOfAdminApprovalMode') {
+    Add-Failure 'EP05 must check Windows 11 Administrator Protection posture.'
+}
 if ($scriptText -notmatch "Pass','Fail','Partial','N/A") {
     Add-Failure 'Auto-check status mapping must preserve N/A results for non-applicable checks.'
 }
