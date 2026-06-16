@@ -4,7 +4,7 @@
     Pester v5 quality gate for NetworkSecurityAudit.ps1.
 .DESCRIPTION
     Static, non-executing tests that protect the single-file tool from
-    regressions: parser health, catalog/profile/framework/risk/D3FEND ID
+    regressions: parser health, catalog/profile/framework/risk/evidence/D3FEND ID
     consistency, version-surface drift, export serialization, lint cleanliness,
     and the legacy static gate. No test executes a real audit check or modifies
     the host.
@@ -44,6 +44,8 @@ BeforeAll {
     $script:FwIds        = Get-IdSet $script:FwBlock "(?m)^\s*'([A-Z]{2}\d{2})'\s*=\s*@\{"
     $script:RiskBlock    = Get-Block $script:Text '\$script:RiskTiers\s*=\s*@\{' '\$script:RiskTierLabels'
     $script:RiskIds      = Get-IdSet $script:RiskBlock "'([A-Z]{2}\d{2})'\s*=\s*\d"
+    $script:EvidenceBlock = Get-Block $script:Text '\$script:CheckEvidenceManifest\s*=\s*@\{' 'function Get-CheckEvidenceMetadata'
+    $script:EvidenceIds   = Get-IdSet $script:EvidenceBlock "(?m)^\s*'([A-Z]{2}\d{2})'\s*=\s*@\{"
     $script:D3Block      = Get-Block $script:Text '\$script:D3FendMap\s*=\s*@\{' '\$script:D3FendStages'
     $script:D3Ids        = Get-IdSet $script:D3Block "(?m)^\s*'([A-Z]{2}\d{2})'\s*=\s*@\{"
     $script:FwChkBlock   = Get-Block $script:Text '\$script:FrameworkChecks\s*=\s*@\{' '# Helper: Get formatted compliance string'
@@ -68,12 +70,13 @@ Describe 'Check catalog consistency' {
         @($script:AutoIds).Count | Should -Be $script:ExpectedCheckCount
     }
 
-    Context 'every catalog ID is covered by <_>' -ForEach @('AutoChecks','FrameworkMap','RiskTiers','D3FendMap') {
+    Context 'every catalog ID is covered by <_>' -ForEach @('AutoChecks','FrameworkMap','RiskTiers','CheckEvidenceManifest','D3FendMap') {
         It 'has no missing or unknown IDs' {
             $actual = switch ($_) {
                 'AutoChecks'   { $script:AutoIds }
                 'FrameworkMap' { $script:FwIds }
                 'RiskTiers'    { $script:RiskIds }
+                'CheckEvidenceManifest' { $script:EvidenceIds }
                 'D3FendMap'    { $script:D3Ids }
             }
             $cat = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
@@ -94,6 +97,14 @@ Describe 'Check catalog consistency' {
     It 'framework profiles reference only known check IDs' {
         $unknown = @($script:FwChkIds | Where-Object { $_ -notin $script:CatalogIds } | Sort-Object)
         $unknown | Should -BeNullOrEmpty -Because "FrameworkChecks reference unknown IDs: $($unknown -join ', ')"
+    }
+    It 'evidence manifest declares every required metadata field per check' {
+        foreach ($field in 'EvidenceMode','AuthorityLevel','DataSources','InternetRequired','WritesPossible','DefaultRiskTier','ManualFollowUp') {
+            [regex]::Matches($script:EvidenceBlock, "$field\s*=").Count | Should -Be $script:ExpectedCheckCount -Because "$field must be present for every catalog check"
+        }
+        $script:Text | Should -Match 'assessment_method = \$evidenceMeta\.EvidenceMode'
+        $script:Text | Should -Match 'score_excluding_manual_evidence'
+        $script:Text | Should -Match 'ManualValidationRequired'
     }
 }
 
@@ -307,7 +318,7 @@ Describe 'Cloud Graph profile manifest' {
         }
     }
     BeforeEach {
-        $script:ProductVersion = '4.10.8'
+        $script:ProductVersion = '4.10.9'
         $script:CloudCheckManifest = [ordered]@{
             'CL01' = [ordered]@{ Name='Microsoft Secure Score'; PermissionScopes=@('SecurityEvents.Read.All'); RoleHints=@('Security Reader'); LicensePrerequisites='Secure Score'; ApiVersion='v1.0'; Endpoint='/security/secureScores?$top=1'; OutputFields=@('currentScore'); SkipStates=@('NotConfigured'); PrivacyClassification='Tenant'; Implemented=$true }
             'CL02' = [ordered]@{ Name='Conditional Access policy baseline'; PermissionScopes=@('Policy.Read.All'); RoleHints=@('Conditional Access Reader'); LicensePrerequisites='Entra ID P1/P2'; ApiVersion='v1.0'; Endpoint='/identity/conditionalAccess/policies?$select=id,displayName,state,conditions,grantControls,sessionControls'; OutputFields=@('displayName'); SkipStates=@('NotConfigured'); PrivacyClassification='TenantPolicy'; Implemented=$true }
@@ -488,11 +499,18 @@ Describe 'Write gate behavior (real functions via AST)' {
 Describe 'Evidence-grade compliance helpers (real functions via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        foreach ($nm in 'Get-AuditExceptions','Get-FrameworkControlSummary') {
+        foreach ($nm in 'Get-CheckEvidenceMetadata','Test-ManualEvidenceRequired','Get-AuditExceptions','Get-FrameworkControlSummary') {
             $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
             . ([scriptblock]::Create($fn.Extent.Text))
         }
         $script:FrameworkChecks = @{ HIPAA = @('IA01','EP02','PS01') }
+        $script:RiskTiers = @{ IA01=0; EP02=0; PS01=0 }
+        $script:ManualEvidenceModes = @('Checklist','InterviewRequired','ExternalRequired')
+        $script:CheckEvidenceManifest = @{
+            IA01 = @{ EvidenceMode='Automated'; AuthorityLevel='Directory'; DataSources=@('AD'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate owner.' }
+            EP02 = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('BitLocker'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate escrow.' }
+            PS01 = @{ EvidenceMode='Checklist'; AuthorityLevel='Documentation'; DataSources=@('Policy'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Review policy.' }
+        }
         $script:SampleFindings = @(
             [pscustomobject]@{ id='IA01'; text='Priv groups'; severity='Critical'; status='Fail'; evidence='12 DAs'; findings='Too many admins'; notes='Accept until Q3'; compliance=[pscustomobject]@{ HIPAA='164.308'; CIS='5.1' }; remediation=[pscustomobject]@{ status='Accepted Risk'; assigned='Jane'; due='2026-09-30' } }
             [pscustomobject]@{ id='EP02'; text='BitLocker'; severity='Critical'; status='N/A'; evidence='No TPM'; findings='N/A'; notes=''; compliance=[pscustomobject]@{ HIPAA='164.312' }; remediation=[pscustomobject]@{ status='Open'; assigned=''; due='' } }
@@ -517,6 +535,8 @@ Describe 'Evidence-grade compliance helpers (real functions via AST)' {
         $fc.assessed | Should -Be 2
         $fc.score | Should -Be 50   # 1 pass of 2 assessed; N/A excluded
         $fc.score_excludes_na | Should -BeTrue
+        $fc.manual_validation_required | Should -Be 1
+        ($fc.controls | Where-Object { $_.check_id -eq 'PS01' }).manual_validation_required | Should -BeTrue
         ($fc.controls | Where-Object { $_.check_id -eq 'IA01' }).observed_fact | Should -Be '12 DAs'
     }
 }
@@ -583,7 +603,7 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $script:AuditCategories = @{ 'Identity' = @{ Items = @(
             @{ ID='IA01'; Text='Priv groups'; Severity='Critical' }
             @{ ID='IA02'; Text='MFA'; Severity='High' }) } }
-        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.8'
+        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.9'
         $save1 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-01'; ScanTarget='DC'; Items=@{ IA01=@{Status='Fail';Findings='x';Evidence='y'}; IA02=@{Status='Pass'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $save2 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-14'; ScanTarget='DC'; Items=@{ IA01=@{Status='Pass'}; IA02=@{Status='Fail'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $s1 = Convert-SaveStateToSnapshot $save1

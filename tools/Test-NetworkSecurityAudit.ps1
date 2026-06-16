@@ -111,6 +111,8 @@ $frameworkBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:Fram
 $frameworkIds = @(Get-UniqueMatches -Text $frameworkBlock -Pattern "(?m)^\s*'([A-Z]{2}\d{2})'\s*=\s*@\{")
 $riskBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:RiskTiers\s*=\s*@\{' -EndPattern '\$script:RiskTierLabels'
 $riskIds = @(Get-UniqueMatches -Text $riskBlock -Pattern "'([A-Z]{2}\d{2})'\s*=\s*\d")
+$evidenceBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:CheckEvidenceManifest\s*=\s*@\{' -EndPattern 'function Get-CheckEvidenceMetadata'
+$evidenceIds = @(Get-UniqueMatches -Text $evidenceBlock -Pattern "(?m)^\s*'([A-Z]{2}\d{2})'\s*=\s*@\{")
 $frameworkChecksBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:FrameworkChecks\s*=\s*@\{' -EndPattern '# Helper: Get formatted compliance string'
 $frameworkCheckIds = @(Get-UniqueMatches -Text $frameworkChecksBlock -Pattern "'([A-Z]{2}\d{2})'")
 $d3fendBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:D3FendMap\s*=\s*@\{' -EndPattern '\$script:D3FendStages'
@@ -122,7 +124,13 @@ if (@($autoCheckIds).Count -ne 69) { Add-Failure "Expected 69 auto-check IDs, fo
 Compare-Set -Expected $catalogIds -Actual $autoCheckIds -Name 'AutoChecks'
 Compare-Set -Expected $catalogIds -Actual $frameworkIds -Name 'FrameworkMap'
 Compare-Set -Expected $catalogIds -Actual $riskIds -Name 'RiskTiers'
+Compare-Set -Expected $catalogIds -Actual $evidenceIds -Name 'CheckEvidenceManifest'
 Compare-Set -Expected $catalogIds -Actual $d3fendIds -Name 'D3FendMap'
+
+foreach ($field in 'EvidenceMode','AuthorityLevel','DataSources','InternetRequired','WritesPossible','DefaultRiskTier','ManualFollowUp') {
+    $count = [regex]::Matches($evidenceBlock, "$field\s*=").Count
+    if ($count -lt @($catalogIds).Count) { Add-Failure "CheckEvidenceManifest field $field appears $count times; expected one per catalog check." }
+}
 
 $profileUnknown = @($profileIds | Where-Object { $_ -notin $catalogIds } | Sort-Object)
 if (@($profileUnknown).Count -gt 0) { Add-Failure "ScanProfiles reference unknown IDs: $($profileUnknown -join ', ')" }
@@ -336,8 +344,8 @@ if ($scriptText -notmatch '\[switch\]\$Dashboard' -or $scriptText -notmatch 'fun
     Add-Failure 'Dashboard mode must expose -Dashboard, define Export-MultiClientDashboard, gate on $Dashboard, and filter to structured_findings exports.'
 }
 # NSA-008: evidence-grade compliance output.
-if ($scriptText -notmatch 'function Get-AuditExceptions' -or $scriptText -notmatch 'function Get-FrameworkControlSummary' -or $scriptText -notmatch 'exceptions     = Get-AuditExceptions' -or $scriptText -notmatch 'framework_controls = if' -or $scriptText -notmatch 'mapping_limitations' -or $scriptText -notmatch 'evidence_model' -or $scriptText -notmatch "assessment_method = 'Automated'" -or $scriptText -notmatch 'score_excludes_na') {
-    Add-Failure 'Evidence-grade output must define Get-AuditExceptions/Get-FrameworkControlSummary and emit exceptions, framework_controls, evidence_model, mapping_limitations, assessment_method, and score_excludes_na.'
+if ($scriptText -notmatch 'function Get-AuditExceptions' -or $scriptText -notmatch 'function Get-FrameworkControlSummary' -or $scriptText -notmatch 'function Get-CheckEvidenceMetadata' -or $scriptText -notmatch 'exceptions     = Get-AuditExceptions' -or $scriptText -notmatch 'framework_controls = if' -or $scriptText -notmatch 'mapping_limitations' -or $scriptText -notmatch 'evidence_model' -or $scriptText -notmatch 'assessment_method = \$evidenceMeta\.EvidenceMode' -or $scriptText -notmatch 'score_excludes_na' -or $scriptText -notmatch 'manual_validation_required' -or $scriptText -notmatch 'score_excluding_manual_evidence') {
+    Add-Failure 'Evidence-grade output must define evidence metadata helpers and emit exceptions, framework_controls, evidence_model, mapping_limitations, manifest-derived assessment_method, manual validation, and score_excludes_na metadata.'
 }
 if ($scriptText -notmatch 'Mapping limitations:</strong>') {
     Add-Failure 'HTML compliance report must include a mapping-limitations disclaimer.'
