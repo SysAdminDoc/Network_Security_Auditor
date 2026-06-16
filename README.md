@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.10.1-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.10.2-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
@@ -280,7 +280,7 @@ All 69 checks also map to MITRE D3FEND defensive techniques (v1.4.0). Reports sh
 
 ### CISA KEV Cross-Reference
 
-The EP04 patch compliance check automatically downloads the [CISA Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and cross-references it against detected Microsoft products on the system, flagging any actively exploited CVEs with remediation due dates.
+The EP04 patch compliance check automatically downloads the [CISA Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and cross-references it against detected Microsoft products on the system, flagging any actively exploited CVEs with remediation due dates. It also calls out CVE-2025-33073 Windows SMB Client remediation evidence and correlates missing June 2025+ patch state with SMB signing and AD delegation exposure.
 
 ### Active Directory IOC Detection
 
