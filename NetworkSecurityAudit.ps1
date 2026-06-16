@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.10.8 - Professional GUI Tool
+    Network Security Auditor v4.11.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -53,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.10.8
+    4.11.0
 #>
 param(
     [switch]$Silent,
@@ -88,13 +88,14 @@ param(
     [switch]$NoHistory,
     [int]$TrendDays = 90,
     [switch]$AlertPreview,
-    [int]$HistoryRetentionDays = 365
+    [int]$HistoryRetentionDays = 365,
+    [string]$BrandingConfig = ''
 )
 
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.10.8'
+$script:ProductVersion = '4.11.0'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.1'
@@ -235,6 +236,44 @@ $script:CliAlertPreview = $AlertPreview.IsPresent
 $script:CliHistoryRetentionDays = $HistoryRetentionDays
 $script:CliCloudAssessmentPaths = @($CloudAssessmentPath | Where-Object { $_ })
 $script:CloudAssessmentImports = @()
+$script:CliBrandingConfig = $BrandingConfig
+
+# ── White-Label Branding ────────────────────────────────────────────────────
+# Loads optional branding JSON for MSP/consultant white-label reports.
+# Config schema: company_name, tagline, logo_base64 or logo_path,
+# primary_color, accent_color, contact_name, contact_email, contact_phone,
+# website, footer_text, cover_page (bool).
+$script:Branding = $null
+if ($script:CliBrandingConfig -and (Test-Path $script:CliBrandingConfig -ErrorAction SilentlyContinue)) {
+    try {
+        $raw = Get-Content $script:CliBrandingConfig -Raw -Encoding UTF8
+        $cfg = $raw | ConvertFrom-Json
+        $logoData = ''
+        if ($cfg.logo_base64) {
+            $logoData = $cfg.logo_base64
+        } elseif ($cfg.logo_path -and (Test-Path $cfg.logo_path -ErrorAction SilentlyContinue)) {
+            $bytes = [System.IO.File]::ReadAllBytes($cfg.logo_path)
+            $ext = [System.IO.Path]::GetExtension($cfg.logo_path).TrimStart('.').ToLower()
+            $mime = switch ($ext) { 'svg' { 'image/svg+xml' } 'ico' { 'image/x-icon' } 'gif' { 'image/gif' } 'webp' { 'image/webp' } default { "image/$ext" } }
+            $logoData = "data:$mime;base64,$([Convert]::ToBase64String($bytes))"
+        }
+        $script:Branding = @{
+            CompanyName  = if ($cfg.company_name) { [string]$cfg.company_name } else { '' }
+            Tagline      = if ($cfg.tagline) { [string]$cfg.tagline } else { '' }
+            LogoData     = $logoData
+            PrimaryColor = if ($cfg.primary_color -match '^#[0-9a-fA-F]{3,8}$') { $cfg.primary_color } else { '' }
+            AccentColor  = if ($cfg.accent_color -match '^#[0-9a-fA-F]{3,8}$') { $cfg.accent_color } else { '' }
+            ContactName  = if ($cfg.contact_name) { [string]$cfg.contact_name } else { '' }
+            ContactEmail = if ($cfg.contact_email) { [string]$cfg.contact_email } else { '' }
+            ContactPhone = if ($cfg.contact_phone) { [string]$cfg.contact_phone } else { '' }
+            Website      = if ($cfg.website) { [string]$cfg.website } else { '' }
+            FooterText   = if ($cfg.footer_text) { [string]$cfg.footer_text } else { '' }
+            CoverPage    = if ($null -ne $cfg.cover_page) { [bool]$cfg.cover_page } else { $false }
+        }
+    } catch {
+        Write-Warning "Branding config parse failed: $_"
+    }
+}
 
 # ── Unified Write Manifest ───────────────────────────────────────────────────
 # Every persistent side effect (RMM field write, registry cache, host-modifying
@@ -5947,6 +5986,114 @@ $script:RiskTiers = @{
 }
 $script:RiskTierLabels = @{ 0='Read-Only'; 1='Remote Read'; 2='Probing'; 3='Modifying' }
 
+# Evidence mode metadata describes how much authority each check's evidence has.
+# It is intentionally keyed by check ID like RiskTiers/FrameworkMap so CI can
+# fail on catalog drift without executing host checks.
+$script:ManualEvidenceModes = @('Checklist','InterviewRequired','ExternalRequired')
+$script:CheckEvidenceManifest = @{
+    # Identity & Access
+    'IA01' = @{ EvidenceMode='Automated'; AuthorityLevel='Directory'; DataSources=@('Active Directory group membership','AdminCount attributes'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate each privileged account business justification.' }
+    'IA02' = @{ EvidenceMode='Automated'; AuthorityLevel='Directory'; DataSources=@('Active Directory service principal names','Password attributes','Group membership'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm service owners and documented rotation process.' }
+    'IA03' = @{ EvidenceMode='Heuristic'; AuthorityLevel='LocalHostSignals'; DataSources=@('RDP settings','WHfB/smart-card indicators','MFA agent inventory','ADFS service state'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Verify tenant MFA and VPN/RDG MFA with IdP or VPN console evidence.' }
+    'IA04' = @{ EvidenceMode='InterviewRequired'; AuthorityLevel='DirectoryAndBusinessRecords'; DataSources=@('Active Directory users','Last logon attributes','HR termination list'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Cross-reference active accounts against HR separation records.' }
+    'IA05' = @{ EvidenceMode='Automated'; AuthorityLevel='DirectoryPolicy'; DataSources=@('Default domain password policy','Fine-grained password policies'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Document compensating controls where rotation differs by policy.' }
+    'IA06' = @{ EvidenceMode='Checklist'; AuthorityLevel='ProcessAndTooling'; DataSources=@('Privileged access tooling inventory','PIM/PAM process evidence','Admin workflow interviews'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm JIT, vaulting, and session monitoring in the PAM/PIM console.' }
+    'IA07' = @{ EvidenceMode='Heuristic'; AuthorityLevel='Directory'; DataSources=@('Active Directory naming patterns','Account descriptions','Group membership'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Interview application owners to identify intentionally shared accounts.' }
+    'IA08' = @{ EvidenceMode='Heuristic'; AuthorityLevel='Directory'; DataSources=@('AD account expiration','Vendor naming patterns','Last logon attributes'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate current vendor sponsors, contracts, and access-review cadence.' }
+    'IA09' = @{ EvidenceMode='Heuristic'; AuthorityLevel='LocalHostSignals'; DataSources=@('RDP/VPN settings','Network adapters','Remote access software inventory','RMM indicators'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm Conditional Access, MFA, and approval controls in remote-access consoles.' }
+    'IA10' = @{ EvidenceMode='Automated'; AuthorityLevel='Directory'; DataSources=@('AD enabled state','Last logon attributes','Account age'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Review exceptions for service, break-glass, and seasonal accounts.' }
+    'IA11' = @{ EvidenceMode='Automated'; AuthorityLevel='DirectoryAndLocalPolicy'; DataSources=@('Kerberos encryption attributes','Domain controller policy','Service principal metadata'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate application compatibility before disabling legacy encryption.' }
+    'IA12' = @{ EvidenceMode='Automated'; AuthorityLevel='Directory'; DataSources=@('dMSA objects','OU ACLs','Delegated rights','Domain functional signals'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Review delegated OU owners before changing dMSA creation or migration rights.' }
+
+    # Endpoint Security
+    'EP01' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('Defender status','Security Center inventory','AV service state'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm third-party EDR policy health in the vendor console.' }
+    'EP02' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('BitLocker volume state','TPM/Secure Boot indicators'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm recovery-key escrow and exception handling.' }
+    'EP03' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostAndDirectory'; DataSources=@('SMB configuration','NTLM/LLMNR policy','delegation posture'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate phased rollout impact for SMB/NTLM hardening changes.' }
+    'EP04' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostAndPublicAdvisory'; DataSources=@('Installed hotfixes','OS lifecycle data','CISA KEV catalog'); InternetRequired=$true; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm vendor patch SLAs and app-specific patch evidence.' }
+    'EP05' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('Local services','registry policy','startup paths','Administrator Protection state'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate owner-approved exceptions for legacy installers or services.' }
+    'EP06' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('Windows Firewall profiles','local rules','network profile state'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm central firewall policy where local policy is managed externally.' }
+    'EP07' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostPolicy'; DataSources=@('AppLocker policy','WDAC indicators','Office macro policy'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate production allowlist coverage before enforcement.' }
+    'EP08' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('Credential Guard state','LSA protection','Secure Boot/TPM indicators'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm hardware readiness and exception groups.' }
+    'EP09' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('AutoRun policy','removable media policy','USB/storage indicators'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate business exceptions for removable media workflows.' }
+    'EP10' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostAndDirectory'; DataSources=@('OS version','lifecycle table','ESU indicators','domain computer inventory'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm ESU enrollment and application upgrade blockers.' }
+
+    # Logging & Monitoring
+    'LM01' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostPolicy'; DataSources=@('Audit policy','Security event log settings'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm domain GPO source for audited categories.' }
+    'LM02' = @{ EvidenceMode='Heuristic'; AuthorityLevel='LocalHostSignals'; DataSources=@('Agent/service inventory','event forwarding state','SIEM indicators'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate central SIEM/log aggregator ingestion in the platform console.' }
+    'LM03' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostPolicy'; DataSources=@('WEF subscriptions','PowerShell logging policy','process command-line policy'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm forwarded event coverage on collectors.' }
+    'LM04' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='NetworkDevice'; DataSources=@('Firewall logging settings','IDS/IPS console','syslog target'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Review firewall/IDS retention and alert samples.' }
+    'LM05' = @{ EvidenceMode='Heuristic'; AuthorityLevel='LocalHostSignals'; DataSources=@('Account lockout policy','recent failed logon events','alerting indicators'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate SIEM alert thresholds and notification owners.' }
+    'LM06' = @{ EvidenceMode='Checklist'; AuthorityLevel='ProcessAndTooling'; DataSources=@('FIM tool inventory','EDR/FIM policy evidence','critical path list'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm FIM scope and sample change alert evidence.' }
+    'LM07' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('Event log sizes','oldest retained events','retention settings'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate central retention period against policy/compliance needs.' }
+    'LM08' = @{ EvidenceMode='InterviewRequired'; AuthorityLevel='ProcessAndTooling'; DataSources=@('Alert routing','IR notification process','MDR/SIEM console evidence'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Walk through a recent alert or tabletop notification path.' }
+
+    # Network Architecture
+    'NA01' = @{ EvidenceMode='Heuristic'; AuthorityLevel='LocalHostAndNetwork'; DataSources=@('Local IP/subnet view','ARP/neighborhood signals','routing observations'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate VLAN and firewall topology against a network diagram.' }
+    'NA02' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='NetworkDevice'; DataSources=@('Switch VLAN configuration','Firewall inter-VLAN ACLs','site topology'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Review switch/firewall configuration exports.' }
+    'NA03' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='WirelessController'; DataSources=@('Wireless controller configuration','RADIUS/NAC settings','guest isolation tests'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm corporate/guest wireless segmentation from controller evidence.' }
+    'NA04' = @{ EvidenceMode='Checklist'; AuthorityLevel='Documentation'; DataSources=@('Network diagram','asset inventory','walkthrough observations'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Reconcile the diagram with observed cabling, VLANs, and WAN links.' }
+    'NA05' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='NetworkDevice'; DataSources=@('Switch port security','802.1X/NAC console','unused-port configuration'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate NAC enforcement and quarantine behavior.' }
+    'NA06' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='NetworkDevice'; DataSources=@('Management VLAN settings','admin ACLs','device management protocols'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm management access paths and break-glass process.' }
+    'NA07' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='NetworkDevice'; DataSources=@('Guest network ACLs','captive portal settings','client isolation test'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Test guest-to-internal isolation from a guest client.' }
+
+    # Network Perimeter
+    'NP01' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='FirewallConsole'; DataSources=@('Firewall rule export','change records','rule hit counts'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm owner, purpose, and expiration for broad or stale rules.' }
+    'NP02' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='ExternalScanner'; DataSources=@('External port scan','public exposure inventory','firewall NAT rules'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate each exposed port against business justification.' }
+    'NP03' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='VpnOrFirewallConsole'; DataSources=@('VPN configuration','routing table','MFA/IdP evidence'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm split-tunnel and MFA enforcement with VPN/IdP evidence.' }
+    'NP04' = @{ EvidenceMode='Automated'; AuthorityLevel='NetworkProbe'; DataSources=@('DNS server settings','filtered-domain lookup','egress DNS behavior'); InternetRequired=$true; WritesPossible=$false; DefaultRiskTier=2; ManualFollowUp='Confirm DNS filter policy categories and bypass controls.' }
+    'NP05' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='FirewallConsole'; DataSources=@('Outbound firewall rules','egress ACLs','proxy/DNS policy'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm outbound allowlist exceptions and business owners.' }
+    'NP06' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='FirewallConsole'; DataSources=@('Firewall rule comments','creation dates','change tickets'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Close or expire temporary/vendor rules that lack an active owner.' }
+    'NP07' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='FirewallOrIdsConsole'; DataSources=@('IDS/IPS signature status','sensor mode','alert review evidence'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate prevention mode, update cadence, and alert review ownership.' }
+    'NP08' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='FirewallConsole'; DataSources=@('TLS inspection policy','CA deployment','privacy exclusions'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm approved decryption scope and employee/privacy notices.' }
+    'NP09' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='FirewallConsole'; DataSources=@('NAT/PAT rules','external scan results','asset owner records'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate each port forward against current asset ownership and patch state.' }
+    'NP10' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='NetworkDevice'; DataSources=@('Firmware versions','vendor advisories','device inventory'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm upgrade plan for unsupported or vulnerable firmware.' }
+
+    # Backup & Recovery
+    'BR01' = @{ EvidenceMode='Heuristic'; AuthorityLevel='LocalHostSignals'; DataSources=@('Backup service inventory','scheduled tasks','backup software indicators'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate all critical assets in the backup console.' }
+    'BR02' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='BackupConsole'; DataSources=@('Backup repository configuration','immutability/offsite settings','storage policy'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm offline/immutable copy and restore credentials are protected.' }
+    'BR03' = @{ EvidenceMode='InterviewRequired'; AuthorityLevel='BackupConsoleAndBusinessRecords'; DataSources=@('Restore test evidence','backup job history','business validation'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Review last restore-test ticket and recovered object/system evidence.' }
+    'BR04' = @{ EvidenceMode='InterviewRequired'; AuthorityLevel='BusinessRecords'; DataSources=@('RTO/RPO statements','backup frequency','stakeholder interviews'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Resolve gaps between business RTO/RPO and backup capabilities.' }
+    'BR05' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='BackupConsole'; DataSources=@('Backup encryption settings','cloud backup policy','key storage evidence'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate encryption key custody and recovery process.' }
+    'BR06' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='BackupConsole'; DataSources=@('Backup job history','alert configuration','notification routing'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Verify recent failure alerts reached an accountable owner.' }
+    'BR07' = @{ EvidenceMode='Checklist'; AuthorityLevel='Documentation'; DataSources=@('DR plan','tabletop records','call tree','system priority list'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Walk through the DR plan and tabletop evidence with owners.' }
+    'BR08' = @{ EvidenceMode='ExternalRequired'; AuthorityLevel='SaaSBackupConsole'; DataSources=@('M365/Google backup console','SaaS retention policy','restore test'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm SaaS backup coverage, retention, and restore test scope.' }
+
+    # Common Findings
+    'CF01' = @{ EvidenceMode='Automated'; AuthorityLevel='Directory'; DataSources=@('AD privileged groups','LAPS/GPP/ADCS evidence','delegation data'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Prioritize validated domain-compromise paths with AD owners.' }
+    'CF02' = @{ EvidenceMode='Automated'; AuthorityLevel='NetworkProbe'; DataSources=@('SMB protocol settings','connectivity probes','legacy protocol indicators'); InternetRequired=$true; WritesPossible=$false; DefaultRiskTier=2; ManualFollowUp='Validate business need before disabling legacy protocols.' }
+    'CF03' = @{ EvidenceMode='InterviewRequired'; AuthorityLevel='ProcessAndTrainingRecords'; DataSources=@('Security awareness records','phishing simulation results','training cadence'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Review current training completion and phishing campaign metrics.' }
+    'CF04' = @{ EvidenceMode='Automated'; AuthorityLevel='DirectoryAndFileSystem'; DataSources=@('AD group membership','share permissions','ACL samples'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate data-owner approval before permission cleanup.' }
+    'CF05' = @{ EvidenceMode='Heuristic'; AuthorityLevel='LocalHostAndNetwork'; DataSources=@('SMB shares','share ACLs','anonymous access tests'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm legitimate open shares and sensitive data exposure.' }
+    'CF06' = @{ EvidenceMode='Heuristic'; AuthorityLevel='LocalHostSignals'; DataSources=@('Remote access services','listening ports','RMM software inventory'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate approved remote access inventory and owner list.' }
+    'CF07' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostAndDirectory'; DataSources=@('Local Administrators group','domain group nesting','admin account patterns'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate break-glass and application exceptions.' }
+    'CF08' = @{ EvidenceMode='Automated'; AuthorityLevel='NetworkProbeAndLocalHost'; DataSources=@('Patch state','software inventory','probe results','vulnerability process indicators'); InternetRequired=$true; WritesPossible=$false; DefaultRiskTier=2; ManualFollowUp='Confirm scanner coverage, remediation SLA, and accepted-risk exceptions.' }
+
+    # Policies & Standards
+    'PS01' = @{ EvidenceMode='Checklist'; AuthorityLevel='Documentation'; DataSources=@('Security policies','policy review dates','approval evidence'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Collect approved policy set and review/exception cadence.' }
+    'PS02' = @{ EvidenceMode='Checklist'; AuthorityLevel='Documentation'; DataSources=@('Acceptable use policy','employee acknowledgment records'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm current acknowledgement coverage with HR or LMS records.' }
+    'PS03' = @{ EvidenceMode='Checklist'; AuthorityLevel='Documentation'; DataSources=@('Incident response plan','playbooks','tabletop evidence'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate contact tree and last tabletop/incident after-action record.' }
+    'PS04' = @{ EvidenceMode='Checklist'; AuthorityLevel='Documentation'; DataSources=@('Compliance calendar','audit evidence','control owner list'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm recurring compliance monitoring cadence and owners.' }
+    'PS05' = @{ EvidenceMode='InterviewRequired'; AuthorityLevel='BusinessRecords'; DataSources=@('Risk register','business impact analysis','stakeholder interviews'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Review last formal risk assessment and accepted-risk approvals.' }
+    'PS06' = @{ EvidenceMode='Checklist'; AuthorityLevel='TrainingRecords'; DataSources=@('Training completion report','phishing simulation metrics','LMS records'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate completion rates and remediation for repeat clickers.' }
+}
+
+function Get-CheckEvidenceMetadata {
+    param([string]$CheckId)
+    if ($script:CheckEvidenceManifest.Contains($CheckId)) { return $script:CheckEvidenceManifest[$CheckId] }
+    $fallbackTier = if ($script:RiskTiers.Contains($CheckId)) { $script:RiskTiers[$CheckId] } else { 0 }
+    return @{
+        EvidenceMode='Unknown'; AuthorityLevel='Unknown'; DataSources=@()
+        InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=$fallbackTier
+        ManualFollowUp='Evidence metadata is missing; update CheckEvidenceManifest.'
+    }
+}
+
+function Test-ManualEvidenceRequired {
+    param([string]$CheckId)
+    $meta = Get-CheckEvidenceMetadata -CheckId $CheckId
+    return ($meta.EvidenceMode -in $script:ManualEvidenceModes)
+}
+
 # ── Category Risk Weights (for weighted scoring) ────────────────────────────
 $script:CategoryWeights = @{
     'Identity & Access'   = 1.5   # Most critical - keys to the kingdom
@@ -6280,20 +6427,36 @@ function Get-ComplianceString {
 
 # Framework-specific scoring: calculate pass/fail/partial per framework
 function Get-FrameworkScores {
-    param([string]$Framework = 'All')
+    param([string]$Framework = 'All', [switch]$ExcludeManualEvidence)
     $frameworks = if ($Framework -eq 'All') { $script:FrameworkMeta.Keys } else { @($Framework) }
     $scores = @{}
     foreach ($fw in $frameworks) {
         $checkIds = if ($script:FrameworkChecks.Contains($fw)) { $script:FrameworkChecks[$fw] } else { @() }
         $pass = 0; $fail = 0; $partial = 0; $na = 0; $notAssessed = 0
+        $manualRequired = 0
+        $autoPass = 0; $autoFail = 0; $autoPartial = 0; $autoNA = 0; $autoNotAssessed = 0
         foreach ($id in $checkIds) {
+            $manual = Test-ManualEvidenceRequired -CheckId $id
+            if ($manual) { $manualRequired++ }
             $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+            if (-not $manual) {
+                switch ($sv) { 'Pass' { $autoPass++ } 'Fail' { $autoFail++ } 'Partial' { $autoPartial++ } 'N/A' { $autoNA++ } default { $autoNotAssessed++ } }
+            }
+            if ($ExcludeManualEvidence -and $manual) { continue }
             switch ($sv) { 'Pass' { $pass++ } 'Fail' { $fail++ } 'Partial' { $partial++ } 'N/A' { $na++ } default { $notAssessed++ } }
         }
         $assessed = $pass + $fail + $partial
         $score = if ($assessed -gt 0) { [math]::Round(($pass + $partial * 0.5) / $assessed * 100) } else { 0 }
-        $total = $checkIds.Count
-        $scores[$fw] = @{ Pass=$pass; Fail=$fail; Partial=$partial; NA=$na; NotAssessed=$notAssessed; Assessed=$assessed; Total=$total; Score=$score }
+        $autoAssessed = $autoPass + $autoFail + $autoPartial
+        $autoScore = if ($autoAssessed -gt 0) { [math]::Round(($autoPass + $autoPartial * 0.5) / $autoAssessed * 100) } else { 0 }
+        $total = if ($ExcludeManualEvidence) { @($checkIds | Where-Object { -not (Test-ManualEvidenceRequired -CheckId $_) }).Count } else { $checkIds.Count }
+        $scores[$fw] = @{
+            Pass=$pass; Fail=$fail; Partial=$partial; NA=$na; NotAssessed=$notAssessed; Assessed=$assessed; Total=$total; Score=$score
+            ManualValidationRequired=$manualRequired
+            ScoreExcludingManual=$autoScore
+            AssessedExcludingManual=$autoAssessed
+            TotalExcludingManual=($checkIds.Count - $manualRequired)
+        }
     }
     return $scores
 }
@@ -10521,6 +10684,8 @@ tr:nth-child(even) td{background:rgba(15,23,42,0.3)}
 .comp{color:#94a3b8;font-size:10px;font-style:italic;margin-top:3px}
 .scan-ts{display:inline-block;background:#0c4a6e;color:#38bdf8;padding:0 6px;border-radius:4px;font-size:9px;font-weight:600;margin-left:4px}
 .scan-auto{display:inline-block;background:#14532d;color:#4ade80;padding:0 6px;border-radius:4px;font-size:9px;font-weight:600;margin-left:2px}
+.evmode{display:inline-block;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;border:1px solid #334155}
+.ev-auto{background:#14532d;color:#4ade80}.ev-heur{background:#0c4a6e;color:#38bdf8}.ev-manual{background:#78350f;color:#fbbf24}
 
 /* Preflight */
 .pfs{background:#1e293b;border-radius:8px;padding:16px;margin-bottom:14px;border-left:4px solid #a855f7}
@@ -10557,6 +10722,23 @@ th,td{padding:4px 6px;font-size:11px}
 /* Footer */
 .ftr{text-align:center;color:#475569;font-size:11px;margin-top:24px;padding-top:16px;border-top:1px solid #334155}
 
+/* Cover Page */
+.cover{page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;text-align:center;padding:60px 40px}
+.cover-logo{max-width:240px;max-height:120px;margin-bottom:32px}
+.cover h1{font-size:36px;font-weight:800;letter-spacing:-1px;margin-bottom:8px}
+.cover .cover-tagline{font-size:16px;color:#94a3b8;margin-bottom:40px}
+.cover .cover-client{font-size:20px;font-weight:700;margin-bottom:4px}
+.cover .cover-date{font-size:14px;color:#94a3b8;margin-bottom:40px}
+.cover .cover-meta{font-size:12px;color:#64748b;line-height:1.8}
+.cover .cover-meta a{color:#38bdf8}
+.cover .cover-divider{width:80px;height:3px;margin:24px auto;border-radius:2px}
+.cover .cover-conf{font-size:11px;color:#475569;margin-top:32px;font-style:italic}
+
+/* Branded header */
+.brand-bar{display:flex;align-items:center;gap:16px;margin-bottom:8px}
+.brand-bar img{max-height:36px;max-width:160px}
+.brand-bar .brand-name{font-size:14px;font-weight:700}
+
 /* Print */
 @media print{
 body{background:#fff;color:#111;padding:16px;font-size:11px}
@@ -10566,15 +10748,56 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 .find{background:#fffbeb;border-color:#f59e0b;color:#92400e}
 .bar-track{background:#e5e7eb}.ftr{color:#9ca3af}
 .score-ring svg text{fill:#111!important}
+.cover{min-height:95vh}
 }
 </style></head><body>
 "@
 
+    # ── COVER PAGE (white-label) ────────────────────────────────────────────
+    $brandPrimary = if ($script:Branding.PrimaryColor) { $script:Branding.PrimaryColor } else { '#0ea5e9' }
+    $brandAccent  = if ($script:Branding.AccentColor) { $script:Branding.AccentColor } else { $overallColor }
+    if ($script:Branding -and $script:Branding.CoverPage) {
+        $html += "<div class='cover'>`n"
+        if ($script:Branding.LogoData) {
+            $html += "<img class='cover-logo' src='$($script:Branding.LogoData)' alt='$([System.Net.WebUtility]::HtmlEncode($script:Branding.CompanyName))' />`n"
+        }
+        $coverTitle = if ($script:Branding.CompanyName) { $script:Branding.CompanyName } else { $script:ProductName }
+        $html += "<h1 style='color:$brandPrimary'>$([System.Net.WebUtility]::HtmlEncode($coverTitle))</h1>`n"
+        if ($script:Branding.Tagline) {
+            $html += "<div class='cover-tagline'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.Tagline))</div>`n"
+        }
+        $html += "<div class='cover-divider' style='background:$brandPrimary'></div>`n"
+        $html += "<div class='cover-client'>Security Assessment Report</div>`n"
+        $html += "<div class='cover-client'>$([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))</div>`n"
+        $html += "<div class='cover-date'>$([System.Net.WebUtility]::HtmlEncode($state.Date))</div>`n"
+        $contactLines = @()
+        if ($script:Branding.ContactName) { $contactLines += "Prepared by: $([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactName))" }
+        if ($script:Branding.ContactEmail) { $contactLines += "Email: <a href='mailto:$([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactEmail))'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactEmail))</a>" }
+        if ($script:Branding.ContactPhone) { $contactLines += "Phone: $([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactPhone))" }
+        if ($script:Branding.Website) { $contactLines += "Web: <a href='$([System.Net.WebUtility]::HtmlEncode($script:Branding.Website))'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.Website))</a>" }
+        if ($contactLines.Count -gt 0) {
+            $html += "<div class='cover-meta'>$($contactLines -join '<br/>')</div>`n"
+        }
+        $confText = if ($script:Branding.FooterText) { $script:Branding.FooterText } else { 'Confidential - For authorized recipients only' }
+        $html += "<div class='cover-conf'>$([System.Net.WebUtility]::HtmlEncode($confText))</div>`n"
+        $html += "</div>`n"
+    }
+
     # ── HEADER ───────────────────────────────────────────────────────────────
+    $brandedTitle = if ($script:Branding.CompanyName) { "$($script:Branding.CompanyName) - Security Assessment" } else { "$($script:ProductName) Report" }
+    $brandedSub = if ($script:Branding.FooterText) { $script:Branding.FooterText } else { "Confidential - Prepared for $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))" }
     $html += @"
-<div class="hdr">
-<h1>$([System.Net.WebUtility]::HtmlEncode($script:ProductName)) Report</h1>
-<div class="sub">Confidential - Prepared for $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))</div>
+<div class="hdr"$(if($script:Branding.PrimaryColor){" style='border-color:$brandPrimary'"})>
+$(if($script:Branding.PrimaryColor){"<style>.hdr::before{background:linear-gradient(90deg,$brandPrimary,$brandAccent)!important}</style>"})
+$(if($script:Branding){
+    $brandHtml = "<div class='brand-bar'>"
+    if($script:Branding.LogoData){ $brandHtml += "<img src='$($script:Branding.LogoData)' alt='$([System.Net.WebUtility]::HtmlEncode($script:Branding.CompanyName))' />" }
+    if($script:Branding.CompanyName){ $brandHtml += "<span class='brand-name' style='color:$brandPrimary'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.CompanyName))</span>" }
+    $brandHtml += "</div>"
+    $brandHtml
+})
+<h1>$([System.Net.WebUtility]::HtmlEncode($brandedTitle))</h1>
+<div class="sub">$brandedSub</div>
 <div class="meta-grid">
 <div>Client: <strong>$([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))</strong></div>
 <div>Auditor: <strong>$([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Auditor 'AUDITOR')))</strong></div>
@@ -10614,7 +10837,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 <div class="stat-card"><div class="num" style="color:#475569">$not2</div><div class="lbl">Not Assessed</div></div>
 </div>
 <div class="scan-info" style="margin-top:10px">
-<strong>Scan Coverage:</strong> $scannedCount of $autoAvail auto-checks executed | <strong>$autoAvail of $tot2</strong> items have auto-discovery | Generated: <strong>$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')</strong>
+<strong>Scan Coverage:</strong> $scannedCount of $autoAvail auto-checks executed | <strong>$autoAvail of $tot2</strong> items have auto-discovery | Manual validation items: <strong>$(@($script:CheckEvidenceManifest.Values | Where-Object { $_.EvidenceMode -in $script:ManualEvidenceModes }).Count)</strong> | Generated: <strong>$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')</strong>
 </div>
 <div class="scan-info" style="border-left:3px solid #6366f1">
 <strong style="color:#818cf8">Environment:</strong> $([System.Net.WebUtility]::HtmlEncode($script:Env.OSCaption)) | $(if($script:Env.IsDomainJoined){"Domain: $([System.Net.WebUtility]::HtmlEncode($script:Env.DomainName))"}else{'Workgroup'}) | $(if($script:Env.IsAdmin){'Administrator'}else{'Standard User'}) | PS $($script:Env.PSVersion) | Modules: $(if($script:Env.InstalledModules.Count -gt 0){$script:Env.InstalledModules -join ', '}else{'None'})
@@ -10662,7 +10885,10 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 <span class="s-na">N/A</span> = not applicable |
 <span class="s-not">Not Assessed</span> = not yet evaluated |
 <span class="ck-y">[X]</span> = checked |
-<span class="ck-n">[ ]</span> = unchecked
+<span class="ck-n">[ ]</span> = unchecked |
+<span class="evmode ev-auto">Automated</span> machine-collected |
+<span class="evmode ev-heur">Heuristic</span> inferred |
+<span class="evmode ev-manual">Manual</span> checklist/interview/external evidence required
 </div>
 "@
 
@@ -10725,6 +10951,9 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
             $html += "<div class='fw-name' style='color:$($meta.Color)'>$($meta.Short)</div>"
             $html += "<div class='fw-score' style='color:$scColor'>$($sc.Score)%</div>"
             $html += "<div class='fw-detail'>$($sc.Pass)P / $($sc.Fail)F / $($sc.Partial)Pt of $($sc.Total)</div>"
+            if ($sc.ManualValidationRequired -gt 0) {
+                $html += "<div class='fw-detail'>$($sc.ManualValidationRequired) manual-validation controls | Auto-only $($sc.ScoreExcludingManual)%</div>"
+            }
             $html += "</div>`n"
         }
         $html += "</div></div>`n"
@@ -11086,7 +11315,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
             $html += "<span style='font-size:12px;color:#94a3b8;font-weight:400'>($($cs.Pass+$cs.Fail+$cs.Partial)/$($cs.Total) assessed, Score: $($cs.Score)%)</span> "
             $html += "<span class='tier-label' style='background:#0ea5e922;color:#38bdf8;border:1px solid #0ea5e944'>TECHNICAL</span></h2>`n"
             $html += "<div class='d'>$([System.Net.WebUtility]::HtmlEncode($cat.Desc))</div>`n"
-            $html += "<table><tr><th style='width:28px'>OK</th><th style='width:70px'>ID</th><th>Item</th><th style='width:55px'>Sev</th><th style='width:50px'>Tier</th><th style='width:90px'>Status</th><th>Details</th><th style='width:120px'>Remediation</th></tr>`n"
+            $html += "<table><tr><th style='width:28px'>OK</th><th style='width:70px'>ID</th><th>Item</th><th style='width:55px'>Sev</th><th style='width:50px'>Tier</th><th style='width:105px'>Evidence</th><th style='width:90px'>Status</th><th>Details</th><th style='width:120px'>Remediation</th></tr>`n"
 
             foreach($it in $cat.Items){
                 $id=$it.ID; $cm=if($script:CheckStates[$id]){"<span class='ck-y'>[X]</span>"}else{"<span class='ck-n'>[ ]</span>"}
@@ -11099,6 +11328,10 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                 $tierCls = "t$riskTier"
                 $tierLbl = $script:RiskTierLabels[$riskTier]
                 $tierHtml = "<span class='tier-badge $tierCls'>T$riskTier $tierLbl</span>"
+                $evidenceMeta = Get-CheckEvidenceMetadata -CheckId $id
+                $manualEvidence = Test-ManualEvidenceRequired -CheckId $id
+                $evCls = if ($evidenceMeta.EvidenceMode -eq 'Automated') { 'ev-auto' } elseif ($evidenceMeta.EvidenceMode -eq 'Heuristic') { 'ev-heur' } else { 'ev-manual' }
+                $evidenceHtml = "<span class='evmode $evCls'>$([System.Net.WebUtility]::HtmlEncode($evidenceMeta.EvidenceMode))</span><div class='comp'>$([System.Net.WebUtility]::HtmlEncode($evidenceMeta.AuthorityLevel))</div>"
 
                 # ID column with scan indicators and deep-link anchor
                 $idHtml = "<a id='chk-$id' style='text-decoration:none;color:inherit'><strong>$id</strong></a>"
@@ -11124,6 +11357,9 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                     $detHtml += "<div class='ev'>Evidence: $evidEnc</div>"
                 }
                 # Enhanced compliance display: built-in + extended framework data
+                if ($manualEvidence) {
+                    $detHtml += "<div class='comp' style='color:#fbbf24'>Manual validation required: $([System.Net.WebUtility]::HtmlEncode($evidenceMeta.ManualFollowUp))</div>"
+                }
                 if ($comp) { $detHtml += "<div class='comp'>$comp</div>" }
                 $fwData = if ($script:FrameworkMap.Contains($id)) { $script:FrameworkMap[$id] } else { $null }
                 if ($fwData) {
@@ -11163,7 +11399,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
                 if($due){$remHtml+="<div class='rem'>Due: $due</div>"}
 
                 $html += "<tr><td>$cm</td><td>$idHtml</td><td>$([System.Net.WebUtility]::HtmlEncode($it.Text))</td>"
-                $html += "<td><span class='badge $bc2'>$($it.Severity)</span></td><td>$tierHtml</td><td><span class='$sc2'>$sv6</span></td>"
+                $html += "<td><span class='badge $bc2'>$($it.Severity)</span></td><td>$tierHtml</td><td>$evidenceHtml</td><td><span class='$sc2'>$sv6</span></td>"
                 $html += "<td>$detHtml</td><td>$remHtml</td></tr>`n"
             }
             $html += "</table></div>`n"
@@ -11171,7 +11407,16 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
     }
 
     $fwLabel = if ($script:ComplianceTarget -eq 'All') { 'All Frameworks' } else { $script:FrameworkMeta[$script:ComplianceTarget].Name }
-    $html += "<div class='ftr'>Generated by $([System.Net.WebUtility]::HtmlEncode($script:ProductDisplayName)) | $(Get-Date -Format 'yyyy-MM-dd HH:mm') | Profile: $profName | Framework: $fwLabel | $scannedCount auto-checks on $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $scanTarget 'HOST'))) | Read-Only: $roMode</div></body></html>"
+    $ftrBrand = if ($script:Branding.CompanyName) { "$([System.Net.WebUtility]::HtmlEncode($script:Branding.CompanyName)) | " } else { '' }
+    $ftrCustom = if ($script:Branding.FooterText) { "<div style='margin-top:4px;font-style:italic'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.FooterText))</div>" } else { '' }
+    $ftrContact = ''
+    if ($script:Branding.ContactEmail -or $script:Branding.Website) {
+        $parts = @()
+        if ($script:Branding.ContactEmail) { $parts += "<a href='mailto:$([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactEmail))'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactEmail))</a>" }
+        if ($script:Branding.Website) { $parts += "<a href='$([System.Net.WebUtility]::HtmlEncode($script:Branding.Website))'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.Website))</a>" }
+        $ftrContact = "<div style='margin-top:2px'>$($parts -join ' | ')</div>"
+    }
+    $html += "<div class='ftr'>${ftrBrand}Generated by $([System.Net.WebUtility]::HtmlEncode($script:ProductDisplayName)) | $(Get-Date -Format 'yyyy-MM-dd HH:mm') | Profile: $profName | Framework: $fwLabel | $scannedCount auto-checks on $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $scanTarget 'HOST'))) | Read-Only: $roMode${ftrCustom}${ftrContact}</div></body></html>"
     $html | Set-Content $outPath -Encoding UTF8
     $el['StatusText'].Text = "Exported: $outPath"; Write-Log "HTML exported: $outPath (Tier: $Tier)" 'INFO'
     if ($OpenAfter) { Start-Process $outPath }
@@ -11355,16 +11600,24 @@ function Get-FrameworkControlSummary {
     $byId = @{}
     foreach ($f in @($Findings)) { if ($f.id) { $byId[[string]$f.id] = $f } }
     $controls = @(); $pass=0; $fail=0; $partial=0; $na=0; $notAssessed=0
+    $manualRequired = 0
     foreach ($id in $ids) {
         $f = if ($byId.Contains($id)) { $byId[$id] } else { $null }
         $st = if ($f) { [string]$f.status } else { 'Not Assessed' }
         switch ($st) { 'Pass' {$pass++} 'Fail' {$fail++} 'Partial' {$partial++} 'N/A' {$na++} default {$notAssessed++} }
         $ctrl = if ($f -and $f.compliance -and $f.compliance.PSObject.Properties[$Framework]) { [string]$f.compliance.$Framework } else { '' }
+        $evidenceMeta = Get-CheckEvidenceMetadata -CheckId $id
+        $manual = Test-ManualEvidenceRequired -CheckId $id
+        if ($manual) { $manualRequired++ }
         $controls += [ordered]@{
             check_id      = $id
             control       = $ctrl
             status        = $st
             severity      = if ($f) { $f.severity } else { '' }
+            evidence_mode = $evidenceMeta.EvidenceMode
+            authority_level = $evidenceMeta.AuthorityLevel
+            manual_validation_required = $manual
+            manual_follow_up = $evidenceMeta.ManualFollowUp
             observed_fact = if ($f) { [string]$f.evidence } else { '' }
             narrative     = if ($f) { [string]$f.findings } else { '' }
         }
@@ -11375,6 +11628,7 @@ function Get-FrameworkControlSummary {
         framework          = $Framework
         score              = $score
         score_excludes_na  = $true
+        manual_validation_required = $manualRequired
         pass = $pass; fail = $fail; partial = $partial; na = $na; not_assessed = $notAssessed
         total = @($ids).Count; assessed = $assessed
         controls = $controls
@@ -11440,6 +11694,8 @@ function Export-FindingsJSON {
             $rawFindings = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
             $rawEvidence = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
             $rawNotes    = if ($script:NotesBoxes[$id]) { $script:NotesBoxes[$id].Text } else { '' }
+            $evidenceMeta = Get-CheckEvidenceMetadata -CheckId $id
+            $manualEvidence = Test-ManualEvidenceRequired -CheckId $id
             $finding = [ordered]@{
                 id            = $id
                 category      = $cn
@@ -11447,7 +11703,17 @@ function Export-FindingsJSON {
                 weight        = $item.Weight
                 status        = $sv
                 text          = $item.Text
-                assessment_method = 'Automated'
+                assessment_method = $evidenceMeta.EvidenceMode
+                evidence_metadata = [ordered]@{
+                    evidence_mode = $evidenceMeta.EvidenceMode
+                    authority_level = $evidenceMeta.AuthorityLevel
+                    data_sources = @($evidenceMeta.DataSources)
+                    internet_required = [bool]$evidenceMeta.InternetRequired
+                    writes_possible = [bool]$evidenceMeta.WritesPossible
+                    default_risk_tier = [int]$evidenceMeta.DefaultRiskTier
+                    manual_follow_up = $evidenceMeta.ManualFollowUp
+                    manual_validation_required = $manualEvidence
+                }
                 findings      = ConvertTo-RedactedText $rawFindings
                 evidence      = ConvertTo-RedactedText $rawEvidence
                 notes         = ConvertTo-RedactedText $rawNotes
@@ -11478,6 +11744,10 @@ function Export-FindingsJSON {
                 na        = $s.NA
                 total     = $s.Total; assessed = $s.Assessed
                 score_excludes_na = $true
+                manual_validation_required = $s.ManualValidationRequired
+                score_excluding_manual_evidence = $s.ScoreExcludingManual
+                assessed_excluding_manual_evidence = $s.AssessedExcludingManual
+                total_excluding_manual_evidence = $s.TotalExcludingManual
             }
         }
     } catch {}
@@ -11515,6 +11785,15 @@ function Export-FindingsJSON {
             join_type   = $script:Env.JoinType
             intune      = $script:Env.IntuneManaged
         }
+        branding       = if ($script:Branding) {
+            [ordered]@{
+                company_name  = $script:Branding.CompanyName
+                contact_name  = $script:Branding.ContactName
+                contact_email = $script:Branding.ContactEmail
+                website       = $script:Branding.Website
+                has_logo      = [bool]$script:Branding.LogoData
+            }
+        } else { $null }
         score          = [ordered]@{
             overall    = $riskData.Pct
             grade      = $riskData.Grade
@@ -11545,7 +11824,9 @@ function Export-FindingsJSON {
         evidence_model = [ordered]@{
             observed_fact = 'The "evidence" field on each finding is the machine-collected observed fact.'
             narrative     = 'The "findings" field is the human-readable narrative/assessment summary.'
-            note          = 'Framework scores exclude N/A controls from the denominator.'
+            evidence_modes = @('Automated','Heuristic','Checklist','InterviewRequired','ExternalRequired')
+            manual_validation_modes = $script:ManualEvidenceModes
+            note          = 'Framework scores exclude N/A controls from the denominator and include manual/checklist/external-required checks by default; score_excluding_manual_evidence is provided for automated-only consumers.'
         }
         mapping_limitations = 'Compliance mappings are assessment support, not certification. Some controls (physical security, backup/DR documentation, and policy/process) rely on heuristic or checklist evidence and require manual validation; automated checks collect machine-verifiable evidence only.'
         exceptions     = Get-AuditExceptions -Findings $findings
@@ -11638,6 +11919,8 @@ function Export-FindingsJSONL {
             $fwData = if ($script:FrameworkMap.Contains($id)) { $script:FrameworkMap[$id] } else { $null }
             $mitreData = if ($script:MitreMap.Contains($id)) { $script:MitreMap[$id] } else { $null }
             $d3fendData = if ($script:D3FendMap.Contains($id)) { $script:D3FendMap[$id] } else { $null }
+            $evidenceMeta = Get-CheckEvidenceMetadata -CheckId $id
+            $manualEvidence = Test-ManualEvidenceRequired -CheckId $id
             $findingsText = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
             $evidenceText = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
             $findingsTruncated = ($findingsText.Length -gt 4000)
@@ -11667,6 +11950,14 @@ function Export-FindingsJSONL {
                 weight          = $item.Weight
                 status          = $sv
                 description     = $item.Text
+                evidence_mode   = $evidenceMeta.EvidenceMode
+                authority_level = $evidenceMeta.AuthorityLevel
+                data_sources    = @($evidenceMeta.DataSources)
+                internet_required = [bool]$evidenceMeta.InternetRequired
+                writes_possible = [bool]$evidenceMeta.WritesPossible
+                default_risk_tier = [int]$evidenceMeta.DefaultRiskTier
+                manual_validation_required = $manualEvidence
+                manual_follow_up = $evidenceMeta.ManualFollowUp
                 findings        = $findingsForExport
                 findings_truncated = $findingsTruncated
                 findings_original_length = $findingsText.Length
@@ -12033,6 +12324,8 @@ function Export-FindingsCSV {
             $fwData = if ($script:FrameworkMap.Contains($id)) { $script:FrameworkMap[$id] } else { $null }
             $mitreData = if ($script:MitreMap.Contains($id)) { $script:MitreMap[$id] } else { $null }
             $d3fendData = if ($script:D3FendMap.Contains($id)) { $script:D3FendMap[$id] } else { $null }
+            $evidenceMeta = Get-CheckEvidenceMetadata -CheckId $id
+            $manualEvidence = Test-ManualEvidenceRequired -CheckId $id
 
             # Risk priority = severity numeric * weight (for sorting/filtering)
             $sevNum = switch($item.Severity) { 'Critical'{4} 'High'{3} 'Medium'{2} 'Low'{1} default{0} }
@@ -12063,6 +12356,14 @@ function Export-FindingsCSV {
                 RiskPriority     = $riskPriority
                 Status           = ConvertTo-CsvSafeText $sv
                 Description      = ConvertTo-CsvSafeText $item.Text
+                EvidenceMode     = ConvertTo-CsvSafeText $evidenceMeta.EvidenceMode
+                AuthorityLevel   = ConvertTo-CsvSafeText $evidenceMeta.AuthorityLevel
+                DataSources      = ConvertTo-CsvSafeText (@($evidenceMeta.DataSources) -join '; ')
+                InternetRequired = [bool]$evidenceMeta.InternetRequired
+                WritesPossible   = [bool]$evidenceMeta.WritesPossible
+                DefaultRiskTier  = [int]$evidenceMeta.DefaultRiskTier
+                ManualValidationRequired = $manualEvidence
+                ManualFollowUp   = ConvertTo-CsvSafeText $evidenceMeta.ManualFollowUp
                 Findings         = ConvertTo-CsvSafeText (ConvertTo-RedactedText $(if ($script:FindingsBoxes[$id]) { ($script:FindingsBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }))
                 Evidence         = ConvertTo-CsvSafeText (ConvertTo-RedactedText $(if ($script:EvidenceBoxes[$id]) { ($script:EvidenceBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }))
                 Notes            = ConvertTo-CsvSafeText (ConvertTo-RedactedText $(if ($script:NotesBoxes[$id]) { ($script:NotesBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }))
@@ -12118,6 +12419,14 @@ function Export-FindingsCSV {
             RiskPriority     = 0
             Status           = ConvertTo-CsvSafeText $cloud.status
             Description      = ConvertTo-CsvSafeText $cloud.name
+            EvidenceMode     = ConvertTo-CsvSafeText 'ExternalRequired'
+            AuthorityLevel   = ConvertTo-CsvSafeText 'CloudAssessment'
+            DataSources      = ConvertTo-CsvSafeText $cloud.assessment_source
+            InternetRequired = $true
+            WritesPossible   = $false
+            DefaultRiskTier  = 0
+            ManualValidationRequired = $false
+            ManualFollowUp   = ''
             Findings         = ConvertTo-CsvSafeText ($cloud.evidence -replace "`r?`n",' ;; ')
             Evidence         = ConvertTo-CsvSafeText ($cloud.evidence -replace "`r?`n",' ;; ')
             Notes            = ''
@@ -12190,7 +12499,12 @@ function Export-ComplianceSummary {
         foreach ($item in $script:AuditCategories[$cn].Items) {
             $sv = if ($script:StatusCombos[$item.ID] -and $script:StatusCombos[$item.ID].SelectedItem) { $script:StatusCombos[$item.ID].SelectedItem.ToString() } else { 'Not Assessed' }
             if ($sv -eq 'Fail' -and $item.Severity -in @('Critical','High')) {
-                $critFindings += [ordered]@{ id=$item.ID; severity=$item.Severity; text=$item.Text; category=$cn }
+                $evidenceMeta = Get-CheckEvidenceMetadata -CheckId $item.ID
+                $critFindings += [ordered]@{
+                    id=$item.ID; severity=$item.Severity; text=$item.Text; category=$cn
+                    evidence_mode=$evidenceMeta.EvidenceMode
+                    manual_validation_required=(Test-ManualEvidenceRequired -CheckId $item.ID)
+                }
             }
         }
     }
@@ -12206,6 +12520,8 @@ function Export-ComplianceSummary {
                 score     = $s.Score
                 grade     = ConvertTo-LetterGrade $s.Score
                 gap_count = $s.Fail + $s.Partial
+                manual_validation_required = $s.ManualValidationRequired
+                score_excluding_manual_evidence = $s.ScoreExcludingManual
             }
         }
     } catch {}
@@ -12239,6 +12555,10 @@ function Export-ComplianceSummary {
         framework_compliance = $fwFlags
         critical_findings = $critFindings
         cloud_assessments = $cloudSummary
+        evidence_model = [ordered]@{
+            manual_validation_modes = $script:ManualEvidenceModes
+            note = 'Framework scores include checklist/interview/external-required controls by default; score_excluding_manual_evidence is provided where consumers need automated-only scoring.'
+        }
         critical_count = $critFindings.Count
         total_checks   = ($script:AuditCategories.Values | ForEach-Object { $_.Items.Count } | Measure-Object -Sum).Sum
         pass_count     = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Pass' }).Count
@@ -12264,6 +12584,7 @@ function Export-SARIF {
             $id = $item.ID
             $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
             $d3fendData = if ($script:D3FendMap.Contains($id)) { $script:D3FendMap[$id] } else { $null }
+            $evidenceMeta = Get-CheckEvidenceMetadata -CheckId $id
             $rules += [ordered]@{
                 id = $id
                 name = $item.Text.Substring(0, [math]::Min(100, $item.Text.Length))
@@ -12273,6 +12594,9 @@ function Export-SARIF {
                     severity = $item.Severity
                     category = $cn
                     weight = $item.Weight
+                    evidence_mode = $evidenceMeta.EvidenceMode
+                    authority_level = $evidenceMeta.AuthorityLevel
+                    manual_validation_required = (Test-ManualEvidenceRequired -CheckId $id)
                     d3fend_version = if ($d3fendData) { $script:ExternalVersions.D3FEND } else { '' }
                     d3fend_stages = if ($d3fendData) { $d3fendData.Stages } else { @() }
                     d3fend_techniques = if ($d3fendData) { $d3fendData.Techniques } else { @() }
@@ -12299,6 +12623,9 @@ function Export-SARIF {
                     properties = @{
                         status = $sv
                         category = $cn
+                        evidence_mode = $evidenceMeta.EvidenceMode
+                        authority_level = $evidenceMeta.AuthorityLevel
+                        manual_validation_required = (Test-ManualEvidenceRequired -CheckId $id)
                         d3fend_version = if ($d3fendData) { $script:ExternalVersions.D3FEND } else { '' }
                         d3fend_stages = if ($d3fendData) { $d3fendData.Stages } else { @() }
                         d3fend_techniques = if ($d3fendData) { $d3fendData.Techniques } else { @() }
@@ -12637,6 +12964,9 @@ if ($script:SilentMode) {
     if ($idx -ge 0) { $el['cboProfile'].SelectedIndex = $idx }
 
     Write-Host "[Silent Mode] Client: $clientName | Auditor: $auditorName"
+    if ($script:Branding) {
+        Write-Host "[Silent Mode] Branding: $($script:Branding.CompanyName)$(if($script:Branding.LogoData){' [logo]'})$(if($script:Branding.CoverPage){' [cover page]'})"
+    }
     Write-Host "[Silent Mode] Environment: $($script:Env.OSCaption) | Domain: $($script:Env.IsDomainJoined) | Admin: $($script:Env.IsAdmin)"
     if ($script:ElevationFailed) {
         Write-Host "[Silent Mode] WARNING: UAC elevation was declined - running without admin privileges" -ForegroundColor Yellow

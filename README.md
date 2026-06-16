@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.10.8-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.11.0-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
@@ -387,17 +387,24 @@ Automatic platform detection and field population:
 | Format | File | Use Case |
 |--------|------|----------|
 | HTML | `SecurityAudit_*.html` | Human-readable report with all three tiers |
-| JSON | `*_findings.json` | Per-finding structured data with compliance, ATT&CK, and D3FEND metadata, an `exceptions` list (accepted-risk/deferred items with owner, expiration, and rationale), per-framework control summaries, observed-fact/narrative separation, and write disclosure |
-| JSONL | `*_siem.jsonl` | One event per finding for Splunk/Elastic/Sentinel with truncation and D3FEND fields |
+| JSON | `*_findings.json` | Per-finding structured data with compliance, ATT&CK, D3FEND, evidence-mode metadata, an `exceptions` list (accepted-risk/deferred items with owner, expiration, and rationale), per-framework control summaries, observed-fact/narrative separation, and write disclosure |
+| JSONL | `*_siem.jsonl` | One event per finding for Splunk/Elastic/Sentinel with truncation, evidence-mode, and D3FEND fields |
 | Run Log JSONL | `*_runlog.jsonl` | Per-check timing, timeout, skip reason, error, and slow-check metadata |
-| CSV | `*.csv` | Pivot table analysis with compliance, ATT&CK, and D3FEND columns |
-| SARIF | `*.sarif` | Static Analysis Results Interchange Format with D3FEND rule properties |
+| CSV | `*.csv` | Pivot table analysis with compliance, ATT&CK, D3FEND, and evidence-mode columns |
+| SARIF | `*.sarif` | Static Analysis Results Interchange Format with D3FEND and evidence-mode rule properties |
 | PDF | `*.pdf` | Portable report via Edge/Chrome headless rendering |
 | Intune | `*_intune.json` | Device compliance discovery script for Conditional Access |
 | Compliance Summary | `*_summary.json` | Compact RMM dashboard payload |
 | ATT&CK Navigator | `*_navigator.json` | MITRE ATT&CK Navigator v4.5 layer with technique scoring |
 | OCSF | `*_ocsf.jsonl` | OCSF v1.8.0 Security Finding events for vendor-neutral SIEM/MDR |
 | OSCAL | `*_oscal.json` | NIST OSCAL v1.2.2 assessment results for GRC and FedRAMP |
+
+Reports and exports label each check as `Automated`, `Heuristic`, `Checklist`,
+`InterviewRequired`, or `ExternalRequired`. Framework scores keep the existing
+default scoring behavior but also expose manual-validation counts and an
+automated-only `score_excluding_manual_evidence` value for consumers that need
+to separate machine-collected evidence from checklist, interview, or external
+console evidence.
 
 ---
 
