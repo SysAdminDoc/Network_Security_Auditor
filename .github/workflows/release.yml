@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Validate version tag format
         shell: powershell
@@ -61,6 +61,6 @@ jobs:
             --generate-notes
 
       - name: Attest release artifact
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: NetworkSecurityAudit.ps1
