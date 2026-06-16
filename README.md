@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.10.2-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.10.3-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
@@ -126,18 +126,22 @@ Every check runs in an isolated runspace with timeout protection. Results includ
 |----|-------|----------|
 | IA01 | Privileged Groups + Delegation | Critical |
 | IA02 | Service Accounts + Kerberoast Risk | Critical |
-| IA03 | MFA Coverage | Critical |
+| IA03 | Local MFA / Strong Auth Signals | Critical |
 | IA04 | Terminated Employee Accounts | Critical |
 | IA05 | Password Policy | High |
 | IA06 | PAM / Privileged Access (LAPS) | High |
 | IA07 | Shared/Generic Accounts | Medium |
 | IA08 | Guest/Vendor Account Lifecycle | Medium |
-| IA09 | Conditional Access / Remote Access | Medium |
+| IA09 | Remote Access / RMM Exposure | Medium |
 | IA10 | Stale/Inactive Accounts (90+ days) | High |
 | IA11 | Kerberos RC4/DES Deprecation Readiness | High |
 | IA12 | BadSuccessor / dMSA Privilege Escalation Exposure | Critical |
 
 </details>
+
+`IA03` and `IA09` are local/remote-access indicator checks. They do not prove
+tenant-wide Entra MFA or Conditional Access policy coverage; use cloud assessment
+imports or future Graph-backed checks for tenant proof.
 
 <details>
 <summary><strong>Endpoint Security (10 checks)</strong></summary>

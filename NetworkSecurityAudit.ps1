@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.10.2 - Professional GUI Tool
+    Network Security Auditor v4.10.3 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -53,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.10.2
+    4.10.3
 #>
 param(
     [switch]$Silent,
@@ -94,7 +94,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.10.2'
+$script:ProductVersion = '4.10.3'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.1'
@@ -1193,8 +1193,8 @@ $script:AuditCategories = [ordered]@{
             }
             @{
                 ID='IA03'; Severity='Critical'; Weight=10
-                Text='MFA coverage - email, VPN, RDP, cloud admin portals, all remote access'
-                Hint='Make a matrix of all remote access points and verify MFA on each: 1) Email (Exchange Online/M365 - check Entra ID > Security > MFA registration, or Conditional Access policies), 2) VPN (check VPN config for RADIUS integration with MFA provider like Duo, Azure MFA), 3) RDP (if exposed externally, must have NLA + MFA via Duo RDP or Azure MFA NPS extension), 4) Cloud admin portals (Azure, AWS, Google Workspace admin - check for MFA enforcement on admin roles), 5) Remote desktop gateways, 6) Any web apps with SSO. Run in Entra ID PowerShell: Get-MgUser -All | Where { $_.StrongAuthenticationMethods.Count -eq 0 } to find users without MFA registered. If any access point is username/password only, flag it as critical.'
+                Text='Local MFA and strong-auth signals for remote access'
+                Hint='This local/AD check collects host-visible strong-auth indicators for remote access; it is not tenant MFA proof. Build a remote-access matrix and verify MFA on each access path: 1) VPN auth should use RADIUS/SAML/IdP MFA, 2) RDP/Remote Desktop Gateway should require NLA plus a second factor such as Duo RDP or Azure MFA NPS extension, 3) admin workstations should show Windows Hello for Business, smart-card, or MFA/SSO agent evidence where expected, 4) cloud portals and tenant-wide MFA require the future Graph-backed cloud checks or a separate Entra report. If any remote access path is username/password only, flag it as critical.'
                 Compliance='NIST CSF PR.AC-7 | CIS Control 6.3, 6.4, 6.5 | HIPAA 164.312(d)'
             }
             @{
@@ -1229,8 +1229,8 @@ $script:AuditCategories = [ordered]@{
             }
             @{
                 ID='IA09'; Severity='Medium'; Weight=5
-                Text='Azure AD / Entra ID conditional access policies reviewed'
-                Hint='If the org uses M365/Azure, log into Entra ID admin center > Protection > Conditional Access. Document all active policies. Key policies that SHOULD exist: 1) Require MFA for all users, 2) Block legacy authentication (Basic auth in IMAP, POP3, SMTP - these bypass MFA), 3) Require compliant device for access, 4) Block access from risky locations/countries, 5) Require MFA for admin roles. If there are NO conditional access policies, that is a significant finding. Also check: Entra ID > Security > Authentication methods to see which MFA methods are enabled (avoid SMS-only, prefer Authenticator app). Note: Conditional Access requires at minimum Entra ID P1 licensing.'
+                Text='Remote access and RMM exposure indicators'
+                Hint='This local check inventories RDP, VPN, split-tunnel settings, remote-access agents, RMM tools, and unsigned portable remote-control binaries; it is not Conditional Access proof. Use it to identify exposed or unmanaged remote administration paths that should be governed by MFA, device compliance, and approval workflows. Tenant Conditional Access policy coverage requires the future Graph-backed cloud checks or a separate Entra report.'
                 Compliance='NIST CSF PR.AC-3, PR.AC-7 | CIS Control 6.3, 6.4, 6.5 | HIPAA 164.312(d), 164.312(e)(1)'
             }
             @{
@@ -3838,10 +3838,11 @@ $script:AutoChecks = @{
 
     # ── Phase 3: Full Coverage Auto-Checks ────────────────────────────────────
 
-    'IA03' = @{ Type='AD'; Label='Scan MFA Coverage'
+    'IA03' = @{ Type='AD'; Label='Scan Local MFA / Strong Auth Signals'
         Script = {
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
-            # Check RDP NLA (Network Level Auth - basic MFA indicator)
+            [void]$sb.AppendLine("Scope: local/AD-visible strong-auth indicators only; not tenant MFA proof.")
+            # Check RDP NLA (Network Level Auth - local strong-auth prerequisite)
             try {
                 $rdp = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -EA Stop
                 $nla = $rdp.UserAuthentication -eq 1
@@ -3849,7 +3850,7 @@ $script:AutoChecks = @{
             } catch { [void]$sb.AppendLine("RDP NLA: Could not check") }
             # Check for Azure AD / Entra modules
             $hasAzureAD = (Get-Module AzureAD,AzureADPreview,Microsoft.Graph -ListAvailable -EA SilentlyContinue | Measure-Object).Count -gt 0
-            [void]$sb.AppendLine("Azure AD/Graph modules installed: $hasAzureAD")
+            [void]$sb.AppendLine("Azure AD/Graph modules installed: $hasAzureAD (module presence only, no tenant MFA proof)")
             # Check for ADFS
             try { $adfs = Get-Service adfssrv -EA SilentlyContinue; if ($adfs) { [void]$sb.AppendLine("ADFS Service: $($adfs.Status)") } else { [void]$sb.AppendLine("ADFS: Not installed on this host") } } catch {}
             # Check for common MFA/SSO agents (registry - fast)
@@ -3884,7 +3885,7 @@ $script:AutoChecks = @{
                 }
             } catch { [void]$sb.AppendLine("  Windows Hello: Could not query") }
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -eq 1) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="MFA coverage scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Local strong-auth indicator scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
 
@@ -3990,9 +3991,10 @@ $script:AutoChecks = @{
         }
     }
 
-    'IA09' = @{ Type='Local'; Label='Scan Conditional Access / Remote Access'
+    'IA09' = @{ Type='Local'; Label='Scan Remote Access / RMM Exposure'
         Script = {
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
+            [void]$sb.AppendLine("Scope: local remote-access and RMM exposure indicators only; not Conditional Access proof.")
             # Check RDP settings
             try {
                 $ts = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -EA Stop
@@ -5787,7 +5789,7 @@ $script:MitreMap = @{
     'IA06' = @{ Tactics=@('TA0004','TA0003','TA0006'); Techniques=@('T1078.002','T1550.002','T1550.003'); Desc='Without PAM/LAPS, lateral movement via pass-the-hash and golden ticket attacks' }
     'IA07' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1078','T1078.001'); Desc='Shared accounts eliminate attribution and enable insider threat denial' }
     'IA08' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078','T1199'); Desc='Vendor accounts with persistent access enable trusted relationship attacks' }
-    'IA09' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1078.004','T1556.006'); Desc='Missing conditional access allows cloud compromise from any device/location' }
+    'IA09' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1078.004','T1556.006'); Desc='Unmanaged remote access and RMM tools allow credentialed access from untrusted devices or locations' }
     'IA10' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078','T1078.002'); Desc='Stale accounts expand the attack surface for credential-based initial access' }
     'IA11' = @{ Tactics=@('TA0006','TA0008'); Techniques=@('T1558.003','T1550.003'); Desc='RC4/DES Kerberos dependencies keep service tickets crackable and weaken pass-the-ticket resistance' }
     'IA12' = @{ Tactics=@('TA0004','TA0003','TA0006'); Techniques=@('T1098','T1078.002','T1550.003'); Desc='BadSuccessor/dMSA abuse can turn delegated OU rights into domain privilege escalation and persistence' }
@@ -5869,7 +5871,7 @@ $script:D3FendMap = @{
     'IA06' = @{ Stages=@('Isolate','Harden'); Techniques=@('D3-AMED','D3-UAP','D3-CH'); Labels=@('Access Mediation','User Account Permissions','Credential Hardening'); Desc='Mediates privileged access and hardens administrator credential handling' }
     'IA07' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP'); Labels=@('Domain Account Monitoring','User Account Permissions'); Desc='Identifies shared accounts and restores user-level accountability' }
     'IA08' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-APA','D3-UAP'); Labels=@('Domain Account Monitoring','Access Policy Administration','User Account Permissions'); Desc='Controls guest and vendor account lifecycle and permissions' }
-    'IA09' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MFA','D3-WSAM','D3-CTS'); Labels=@('Multi-factor Authentication','Web Session Access Mediation','Credential Transmission Scoping'); Desc='Mediates cloud and remote sessions with conditional access controls' }
+    'IA09' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MFA','D3-WSAM','D3-CTS'); Labels=@('Multi-factor Authentication','Web Session Access Mediation','Credential Transmission Scoping'); Desc='Mediates remote administration sessions and scopes unmanaged remote-access paths' }
     'IA10' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP'); Labels=@('Domain Account Monitoring','User Account Permissions'); Desc='Finds inactive accounts so access can be removed before abuse' }
     'IA11' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-CH','D3-CRO','D3-MENCR','D3-DAM'); Labels=@('Credential Hardening','Credential Rotation','Message Encryption','Domain Account Monitoring'); Desc='Hardens Kerberos encryption by identifying RC4/DES dependencies and AES readiness gaps' }
     'IA12' = @{ Stages=@('Model','Harden','Detect','Isolate'); Techniques=@('D3-AM','D3-UAP','D3-APA','D3-DAM'); Labels=@('Access Modeling','User Account Permissions','Access Policy Administration','Domain Account Monitoring'); Desc='Models and restricts dMSA creation/migration rights while monitoring BadSuccessor abuse indicators' }
@@ -6025,7 +6027,7 @@ function Get-AttackPaths {
     }
     # Chain 1: Phishing -> Credential Harvest -> Domain Compromise
     $chain1 = @()
-    if ('IA03' -in $failedIds) { $chain1 += @{ID='IA03';Step='Phishing bypasses MFA-less email (T1566)'} }
+    if ('IA03' -in $failedIds) { $chain1 += @{ID='IA03';Step='Phishing reaches remote access without local strong-auth evidence (T1566)'} }
     if ('CF03' -in $failedIds) { $chain1 += @{ID='CF03';Step='Untrained users click malicious links (T1204)'} }
     if ('EP07' -in $failedIds) { $chain1 += @{ID='EP07';Step='Malicious macro executes payload (T1059, T1204.002)'} }
     if ('EP01' -in $failedIds) { $chain1 += @{ID='EP01';Step='AV fails to detect/block payload (T1562.001)'} }
@@ -6074,7 +6076,7 @@ function Get-AttackPaths {
     # Chain 6: ADCS Abuse -> Certificate-Based Persistence
     $chain6 = @()
     if ('CF01' -in $failedIds) { $chain6 += @{ID='CF01';Step='ADCS ESC1/ESC6 templates allow SAN specification (T1649)'} }
-    if ('IA03' -in $failedIds) { $chain6 += @{ID='IA03';Step='No MFA on cert enrollment - any user can request certs (T1556)'} }
+    if ('IA03' -in $failedIds) { $chain6 += @{ID='IA03';Step='No local strong-auth evidence for certificate/admin workflows (T1556)'} }
     if ('EP03' -in $failedIds) { $chain6 += @{ID='EP03';Step='NTLM relay to web enrollment endpoint (T1557.001)'} }
     if ('LM02' -in $failedIds) { $chain6 += @{ID='LM02';Step='No SIEM - certificate abuse goes undetected (T1562.002)'} }
     if ($chain6.Count -ge 3) { $paths += @{ Name='ADCS Abuse to Persistent Access'; Severity='CRITICAL'; Steps=$chain6 } }
@@ -6100,7 +6102,7 @@ function Get-RansomwareScore {
             Checks = @(
                 @{ID='EP01'; Factor='AV/EDR active with ASR rules'; Points=15}
                 @{ID='EP07'; Factor='AppLocker/WDAC + Office macros restricted'; Points=15}
-                @{ID='IA03'; Factor='MFA on all remote access'; Points=12}
+                @{ID='IA03'; Factor='Local strong-auth signals for remote access'; Points=12}
                 @{ID='IA05'; Factor='Strong password policy'; Points=8}
                 @{ID='NP07'; Factor='IDS/IPS on perimeter'; Points=8}
                 @{ID='CF03'; Factor='Security awareness training'; Points=8}
@@ -6197,7 +6199,7 @@ function Get-DomainMaturityScore {
                 @{ID='IA07'; Factor='No shared/generic accounts'; Points=10}
                 @{ID='IA08'; Factor='Vendor account lifecycle managed'; Points=8}
                 @{ID='CF04'; Factor='Former employee access revoked'; Points=10}
-                @{ID='IA03'; Factor='MFA enforced'; Points=15}
+                @{ID='IA03'; Factor='Local strong-auth posture evidenced'; Points=15}
             )
         }
         'Infrastructure Hardening' = @{

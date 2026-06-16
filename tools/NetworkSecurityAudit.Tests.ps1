@@ -363,7 +363,7 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $script:AuditCategories = @{ 'Identity' = @{ Items = @(
             @{ ID='IA01'; Text='Priv groups'; Severity='Critical' }
             @{ ID='IA02'; Text='MFA'; Severity='High' }) } }
-        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.2'
+        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.3'
         $save1 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-01'; ScanTarget='DC'; Items=@{ IA01=@{Status='Fail';Findings='x';Evidence='y'}; IA02=@{Status='Pass'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $save2 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-14'; ScanTarget='DC'; Items=@{ IA01=@{Status='Pass'}; IA02=@{Status='Fail'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $s1 = Convert-SaveStateToSnapshot $save1

@@ -269,6 +269,12 @@ if ($scriptText -notmatch 'VerifiedAndReputablePolicyState' -or $scriptText -not
 if ($scriptText -notmatch 'REMOTE ACCESS.*RMM TOOLS' -or $scriptText -notmatch 'AnyDesk' -or $scriptText -notmatch 'ScreenConnect' -or $scriptText -notmatch 'TeamViewer') {
     Add-Failure 'IA09 must inventory remote access and RMM tools.'
 }
+if ($scriptText -match 'Scan MFA Coverage' -or $scriptText -match 'Scan Conditional Access / Remote Access' -or $scriptText -match 'Azure AD / Entra ID conditional access policies reviewed') {
+    Add-Failure 'IA03/IA09 labels must not overclaim tenant MFA or Conditional Access proof.'
+}
+if ($scriptText -notmatch 'not tenant MFA proof' -or $scriptText -notmatch 'not Conditional Access proof' -or $readmeText -notmatch 'do not prove\s+tenant-wide Entra MFA or Conditional Access') {
+    Add-Failure 'IA03/IA09 must explicitly scope local indicators apart from tenant Graph proof.'
+}
 if ($scriptText -notmatch 'highValueRules' -or $scriptText -notmatch 'Block credential stealing from LSASS' -or $scriptText -notmatch 'ExclusionPath' -or $scriptText -notmatch 'MISSING:') {
     Add-Failure 'EP01 ASR section must list individual rules, flag missing high-value rules, and report Defender exclusions.'
 }
