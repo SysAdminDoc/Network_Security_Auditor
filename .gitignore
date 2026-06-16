@@ -3,7 +3,24 @@
 *.tmp
 .vs/
 CLAUDE.md
+CODEX_CHANGELOG.md
+.claude/
 
-# Markdown files local-only (except README)
-*.md
-!README.md
+# Markdown files local-only (except README and CHANGELOG)
+AGENTS.md
+LOGO_PROMPTS.md
+RESEARCH.md
+Roadmap_Blocks.md
+ROADMAP.md
+
+# .NET build artifacts
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.DotSettings
+*.DotSettings.user
+packages/
+TestResults/
+publish/
