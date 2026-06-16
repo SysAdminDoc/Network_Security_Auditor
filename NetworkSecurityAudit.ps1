@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.10.1 - Professional GUI Tool
+    Network Security Auditor v4.10.2 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -53,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.10.1
+    4.10.2
 #>
 param(
     [switch]$Silent,
@@ -94,7 +94,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.10.1'
+$script:ProductVersion = '4.10.2'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.1'
@@ -1586,12 +1586,17 @@ $script:AutoChecks = @{
             $groups = @('Domain Admins','Enterprise Admins','Schema Admins','Administrators')
             $sb = [System.Text.StringBuilder]::new()
             $totalPriv = 0; $issues = 0
+            $privilegedSam = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+            $protectedSam = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
             foreach ($g in $groups) {
                 try {
                     $members = Get-ADGroupMember $g -Recursive -EA Stop | Select-Object Name,SamAccountName,objectClass
                     $count = ($members | Measure-Object).Count; $totalPriv += $count
                     [void]$sb.AppendLine("[$g] ($count members):")
-                    foreach ($m in $members) { [void]$sb.AppendLine("  $($m.SamAccountName) ($($m.objectClass))") }
+                    foreach ($m in $members) {
+                        [void]$sb.AppendLine("  $($m.SamAccountName) ($($m.objectClass))")
+                        if ($m.SamAccountName) { [void]$privilegedSam.Add([string]$m.SamAccountName) }
+                    }
                     # CIS: Enterprise Admins and Schema Admins should be empty
                     if ($g -in @('Enterprise Admins','Schema Admins') -and $count -gt 0) {
                         $issues++; [void]$sb.AppendLine("  [!] CIS: $g should be EMPTY except during schema changes")
@@ -1601,9 +1606,10 @@ $script:AutoChecks = @{
             }
             # Protected Users group check
             try {
-                $protectedUsers = (Get-ADGroupMember 'Protected Users' -EA SilentlyContinue | Measure-Object).Count
-                [void]$sb.AppendLine("[Protected Users] ($protectedUsers members)")
-                if ($protectedUsers -eq 0) { $issues++; [void]$sb.AppendLine("  [!] No privileged accounts in Protected Users group - Tier 0 accounts should be members") }
+                $protectedUsers = @(Get-ADGroupMember 'Protected Users' -EA SilentlyContinue)
+                foreach ($pu in $protectedUsers) { if ($pu.SamAccountName) { [void]$protectedSam.Add([string]$pu.SamAccountName) } }
+                [void]$sb.AppendLine("[Protected Users] ($($protectedUsers.Count) members)")
+                if ($protectedUsers.Count -eq 0) { $issues++; [void]$sb.AppendLine("  [!] No privileged accounts in Protected Users group - Tier 0 accounts should be members") }
             } catch { [void]$sb.AppendLine("[Protected Users] Could not query") }
             # Kerberos unconstrained delegation scan
             try {
@@ -1620,6 +1626,38 @@ $script:AutoChecks = @{
                     foreach ($uu in $unconstUsers) { [void]$sb.AppendLine("  $($uu.SamAccountName)") }
                 }
             } catch {}
+            # CVE-2025-33073 blast-radius correlation: reflected/coerced SMB auth is worse when
+            # privileged identities can be delegated or unconstrained-delegation hosts exist.
+            try {
+                [void]$sb.AppendLine("`nCVE-2025-33073 NTLM REFLECTION BLAST RADIUS:")
+                if ($unconst) {
+                    [void]$sb.AppendLine("  [HIGH] $($unconst.Count) non-DC computer(s) have unconstrained delegation; remove unconstrained delegation or scope to constrained delegation.")
+                } else {
+                    [void]$sb.AppendLine("  Unconstrained delegation hosts: None found outside domain controllers [OK]")
+                }
+                $unsafePriv = @()
+                foreach ($sam in $privilegedSam) {
+                    $acct = Get-ADUser -Identity $sam -Properties Enabled,AccountNotDelegated,TrustedForDelegation,ServicePrincipalName -EA SilentlyContinue
+                    if (-not $acct -or -not $acct.Enabled) { continue }
+                    $isProtected = $protectedSam.Contains($acct.SamAccountName)
+                    if (($acct.TrustedForDelegation -eq $true) -or (-not $acct.AccountNotDelegated -and -not $isProtected)) {
+                        $unsafePriv += $acct
+                    }
+                }
+                if ($unsafePriv.Count -gt 0) {
+                    $issues += [math]::Min($unsafePriv.Count, 5)
+                    [void]$sb.AppendLine("  [HIGH] Privileged account(s) not protected from delegation or explicitly trusted for delegation: $($unsafePriv.Count)")
+                    foreach ($acct in ($unsafePriv | Select-Object -First 10)) {
+                        $why = if ($acct.TrustedForDelegation) { 'TrustedForDelegation' } elseif (-not $acct.AccountNotDelegated) { 'SensitiveAccountFlagMissing' } else { 'Review' }
+                        [void]$sb.AppendLine("    $($acct.SamAccountName) | $why | ProtectedUsers:$($protectedSam.Contains($acct.SamAccountName))")
+                    }
+                    [void]$sb.AppendLine("  Remediation: mark Tier-0 accounts as 'Account is sensitive and cannot be delegated' and add them to Protected Users where compatible.")
+                } else {
+                    [void]$sb.AppendLine("  Privileged delegation protection: Tier-0 accounts appear protected or unavailable for delegation [OK]")
+                }
+            } catch {
+                [void]$sb.AppendLine("`nCVE-2025-33073 NTLM reflection blast-radius check: Could not correlate privileged delegation protection")
+            }
             # Golden Ticket indicator: krbtgt password age
             try {
                 $krbtgt = Get-ADUser 'krbtgt' -Properties PasswordLastSet -EA SilentlyContinue
@@ -2318,9 +2356,15 @@ $script:AutoChecks = @{
     'EP03' = @{ Type='Local'; Label='Scan SMB / Protocol Hardening'
         Script = {
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
+            $serverSigningRequired = $null
+            $clientSigningRequired = $null
+            $ntlmOutboundDenied = $false
+            $llmnrEnabled = $null
+            $netbiosEnabledCount = $null
             # SMBv1 and SMB server configuration
             try {
                 $cfg = Get-SmbServerConfiguration -EA Stop
+                $serverSigningRequired = [bool]$cfg.RequireSecuritySignature
                 [void]$sb.AppendLine("SMB SERVER CONFIGURATION:")
                 [void]$sb.AppendLine("  SMB1Protocol     : $($cfg.EnableSMB1Protocol) $(if($cfg.EnableSMB1Protocol){'[ENABLED - VULNERABLE!]'; $issues += 2}else{'[OK - Disabled]'})")
                 [void]$sb.AppendLine("  SMB2Protocol     : $($cfg.EnableSMB2Protocol)")
@@ -2334,6 +2378,7 @@ $script:AutoChecks = @{
             try {
                 $cliSign = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -EA SilentlyContinue)
                 if ($cliSign) {
+                    $clientSigningRequired = ($cliSign.RequireSecuritySignature -eq 1)
                     [void]$sb.AppendLine("  RequireSign (Cli): $(if($cliSign.RequireSecuritySignature -eq 1){'True [OK]'}else{'False [!]'; $issues++})")
                 }
             } catch {}
@@ -2360,6 +2405,7 @@ $script:AutoChecks = @{
                     $restrictRecv = $msv.RestrictReceivingNTLMTraffic
                     $auditRecv = $msv.AuditReceivingNTLMTraffic
                     $blockV1 = $msv.BlockNTLMv1SSO
+                    $ntlmOutboundDenied = ($restrictSend -ge 2)
                     $sendDesc = switch ($restrictSend) { 0 {'Allow all'} 1 {'Audit'} 2 {'Deny all domain/remote'} default {'Not configured'} }
                     $recvDesc = switch ($restrictRecv) { 0 {'Allow all'} 1 {'Deny domain'} 2 {'Deny all'} default {'Not configured'} }
                     $auditDesc = switch ($auditRecv) { 0 {'Disabled'} 1 {'Audit for domain accounts'} 2 {'Audit all accounts'} default {'Not configured'} }
@@ -2375,14 +2421,39 @@ $script:AutoChecks = @{
             # LLMNR (should be disabled)
             try {
                 $llmnr = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' -EA SilentlyContinue).EnableMulticast
+                $llmnrEnabled = ($llmnr -ne 0)
                 [void]$sb.AppendLine("  LLMNR            : $(if($llmnr -eq 0){'Disabled [OK]'}else{'Enabled/Not configured [!] - poisoning risk'; $issues++})")
             } catch { [void]$sb.AppendLine("  LLMNR            : Could not query") }
             # NetBIOS over TCP/IP
             try {
                 $nbAdapters = Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=true' -EA SilentlyContinue
                 $nbEnabled = @($nbAdapters | Where-Object { $_.TcpipNetbiosOptions -ne 2 })
+                $netbiosEnabledCount = $nbEnabled.Count
                 [void]$sb.AppendLine("  NetBIOS over TCP : $(if($nbEnabled.Count -eq 0){'Disabled on all adapters [OK]'}else{"Enabled on $($nbEnabled.Count) adapter(s) [!]"; $issues++})")
             } catch {}
+            [void]$sb.AppendLine("`nCVE-2025-33073 NTLM REFLECTION EXPOSURE:")
+            $reflectionExposure = $false
+            if ($serverSigningRequired -eq $false -or $clientSigningRequired -eq $false) {
+                $reflectionExposure = $true
+                [void]$sb.AppendLine("  [HIGH] SMB signing is not enforced on $(if($serverSigningRequired -eq $false -and $clientSigningRequired -eq $false){'server and client'}elseif($serverSigningRequired -eq $false){'server'}else{'client'}) paths. CVE-2025-33073 reflection/relay risk remains until June 2025+ patches and signing enforcement are in place.")
+            } elseif ($serverSigningRequired -eq $true -and $clientSigningRequired -eq $true) {
+                [void]$sb.AppendLine("  SMB signing enforced on server and client paths [OK]")
+            } else {
+                [void]$sb.AppendLine("  SMB signing enforcement partially unknown - confirm both LanmanServer and LanmanWorkstation RequireSecuritySignature")
+            }
+            if ($llmnrEnabled -eq $true -or ($netbiosEnabledCount -ne $null -and $netbiosEnabledCount -gt 0)) {
+                $reflectionExposure = $true
+                [void]$sb.AppendLine("  [REVIEW] Name-resolution coercion paths present (LLMNR:$llmnrEnabled NetBIOS-enabled adapters:$netbiosEnabledCount). Disable LLMNR/NBNS where possible.")
+            }
+            if (-not $ntlmOutboundDenied) {
+                [void]$sb.AppendLine("  [REVIEW] Outbound NTLM is not denied; audit first, then restrict NTLM where application compatibility allows.")
+            }
+            if ($reflectionExposure) {
+                $issues++
+                [void]$sb.AppendLine("  Remediation: apply Microsoft CVE-2025-33073 updates, enforce SMB signing client/server-wide, disable LLMNR/NBNS, and reduce NTLM use.")
+            } else {
+                [void]$sb.AppendLine("  CVE-2025-33073 local protocol posture: no signing/coercion exposure indicators found [OK]")
+            }
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 2) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="SMB/protocol hardening scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
@@ -2396,11 +2467,22 @@ $script:AutoChecks = @{
             $latest = $fixes | Select-Object -First 1
             $sb = [System.Text.StringBuilder]::new()
             $daysSince = if ($latest.InstalledOn) { ((Get-Date) - $latest.InstalledOn).Days } else { 999 }
+            $cve33073PatchDate = [datetime]'2025-06-10'
+            $cve33073Patch = @($fixes | Where-Object { $_.InstalledOn -and ([datetime]$_.InstalledOn) -ge $cve33073PatchDate } | Select-Object -First 1)
+            $cve33073Patched = ($cve33073Patch.Count -gt 0)
             [void]$sb.AppendLine("Total patches installed: $($fixes.Count)")
             [void]$sb.AppendLine("Most recent patch      : $($latest.HotFixID) on $(if($latest.InstalledOn){$latest.InstalledOn.ToString('yyyy-MM-dd')}else{'Unknown'}) ($daysSince days ago)")
             [void]$sb.AppendLine("`nLast 10 patches:")
             foreach ($h in ($fixes | Select-Object -First 10)) {
                 [void]$sb.AppendLine("  $($h.HotFixID) | $($h.Description) | $(if($h.InstalledOn){$h.InstalledOn.ToString('yyyy-MM-dd')}else{'N/A'})")
+            }
+            [void]$sb.AppendLine("`nCVE-2025-33073 PATCH EVIDENCE:")
+            if ($cve33073Patched) {
+                $firstPatch = $cve33073Patch[0]
+                [void]$sb.AppendLine("  June 2025+ cumulative update evidence: $($firstPatch.HotFixID) installed $(if($firstPatch.InstalledOn){$firstPatch.InstalledOn.ToString('yyyy-MM-dd')}else{'unknown date'}) [OK]")
+            } else {
+                $kevRisk = $true
+                [void]$sb.AppendLine("  [HIGH] No June 10 2025 or newer hotfix is visible in Get-HotFix. Verify Microsoft CVE-2025-33073 remediation or current cumulative update state.")
             }
             [void]$sb.AppendLine("`nCISA KEV CROSS-REFERENCE:")
             $kevCachePath = Join-Path $env:TEMP 'NetworkSecurityAudit_kev_cache.json'
@@ -2460,6 +2542,16 @@ $script:AutoChecks = @{
                 } else {
                     [void]$sb.AppendLine("  KEV catalog: $kevTotal known exploited vulnerabilities (source: $kevSource)")
                     if ($kevJson.catalogVersion) { [void]$sb.AppendLine("  Catalog version: $($kevJson.catalogVersion)") }
+                    $cve33073Kev = @($kevVulns | Where-Object { $_.cveID -eq 'CVE-2025-33073' })
+                    if ($cve33073Kev.Count -gt 0) {
+                        $entry = $cve33073Kev[0]
+                        $dueText = if ($entry.dueDate) { $entry.dueDate } else { 'not specified' }
+                        [void]$sb.AppendLine("  CVE-2025-33073 KEV: $($entry.vulnerabilityName) | Due: $dueText | Product: $($entry.product)")
+                        if (-not $cve33073Patched) {
+                            $kevRisk = $true
+                            [void]$sb.AppendLine("  [HIGH] CVE-2025-33073 is in CISA KEV and local hotfix evidence does not show a June 2025+ update.")
+                        }
+                    }
                     $msKevEntries = @($kevVulns | Where-Object { $_.vendorProject -eq 'Microsoft' })
                     $osCaption = (Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).Caption
                     $detectedProducts = @('Windows')
@@ -3092,6 +3184,35 @@ $script:AutoChecks = @{
                             $cbStatus = switch ($certBinding) { 0 {'Disabled [CRITICAL - vulnerable to ESC10]'; $issues += 2} 1 {'Compatibility mode [!]'; $issues++} 2 {'Full enforcement [OK]'} default {'Not set (default behavior)'} }
                             [void]$sb.AppendLine("  ESC10 (StrongCertificateBinding): $cbStatus")
                         } catch {}
+                        # ESC16: Weak certificate mapping methods allow UPN-based impersonation when
+                        # CertificateMappingMethods includes explicit UPN mapping (0x04) or subject/issuer
+                        # one-to-one mapping (0x01) and StrongCertificateBindingEnforcement is not fully enforced.
+                        try {
+                            $schannelPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\Schannel'
+                            $certMapMethods = (Get-ItemProperty $schannelPath -EA SilentlyContinue).CertificateMappingMethods
+                            $weakBinding = ($null -eq $certBinding -or $certBinding -lt 2)
+                            if ($null -ne $certMapMethods) {
+                                $hasUPN = ($certMapMethods -band 0x04) -ne 0
+                                $hasSubjectIssuer = ($certMapMethods -band 0x01) -ne 0
+                                $methodLabels = @()
+                                if ($hasSubjectIssuer) { $methodLabels += 'Subject/Issuer(0x01)' }
+                                if (($certMapMethods -band 0x02) -ne 0) { $methodLabels += 'Issuer(0x02)' }
+                                if ($hasUPN) { $methodLabels += 'UPN(0x04)' }
+                                if (($certMapMethods -band 0x08) -ne 0) { $methodLabels += 'S4U2Self(0x08)' }
+                                if (($certMapMethods -band 0x10) -ne 0) { $methodLabels += 'S4U2SelfExplicit(0x10)' }
+                                $methodStr = if ($methodLabels.Count -gt 0) { $methodLabels -join '+' } else { "0x$($certMapMethods.ToString('X2'))" }
+                                if (($hasUPN -or $hasSubjectIssuer) -and $weakBinding) {
+                                    $issues += 2
+                                    [void]$sb.AppendLine("  [CRITICAL] ESC16: CertificateMappingMethods=$methodStr with weak StrongCertificateBindingEnforcement allows UPN/subject-based impersonation. Enforce full strong binding (=2) or remove legacy mapping bits.")
+                                } elseif ($hasUPN -or $hasSubjectIssuer) {
+                                    [void]$sb.AppendLine("  ESC16: Legacy mapping methods present ($methodStr) but strong binding mitigates risk [OK]")
+                                } else {
+                                    [void]$sb.AppendLine("  ESC16 (CertificateMappingMethods): $methodStr - no weak legacy methods [OK]")
+                                }
+                            } else {
+                                [void]$sb.AppendLine("  ESC16 (CertificateMappingMethods): Not explicitly set (OS default applies)")
+                            }
+                        } catch { [void]$sb.AppendLine("  ESC16: Could not query Schannel certificate mapping methods") }
                     } else { [void]$sb.AppendLine("  No Enterprise CAs found in AD") }
                 } catch { [void]$sb.AppendLine("  ADCS scan: Could not query ($($_.Exception.Message))") }
                 # LDAP Signing + Channel Binding (DC relay protection)
@@ -5570,7 +5691,7 @@ function Get-FrameworkScores {
 # Format: CheckID -> @{ Tactics=@('TA00xx',...); Techniques=@('T1xxx',...); Desc='short attack context' }
 $script:MitreMap = @{
     # ── Identity & Access ──
-    'IA01' = @{ Tactics=@('TA0004','TA0003'); Techniques=@('T1078.002','T1078.001','T1098'); Desc='Compromised DA accounts enable domain-wide persistence and privilege escalation' }
+    'IA01' = @{ Tactics=@('TA0004','TA0003'); Techniques=@('T1078.002','T1078.001','T1098'); Desc='Compromised or delegable privileged accounts expand CVE-2025-33073 blast radius, domain-wide persistence, and privilege escalation' }
     'IA02' = @{ Tactics=@('TA0006','TA0004'); Techniques=@('T1558.003','T1558.004','T1078.002'); Desc='Service accounts with SPNs are Kerberoastable; stale passwords make cracking trivial' }
     'IA03' = @{ Tactics=@('TA0001','TA0006'); Techniques=@('T1078','T1110.001','T1110.003','T1556'); Desc='Missing MFA allows credential stuffing, password spraying, and phishing-to-access' }
     'IA04' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078.002','T1078.001'); Desc='Stale accounts from terminated employees are prime targets for unauthorized access' }
@@ -5585,8 +5706,8 @@ $script:MitreMap = @{
     # ── Endpoint Security ──
     'EP01' = @{ Tactics=@('TA0005','TA0002'); Techniques=@('T1562.001','T1562.004','T1059'); Desc='Disabled/misconfigured AV allows malware execution, defense evasion, and payload delivery' }
     'EP02' = @{ Tactics=@('TA0005','TA0002'); Techniques=@('T1486','T1059'); Desc='Missing encryption exposes data at rest; enables theft on stolen/decommissioned devices' }
-    'EP03' = @{ Tactics=@('TA0006','TA0008','TA0005'); Techniques=@('T1557.001','T1040','T1570','T1187'); Desc='SMB/NTLM misconfig enables relay attacks, credential capture, and lateral tool transfer' }
-    'EP04' = @{ Tactics=@('TA0001','TA0002'); Techniques=@('T1190','T1203','T1210'); Desc='Unpatched systems enable exploitation of public-facing apps, client-side vulns, and remote services' }
+    'EP03' = @{ Tactics=@('TA0006','TA0008','TA0005'); Techniques=@('T1557.001','T1040','T1570','T1187'); Desc='SMB/NTLM misconfig enables CVE-2025-33073 reflection, relay attacks, credential capture, and lateral tool transfer' }
+    'EP04' = @{ Tactics=@('TA0001','TA0002'); Techniques=@('T1190','T1203','T1210'); Desc='Unpatched systems, including missing CVE-2025-33073 remediation, enable exploitation of public-facing apps, client-side vulns, and remote services' }
     'EP05' = @{ Tactics=@('TA0004','TA0003','TA0002'); Techniques=@('T1574.009','T1574.001','T1547.001','T1053'); Desc='Unquoted service paths, AlwaysInstallElevated, cached creds enable local privesc and persistence' }
     'EP06' = @{ Tactics=@('TA0005','TA0011'); Techniques=@('T1562.004','T1071','T1048'); Desc='Firewall gaps allow C2 communication, data exfiltration, and inbound exploitation' }
     'EP07' = @{ Tactics=@('TA0002','TA0005'); Techniques=@('T1059','T1204.002','T1137','T1221'); Desc='Missing AppLocker/WDAC and unrestricted macros enable arbitrary code execution and initial access via documents' }
@@ -5832,6 +5953,12 @@ function Get-AttackPaths {
     if ('LM02' -in $failedIds) { $chain2 += @{ID='LM02';Step='No SIEM - lateral movement goes undetected (T1562.002)'} }
     if ('BR01' -in $failedIds -or 'BR02' -in $failedIds) { $chain2 += @{ID=$(if('BR01' -in $failedIds){'BR01'}else{'BR02'});Step='No backup recovery path - ransomware is catastrophic (T1486)'} }
     if ($chain2.Count -ge 3) { $paths += @{ Name='Lateral Movement to Ransomware'; Severity='CRITICAL'; Steps=$chain2 } }
+    # Chain 2B: CVE-2025-33073 NTLM Reflection
+    $chain2b = @()
+    if ('EP04' -in $failedIds) { $chain2b += @{ID='EP04';Step='Missing or unverified June 2025+ Windows SMB Client fix for CVE-2025-33073'} }
+    if ('EP03' -in $failedIds) { $chain2b += @{ID='EP03';Step='SMB signing/NTLM/name-resolution posture permits reflection or relay conditions (T1557.001)'} }
+    if ('IA01' -in $failedIds) { $chain2b += @{ID='IA01';Step='Unconstrained delegation or unprotected privileged accounts increase domain blast radius (T1078.002)'} }
+    if ($chain2b.Count -ge 3) { $paths += @{ Name='CVE-2025-33073 NTLM Reflection to Domain Impact'; Severity='CRITICAL'; Steps=$chain2b } }
     # Chain 3: External Exploitation -> Data Exfiltration
     $chain3 = @()
     if ('NP02' -in $failedIds) { $chain3 += @{ID='NP02';Step='Open ports expose vulnerable services (T1190)'} }

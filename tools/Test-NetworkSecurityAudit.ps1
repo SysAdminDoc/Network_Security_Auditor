@@ -225,6 +225,14 @@ if ($scriptText -notmatch '\[string\[\]\]\$CloudAssessmentPath' -or $scriptText 
 if ($scriptText -notmatch 'RestrictSendingNTLMTraffic' -or $scriptText -notmatch 'RestrictReceivingNTLMTraffic' -or $scriptText -notmatch 'BlockNTLMv1SSO') {
     Add-Failure 'EP03 must audit NTLM restriction, receive, and NTLMv1 SSO block policies.'
 }
+if ($scriptText -notmatch 'CVE-2025-33073 NTLM REFLECTION BLAST RADIUS' -or
+    $scriptText -notmatch 'CVE-2025-33073 NTLM REFLECTION EXPOSURE' -or
+    $scriptText -notmatch 'CVE-2025-33073 PATCH EVIDENCE' -or
+    $scriptText -notmatch 'CVE-2025-33073 NTLM Reflection to Domain Impact' -or
+    $scriptText -notmatch 'AccountNotDelegated' -or
+    $scriptText -notmatch 'June 10 2025') {
+    Add-Failure 'CVE-2025-33073 correlation must cover IA01 delegation blast radius, EP03 SMB/NTLM exposure, EP04 patch evidence, and attack-path output.'
+}
 if ($scriptText -notmatch 'UEFICA2023Status' -or $scriptText -notmatch 'KB5025885') {
     Add-Failure 'EP08 must check Secure Boot 2023 CA status and reference KB5025885.'
 }
@@ -392,6 +400,9 @@ if ($scriptText -notmatch "'IA12'\s*=\s*@\{\s*Type='AD'" -or $scriptText -notmat
 }
 if ($scriptText -notmatch 'ESC9' -or $scriptText -notmatch 'CT_FLAG_NO_SECURITY_EXTENSION' -or $scriptText -notmatch '0x00080000' -or $scriptText -notmatch 'ESC11' -or $scriptText -notmatch 'IF_ENFORCEENCRYPTICERTREQUEST' -or $scriptText -notmatch 'ESC13' -or $scriptText -notmatch 'msDS-OIDToGroupLink' -or $scriptText -notmatch 'ESC15/EKUwu' -or $scriptText -notmatch 'msPKI-Template-Schema-Version' -or $scriptText -notmatch 'CVE-2024-49019') {
     Add-Failure 'CF01 ADCS scan must cover ESC9, ESC11, ESC13, and ESC15/EKUwu indicators.'
+}
+if ($scriptText -notmatch 'ESC16' -or $scriptText -notmatch 'CertificateMappingMethods') {
+    Add-Failure 'CF01 ADCS scan must cover ESC16 certificate mapping methods.'
 }
 if ($scriptText -notmatch "Pass','Fail','Partial','N/A") {
     Add-Failure 'Auto-check status mapping must preserve N/A results for non-applicable checks.'
