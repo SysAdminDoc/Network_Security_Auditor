@@ -1182,6 +1182,12 @@ $script:CloudCheckManifest = [ordered]@{
         OutputFields=@('displayName','operatingSystem','trustType','isCompliant','approximateLastSignInDateTime'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='DevicePII'
         Implemented=$false
     }
+    'CL13' = [ordered]@{
+        Name='Entra Connect hard-match and source-anchor posture'; PermissionScopes=@('User.Read.All','RoleManagement.Read.Directory'); RoleHints=@('Global Reader','Privileged Role Reader')
+        LicensePrerequisites='Entra ID (any tier) with Entra Connect sync'; ApiVersion='v1.0'; Endpoint='/users?$select=displayName,userPrincipalName,onPremisesSyncEnabled,onPremisesImmutableId,onPremisesSamAccountName,userType&$filter=onPremisesSyncEnabled eq true'
+        OutputFields=@('displayName','userPrincipalName','onPremisesSyncEnabled','onPremisesImmutableId','onPremisesSamAccountName','assignedRoles'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='UserPII'
+        Implemented=$true
+    }
 }
 
 function Convert-CloudAssessmentStatus {
@@ -1542,6 +1548,48 @@ function Invoke-CloudGuestLifecycleAssessment {
         -SourceTimestamp $graph.SourceTimestamp -PermissionScopes @($meta.PermissionScopes) -ApiVersion $meta.ApiVersion -Endpoint $meta.Endpoint -PrivacyClassification $meta.PrivacyClassification
 }
 
+function Invoke-CloudHardMatchAssessment {
+    param([hashtable]$MockResponsesById = @{})
+    $meta = $script:CloudCheckManifest['CL13']
+    $graph = Invoke-GraphAuditRequest -Uri $meta.Endpoint -ApiVersion $meta.ApiVersion -PermissionScopes @($meta.PermissionScopes) -MockResponses (Get-CloudMockResponses -MockResponsesById $MockResponsesById -CheckId 'CL13')
+    if ($graph.Status -ne 'Pass') {
+        return New-CloudUnavailableFinding -CheckId 'CL13' -Meta $meta -GraphResult $graph
+    }
+
+    $syncedUsers = @($graph.Data)
+    $privilegedWithAnchor = @()
+    $privilegedRoles = @('Global Administrator','Privileged Role Administrator','Exchange Administrator','SharePoint Administrator','User Administrator','Security Administrator','Hybrid Identity Administrator')
+    foreach ($user in $syncedUsers) {
+        $immutableId = [string](Get-GraphObjectProperty $user 'onPremisesImmutableId')
+        if (-not $immutableId) { continue }
+        $upn = [string](Get-GraphObjectProperty $user 'userPrincipalName')
+        $display = [string](Get-GraphObjectProperty $user 'displayName')
+        $samAccount = [string](Get-GraphObjectProperty $user 'onPremisesSamAccountName')
+        $roles = Get-GraphObjectProperty $user 'assignedRoles'
+        $hasPrivRole = $false
+        if ($roles) {
+            foreach ($r in @($roles)) {
+                $rName = [string](Get-GraphObjectProperty $r 'displayName')
+                if ($rName -and $privilegedRoles -contains $rName) { $hasPrivRole = $true; break }
+            }
+        }
+        if ($upn -match '^admin|^global|^priv|^sec|breakglass|emergency' -or $hasPrivRole) {
+            $privilegedWithAnchor += "$display <$upn> immutableId=$($immutableId.Substring(0,[math]::Min(8,$immutableId.Length)))... samAccount=$samAccount$(if($hasPrivRole){' [PRIVILEGED_ROLE]'})"
+        }
+    }
+
+    $status = if ($privilegedWithAnchor.Count -gt 0) { 'Fail' } else { 'Pass' }
+    $name = if ($privilegedWithAnchor.Count -gt 0) {
+        "$($privilegedWithAnchor.Count) privileged synced user(s) with source-anchor/hard-match exposure"
+    } else {
+        "No privileged synced users with hard-match risk found across $($syncedUsers.Count) synced account(s)"
+    }
+    $evidence = "SyncedUsers=$($syncedUsers.Count); PrivilegedWithAnchor=$($privilegedWithAnchor.Count); $(if($privilegedWithAnchor.Count){$privilegedWithAnchor -join '; '}else{'none'})"
+    $remediation = 'Review privileged cloud users with onPremisesImmutableId. Microsoft is blocking hard-match takeover of privileged users. Ensure privileged cloud accounts are cloud-native or have documented sync requirements. Rotate credentials and verify source-anchor integrity for any flagged accounts.'
+    New-CloudAssessmentFinding -TestId 'CL13' -Name $name -Status $status -Category 'Hybrid Identity' -Remediation $remediation -Evidence $evidence `
+        -SourceTimestamp $graph.SourceTimestamp -PermissionScopes @($meta.PermissionScopes) -ApiVersion $meta.ApiVersion -Endpoint $meta.Endpoint -PrivacyClassification $meta.PrivacyClassification
+}
+
 function Invoke-CloudProfileAssessment {
     param([hashtable]$MockResponsesById = @{})
 
@@ -1554,6 +1602,7 @@ function Invoke-CloudProfileAssessment {
     if ($secure.SecureScore) { $secureScore = $secure.SecureScore }
     $results += Invoke-CloudConditionalAccessAssessment -MockResponsesById $MockResponsesById
     $results += Invoke-CloudGuestLifecycleAssessment -MockResponsesById $MockResponsesById
+    $results += Invoke-CloudHardMatchAssessment -MockResponsesById $MockResponsesById
 
     $statusSummary = Get-CloudAssessmentStatusSummary -Items $results -StatusSelector { param($x) $x.Status }
     $statusCounts = $statusSummary.Counts
