@@ -225,6 +225,9 @@ if ($scriptText -notmatch '\[string\[\]\]\$CloudAssessmentPath' -or $scriptText 
 if ($scriptText -notmatch 'function Convert-CloudAssessmentStatus' -or $scriptText -notmatch 'NotLicensed' -or $scriptText -notmatch 'NotPermitted' -or $scriptText -notmatch 'NotConfigured' -or $scriptText -notmatch 'status_breakdown' -or $readmeText -notmatch 'NotLicensed.*NotPermitted.*NotConfigured.*Skipped.*Error') {
     Add-Failure 'Cloud assessment imports must distinguish unavailable cloud statuses from true failures.'
 }
+if ($scriptText -notmatch 'function Invoke-GraphAuditRequest' -or $scriptText -notmatch '\[object\[\]\]\$MockResponses' -or $scriptText -notmatch 'Retry-After' -or $scriptText -notmatch 'Convert-GraphAuditErrorStatus' -or $readmeText -notmatch 'offline Microsoft Graph wrapper') {
+    Add-Failure 'Graph request wrapper must support offline mock fixtures, paging/retry, and error classification.'
+}
 if ($scriptText -notmatch 'RestrictSendingNTLMTraffic' -or $scriptText -notmatch 'RestrictReceivingNTLMTraffic' -or $scriptText -notmatch 'BlockNTLMv1SSO') {
     Add-Failure 'EP03 must audit NTLM restriction, receive, and NTLMv1 SSO block policies.'
 }

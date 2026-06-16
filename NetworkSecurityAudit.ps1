@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.10.4 - Professional GUI Tool
+    Network Security Auditor v4.10.5 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -53,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.10.4
+    4.10.5
 #>
 param(
     [switch]$Silent,
@@ -94,7 +94,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.10.4'
+$script:ProductVersion = '4.10.5'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.1'
@@ -752,6 +752,127 @@ function Get-CloudAssessmentStatusSummary {
     }
     $unavailable = $counts.NotLicensed + $counts.NotPermitted + $counts.NotConfigured + $counts.Error + $counts.Other
     return [ordered]@{ Counts = $counts; Unavailable = $unavailable }
+}
+
+function Get-GraphObjectProperty {
+    param(
+        [object]$Object,
+        [string]$Name
+    )
+
+    if ($null -eq $Object) { return $null }
+    if ($Object -is [System.Collections.IDictionary] -and $Object.Contains($Name)) { return $Object[$Name] }
+    $prop = $Object.PSObject.Properties[$Name]
+    if ($prop) { return $prop.Value }
+    return $null
+}
+
+function Convert-GraphAuditErrorStatus {
+    param(
+        [int]$StatusCode,
+        [string]$Message = ''
+    )
+
+    $msg = if ($Message) { $Message.ToLowerInvariant() } else { '' }
+    if ($StatusCode -eq 401 -or $StatusCode -eq 403 -or $msg -match 'permission|unauthorized|forbidden|denied|consent') { return 'NotPermitted' }
+    if ($StatusCode -eq 402 -or $msg -match 'license|not licensed|premium') { return 'NotLicensed' }
+    if ($StatusCode -eq 404 -or $msg -match 'not found|not configured|not enabled') { return 'NotConfigured' }
+    if ($StatusCode -eq 429 -or $msg -match 'throttle|rate limit') { return 'Error' }
+    return 'Error'
+}
+
+function Invoke-GraphAuditRequest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$Uri,
+        [ValidateSet('GET','POST','PATCH','DELETE')][string]$Method = 'GET',
+        [ValidateSet('v1.0','beta')][string]$ApiVersion = 'v1.0',
+        [string[]]$PermissionScopes = @(),
+        [hashtable]$Headers = @{},
+        [object]$Body = $null,
+        [int]$MaxPages = 10,
+        [int]$MaxRetries = 3,
+        [object[]]$MockResponses = @()
+    )
+
+    $items = @()
+    $requests = @()
+    $nextUri = $Uri
+    $pages = 0
+    $retries = 0
+    $mockIndex = 0
+
+    while ($nextUri -and $pages -lt $MaxPages) {
+        $requests += [ordered]@{ method=$Method; uri=$nextUri; api_version=$ApiVersion }
+        try {
+            if ($MockResponses.Count -gt 0) {
+                if ($mockIndex -ge $MockResponses.Count) {
+                    throw "No mock response available for $nextUri"
+                }
+                $response = $MockResponses[$mockIndex]
+                $mockIndex++
+                $statusValue = Get-GraphObjectProperty $response 'StatusCode'
+                $statusCode = if ($null -ne $statusValue -and [string]$statusValue -ne '') { [int]$statusValue } else { 200 }
+                $responseHeaders = Get-GraphObjectProperty $response 'Headers'
+                $responseBody = Get-GraphObjectProperty $response 'Body'
+            }
+            else {
+                $cmd = Get-Command Invoke-MgGraphRequest -ErrorAction SilentlyContinue
+                if (-not $cmd) {
+                    return [ordered]@{
+                        Status='NotConfigured'; Data=@(); Error=[ordered]@{ status='NotConfigured'; message='Microsoft.Graph.Authentication is not loaded and no mock response was supplied.' }
+                        SourceTimestamp=(Get-Date).ToUniversalTime().ToString('o'); PermissionScopes=@($PermissionScopes); Pages=$pages; Retried=$retries; Requests=$requests
+                    }
+                }
+                $invokeParams = @{ Method=$Method; Uri=$nextUri; ErrorAction='Stop' }
+                if ($Headers.Count -gt 0) { $invokeParams['Headers'] = $Headers }
+                if ($null -ne $Body) { $invokeParams['Body'] = $Body }
+                $responseBody = Invoke-MgGraphRequest @invokeParams
+                $responseHeaders = @{}
+                $statusCode = 200
+            }
+
+            if ($statusCode -eq 429 -and $retries -lt $MaxRetries) {
+                $retryAfter = 0
+                $retryHeader = Get-GraphObjectProperty $responseHeaders 'Retry-After'
+                if ($retryHeader) { [void][int]::TryParse([string]$retryHeader, [ref]$retryAfter) }
+                if ($retryAfter -gt 0) { Start-Sleep -Seconds ([math]::Min($retryAfter, 30)) }
+                $retries++
+                continue
+            }
+            if ($statusCode -ge 400) {
+                $message = [string](Get-GraphObjectProperty $responseBody 'error')
+                $status = Convert-GraphAuditErrorStatus -StatusCode $statusCode -Message $message
+                return [ordered]@{
+                    Status=$status; Data=@(); Error=[ordered]@{ status=$status; status_code=$statusCode; message=$message }
+                    SourceTimestamp=(Get-Date).ToUniversalTime().ToString('o'); PermissionScopes=@($PermissionScopes); Pages=$pages; Retried=$retries; Requests=$requests
+                }
+            }
+
+            $value = Get-GraphObjectProperty $responseBody 'value'
+            if ($null -ne $value) { foreach ($item in @($value)) { $items += $item } }
+            elseif ($null -ne $responseBody) { $items += $responseBody }
+
+            $pages++
+            $nextUri = [string](Get-GraphObjectProperty $responseBody '@odata.nextLink')
+        }
+        catch {
+            $statusCode = 0
+            try { if ($_.Exception.Response -and $_.Exception.Response.StatusCode) { $statusCode = [int]$_.Exception.Response.StatusCode } } catch {}
+            $status = Convert-GraphAuditErrorStatus -StatusCode $statusCode -Message $_.Exception.Message
+            return [ordered]@{
+                Status=$status; Data=@(); Error=[ordered]@{ status=$status; status_code=$statusCode; message=$_.Exception.Message }
+                SourceTimestamp=(Get-Date).ToUniversalTime().ToString('o'); PermissionScopes=@($PermissionScopes); Pages=$pages; Retried=$retries; Requests=$requests
+            }
+        }
+    }
+
+    $finalStatus = if ($nextUri) { 'Error' } else { 'Pass' }
+    $graphError = if ($nextUri) { [ordered]@{ status='Error'; status_code=0; message="Graph paging exceeded MaxPages=$MaxPages." } } else { $null }
+    return [ordered]@{
+        Status=$finalStatus; Data=$items; Error=$graphError
+        SourceTimestamp=(Get-Date).ToUniversalTime().ToString('o'); PermissionScopes=@($PermissionScopes); Pages=$pages; Retried=$retries; Requests=$requests
+    }
 }
 
 function Import-CloudAssessment {

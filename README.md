@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.10.4-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.10.5-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
@@ -470,7 +470,9 @@ Invoke-Pester -Path .\tools\NetworkSecurityAudit.Tests.ps1
 it documents each excluded rule as an intentional single-file design choice
 (console `Write-Host` output, graceful empty-catch guards, runspace credential
 arguments, the WinRM-bootstrap WMI call, and so on). The lint gate must report
-**zero** findings.
+**zero** findings. The Pester suite also includes offline Microsoft Graph wrapper
+fixtures for paging, throttling, and permission/license classification; these do
+not require tenant credentials.
 
 ---
 

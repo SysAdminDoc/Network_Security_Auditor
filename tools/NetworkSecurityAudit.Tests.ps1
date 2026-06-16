@@ -253,6 +253,51 @@ Describe 'Cloud assessment import semantics' {
     }
 }
 
+Describe 'Graph wrapper offline fixtures' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Get-GraphObjectProperty','Convert-GraphAuditErrorStatus','Invoke-GraphAuditRequest') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+    It 'pages mock Graph responses without a tenant' {
+        $res = Invoke-GraphAuditRequest -Uri '/users' -PermissionScopes @('User.Read.All') -MockResponses @(
+            [ordered]@{ StatusCode=200; Body=[ordered]@{ value=@([ordered]@{ id='u1' }); '@odata.nextLink'='/users?page=2' } }
+            [ordered]@{ StatusCode=200; Body=[ordered]@{ value=@([ordered]@{ id='u2' }) } }
+        )
+
+        $res.Status | Should -Be 'Pass'
+        @($res.Data).Count | Should -Be 2
+        $res.Pages | Should -Be 2
+        $res.PermissionScopes | Should -Contain 'User.Read.All'
+        $res.SourceTimestamp | Should -Match '^\d{4}-\d{2}-\d{2}T'
+    }
+    It 'retries a throttled mock response without sleeping when Retry-After is zero' {
+        $res = Invoke-GraphAuditRequest -Uri '/security/secureScores' -PermissionScopes @('SecurityEvents.Read.All') -MockResponses @(
+            [ordered]@{ StatusCode=429; Headers=@{'Retry-After'='0'}; Body=[ordered]@{ error='throttled' } }
+            [ordered]@{ StatusCode=200; Body=[ordered]@{ value=@([ordered]@{ id='score1' }) } }
+        )
+
+        $res.Status | Should -Be 'Pass'
+        $res.Retried | Should -Be 1
+        @($res.Data).Count | Should -Be 1
+    }
+    It 'classifies denied and unlicensed mock responses without tenant access' {
+        $denied = Invoke-GraphAuditRequest -Uri '/identity/conditionalAccess/policies' -PermissionScopes @('Policy.Read.All') -MockResponses @(
+            [ordered]@{ StatusCode=403; Body=[ordered]@{ error='permission denied' } }
+        )
+        $unlicensed = Invoke-GraphAuditRequest -Uri '/identityProtection/riskyUsers' -PermissionScopes @('IdentityRiskyUser.Read.All') -MockResponses @(
+            [ordered]@{ StatusCode=402; Body=[ordered]@{ error='license required' } }
+        )
+
+        $denied.Status | Should -Be 'NotPermitted'
+        $denied.Error.status_code | Should -Be 403
+        $unlicensed.Status | Should -Be 'NotLicensed'
+        $unlicensed.Error.status_code | Should -Be 402
+    }
+}
+
 Describe 'Write gate behavior (real functions via AST)' {
     BeforeAll {
         # Extract the actual function bodies from the script and load them in
@@ -412,7 +457,7 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $script:AuditCategories = @{ 'Identity' = @{ Items = @(
             @{ ID='IA01'; Text='Priv groups'; Severity='Critical' }
             @{ ID='IA02'; Text='MFA'; Severity='High' }) } }
-        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.4'
+        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.5'
         $save1 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-01'; ScanTarget='DC'; Items=@{ IA01=@{Status='Fail';Findings='x';Evidence='y'}; IA02=@{Status='Pass'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $save2 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-14'; ScanTarget='DC'; Items=@{ IA01=@{Status='Pass'}; IA02=@{Status='Fail'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $s1 = Convert-SaveStateToSnapshot $save1
