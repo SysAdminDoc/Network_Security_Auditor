@@ -307,7 +307,7 @@ Describe 'Cloud Graph profile manifest' {
         }
     }
     BeforeEach {
-        $script:ProductVersion = '4.10.7'
+        $script:ProductVersion = '4.10.8'
         $script:CloudCheckManifest = [ordered]@{
             'CL01' = [ordered]@{ Name='Microsoft Secure Score'; PermissionScopes=@('SecurityEvents.Read.All'); RoleHints=@('Security Reader'); LicensePrerequisites='Secure Score'; ApiVersion='v1.0'; Endpoint='/security/secureScores?$top=1'; OutputFields=@('currentScore'); SkipStates=@('NotConfigured'); PrivacyClassification='Tenant'; Implemented=$true }
             'CL02' = [ordered]@{ Name='Conditional Access policy baseline'; PermissionScopes=@('Policy.Read.All'); RoleHints=@('Conditional Access Reader'); LicensePrerequisites='Entra ID P1/P2'; ApiVersion='v1.0'; Endpoint='/identity/conditionalAccess/policies?$select=id,displayName,state,conditions,grantControls,sessionControls'; OutputFields=@('displayName'); SkipStates=@('NotConfigured'); PrivacyClassification='TenantPolicy'; Implemented=$true }
@@ -325,6 +325,16 @@ Describe 'Cloud Graph profile manifest' {
         }
         $script:Text | Should -Match 'Cloud\s*=\s*@\{'
         $script:Text | Should -Match "Invoke-CloudProfileAssessment"
+    }
+
+    It 'preserves cloud provenance across machine-readable export surfaces' {
+        $script:Text | Should -Match 'function Get-CloudAssessmentExportRecords'
+        $script:Text | Should -Match 'cloud_assessment_finding'
+        $script:Text | Should -Match 'CloudSource\s*='
+        $script:Text | Should -Match 'cloud_assessments\s*=\s*\$cloudSummary'
+        $script:Text | Should -Match 'CloudAssessments\s*=\s*@\(Get-CloudAssessmentExportRecords\)'
+        $script:Text | Should -Match 'network-security-audit://cloud'
+        $script:Text | Should -Match 'CloudUnavailable'
     }
 
     It 'builds secure score, Conditional Access, and guest lifecycle findings from mock Graph responses' {
@@ -573,7 +583,7 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $script:AuditCategories = @{ 'Identity' = @{ Items = @(
             @{ ID='IA01'; Text='Priv groups'; Severity='Critical' }
             @{ ID='IA02'; Text='MFA'; Severity='High' }) } }
-        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.7'
+        $script:SchemaVersion = '2.1'; $script:ProductVersion = '4.10.8'
         $save1 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-01'; ScanTarget='DC'; Items=@{ IA01=@{Status='Fail';Findings='x';Evidence='y'}; IA02=@{Status='Pass'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $save2 = @{ SchemaVersion='2.1'; Client='Acme'; Date='2026-06-14'; ScanTarget='DC'; Items=@{ IA01=@{Status='Pass'}; IA02=@{Status='Fail'} } } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         $s1 = Convert-SaveStateToSnapshot $save1

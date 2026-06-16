@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.10.7 - Professional GUI Tool
+    Network Security Auditor v4.10.8 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -53,7 +53,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.10.7
+    4.10.8
 #>
 param(
     [switch]$Silent,
@@ -94,7 +94,7 @@ param(
 $script:ProductName = 'Network Security Auditor'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.10.7'
+$script:ProductVersion = '4.10.8'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.1'
@@ -345,6 +345,14 @@ function Export-MultiClientDashboard {
                 if ($p.Value.compliant) { $fwCompliant++ }
             }
         }
+        $cloudFindings = @()
+        if ($doc.cloud_assessments) {
+            foreach ($ca in @($doc.cloud_assessments)) {
+                foreach ($cf in @($ca.findings)) { $cloudFindings += $cf }
+            }
+        }
+        $cloudFail = @($cloudFindings | Where-Object { $_.Status -eq 'Fail' -or $_.status -eq 'Fail' }).Count
+        $cloudUnavailable = @($cloudFindings | Where-Object { $_.Status -in @('NotLicensed','NotPermitted','NotConfigured','Error','Other') -or $_.status -in @('NotLicensed','NotPermitted','NotConfigured','Error','Other') }).Count
         $htmlReport = $jf.FullName -replace '_findings\.json$','.html'
         if (-not (Test-Path -LiteralPath $htmlReport)) { $htmlReport = '' }
         $staleDays = if ($ts) { [math]::Round(((Get-Date) - $ts).TotalDays) } else { $null }
@@ -364,6 +372,9 @@ function Export-MultiClientDashboard {
             Stale       = ($null -ne $staleDays -and $staleDays -gt $StaleAfterDays)
             ReportPath  = $htmlReport
             Findings    = @($doc.findings)
+            CloudFindings = $cloudFindings
+            CloudFail = $cloudFail
+            CloudUnavailable = $cloudUnavailable
             ToolVersion = [string]$doc.tool_version
         })
     }
@@ -401,6 +412,7 @@ function Export-MultiClientDashboard {
     $totalClients = $latestRows.Count
     $avgScore = if ($totalClients -gt 0) { [int]([math]::Round((($latestRows | Measure-Object ScorePct -Average).Average))) } else { 0 }
     $totalCriticals = ($latestRows | Measure-Object Critical -Sum).Sum
+    $totalCloudUnavailable = ($latestRows | Measure-Object CloudUnavailable -Sum).Sum
     $staleCount = @($latestRows | Where-Object { $_.Stale }).Count
     $generated = Get-Date -Format 'yyyy-MM-dd HH:mm'
 
@@ -416,10 +428,11 @@ function Export-MultiClientDashboard {
         $clientCell = Convert-DashHtml $r.Client
         if ($r.ReportPath) { $clientCell = "<a href='$([uri]$r.ReportPath)'>$clientCell</a>" }
         $fwCell = "$($r.FwCompliant)/$($r.FwTotal)"
+        $cloudCell = "$($r.CloudFail) fail / $($r.CloudUnavailable) unavailable"
         # mini trend bars
         $trendBars = ''
         foreach ($tp in $r.Trend) { $h = [math]::Max(2,[int]($tp * 0.28)); $tc = Get-ScoreColor $tp; $trendBars += "<span class='tbar' style='height:${h}px;background:$tc' title='$tp%'></span>" }
-        [void]$rowsHtml.Append("<tr><td>$clientCell<div class='sub'>$(Convert-DashHtml $r.Target)</div></td><td style='color:$gColor;font-weight:700'>$($r.Grade)</td><td style='color:$sColor;font-weight:700'>$($r.ScorePct)%</td><td>$($r.RansomScore)% ($($r.RansomGrade))</td><td style='color:$(if($r.Critical -gt 0){'#f38ba8'}else{'#a6e3a1'});font-weight:700'>$($r.Critical)</td><td>$fwCell</td><td><div class='trend'>$trendBars</div><div class='sub'>$($r.ScanCount) scans</div></td><td>$lastScan</td><td>$staleBadge</td></tr>")
+        [void]$rowsHtml.Append("<tr><td>$clientCell<div class='sub'>$(Convert-DashHtml $r.Target)</div></td><td style='color:$gColor;font-weight:700'>$($r.Grade)</td><td style='color:$sColor;font-weight:700'>$($r.ScorePct)%</td><td>$($r.RansomScore)% ($($r.RansomGrade))</td><td style='color:$(if($r.Critical -gt 0){'#f38ba8'}else{'#a6e3a1'});font-weight:700'>$($r.Critical)</td><td>$fwCell</td><td>$cloudCell</td><td><div class='trend'>$trendBars</div><div class='sub'>$($r.ScanCount) scans</div></td><td>$lastScan</td><td>$staleBadge</td></tr>")
     }
 
     $catHtml = New-Object System.Text.StringBuilder
@@ -461,10 +474,11 @@ footer{color:var(--sub);font-size:11px;margin-top:24px;text-align:center}
 <div class='card'><div class='n'>$($records.Count)</div><div class='l'>Total Scans</div></div>
 <div class='card'><div class='n' style='color:$(Get-ScoreColor $avgScore)'>$avgScore%</div><div class='l'>Avg Latest Score</div></div>
 <div class='card'><div class='n' style='color:$(if($totalCriticals -gt 0){'#f38ba8'}else{'#a6e3a1'})'>$totalCriticals</div><div class='l'>Critical Findings</div></div>
+<div class='card'><div class='n' style='color:$(if($totalCloudUnavailable -gt 0){'#f9e2af'}else{'#a6e3a1'})'>$totalCloudUnavailable</div><div class='l'>Cloud Unavailable</div></div>
 <div class='card'><div class='n' style='color:$(if($staleCount -gt 0){'#fab387'}else{'#a6e3a1'})'>$staleCount</div><div class='l'>Stale Scans (&gt;$StaleAfterDays d)</div></div>
 </div>
 <div class='panel'><h2>Clients (latest scan, lowest score first)</h2>
-<table><thead><tr><th>Client / Target</th><th>Grade</th><th>Score</th><th>Ransomware</th><th>Criticals</th><th>Frameworks</th><th>Trend</th><th>Last Scan</th><th>Freshness</th></tr></thead>
+<table><thead><tr><th>Client / Target</th><th>Grade</th><th>Score</th><th>Ransomware</th><th>Criticals</th><th>Frameworks</th><th>Cloud</th><th>Trend</th><th>Last Scan</th><th>Freshness</th></tr></thead>
 <tbody>$($rowsHtml.ToString())</tbody></table></div>
 <div class='panel'><h2>Critical Findings by Category (across latest scans)</h2>$($catHtml.ToString())</div>
 <footer>Generated by $($script:ProductName) v$($script:ProductVersion). Aggregate scores only - no finding evidence or notes are embedded.</footer>
@@ -483,6 +497,7 @@ footer{color:var(--sub);font-size:11px;margin-top:24px;text-align:center}
                 RansomwareScore = $_.RansomScore; RansomwareGrade = $_.RansomGrade
                 Criticals = $_.Critical; TotalFailures = $_.TotalFail
                 FrameworksCompliant = $_.FwCompliant; FrameworksTotal = $_.FwTotal
+                CloudFailures = $_.CloudFail; CloudUnavailable = $_.CloudUnavailable
                 ScanCount = $_.ScanCount; StaleDays = $_.StaleDays; Stale = $_.Stale
                 ReportPath = $_.ReportPath
             }
@@ -11179,6 +11194,41 @@ function Export-RunLogJSONL {
     return $OutPath
 }
 
+function Get-CloudAssessmentExportRecords {
+    $records = [System.Collections.Generic.List[object]]::new()
+    foreach ($imp in @($script:CloudAssessmentImports)) {
+        $tenantLabel = if ($imp.TenantName) { Get-RedactedIdentity $imp.TenantName 'TENANT' } elseif ($imp.TenantId) { Get-RedactedIdentity $imp.TenantId 'TENANT' } else { '' }
+        $tenantId = Get-RedactedIdentity $imp.TenantId 'TENANT'
+        $sourcePath = Get-RedactedIdentity $imp.Path 'PATH'
+        foreach ($f in @($imp.Findings)) {
+            $records.Add([ordered]@{
+                assessment_source = $imp.Source
+                tenant_id = $tenantId
+                tenant = $tenantLabel
+                source_path = $sourcePath
+                assessment_timestamp = $imp.Timestamp
+                assessment_score = $imp.Score
+                status_breakdown = $imp.StatusBreakdown
+                secure_score = $imp.SecureScore
+                check_id = ConvertTo-RedactedText $f.TestId
+                name = ConvertTo-RedactedText $f.Name
+                result = $f.Result
+                status = $f.Status
+                category = ConvertTo-RedactedText $f.Category
+                remediation = ConvertTo-RedactedText $f.Remediation
+                evidence = ConvertTo-RedactedText $f.Evidence
+                source_timestamp = $f.SourceTimestamp
+                permission_scopes = @($f.PermissionScopes)
+                api_version = $f.ApiVersion
+                endpoint = $f.Endpoint
+                privacy_classification = $f.PrivacyClassification
+                privacy_redacted = $script:CliPrivacyMode
+            })
+        }
+    }
+    return @($records)
+}
+
 function Invoke-AutoExport {
     $desktop = [Environment]::GetFolderPath('Desktop')
     # Fallback if Desktop path is empty (roaming profiles, OneDrive redirection)
@@ -11661,6 +11711,38 @@ function Export-FindingsJSONL {
         }
     }
 
+    foreach ($cloud in Get-CloudAssessmentExportRecords) {
+        $evt = [ordered]@{
+            timestamp       = if ($cloud.source_timestamp) { $cloud.source_timestamp } elseif ($cloud.assessment_timestamp) { $cloud.assessment_timestamp } else { $scanTs }
+            event_type      = 'cloud_assessment_finding'
+            source          = $script:ProductShortName
+            source_version  = $script:ProductVersion
+            external_versions = Get-ExternalVersionManifest
+            client          = Get-RedactedIdentity $ClientName 'CLIENT'
+            auditor         = Get-RedactedIdentity $AuditorName 'AUDITOR'
+            host            = Get-RedactedIdentity $scanTarget 'HOST'
+            assessment_source = $cloud.assessment_source
+            tenant_id       = $cloud.tenant_id
+            tenant          = $cloud.tenant
+            source_path     = $cloud.source_path
+            privacy_redacted = $cloud.privacy_redacted
+            check_id        = $cloud.check_id
+            category        = $cloud.category
+            status          = $cloud.status
+            result          = $cloud.result
+            description     = $cloud.name
+            findings        = $cloud.evidence
+            evidence        = $cloud.evidence
+            remediation     = $cloud.remediation
+            source_timestamp = $cloud.source_timestamp
+            permission_scopes = $cloud.permission_scopes
+            api_version     = $cloud.api_version
+            endpoint        = $cloud.endpoint
+            privacy_classification = $cloud.privacy_classification
+        }
+        $lines.Add(($evt | ConvertTo-Json -Depth 8 -Compress))
+    }
+
     $lines -join "`n" | Set-Content $OutPath -Encoding UTF8
     Write-Log "JSONL (SIEM) exported: $OutPath ($($lines.Count) events)" 'INFO'
     return $OutPath
@@ -12010,9 +12092,68 @@ function Export-FindingsCSV {
                 D3FEND_Techniques = ConvertTo-CsvSafeText $(if ($d3fendData) { $d3fendData.Techniques -join '; ' } else { '' })
                 D3FEND_Labels    = ConvertTo-CsvSafeText $(if ($d3fendData) { $d3fendData.Labels -join '; ' } else { '' })
                 ScanTimestamp    = ConvertTo-CsvSafeText $(if ($script:ScanTimestamps.Contains($id)) { $script:ScanTimestamps[$id] } else { '' })
+                CloudSource      = ''
+                CloudTenant      = ''
+                CloudSourcePath  = ''
+                CloudSourceTimestamp = ''
+                CloudPermissionScopes = ''
+                CloudPrivacyClass = ''
             }
             $rows.Add($row)
         }
+    }
+
+    foreach ($cloud in Get-CloudAssessmentExportRecords) {
+        $rows.Add([PSCustomObject][ordered]@{
+            ScanDate         = $scanTs
+            Client           = ConvertTo-CsvSafeText (Get-RedactedIdentity $ClientName 'CLIENT')
+            Auditor          = ConvertTo-CsvSafeText (Get-RedactedIdentity $AuditorName 'AUDITOR')
+            Target           = ConvertTo-CsvSafeText (Get-RedactedIdentity $scanTarget 'HOST')
+            OverallGrade     = $riskData.Grade
+            OverallScore     = $riskData.Pct
+            CheckID          = ConvertTo-CsvSafeText $cloud.check_id
+            Category         = ConvertTo-CsvSafeText $cloud.category
+            Severity         = ConvertTo-CsvSafeText 'Cloud'
+            Weight           = 0
+            RiskPriority     = 0
+            Status           = ConvertTo-CsvSafeText $cloud.status
+            Description      = ConvertTo-CsvSafeText $cloud.name
+            Findings         = ConvertTo-CsvSafeText ($cloud.evidence -replace "`r?`n",' ;; ')
+            Evidence         = ConvertTo-CsvSafeText ($cloud.evidence -replace "`r?`n",' ;; ')
+            Notes            = ''
+            RemStatus        = ConvertTo-CsvSafeText 'Open'
+            RemAssigned      = ''
+            RemDue           = ''
+            NIST_CSF         = ''
+            CIS_Controls     = ''
+            HIPAA            = ''
+            NIST_800_171     = ''
+            CMMC_2_0         = ''
+            PCI_DSS_4        = ''
+            Essential_Eight  = ''
+            Cyber_Essentials = ''
+            SOC2             = ''
+            ISO_27001        = ''
+            STIG             = ''
+            FedRAMP          = ''
+            ATTACK_Version   = ConvertTo-CsvSafeText $script:ExternalVersions.AttackEnterprise
+            ATTACK_SourceVersion = ConvertTo-CsvSafeText $script:ExternalVersionSources.AttackEnterprise.SourceVersion
+            OCSF_Version     = ConvertTo-CsvSafeText $script:ExternalVersions.OCSF
+            OSCAL_Version    = ConvertTo-CsvSafeText $script:ExternalVersions.OSCAL
+            MITRE_Tactics    = ''
+            MITRE_Techniques = ''
+            D3FEND_Version   = ''
+            D3FEND_Stages    = ''
+            D3FEND_Techniques = ''
+            D3FEND_Labels    = ''
+            ScanTimestamp    = ConvertTo-CsvSafeText $cloud.assessment_timestamp
+            CloudSource      = ConvertTo-CsvSafeText $cloud.assessment_source
+            CloudTenant      = ConvertTo-CsvSafeText $cloud.tenant
+            CloudSourcePath  = ConvertTo-CsvSafeText $cloud.source_path
+            CloudSourceTimestamp = ConvertTo-CsvSafeText $cloud.source_timestamp
+            CloudPermissionScopes = ConvertTo-CsvSafeText (@($cloud.permission_scopes) -join '; ')
+            CloudPrivacyClass = ConvertTo-CsvSafeText $cloud.privacy_classification
+        })
     }
 
     $rows | Export-Csv -Path $OutPath -NoTypeInformation -Encoding UTF8
@@ -12069,6 +12210,14 @@ function Export-ComplianceSummary {
         }
     } catch {}
 
+    $cloudRecords = @(Get-CloudAssessmentExportRecords)
+    $cloudSummary = [ordered]@{
+        finding_count = $cloudRecords.Count
+        failed = @($cloudRecords | Where-Object { $_.status -eq 'Fail' }).Count
+        unavailable = @($cloudRecords | Where-Object { $_.status -in @('NotLicensed','NotPermitted','NotConfigured','Error','Other') }).Count
+        findings = $cloudRecords
+    }
+
     $summary = [ordered]@{
         schema_version = $script:SchemaVersion
         tool           = $script:ProductShortName
@@ -12089,6 +12238,7 @@ function Export-ComplianceSummary {
         category_scores = $catScores
         framework_compliance = $fwFlags
         critical_findings = $critFindings
+        cloud_assessments = $cloudSummary
         critical_count = $critFindings.Count
         total_checks   = ($script:AuditCategories.Values | ForEach-Object { $_.Items.Count } | Measure-Object -Sum).Sum
         pass_count     = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Pass' }).Count
@@ -12103,7 +12253,10 @@ function Export-ComplianceSummary {
 # ── Phase 5D: SARIF Export (Static Analysis Results Interchange Format) ──────
 function Export-SARIF {
     param([string]$OutPath, [string]$ClientName = '')
-    if (-not $ClientName) { $ClientName = try { $el['txtClient'].Text } catch { $env:COMPUTERNAME } }
+    if (-not $ClientName) {
+        try { $ClientName = $el['txtClient'].Text } catch { $ClientName = $env:COMPUTERNAME }
+    }
+    try { $scanTarget = $el['txtScanTarget'].Text } catch { $scanTarget = $env:COMPUTERNAME }
     $rules = @()
     $results = @()
     foreach ($cn in $script:AuditCategories.Keys) {
@@ -12155,6 +12308,54 @@ function Export-SARIF {
             }
         }
     }
+    foreach ($cloud in Get-CloudAssessmentExportRecords) {
+        $cloudRuleLevel = if ($cloud.status -eq 'Fail') { 'warning' } else { 'note' }
+        $cloudResultLevel = if ($cloud.status -eq 'Fail') { 'warning' } elseif ($cloud.status -eq 'Error') { 'error' } else { 'note' }
+        $cloudMessage = if ($cloud.evidence) { $cloud.evidence.Substring(0, [math]::Min(500, $cloud.evidence.Length)) } else { $cloud.name }
+        $rules += [ordered]@{
+            id = $cloud.check_id
+            name = $cloud.name
+            shortDescription = @{ text = $cloud.name }
+            defaultConfiguration = @{ level = $cloudRuleLevel }
+            properties = @{
+                category = $cloud.category
+                assessment_source = $cloud.assessment_source
+                source_timestamp = $cloud.source_timestamp
+                permission_scopes = $cloud.permission_scopes
+                api_version = $cloud.api_version
+                endpoint = $cloud.endpoint
+                privacy_classification = $cloud.privacy_classification
+            }
+        }
+        if ($cloud.status -ne 'Pass') {
+            $results += [ordered]@{
+                ruleId = $cloud.check_id
+                level = $cloudResultLevel
+                message = @{ text = $cloudMessage }
+                locations = @(@{
+                    physicalLocation = @{
+                        artifactLocation = @{ uri = "network-security-audit://cloud/$($cloud.check_id)" }
+                    }
+                    logicalLocations = @(@{
+                        name = $cloud.check_id
+                        fullyQualifiedName = "$($script:ProductShortName).Cloud.$($cloud.check_id)"
+                        kind = 'function'
+                        decoratedName = $cloud.name
+                    })
+                })
+                properties = @{
+                    status = $cloud.status
+                    category = $cloud.category
+                    assessment_source = $cloud.assessment_source
+                    tenant = $cloud.tenant
+                    source_path = $cloud.source_path
+                    source_timestamp = $cloud.source_timestamp
+                    permission_scopes = $cloud.permission_scopes
+                    privacy_redacted = $cloud.privacy_redacted
+                }
+            }
+        }
+    }
     $sarif = [ordered]@{
         '$schema' = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json'
         version = '2.1.0'
@@ -12172,7 +12373,7 @@ function Export-SARIF {
             invocations = @(@{
                 executionSuccessful = $true
                 endTimeUtc = (Get-Date).ToUniversalTime().ToString('o')
-                properties = @{ client = (Get-RedactedIdentity $ClientName 'CLIENT'); target = (Get-RedactedIdentity (try{$el['txtScanTarget'].Text}catch{$env:COMPUTERNAME}) 'HOST') }
+                properties = @{ client = (Get-RedactedIdentity $ClientName 'CLIENT'); target = (Get-RedactedIdentity $scanTarget 'HOST') }
             })
         })
     }
@@ -12223,6 +12424,7 @@ function Export-IntuneCompliance {
         OverallCompliant = ($riskData.Grade -in @('A','B'))
         CriticalFailures = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
         Checks = $checks
+        CloudAssessments = @(Get-CloudAssessmentExportRecords)
     }
     $output | ConvertTo-Json -Depth 5 | Set-Content $OutPath -Encoding UTF8
     Write-Log "Intune compliance JSON exported: $OutPath" 'INFO'

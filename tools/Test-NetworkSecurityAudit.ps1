@@ -273,6 +273,15 @@ if ($scriptText -notmatch 'cloud_assessments' -or $scriptText -notmatch 'CloudAs
 if ($scriptText -notmatch 'source_path\s*=' -or $scriptText -notmatch 'provenance\s*=\s*\[ordered\]@' -or $scriptText -notmatch "Tag = 'TENANT'" -or $scriptText -notmatch "Tag = 'PATH'" -or $scriptText -notmatch '\[SECRET-REDACTED\]') {
     Add-Failure 'Cloud assessment provenance must include redacted source paths, tenants, and token-like values under privacy mode.'
 }
+if ($scriptText -notmatch 'function Get-CloudAssessmentExportRecords' -or
+    $scriptText -notmatch 'cloud_assessment_finding' -or
+    $scriptText -notmatch 'CloudSource\s*=' -or
+    $scriptText -notmatch 'cloud_assessments\s*=\s*\$cloudSummary' -or
+    $scriptText -notmatch 'CloudAssessments\s*=\s*@\(Get-CloudAssessmentExportRecords\)' -or
+    $scriptText -notmatch 'network-security-audit://cloud' -or
+    $scriptText -notmatch 'CloudUnavailable') {
+    Add-Failure 'Cloud assessment provenance must flow through JSONL, CSV, summary JSON, SARIF, Intune, and dashboard exports.'
+}
 if ($scriptText -notmatch 'LAPS DELEGATION AUDIT' -or $scriptText -notmatch 'ms-Mcs-AdmPwd' -or $scriptText -notmatch 'msLAPS-EncryptedPassword' -or $scriptText -notmatch 'schemaIDGUID') {
     Add-Failure 'IA06 must audit LAPS password read/decrypt delegation via schema GUID ACL inspection.'
 }

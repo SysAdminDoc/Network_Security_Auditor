@@ -6,7 +6,7 @@ One script. No dependencies to pre-install. Works on any Windows machine from st
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.10.7-brightgreen)
+![Version](https://img.shields.io/badge/Version-4.10.8-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
@@ -541,7 +541,9 @@ pseudonymized in report/export provenance.
 on-premises domain. It currently emits CL01 Secure Score, CL02 Conditional
 Access baseline gaps/exclusions, and CL06 stale guest lifecycle evidence; CL01
 through CL12 are declared in the cloud manifest with permissions, license
-prerequisites, endpoints, output fields, skip states, and privacy classes.
+prerequisites, endpoints, output fields, skip states, and privacy classes. Cloud
+provenance is also carried into JSONL, CSV, SARIF, Intune, compliance summary,
+and dashboard exports with the same privacy redaction rules.
 
 ---
 
