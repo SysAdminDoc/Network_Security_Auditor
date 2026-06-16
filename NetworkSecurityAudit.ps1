@@ -2834,14 +2834,32 @@ $script:AutoChecks = @{
     'EP10' = @{ Type='AD'; Label='Scan EOL Operating Systems'
         Script = {
             $sb = [System.Text.StringBuilder]::new(); $eolCount = 0
-            $eolPatterns = @('Windows XP','Windows Vista','Windows 7','Windows 8','Windows 10','Server 2003','Server 2008','Server 2012')
+            $lifecycleTable = @(
+                @{ Pattern='Windows XP';          Status='EndOfUpdates'; EOL='2014-04-08'; ESU=$false; Note='No security updates since 2014' }
+                @{ Pattern='Windows Vista';       Status='EndOfUpdates'; EOL='2017-04-11'; ESU=$false; Note='No security updates since 2017' }
+                @{ Pattern='Windows 7';           Status='EndOfUpdates'; EOL='2023-01-10'; ESU=$false; Note='ESU ended Jan 2023' }
+                @{ Pattern='Windows 8';           Status='EndOfUpdates'; EOL='2023-01-10'; ESU=$false; Note='No security updates since Jan 2023' }
+                @{ Pattern='Windows 10';          Status='EndOfUpdates'; EOL='2025-10-14'; ESU=$true;  Note='ESU available Oct 2025 - Oct 2028' }
+                @{ Pattern='Server 2003';         Status='EndOfUpdates'; EOL='2015-07-14'; ESU=$false; Note='No security updates since 2015' }
+                @{ Pattern='Server 2008';         Status='EndOfUpdates'; EOL='2023-01-10'; ESU=$false; Note='ESU ended Jan 2023' }
+                @{ Pattern='Server 2012';         Status='EndOfUpdates'; EOL='2023-10-10'; ESU=$false; Note='ESU ended Oct 2026' }
+                @{ Pattern='Server 2016';         Status='EndOfUpdates'; EOL='2027-01-12'; ESU=$false; Note='Mainstream ended Jan 2022; extended support until Jan 2027' }
+                @{ Pattern='Server 2019';         Status='Supported';    EOL='2029-01-09'; ESU=$false; Note='Extended support until Jan 2029' }
+                @{ Pattern='Server 2022';         Status='Supported';    EOL='2031-10-14'; ESU=$false; Note='Extended support until Oct 2031' }
+                @{ Pattern='Server 2025';         Status='Supported';    EOL='2034-10-10'; ESU=$false; Note='Extended support until Oct 2034' }
+            )
+            $lifecycleSource = 'https://learn.microsoft.com/en-us/lifecycle/products/'
+            $lifecycleReviewed = '2026-06-14'
+            $eolPatterns = @($lifecycleTable | Where-Object { $_.Status -eq 'EndOfUpdates' } | ForEach-Object { $_.Pattern })
+            [void]$sb.AppendLine("LIFECYCLE TABLE: source=$lifecycleSource reviewed=$lifecycleReviewed entries=$($lifecycleTable.Count)")
             # Check local machine first
             $localOS = (Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).Caption
-            $localEOL = $eolPatterns | Where-Object { $localOS -match [regex]::Escape($_) }
-            if ($localEOL) {
+            $localMatch = $lifecycleTable | Where-Object { $localOS -match [regex]::Escape($_.Pattern) } | Select-Object -First 1
+            if ($localMatch -and $localMatch.Status -eq 'EndOfUpdates') {
                 $eolCount++
                 [void]$sb.AppendLine("[!] LOCAL MACHINE IS END OF LIFE: $localOS")
-                if ($localOS -match 'Windows 10') {
+                [void]$sb.AppendLine("  EOL: $($localMatch.EOL) | $($localMatch.Note)")
+                if ($localOS -match 'Windows 10' -and $localMatch.ESU) {
                     try {
                         $esuKey = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\ESU' -EA SilentlyContinue
                         $esuActivation = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\TargetVersionUpgradeExperienceIndicators\NI22H2' -EA SilentlyContinue
@@ -2856,21 +2874,25 @@ $script:AutoChecks = @{
                         }
                     } catch { [void]$sb.AppendLine("  ESU Enrollment : Could not query") }
                 }
+            } elseif ($localMatch) {
+                [void]$sb.AppendLine("Local OS: $localOS [$($localMatch.Status) until $($localMatch.EOL)]")
             } else {
-                [void]$sb.AppendLine("Local OS: $localOS [OK]")
+                [void]$sb.AppendLine("Local OS: $localOS [Unknown lifecycle - not in table]")
             }
             # Scan AD computers
             $comps = Get-ADComputer -Filter {Enabled -eq $true} -Properties OperatingSystem,OperatingSystemVersion,LastLogonDate -EA Stop
             $grouped = $comps | Group-Object OperatingSystem | Sort-Object Count -Descending
             [void]$sb.AppendLine("`nAD OS DISTRIBUTION ($($comps.Count) total computers):")
             foreach ($g in $grouped) {
-                $isEOL = $eolPatterns | Where-Object { $g.Name -match [regex]::Escape($_) }
+                $osMatch = $lifecycleTable | Where-Object { $g.Name -match [regex]::Escape($_.Pattern) } | Select-Object -First 1
+                $isEOL = ($osMatch -and $osMatch.Status -eq 'EndOfUpdates')
                 if ($isEOL) { $eolCount += $g.Count }
-                [void]$sb.AppendLine("  $($g.Count.ToString().PadLeft(4)) x $($g.Name) $(if($isEOL){'[END OF LIFE!]'})")
+                $label = if ($isEOL) { '[END OF LIFE!]' } elseif ($osMatch) { "[$($osMatch.Status)]" } else { '' }
+                [void]$sb.AppendLine("  $($g.Count.ToString().PadLeft(4)) x $($g.Name) $label")
             }
             if ($eolCount -gt 0) {
                 [void]$sb.AppendLine("`nEOL SYSTEMS ($eolCount):")
-                $eolSystems = $comps | Where-Object { $eolPatterns | Where-Object { $_.OperatingSystem -match [regex]::Escape($_) } } | Select-Object -First 20
+                $eolSystems = @($comps | Where-Object { $eos = $_; $eolPatterns | Where-Object { $eos.OperatingSystem -match [regex]::Escape($_) } } | Select-Object -First 20)
                 foreach ($c in $eolSystems) { [void]$sb.AppendLine("  $($c.Name) | $($c.OperatingSystem) | Last logon: $(if($c.LastLogonDate){$c.LastLogonDate.ToString('yyyy-MM-dd')}else{'Never'})") }
             }
             # Windows 10 migration progress

@@ -413,6 +413,9 @@ if ($scriptText -notmatch 'SMB OVER QUIC' -or $scriptText -notmatch 'EnableSMBQU
 if ($scriptText -notmatch 'SourceVersion' -or $scriptText -notmatch 'SourceUrl' -or $scriptText -notmatch 'ReviewedDate' -or $scriptText -notmatch 'framework_provenance') {
     Add-Failure 'FrameworkMeta must include provenance (SourceVersion, SourceUrl, ReviewedDate) and exports must emit framework_provenance.'
 }
+if ($scriptText -notmatch 'lifecycleTable' -or $scriptText -notmatch 'lifecycleSource' -or $scriptText -notmatch 'lifecycleReviewed' -or $scriptText -notmatch 'Server 2025') {
+    Add-Failure 'EP10 must use a versioned lifecycle table with source/reviewed metadata covering Server 2025.'
+}
 if ($scriptText -notmatch "Pass','Fail','Partial','N/A") {
     Add-Failure 'Auto-check status mapping must preserve N/A results for non-applicable checks.'
 }
