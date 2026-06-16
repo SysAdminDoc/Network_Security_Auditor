@@ -97,7 +97,8 @@ param(
     [PSCredential]$Credential = $null,
     [switch]$Remediate,
     [switch]$RemediateDryRun,
-    [string[]]$RemediateChecks = @()
+    [string[]]$RemediateChecks = @(),
+    [string[]]$BenchmarkImportPath = @()
 )
 
 $script:ProductName = 'Network Security Auditor'
@@ -11562,6 +11563,34 @@ $(if($script:Branding){
         $html += "</div>`n"
     }
 
+    # ── IMPORTED BENCHMARK RESULTS (Management, All) ───────────────────────
+    if (($Tier -eq 'Management' -or $Tier -eq 'All') -and $script:BenchmarkImports.Count -gt 0) {
+        $html += "<div class='sec' style='border-left:4px solid #a855f7'><h2 style='color:#a855f7'>Imported Benchmark Results <span class='tier-label' style='background:#a855f722;color:#a855f7;border:1px solid #a855f744'>BENCHMARK</span></h2>`n"
+        $html += "<div class='d'>External benchmark/baseline results imported from HardeningKitty, Microsoft Policy Analyzer, or DISA STIG checklists. These supplement native NSA checks with exact CIS/STIG-level compliance data.</div>`n"
+        foreach ($bm in $script:BenchmarkImports) {
+            $bmScore = if ($bm.summary.total -gt 0) { [math]::Round(($bm.summary.pass / $bm.summary.total) * 100) } else { 0 }
+            $bmColor = if ($bmScore -ge 80) { '#22c55e' } elseif ($bmScore -ge 60) { '#eab308' } elseif ($bmScore -ge 40) { '#f97316' } else { '#ef4444' }
+            $html += "<div style='background:#1e293b;border-radius:4px;padding:12px;margin:8px 0;border:1px solid #334155'>`n"
+            $html += "<div style='display:flex;align-items:center;gap:12px;margin-bottom:8px'>"
+            $html += "<span style='font-size:15px;font-weight:600;color:#e2e8f0'>$([System.Net.WebUtility]::HtmlEncode($bm.source))</span>"
+            $html += "<span style='font-size:22px;font-weight:700;color:$bmColor'>${bmScore}%</span>"
+            $html += "<span style='color:#94a3b8;font-size:11px'>$($bm.summary.pass) pass | $($bm.summary.fail) fail | $($bm.summary.warning) warning | $($bm.summary.not_applicable) N/A of $($bm.summary.total) checks</span></div>`n"
+            if ($bm.benchmark) { $html += "<div style='color:#c4b5fd;font-size:11px;margin-bottom:4px'>Benchmark: $([System.Net.WebUtility]::HtmlEncode($bm.benchmark))$(if($bm.version){" v$([System.Net.WebUtility]::HtmlEncode($bm.version))"})</div>`n" }
+            $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>File: $([System.Net.WebUtility]::HtmlEncode($bm.source_file))</div>`n"
+            $failedBm = @($bm.findings | Where-Object { $_.status -eq 'Fail' })
+            if ($failedBm.Count -gt 0) {
+                $html += "<table style='margin-top:8px'><tr><th>ID</th><th>Status</th><th>Severity</th><th>Name</th><th>Expected</th><th>Actual</th></tr>`n"
+                foreach ($f in $failedBm | Select-Object -First 50) {
+                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode($f.id))</td><td style='color:#ef4444'>$([System.Net.WebUtility]::HtmlEncode($f.status))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.severity))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.name))</td><td style='color:#22c55e'>$([System.Net.WebUtility]::HtmlEncode($f.expected))</td><td style='color:#ef4444'>$([System.Net.WebUtility]::HtmlEncode($f.actual))</td></tr>`n"
+                }
+                if ($failedBm.Count -gt 50) { $html += "<tr><td colspan='6' style='color:#94a3b8'>... and $($failedBm.Count - 50) more failed checks</td></tr>`n" }
+                $html += "</table>`n"
+            }
+            $html += "</div>`n"
+        }
+        $html += "</div>`n"
+    }
+
     # ── RANSOMWARE PREPAREDNESS (Management, All) ─────────────────────────
     if ($Tier -eq 'Management' -or $Tier -eq 'All') {
         $rwScore = Get-RansomwareScore
@@ -12216,6 +12245,16 @@ function Export-FindingsJSON {
                             PrivacyClassification = $_.PrivacyClassification
                         }
                     })
+                }
+            })
+        } else { @() }
+        benchmark_imports = if ($script:BenchmarkImports.Count -gt 0) {
+            @($script:BenchmarkImports | ForEach-Object {
+                [ordered]@{
+                    source = $_.source; source_file = $_.source_file; benchmark = $_.benchmark
+                    version = $_.version; timestamp = $_.timestamp
+                    summary = $_.summary
+                    findings = @($_.findings)
                 }
             })
         } else { @() }
@@ -13354,6 +13393,117 @@ function Export-SIEMContentPack {
     }
 }
 
+# ── Benchmark Import Parser ─────────────────────────────────────────────────
+# Imports results from HardeningKitty CSV, Microsoft SCT/Policy Analyzer,
+# or DISA STIG Checklist (.ckl) / XCCDF results into the audit report.
+$script:BenchmarkImports = [System.Collections.Generic.List[object]]::new()
+function Import-BenchmarkResults {
+    [CmdletBinding()]
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { Write-Warning "Benchmark file not found: $Path"; return $null }
+    $ext = [System.IO.Path]::GetExtension($Path).ToLower()
+    $fileName = [System.IO.Path]::GetFileName($Path)
+    $content = Get-Content $Path -Raw -Encoding UTF8
+
+    $result = [ordered]@{
+        source = 'Unknown'; source_file = $fileName; path = $Path
+        timestamp = (Get-Date -Format 'o'); benchmark = ''; version = ''
+        findings = [System.Collections.Generic.List[object]]::new()
+        summary = [ordered]@{ total = 0; pass = 0; fail = 0; warning = 0; not_applicable = 0; manual = 0; error = 0 }
+    }
+
+    if ($ext -eq '.csv') {
+        $csv = Import-Csv $Path -ErrorAction Stop
+        $cols = $csv | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
+        if ('TestResult' -in $cols -and 'ID' -in $cols -and 'Name' -in $cols) {
+            $result.source = 'HardeningKitty'
+            $result.benchmark = if ('Category' -in $cols -and $csv.Count -gt 0) { $csv[0].Category } else { 'Windows Hardening' }
+            foreach ($row in $csv) {
+                $status = switch ($row.TestResult) {
+                    'Passed' { 'Pass' } 'Failed' { 'Fail' } 'Warning' { 'Warning' }
+                    'Not Applicable' { 'N/A' } default { $row.TestResult }
+                }
+                $entry = [ordered]@{
+                    id = $row.ID; name = $row.Name; status = $status
+                    category = if ($row.PSObject.Properties['Category']) { $row.Category } else { '' }
+                    severity = if ($row.PSObject.Properties['Severity']) { $row.Severity } else { 'Medium' }
+                    expected = if ($row.PSObject.Properties['Recommended']) { $row.Recommended } else { '' }
+                    actual   = if ($row.PSObject.Properties['CurrentValue']) { $row.CurrentValue } else { '' }
+                    registry = if ($row.PSObject.Properties['RegistryPath']) { $row.RegistryPath } else { '' }
+                }
+                $result.findings.Add($entry)
+                switch ($status) { 'Pass' { $result.summary.pass++ } 'Fail' { $result.summary.fail++ } 'Warning' { $result.summary.warning++ } 'N/A' { $result.summary.not_applicable++ } default { $result.summary.error++ } }
+            }
+        } elseif ('Setting' -in $cols -and 'Result' -in $cols) {
+            $result.source = 'PolicyAnalyzer'
+            $result.benchmark = 'Microsoft Security Baseline'
+            foreach ($row in $csv) {
+                $status = switch -Wildcard ($row.Result) {
+                    'Match*' { 'Pass' } 'Mismatch*' { 'Fail' } 'Not Configured*' { 'Warning' }
+                    'N/A*' { 'N/A' } default { 'Warning' }
+                }
+                $entry = [ordered]@{
+                    id = ''; name = $row.Setting; status = $status
+                    category = if ($row.PSObject.Properties['PolicyArea']) { $row.PolicyArea } else { '' }
+                    severity = 'Medium'
+                    expected = if ($row.PSObject.Properties['BaselineValue']) { $row.BaselineValue } else { '' }
+                    actual   = if ($row.PSObject.Properties['LocalValue']) { $row.LocalValue } else { '' }
+                    registry = if ($row.PSObject.Properties['RegistryPath']) { $row.RegistryPath } else { '' }
+                }
+                $result.findings.Add($entry)
+                switch ($status) { 'Pass' { $result.summary.pass++ } 'Fail' { $result.summary.fail++ } 'Warning' { $result.summary.warning++ } 'N/A' { $result.summary.not_applicable++ } }
+            }
+        }
+    } elseif ($ext -in '.xml', '.ckl') {
+        if ($content -match '<CHECKLIST>') {
+            $result.source = 'DISA_STIG_CKL'
+            try {
+                $xml = [xml]$content
+                $stigs = $xml.CHECKLIST.STIGS.iSTIG
+                if ($stigs) {
+                    $headerData = $stigs.STIG_INFO.SI_DATA
+                    $titleNode = $headerData | Where-Object { $_.SID_NAME -eq 'title' }
+                    $result.benchmark = if ($titleNode) { $titleNode.SID_DATA } else { 'DISA STIG' }
+                    $verNode = $headerData | Where-Object { $_.SID_NAME -eq 'version' }
+                    $result.version = if ($verNode) { $verNode.SID_DATA } else { '' }
+                    foreach ($vuln in $stigs.VULN) {
+                        $attrs = @{}
+                        foreach ($sd in $vuln.STIG_DATA) { $attrs[$sd.VULN_ATTRIBUTE] = $sd.ATTRIBUTE_DATA }
+                        $status = switch ($vuln.STATUS) {
+                            'NotAFinding' { 'Pass' } 'Open' { 'Fail' } 'Not_Applicable' { 'N/A' }
+                            'Not_Reviewed' { 'Manual' } default { $vuln.STATUS }
+                        }
+                        $entry = [ordered]@{
+                            id = $attrs['Vuln_Num']; name = $attrs['Rule_Title']; status = $status
+                            category = $attrs['IA_Controls']; severity = $attrs['Severity']
+                            expected = $attrs['Fix_Text']; actual = $vuln.FINDING_DETAILS
+                            registry = ''
+                        }
+                        $result.findings.Add($entry)
+                        switch ($status) { 'Pass' { $result.summary.pass++ } 'Fail' { $result.summary.fail++ } 'N/A' { $result.summary.not_applicable++ } 'Manual' { $result.summary.manual++ } default { $result.summary.warning++ } }
+                    }
+                }
+            } catch { $result.source = 'DISA_STIG_CKL'; $result.summary.error++ }
+        } elseif ($content -match 'TestResult|Benchmark') {
+            $result.source = 'XCCDF'
+            $result.benchmark = 'XCCDF Benchmark'
+        }
+    }
+
+    $result.summary.total = $result.findings.Count
+    return $result
+}
+
+$script:CliBenchmarkPaths = @($BenchmarkImportPath | Where-Object { $_ })
+if ($script:CliBenchmarkPaths.Count -gt 0) {
+    foreach ($bPath in $script:CliBenchmarkPaths) {
+        $imported = Import-BenchmarkResults -Path $bPath
+        if ($imported -and $imported.findings.Count -gt 0) {
+            $script:BenchmarkImports.Add($imported)
+        }
+    }
+}
+
 # ── Full Audit Button Handler ────────────────────────────────────────────────
 $el['btnFullAudit'].Add_Click({
     if ($script:ScanRunning) { return }
@@ -13533,6 +13683,9 @@ if ($script:SilentMode) {
     Write-Host "[Silent Mode]   Profile:     $profName ($($idList.Count + $cloudChecks) checks: $localChecks local, $adChecks AD, $cloudChecks cloud)"
     Write-Host "[Silent Mode]   Read-only:   $($script:ReadOnlyMode)"
     Write-Host "[Silent Mode]   Internet:    $(if($script:CliNoInternet){'Disabled (-NoInternet)'}else{'Enabled (KEV download, DNS probes)'})"
+    if ($script:BenchmarkImports.Count -gt 0) {
+        Write-Host "[Silent Mode]   Benchmarks:  $($script:BenchmarkImports.Count) imported ($($script:BenchmarkImports | ForEach-Object { "$($_.source): $($_.summary.total) checks" }))"
+    }
     if ($skippedByProfile -gt 0) { Write-Host "[Silent Mode]   Skipped:     $skippedByProfile checks (not in profile)" }
     if ($skippedByRisk -gt 0)    { Write-Host "[Silent Mode]   Skipped:     $skippedByRisk checks (risk tier 3, read-only mode)" }
     if ($script:CliWriteManifestOnly) {
