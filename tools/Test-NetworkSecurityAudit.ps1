@@ -410,6 +410,9 @@ if ($scriptText -notmatch 'ADMINISTRATOR PROTECTION' -or $scriptText -notmatch '
 if ($scriptText -notmatch 'SMB OVER QUIC' -or $scriptText -notmatch 'EnableSMBQUIC') {
     Add-Failure 'EP03 must check SMB over QUIC posture on Server 2025/Win11 24H2+.'
 }
+if ($scriptText -notmatch 'SourceVersion' -or $scriptText -notmatch 'SourceUrl' -or $scriptText -notmatch 'ReviewedDate' -or $scriptText -notmatch 'framework_provenance') {
+    Add-Failure 'FrameworkMeta must include provenance (SourceVersion, SourceUrl, ReviewedDate) and exports must emit framework_provenance.'
+}
 if ($scriptText -notmatch "Pass','Fail','Partial','N/A") {
     Add-Failure 'Auto-check status mapping must preserve N/A results for non-applicable checks.'
 }

@@ -5418,17 +5418,17 @@ $script:CategoryWeights = @{
 $script:ComplianceTarget = 'All'   # Active framework filter: All, CIS, NIST, CMMC, HIPAA, PCI, E8, CyberEssentials, SOC2, ISO27001, STIG
 
 $script:FrameworkMeta = [ordered]@{
-    'CIS'      = @{ Name='CIS Controls v8.1'; Color='#38bdf8'; Short='CIS' }
-    'NIST'     = @{ Name='NIST 800-171 Rev 3'; Color='#818cf8'; Short='800-171' }
-    'CMMC'     = @{ Name='CMMC 2.0 Level 2'; Color='#a855f7'; Short='CMMC' }
-    'HIPAA'    = @{ Name='HIPAA Security Rule'; Color='#22c55e'; Short='HIPAA' }
-    'PCI'      = @{ Name='PCI-DSS 4.0.1'; Color='#f97316'; Short='PCI' }
-    'E8'       = @{ Name='ACSC Essential Eight'; Color='#14b8a6'; Short='E8' }
-    'CyberEssentials' = @{ Name='Cyber Essentials v3.3'; Color='#84cc16'; Short='CE' }
-    'SOC2'     = @{ Name='SOC 2 Type II'; Color='#eab308'; Short='SOC2' }
-    'ISO27001' = @{ Name='ISO 27001:2022'; Color='#ec4899'; Short='ISO' }
-    'STIG'     = @{ Name='DISA STIG'; Color='#06b6d4'; Short='STIG' }
-    'FedRAMP'  = @{ Name='FedRAMP Moderate'; Color='#f43f5e'; Short='FedRAMP' }
+    'CIS'      = @{ Name='CIS Controls v8.1'; Color='#38bdf8'; Short='CIS'; SourceVersion='v8.1'; SourceUrl='https://www.cisecurity.org/controls/v8'; ReviewedDate='2026-06-06'; Confidence='High' }
+    'NIST'     = @{ Name='NIST 800-171 Rev 3'; Color='#818cf8'; Short='800-171'; SourceVersion='Rev 3'; SourceUrl='https://csrc.nist.gov/pubs/sp/800/171/r3/final'; ReviewedDate='2026-06-06'; Confidence='High' }
+    'CMMC'     = @{ Name='CMMC 2.0 Level 2'; Color='#a855f7'; Short='CMMC'; SourceVersion='v2.0 Final Rule'; SourceUrl='https://www.acq.osd.mil/cmmc/'; ReviewedDate='2026-06-06'; Confidence='High' }
+    'HIPAA'    = @{ Name='HIPAA Security Rule'; Color='#22c55e'; Short='HIPAA'; SourceVersion='45 CFR 164'; SourceUrl='https://www.hhs.gov/hipaa/for-professionals/security/'; ReviewedDate='2026-06-06'; Confidence='Medium' }
+    'PCI'      = @{ Name='PCI-DSS 4.0.1'; Color='#f97316'; Short='PCI'; SourceVersion='v4.0.1'; SourceUrl='https://www.pcisecuritystandards.org/document_library/'; ReviewedDate='2026-06-06'; Confidence='High' }
+    'E8'       = @{ Name='ACSC Essential Eight'; Color='#14b8a6'; Short='E8'; SourceVersion='Maturity Model 2024'; SourceUrl='https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight'; ReviewedDate='2026-06-09'; Confidence='High' }
+    'CyberEssentials' = @{ Name='Cyber Essentials v3.3'; Color='#84cc16'; Short='CE'; SourceVersion='v3.3'; SourceUrl='https://www.ncsc.gov.uk/cyberessentials/overview'; ReviewedDate='2026-06-09'; Confidence='High' }
+    'SOC2'     = @{ Name='SOC 2 Type II'; Color='#eab308'; Short='SOC2'; SourceVersion='2017 Trust Services Criteria'; SourceUrl='https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2'; ReviewedDate='2026-06-06'; Confidence='Medium' }
+    'ISO27001' = @{ Name='ISO 27001:2022'; Color='#ec4899'; Short='ISO'; SourceVersion='2022 Annex A'; SourceUrl='https://www.iso.org/standard/27001'; ReviewedDate='2026-06-06'; Confidence='High' }
+    'STIG'     = @{ Name='DISA STIG'; Color='#06b6d4'; Short='STIG'; SourceVersion='Windows Server/Client'; SourceUrl='https://public.cyber.mil/stigs/'; ReviewedDate='2026-06-06'; Confidence='High' }
+    'FedRAMP'  = @{ Name='FedRAMP Moderate'; Color='#f43f5e'; Short='FedRAMP'; SourceVersion='NIST 800-53 Rev 5 Moderate'; SourceUrl='https://www.fedramp.gov/'; ReviewedDate='2026-06-12'; Confidence='High' }
 }
 
 # Per-check mapping: each key = check ID, value = hashtable of framework -> control IDs
@@ -10869,6 +10869,18 @@ function Export-FindingsJSON {
 
     $scanTarget = if ($el -and $el['txtScanTarget']) { $el['txtScanTarget'].Text } else { 'localhost' }
 
+    $fwProvenance = [ordered]@{}
+    foreach ($fwKey in $script:FrameworkMeta.Keys) {
+        $fm = $script:FrameworkMeta[$fwKey]
+        $fwProvenance[$fwKey] = [ordered]@{
+            name = $fm.Name; source_version = $fm.SourceVersion; source_url = $fm.SourceUrl
+            reviewed_date = $fm.ReviewedDate; confidence = $fm.Confidence
+        }
+    }
+    foreach ($evKey in $script:ExternalVersions.Keys) {
+        $fwProvenance["_ext_$evKey"] = $script:ExternalVersions[$evKey]
+    }
+
     $privacyFlag = $script:CliPrivacyMode
     $export = [ordered]@{
         schema_version = $script:SchemaVersion
@@ -10894,6 +10906,7 @@ function Export-FindingsJSON {
             ransomware = [ordered]@{ score=$rwData.Overall; grade=$rwData.Grade }
         }
         compliance_frameworks = $fwStatus
+        framework_provenance = $fwProvenance
         run_log_summary = Get-RunLogSummary
         run_log = @(if ($script:CliPrivacyMode) { foreach ($rl in $script:RunLog) { $o=[ordered]@{}; foreach($k in $rl.Keys){$o[$k]=$rl[$k]}; if($o.target){$o.target=Get-RedactedIdentity $o.target 'HOST'}; if($o.error){$o.error=ConvertTo-RedactedText $o.error}; $o } } else { $script:RunLog })
         writes = [ordered]@{
