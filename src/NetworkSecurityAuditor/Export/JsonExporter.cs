@@ -52,15 +52,7 @@ public static class JsonExporter
                 AzureAdJoined = env.AzureADJoined,
                 IntuneManaged = env.IntuneManaged
             },
-            Score = new ScoreSection
-            {
-                Overall = overallScore,
-                Grade = grade,
-                RansomwareReadiness = ransomwareScore,
-                RansomwareGrade = ransomwareGrade,
-                DomainMaturity = domainMaturityScore,
-                DomainMaturityGrade = domainMaturityGrade
-            },
+            Score = BuildScoreSection(checkList, overallScore, grade, ransomwareScore, ransomwareGrade, domainMaturityScore, domainMaturityGrade),
             Findings = checkList.Select(c =>
             {
                 var mapping = FrameworkMappings.All.GetValueOrDefault(c.Id);
@@ -109,6 +101,26 @@ public static class JsonExporter
         };
 
         return JsonSerializer.Serialize(report, SerializerOptions);
+    }
+
+    private static ScoreSection BuildScoreSection(
+        List<CheckItemViewModel> checks,
+        int overallScore, string grade,
+        int ransomwareScore, string ransomwareGrade,
+        int domainMaturityScore, string domainMaturityGrade)
+    {
+        var (sprs, sprsConfidence) = Scoring.SprsScoreEngine.Calculate(checks);
+        return new ScoreSection
+        {
+            Overall = overallScore,
+            Grade = grade,
+            RansomwareReadiness = ransomwareScore,
+            RansomwareGrade = ransomwareGrade,
+            DomainMaturity = domainMaturityScore,
+            DomainMaturityGrade = domainMaturityGrade,
+            SprsScore = sprs,
+            SprsConfidence = sprsConfidence
+        };
     }
 
     private static Dictionary<string, ComplianceFrameworkSummary> BuildComplianceSummary(
@@ -181,6 +193,8 @@ public static class JsonExporter
         public string RansomwareGrade { get; set; } = "";
         public int DomainMaturity { get; set; }
         public string DomainMaturityGrade { get; set; } = "";
+        public int SprsScore { get; set; }
+        public string SprsConfidence { get; set; } = "";
     }
 
     private sealed class FindingEntry

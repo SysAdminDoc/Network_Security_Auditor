@@ -44,6 +44,10 @@ public static class HtmlReportGenerator
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(ransomwareGrade)}\">{ransomwareGrade}</div><div class=\"score-value\">{ransomwareScore}/100</div><div class=\"score-label\">Ransomware Readiness</div></div>");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(domainMaturityGrade)}\">{domainMaturityGrade}</div><div class=\"score-value\">{domainMaturityScore}/100</div><div class=\"score-label\">Domain Maturity</div></div>");
 
+        var (sprsScore, sprsConf) = Scoring.SprsScoreEngine.Calculate(checkList);
+        var sprsColor = sprsScore >= 88 ? "#a6e3a1" : sprsScore >= 50 ? "#f9e2af" : "#f38ba8";
+        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{sprsColor};font-size:48px\">{sprsScore}</div><div class=\"score-value\">of 110</div><div class=\"score-label\">SPRS Score ({sprsConf})</div></div>");
+
         var passCount = checkList.Count(c => c.Status == CheckStatus.Pass);
         var failCount = checkList.Count(c => c.Status == CheckStatus.Fail);
         var partialCount = checkList.Count(c => c.Status == CheckStatus.Partial);
@@ -201,7 +205,7 @@ public static class HtmlReportGenerator
         h2 { color: #cba6f7; margin: 24px 0 12px; font-size: 20px; }
         h3 { color: #b5bcd6; margin: 16px 0 8px; font-size: 16px; }
         .summary-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr);
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 16px; margin-bottom: 24px;
         }
         .score-card {
