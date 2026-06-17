@@ -13,4 +13,5 @@ public sealed class CheckMetadata
     public required string Compliance { get; init; }
     public EvidenceMode EvidenceMode { get; init; } = EvidenceMode.Automated;
     public string? RemediationUrl { get; init; }
+    public int CisImplementationGroup { get; init; }
 }

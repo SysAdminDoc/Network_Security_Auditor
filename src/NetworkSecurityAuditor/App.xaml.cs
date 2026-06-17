@@ -153,6 +153,16 @@ public partial class App : Application
         await File.WriteAllTextAsync(htmlPath, html);
         Console.WriteLine($"  HTML: {htmlPath}");
 
+        var csvPath = Path.Combine(outputDir, $"{baseName}.csv");
+        var csv = CsvExporter.Export(checkVms, env, score, grade);
+        await File.WriteAllTextAsync(csvPath, csv);
+        Console.WriteLine($"  CSV: {csvPath}");
+
+        var jsonlPath = Path.Combine(outputDir, $"{baseName}_siem.jsonl");
+        var jsonl = JsonlExporter.Export(checkVms, env, score, grade, args.ScanProfile);
+        await File.WriteAllTextAsync(jsonlPath, jsonl);
+        Console.WriteLine($"  JSONL: {jsonlPath}");
+
         Console.WriteLine();
 
         int exitCode;
