@@ -67,6 +67,7 @@ public static class DefectDojoExporter
                 impact = $"Security score impact: {check.Severity} severity ({(int)check.Severity} points)",
                 references = string.Join("\n", references),
                 file_path = $"NetworkSecurityAuditor://{check.Category}/{check.Id}",
+                unique_id_from_tool = check.Id,
                 vuln_id_from_tool = check.Id,
                 severity_justification = $"Category: {check.Category} | Weight: {(int)check.Severity}",
                 tags = new[] { check.Category, check.Id, $"Grade:{grade}" },

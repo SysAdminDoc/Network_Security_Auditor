@@ -255,6 +255,21 @@ public static class HtmlReportGenerator
             text-align: center; padding: 24px; color: #585b70;
             font-size: 12px; margin-top: 32px;
         }
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .summary-grid { grid-template-columns: repeat(2, 1fr); }
+            .score-grade { font-size: 48px; }
+            .findings-cell, .evidence-cell { max-width: 200px; }
+            .mitre-cell { display: none; }
+        }
+        @media (max-width: 480px) {
+            .summary-grid { grid-template-columns: 1fr; }
+            .header { padding: 16px; }
+            .header h1 { font-size: 22px; }
+            table { display: block; overflow-x: auto; white-space: nowrap; }
+            th, td { padding: 6px 8px; font-size: 12px; }
+            .findings-cell, .evidence-cell { max-width: 150px; white-space: normal; }
+        }
         @media print {
             body { background: #fff; color: #333; padding: 16px; }
             .header { background: #f5f5f5; border-left-color: #7c3aed; }

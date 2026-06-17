@@ -274,6 +274,107 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task ExportCsvAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "CSV|*.csv",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.csv",
+            DefaultExt = ".csv"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            ApplyPrivacyRedaction();
+            await File.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(Checks, Environment, OverallScore, Grade));
+            ScanStatus = $"CSV exported: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportJsonlAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "JSONL|*.jsonl",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_siem.jsonl",
+            DefaultExt = ".jsonl"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            ApplyPrivacyRedaction();
+            await File.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(Checks, Environment, OverallScore, Grade, SelectedProfile));
+            ScanStatus = $"JSONL exported: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportSarifAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "SARIF|*.sarif",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.sarif",
+            DefaultExt = ".sarif"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            ApplyPrivacyRedaction();
+            await File.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(Checks, Environment));
+            ScanStatus = $"SARIF exported: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportNavigatorAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "ATT&CK Navigator|*.json",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_navigator.json",
+            DefaultExt = ".json"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            await File.WriteAllTextAsync(dialog.FileName, Export.NavigatorExporter.Export(Checks));
+            ScanStatus = $"Navigator layer exported: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportDefectDojoAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "DefectDojo JSON|*.json",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_defectdojo.json",
+            DefaultExt = ".json"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            ApplyPrivacyRedaction();
+            await File.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(Checks, Environment, OverallScore, Grade));
+            ScanStatus = $"DefectDojo exported: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportComplianceSummaryAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Compliance Summary JSON|*.json",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_summary.json",
+            DefaultExt = ".json"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            ApplyPrivacyRedaction();
+            await File.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
+            ScanStatus = $"Compliance summary exported: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
     private async Task SaveStateAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

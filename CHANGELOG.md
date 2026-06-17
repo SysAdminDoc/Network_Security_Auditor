@@ -13,6 +13,10 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Added: Exit code 3 for compliance framework threshold (any framework below 60% triggers ComplianceAlert exit code for RMM alerting).
 - Added: HTML report D3FEND coverage section showing defensive stage distribution across all checks.
 - Changed: JSON findings now include framework_controls.cis and framework_controls.hipaa fields.
+- Added: GUI export buttons for all 8 formats (HTML, JSON, CSV, JSONL, SARIF, Navigator, DefectDojo, Compliance Summary).
+- Added: WPF AutomationProperties.Name on scan controls, category list, profile selector, status dropdowns for screen reader support.
+- Added: Responsive HTML report CSS breakpoints at 768px and 480px for tablet/mobile viewing.
+- Fixed: DefectDojo exporter now sets unique_id_from_tool for stable deduplication across re-imports.
 
 ## [v4.11.0] - 2026-06-16
 

@@ -49,7 +49,8 @@
                 <Border Grid.Row="0" Background="{StaticResource SurfaceBg}" CornerRadius="8" Padding="16" Margin="0,0,0,12">
                     <StackPanel HorizontalAlignment="Center">
                         <TextBlock Text="{Binding Grade}" FontSize="56" FontWeight="Bold"
-                                   HorizontalAlignment="Center">
+                                   HorizontalAlignment="Center"
+                                   AutomationProperties.Name="Overall security grade">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
@@ -90,7 +91,8 @@
                     <ListBox ItemsSource="{Binding Categories}"
                              SelectedItem="{Binding SelectedCategory}"
                              Style="{StaticResource DarkListBox}"
-                             ItemContainerStyle="{StaticResource DarkListBoxItem}" />
+                             ItemContainerStyle="{StaticResource DarkListBoxItem}"
+                             AutomationProperties.Name="Check categories" />
                 </DockPanel>
 
                 <!-- Scan Profile -->
@@ -99,27 +101,48 @@
                 <ComboBox Grid.Row="4" ItemsSource="{Binding AvailableProfiles}"
                           SelectedItem="{Binding SelectedProfile}"
                           Style="{StaticResource DarkComboBox}"
-                          Margin="0,0,0,12" />
+                          Margin="0,0,0,12"
+                          AutomationProperties.Name="Scan profile selector" />
 
                 <!-- Scan Buttons -->
                 <Button Grid.Row="5" Content="Start Scan"
                         Command="{Binding StartScanCommand}"
                         Style="{StaticResource AccentButton}"
-                        Margin="0,0,0,6" />
+                        Margin="0,0,0,6"
+                        AutomationProperties.Name="Start security scan" />
                 <Button Grid.Row="6" Content="Stop Scan"
                         Command="{Binding StopScanCommand}"
                         Style="{StaticResource SecondaryButton}"
-                        Margin="0,0,0,12" />
+                        Margin="0,0,0,12"
+                        AutomationProperties.Name="Stop running scan" />
 
                 <!-- Export Buttons -->
-                <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Center">
+                <WrapPanel Grid.Row="7" HorizontalAlignment="Center">
                     <Button Content="HTML" Command="{Binding ExportHtmlCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="0,0,6,0"
-                            Padding="12,6" FontSize="11" />
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
                     <Button Content="JSON" Command="{Binding ExportJsonCommand}"
-                            Style="{StaticResource SecondaryButton}"
-                            Padding="12,6" FontSize="11" />
-                </StackPanel>
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
+                    <Button Content="CSV" Command="{Binding ExportCsvCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
+                    <Button Content="JSONL" Command="{Binding ExportJsonlCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
+                    <Button Content="SARIF" Command="{Binding ExportSarifCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
+                    <Button Content="Navigator" Command="{Binding ExportNavigatorCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
+                    <Button Content="DefectDojo" Command="{Binding ExportDefectDojoCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
+                    <Button Content="Summary" Command="{Binding ExportComplianceSummaryCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
+                </WrapPanel>
             </Grid>
         </Border>
 
@@ -184,7 +207,8 @@
                                           ItemsSource="{Binding Source={StaticResource CheckStatusValues}}"
                                           SelectedItem="{Binding Status}"
                                           Width="120" VerticalAlignment="Center"
-                                          Style="{StaticResource DarkComboBox}" />
+                                          Style="{StaticResource DarkComboBox}"
+                                          AutomationProperties.Name="{Binding Id, StringFormat='Status for {0}'}" />
 
                                 <!-- Status Indicator Bar -->
                                 <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4"
