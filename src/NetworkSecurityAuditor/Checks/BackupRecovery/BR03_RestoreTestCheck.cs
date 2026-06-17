@@ -87,7 +87,7 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
                 foreach (var entry in recentEntries.Take(5))
                 {
                     evidence.AppendLine($"    {entry.TimeGenerated:yyyy-MM-dd HH:mm} " +
-                        $"[{entry.EntryType}] EventID={entry.EventID}: " +
+                        $"[{entry.EntryType}] InstanceId={entry.InstanceId}: " +
                         $"{Truncate(entry.Message, 100)}");
                 }
 

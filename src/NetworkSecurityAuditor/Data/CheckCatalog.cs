@@ -28,7 +28,8 @@ public static class CheckCatalog
             Type = CheckType.AD,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-1, PR.AC-4, PR.AC-6 | CIS Control 5.1, 5.4, 5.5, 6.8 | HIPAA 164.312(a)(1), 164.312(a)(2)(i)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/best-practices-for-securing-active-directory"
         });
 
         Add(checks, new CheckMetadata
@@ -42,7 +43,8 @@ public static class CheckCatalog
             Type = CheckType.AD,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-1, PR.AC-4 | CIS Control 5.2, 5.4, 5.5 | HIPAA 164.312(a)(1), 164.312(d)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-service-accounts"
         });
 
         Add(checks, new CheckMetadata
@@ -56,7 +58,8 @@ public static class CheckCatalog
             Type = CheckType.AD,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-7 | CIS Control 6.3, 6.4, 6.5 | HIPAA 164.312(d)",
-            EvidenceMode = EvidenceMode.Heuristic
+            EvidenceMode = EvidenceMode.Heuristic,
+            RemediationUrl = "https://learn.microsoft.com/en-us/entra/identity/authentication/concept-mfa-howitworks"
         });
 
         Add(checks, new CheckMetadata

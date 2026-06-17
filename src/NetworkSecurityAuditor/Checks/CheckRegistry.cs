@@ -1,11 +1,13 @@
 namespace NetworkSecurityAuditor.Checks;
 
+using NetworkSecurityAuditor.Checks.BackupRecovery;
 using NetworkSecurityAuditor.Checks.CommonFindings;
 using NetworkSecurityAuditor.Checks.EndpointSecurity;
 using NetworkSecurityAuditor.Checks.IdentityAccess;
 using NetworkSecurityAuditor.Checks.LoggingMonitoring;
 using NetworkSecurityAuditor.Checks.NetworkArchitecture;
 using NetworkSecurityAuditor.Checks.NetworkPerimeter;
+using NetworkSecurityAuditor.Checks.PoliciesStandards;
 using NetworkSecurityAuditor.Data;
 
 /// <summary>
@@ -43,13 +45,53 @@ public static class CheckRegistry
         Register(checks, new LM08_AlertingCheck());
 
         // Common Findings
+        Register(checks, new CF01_DaServiceAccountsCheck());
+        Register(checks, new CF02_EgressTestCheck());
+        Register(checks, new CF03_SecurityAwarenessCheck());
+        Register(checks, new CF04_FormerEmployeeCheck());
+        Register(checks, new CF05_OpenSharesCheck());
+        Register(checks, new CF06_NetworkFlatnessCheck());
         Register(checks, new CF07_LocalAdminRightsCheck());
+        Register(checks, new CF08_DnsFilterTestCheck());
 
         // Network Perimeter
         Register(checks, new NP01_FirewallRulesCheck());
+        Register(checks, new NP02_OpenPortsCheck());
+        Register(checks, new NP03_VpnCheck());
+        Register(checks, new NP04_DnsFilteringCheck());
+        Register(checks, new NP05_EgressFilteringCheck());
+        Register(checks, new NP06_TempRulesCheck());
+        Register(checks, new NP07_IdsIpsCheck());
+        Register(checks, new NP08_TlsCheck());
+        Register(checks, new NP09_NatCheck());
+        Register(checks, new NP10_FirmwareCheck());
 
         // Network Architecture
         Register(checks, new NA01_SegmentationCheck());
+        Register(checks, new NA02_VlanCheck());
+        Register(checks, new NA03_WirelessCheck());
+        Register(checks, new NA04_NetworkDocCheck());
+        Register(checks, new NA05_NacCheck());
+        Register(checks, new NA06_MgmtIsolationCheck());
+        Register(checks, new NA07_GuestNetworkCheck());
+
+        // Backup & Recovery
+        Register(checks, new BR01_BackupSolutionCheck());
+        Register(checks, new BR02_OffsiteBackupCheck());
+        Register(checks, new BR03_RestoreTestCheck());
+        Register(checks, new BR04_RtoRpoCheck());
+        Register(checks, new BR05_BackupEncryptionCheck());
+        Register(checks, new BR06_BackupMonitoringCheck());
+        Register(checks, new BR07_DrPlanCheck());
+        Register(checks, new BR08_SaasBackupCheck());
+
+        // Policies & Standards
+        Register(checks, new PS01_SecurityPoliciesCheck());
+        Register(checks, new PS02_AcceptableUseCheck());
+        Register(checks, new PS03_IncidentResponseCheck());
+        Register(checks, new PS04_ComplianceMonitoringCheck());
+        Register(checks, new PS05_RiskAssessmentCheck());
+        Register(checks, new PS06_SecurityTrainingCheck());
 
         // Identity & Access
         Register(checks, new IA01_PrivilegedGroupsCheck());

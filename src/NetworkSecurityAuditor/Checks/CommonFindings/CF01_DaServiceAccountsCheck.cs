@@ -120,8 +120,9 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
 
                     // Check for non-interactive flags
                     int uac = 0;
-                    if (memberEntry.Properties["userAccountControl"]?.Value != null)
-                        uac = (int)memberEntry.Properties["userAccountControl"].Value;
+                    object? uacVal = memberEntry.Properties["userAccountControl"]?.Value;
+                    if (uacVal != null)
+                        uac = (int)uacVal;
 
                     bool pwdNeverExpires = (uac & 0x10000) != 0;
 
