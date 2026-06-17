@@ -195,6 +195,13 @@ public partial class App : Application
             Console.WriteLine($"  Navigator: {navPath}");
         }
 
+        if (args.ExportSarif)
+        {
+            var sarifPath = Path.Combine(outputDir, $"{baseName}.sarif");
+            await File.WriteAllTextAsync(sarifPath, SarifExporter.Export(checkVms, env));
+            Console.WriteLine($"  SARIF: {sarifPath}");
+        }
+
         Console.WriteLine();
 
         int exitCode;
