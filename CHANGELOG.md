@@ -17,6 +17,13 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Added: WPF AutomationProperties.Name on scan controls, category list, profile selector, status dropdowns for screen reader support.
 - Added: Responsive HTML report CSS breakpoints at 768px and 480px for tablet/mobile viewing.
 - Fixed: DefectDojo exporter now sets unique_id_from_tool for stable deduplication across re-imports.
+- Added: ATT&CK v19 tactic split — Defense Impairment (TA0112) for checks involving disabling AV, logging, and firewalls. Navigator layer updated to ATT&CK version 19.0.
+- Added: Windows Server 2025 security default awareness. EP03, EP08, and IA11 annotate mandatory defaults (SMB signing, Credential Guard, AES-only Kerberos) on Server 2025+ builds.
+- Added: SPRS score calculation for CMMC Level 2. Weighted 1/3/5 point deductions per unmet NIST 800-171 control. Included in JSON export and HTML report score card.
+- Added: OCSF v1.4.0 Compliance Finding (class 2003) export. Replaces deprecated Security Finding class. CLI: `--export-ocsf`.
+- Added: NIST OSCAL v1.1.3 assessment results export with observations, findings, and risks. CLI: `--export-oscal`.
+- Added: OCSF and OSCAL GUI export buttons.
+- Added: CI/CD integration section in README with GitHub Actions SARIF upload workflow example.
 
 ## [v4.11.0] - 2026-06-16
 
