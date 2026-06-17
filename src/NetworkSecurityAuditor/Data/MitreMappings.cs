@@ -4,7 +4,8 @@ using NetworkSecurityAuditor.Models;
 namespace NetworkSecurityAuditor.Data;
 
 /// <summary>
-/// MITRE ATT&amp;CK Enterprise v19.1 mappings for all 69 security checks.
+/// MITRE ATT&amp;CK Enterprise v19 mappings for all 69 security checks.
+/// v19 split Defense Evasion into Stealth (TA0005) and Defense Impairment (TA0112).
 /// Maps each check ID to its relevant tactics, techniques, and a threat description.
 /// </summary>
 public static class MitreMappings
@@ -94,7 +95,7 @@ public static class MitreMappings
             // ── Endpoint Security ──────────────────────────────────────────
             ["EP01"] = new AttackMapping
             {
-                Tactics = ["TA0005", "TA0002"],
+                Tactics = ["TA0112", "TA0002"],
                 Techniques = ["T1685.001", "T1686.003", "T1059"],
                 Description = "Disabled AV allows malware execution"
             },
@@ -124,7 +125,7 @@ public static class MitreMappings
             },
             ["EP06"] = new AttackMapping
             {
-                Tactics = ["TA0005", "TA0011"],
+                Tactics = ["TA0112", "TA0011"],
                 Techniques = ["T1686.003", "T1071", "T1048"],
                 Description = "Firewall gaps allow C2 and data exfiltration"
             },
@@ -156,49 +157,49 @@ public static class MitreMappings
             // ── Logging & Monitoring ───────────────────────────────────────
             ["LM01"] = new AttackMapping
             {
-                Tactics = ["TA0005"],
+                Tactics = ["TA0112"],
                 Techniques = ["T1685.002", "T1070.001"],
                 Description = "Inadequate audit policy creates blind spots"
             },
             ["LM02"] = new AttackMapping
             {
-                Tactics = ["TA0005", "TA0040"],
+                Tactics = ["TA0112", "TA0040"],
                 Techniques = ["T1685.002", "T1485"],
                 Description = "No SIEM means no correlation or alerting"
             },
             ["LM03"] = new AttackMapping
             {
-                Tactics = ["TA0002", "TA0005"],
+                Tactics = ["TA0002", "TA0112"],
                 Techniques = ["T1059.001", "T1059.003", "T1685.002", "T1070"],
                 Description = "Missing PS logging allows script-based attacks without trace"
             },
             ["LM04"] = new AttackMapping
             {
-                Tactics = ["TA0005", "TA0011"],
+                Tactics = ["TA0112", "TA0011"],
                 Techniques = ["T1685.002", "T1071"],
                 Description = "No firewall logging means network attacks go undetected"
             },
             ["LM05"] = new AttackMapping
             {
-                Tactics = ["TA0005"],
+                Tactics = ["TA0112"],
                 Techniques = ["T1685.002", "T1070.001", "T1070.002"],
                 Description = "Logs without integrity protection can be tampered with"
             },
             ["LM06"] = new AttackMapping
             {
-                Tactics = ["TA0005"],
+                Tactics = ["TA0112"],
                 Techniques = ["T1070.001", "T1685.002"],
                 Description = "Missing log review means alerts never acted upon"
             },
             ["LM07"] = new AttackMapping
             {
-                Tactics = ["TA0005"],
+                Tactics = ["TA0112"],
                 Techniques = ["T1070.001", "T1685.002"],
                 Description = "Small log sizes cause critical events to be overwritten"
             },
             ["LM08"] = new AttackMapping
             {
-                Tactics = ["TA0005", "TA0011"],
+                Tactics = ["TA0112", "TA0011"],
                 Techniques = ["T1685.002", "T1071"],
                 Description = "Missing alerting means attacks proceed without response"
             },
@@ -250,7 +251,7 @@ public static class MitreMappings
             // ── Network Perimeter ──────────────────────────────────────────
             ["NP01"] = new AttackMapping
             {
-                Tactics = ["TA0005", "TA0011"],
+                Tactics = ["TA0112", "TA0011"],
                 Techniques = ["T1686.003", "T1071"],
                 Description = "Weak firewall rules expose attack surface"
             },

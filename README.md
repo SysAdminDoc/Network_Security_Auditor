@@ -658,6 +658,37 @@ tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validat
 
 ---
 
+## CI/CD Integration (SARIF)
+
+The C# rewrite exports SARIF 2.1.0, which integrates directly with GitHub Advanced Security and Azure DevOps code scanning. This is unique among free AD/Windows security tools.
+
+```yaml
+# .github/workflows/security-audit.yml
+name: Security Audit
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6 AM
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - run: dotnet publish src/NetworkSecurityAuditor -c Release -o publish
+      - run: ./publish/NetworkSecurityAuditor.exe --silent --export-sarif --output "$env:GITHUB_WORKSPACE"
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: SecurityAudit_*.sarif
+```
+
+Findings appear as security alerts in the repository's Security tab with severity, category, and remediation links.
+
+---
+
 ## Contributing
 
 Contributions are welcome. Areas where help is most needed:
