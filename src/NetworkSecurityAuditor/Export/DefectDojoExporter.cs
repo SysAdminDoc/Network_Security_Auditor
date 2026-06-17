@@ -36,15 +36,24 @@ public static class DefectDojoExporter
 
             var active = check.Status is CheckStatus.Fail or CheckStatus.Partial;
 
+            var mitre = MitreMappings.All.GetValueOrDefault(check.Id);
+            var defend = D3FendMappings.All.GetValueOrDefault(check.Id);
+
             var references = new List<string>();
             if (meta?.RemediationUrl is not null)
                 references.Add(meta.RemediationUrl);
             if (compliance is not null)
             {
+                if (compliance.CIS is not null) references.Add($"CIS Controls: {compliance.CIS}");
                 if (compliance.NIST is not null) references.Add($"NIST 800-171: {compliance.NIST}");
+                if (compliance.HIPAA is not null) references.Add($"HIPAA: {compliance.HIPAA}");
                 if (compliance.PCI is not null) references.Add($"PCI-DSS: {compliance.PCI}");
                 if (compliance.STIG is not null) references.Add($"DISA STIG: {compliance.STIG}");
             }
+            if (mitre is not null)
+                references.Add($"ATT&CK: {string.Join(", ", mitre.Techniques)}");
+            if (defend is not null)
+                references.Add($"D3FEND: {string.Join(", ", defend.Techniques)}");
 
             findings.Add(new
             {

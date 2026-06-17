@@ -16,11 +16,13 @@ public static class CsvExporter
     {
         var sb = new StringBuilder();
 
-        sb.AppendLine("CheckID,Category,Label,Severity,Status,Findings,Evidence,Notes,NIST,CMMC,PCI,SOC2,ISO27001,STIG,FedRAMP");
+        sb.AppendLine("CheckID,Category,Label,Severity,Status,Findings,Evidence,Notes,CIS,NIST,CMMC,HIPAA,PCI,SOC2,ISO27001,STIG,FedRAMP,E8,CyberEssentials,MitreTactics,MitreTechniques,D3FendStages,D3FendTechniques");
 
         foreach (var check in checks)
         {
             var compliance = FrameworkMappings.All.GetValueOrDefault(check.Id);
+            var mitre = MitreMappings.All.GetValueOrDefault(check.Id);
+            var defend = D3FendMappings.All.GetValueOrDefault(check.Id);
 
             sb.Append(Escape(check.Id)).Append(',');
             sb.Append(Escape(check.Category)).Append(',');
@@ -30,13 +32,21 @@ public static class CsvExporter
             sb.Append(Escape(check.Findings)).Append(',');
             sb.Append(Escape(check.Evidence)).Append(',');
             sb.Append(Escape(check.Notes)).Append(',');
+            sb.Append(Escape(compliance?.CIS ?? "")).Append(',');
             sb.Append(Escape(compliance?.NIST ?? "")).Append(',');
             sb.Append(Escape(compliance?.CMMC ?? "")).Append(',');
+            sb.Append(Escape(compliance?.HIPAA ?? "")).Append(',');
             sb.Append(Escape(compliance?.PCI ?? "")).Append(',');
             sb.Append(Escape(compliance?.SOC2 ?? "")).Append(',');
             sb.Append(Escape(compliance?.ISO27001 ?? "")).Append(',');
             sb.Append(Escape(compliance?.STIG ?? "")).Append(',');
-            sb.Append(Escape(compliance?.FedRAMP ?? ""));
+            sb.Append(Escape(compliance?.FedRAMP ?? "")).Append(',');
+            sb.Append(Escape(compliance?.E8 ?? "")).Append(',');
+            sb.Append(Escape(compliance?.CyberEssentials ?? "")).Append(',');
+            sb.Append(Escape(mitre is not null ? string.Join("; ", mitre.Tactics) : "")).Append(',');
+            sb.Append(Escape(mitre is not null ? string.Join("; ", mitre.Techniques) : "")).Append(',');
+            sb.Append(Escape(defend is not null ? string.Join("; ", defend.Stages) : "")).Append(',');
+            sb.Append(Escape(defend is not null ? string.Join("; ", defend.Techniques) : ""));
             sb.AppendLine();
         }
 

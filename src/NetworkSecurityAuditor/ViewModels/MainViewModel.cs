@@ -294,7 +294,9 @@ public partial class MainViewModel : ViewModelBase
                 OverallScore = OverallScore,
                 Grade = Grade,
                 RansomwareScore = RansomwareScore,
-                RansomwareGrade = RansomwareGrade
+                RansomwareGrade = RansomwareGrade,
+                DomainMaturityScore = DomainMaturityScore,
+                DomainMaturityGrade = DomainMaturityGrade
             };
 
             foreach (var check in Checks)

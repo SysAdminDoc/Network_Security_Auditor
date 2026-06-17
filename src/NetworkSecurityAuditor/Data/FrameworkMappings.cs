@@ -13,8 +13,10 @@ public static class FrameworkMappings
             // ──────────────────────────────────────────────
             ["IA01"] = new()
             {
+                CIS = "5.1, 5.4, 5.5, 6.8",
                 NIST = "3.1.1, 3.1.2, 3.1.5",
                 CMMC = "AC.L2-3.1.1, AC.L2-3.1.2, AC.L2-3.1.5",
+                HIPAA = "164.312(a)(1), 164.312(a)(2)(i)",
                 PCI = "7.2.1, 7.2.2, 8.6.1",
                 SOC2 = "CC6.1, CC6.3",
                 ISO27001 = "A.5.15, A.5.18, A.8.2",
@@ -23,8 +25,10 @@ public static class FrameworkMappings
             },
             ["IA02"] = new()
             {
+                CIS = "5.2, 5.4, 5.5",
                 NIST = "3.1.1, 3.1.5, 3.7.5",
                 CMMC = "AC.L2-3.1.1, AC.L2-3.1.5",
+                HIPAA = "164.312(a)(1), 164.312(d)",
                 PCI = "7.2.2, 8.6.1, 8.6.2",
                 SOC2 = "CC6.1, CC6.3",
                 ISO27001 = "A.5.15, A.5.17, A.8.2",
@@ -33,8 +37,10 @@ public static class FrameworkMappings
             },
             ["IA03"] = new()
             {
+                CIS = "6.3, 6.4, 6.5",
                 NIST = "3.5.3, 3.7.5",
                 CMMC = "IA.L2-3.5.3",
+                HIPAA = "164.312(d)",
                 PCI = "8.4.1, 8.4.2, 8.4.3",
                 SOC2 = "CC6.1, CC6.6",
                 ISO27001 = "A.5.17, A.8.5",
@@ -45,8 +51,10 @@ public static class FrameworkMappings
             },
             ["IA04"] = new()
             {
+                CIS = "5.1, 5.3",
                 NIST = "3.1.1, 3.1.12",
                 CMMC = "AC.L2-3.1.1, PS.L2-3.9.2",
+                HIPAA = "164.312(a)(2)(ii), 164.308(a)(3)(ii)(C)",
                 PCI = "8.1.4, 8.2.6",
                 SOC2 = "CC6.1, CC6.2",
                 ISO27001 = "A.5.18, A.6.5",
@@ -56,8 +64,10 @@ public static class FrameworkMappings
             },
             ["IA05"] = new()
             {
+                CIS = "5.2",
                 NIST = "3.5.7, 3.5.8, 3.5.9, 3.5.10",
                 CMMC = "IA.L2-3.5.7, IA.L2-3.5.8",
+                HIPAA = "164.312(d), 164.308(a)(5)(ii)(D)",
                 PCI = "8.3.6, 8.3.7, 8.3.9",
                 SOC2 = "CC6.1",
                 ISO27001 = "A.5.17, A.8.5",
@@ -67,8 +77,10 @@ public static class FrameworkMappings
             },
             ["IA06"] = new()
             {
+                CIS = "5.4, 5.5, 6.8",
                 NIST = "3.1.5, 3.1.6, 3.1.7",
                 CMMC = "AC.L2-3.1.5, AC.L2-3.1.6, AC.L2-3.1.7",
+                HIPAA = "164.312(a)(1)",
                 PCI = "7.2.1, 8.2.4",
                 SOC2 = "CC6.1, CC6.3",
                 ISO27001 = "A.5.15, A.8.2, A.8.18",
@@ -79,8 +91,10 @@ public static class FrameworkMappings
             },
             ["IA07"] = new()
             {
+                CIS = "5.1, 5.4",
                 NIST = "3.1.1, 3.5.1",
                 CMMC = "AC.L2-3.1.1, IA.L2-3.5.1",
+                HIPAA = "164.312(a)(2)(i)",
                 PCI = "8.2.1, 8.2.2",
                 SOC2 = "CC6.1",
                 ISO27001 = "A.5.15, A.5.17",
@@ -90,8 +104,10 @@ public static class FrameworkMappings
             },
             ["IA08"] = new()
             {
+                CIS = "5.1, 5.3, 6.1",
                 NIST = "3.1.1, 3.1.12",
                 CMMC = "AC.L2-3.1.1, PS.L2-3.9.2",
+                HIPAA = "164.308(a)(4)(ii)(B), 164.312(a)(1)",
                 PCI = "8.1.4, 8.6.1",
                 SOC2 = "CC6.1, CC6.2",
                 ISO27001 = "A.5.18, A.5.19, A.5.20",
@@ -101,8 +117,10 @@ public static class FrameworkMappings
             },
             ["IA09"] = new()
             {
+                CIS = "6.3, 6.4, 6.5",
                 NIST = "3.1.3, 3.5.3",
                 CMMC = "AC.L2-3.1.3, IA.L2-3.5.3",
+                HIPAA = "164.312(d), 164.312(e)(1)",
                 PCI = "7.2.1, 8.4.1",
                 SOC2 = "CC6.1, CC6.6",
                 ISO27001 = "A.5.15, A.8.5",
@@ -113,8 +131,10 @@ public static class FrameworkMappings
             },
             ["IA10"] = new()
             {
+                CIS = "5.3",
                 NIST = "3.1.1, 3.1.12",
                 CMMC = "AC.L2-3.1.1",
+                HIPAA = "164.312(a)(2)(ii)",
                 PCI = "8.2.6",
                 SOC2 = "CC6.1, CC6.2",
                 ISO27001 = "A.5.18, A.6.5",
@@ -125,8 +145,10 @@ public static class FrameworkMappings
             },
             ["IA11"] = new()
             {
+                CIS = "5.2, 6.7, 8.11",
                 NIST = "3.5.2, 3.5.3, 3.13.8",
                 CMMC = "IA.L2-3.5.2, IA.L2-3.5.3, SC.L2-3.13.8",
+                HIPAA = "164.312(a)(2)(i), 164.312(d), 164.312(e)(2)(ii)",
                 PCI = "4.2.1, 8.3.6, 8.4.2",
                 SOC2 = "CC6.1, CC6.6",
                 ISO27001 = "A.5.17, A.8.5, A.8.24",
@@ -136,8 +158,10 @@ public static class FrameworkMappings
             },
             ["IA12"] = new()
             {
+                CIS = "5.4, 6.8",
                 NIST = "3.1.5, 3.1.6, 3.1.7, 3.5.2",
                 CMMC = "AC.L2-3.1.5, AC.L2-3.1.6, AC.L2-3.1.7, IA.L2-3.5.2",
+                HIPAA = "164.312(a)(1), 164.312(a)(2)(i)",
                 PCI = "7.2.1, 7.2.2, 8.2.4, 8.6.1",
                 SOC2 = "CC6.1, CC6.3, CC6.6",
                 ISO27001 = "A.5.15, A.5.17, A.8.2, A.8.18",
@@ -152,8 +176,10 @@ public static class FrameworkMappings
             // ──────────────────────────────────────────────
             ["EP01"] = new()
             {
+                CIS = "10.1, 10.2",
                 NIST = "3.14.1, 3.14.2, 3.14.4, 3.14.5",
                 CMMC = "SI.L2-3.14.1, SI.L2-3.14.2",
+                HIPAA = "164.308(a)(5)(ii)(B)",
                 PCI = "5.2.1, 5.2.2, 5.3.1, 5.3.2",
                 SOC2 = "CC6.8, CC7.1",
                 ISO27001 = "A.8.7",
@@ -164,8 +190,10 @@ public static class FrameworkMappings
             },
             ["EP02"] = new()
             {
+                CIS = "3.6",
                 NIST = "3.8.6, 3.13.11",
                 CMMC = "MP.L2-3.8.6, SC.L2-3.13.11",
+                HIPAA = "164.312(a)(2)(iv), 164.312(e)(2)(ii)",
                 PCI = "3.5.1, 9.4.1",
                 SOC2 = "CC6.1, CC6.7",
                 ISO27001 = "A.8.24",
@@ -175,8 +203,10 @@ public static class FrameworkMappings
             },
             ["EP03"] = new()
             {
+                CIS = "4.1, 4.8",
                 NIST = "3.1.13, 3.13.1, 3.13.8",
                 CMMC = "AC.L2-3.1.13, SC.L2-3.13.1",
+                HIPAA = "164.312(e)(1), 164.312(a)(1)",
                 PCI = "2.2.7, 4.2.1",
                 SOC2 = "CC6.1, CC6.7",
                 ISO27001 = "A.8.20, A.8.24",
@@ -186,8 +216,10 @@ public static class FrameworkMappings
             },
             ["EP04"] = new()
             {
+                CIS = "7.1, 7.2, 7.3, 7.4",
                 NIST = "3.14.1, 3.4.8, 3.4.9",
                 CMMC = "SI.L2-3.14.1, CM.L2-3.4.8",
+                HIPAA = "164.308(a)(5)(ii)(B)",
                 PCI = "6.3.1, 6.3.3",
                 SOC2 = "CC7.1, CC8.1",
                 ISO27001 = "A.8.8, A.8.19",
@@ -198,8 +230,10 @@ public static class FrameworkMappings
             },
             ["EP05"] = new()
             {
+                CIS = "5.4, 5.5",
                 NIST = "3.1.5, 3.1.6, 3.4.6",
                 CMMC = "AC.L2-3.1.5, AC.L2-3.1.6",
+                HIPAA = "164.312(a)(1)",
                 PCI = "7.2.1, 7.2.2",
                 SOC2 = "CC6.1, CC6.3",
                 ISO27001 = "A.5.15, A.8.2",
@@ -209,8 +243,10 @@ public static class FrameworkMappings
             },
             ["EP06"] = new()
             {
+                CIS = "4.4, 4.5",
                 NIST = "3.13.1, 3.13.5",
                 CMMC = "SC.L2-3.13.1, SC.L2-3.13.5",
+                HIPAA = "164.312(e)(1)",
                 PCI = "1.2.1, 1.3.1, 1.4.1",
                 SOC2 = "CC6.1, CC6.6",
                 ISO27001 = "A.8.20, A.8.21",
@@ -220,8 +256,10 @@ public static class FrameworkMappings
             },
             ["EP07"] = new()
             {
+                CIS = "2.5, 2.6, 2.7",
                 NIST = "3.4.6, 3.4.8",
                 CMMC = "CM.L2-3.4.6, CM.L2-3.4.8",
+                HIPAA = "164.312(a)(1)",
                 PCI = "2.2.4, 6.3.2",
                 SOC2 = "CC6.8, CC7.1",
                 ISO27001 = "A.8.7, A.8.19",
@@ -232,8 +270,10 @@ public static class FrameworkMappings
             },
             ["EP08"] = new()
             {
+                CIS = "1.1, 4.1, 10.5",
                 NIST = "3.13.11, 3.14.1",
                 CMMC = "SC.L2-3.13.11, SI.L2-3.14.1",
+                HIPAA = "164.310(a)(1)",
                 PCI = "9.4.1, 2.2.1",
                 SOC2 = "CC6.1, CC6.7",
                 ISO27001 = "A.8.1, A.8.24",
@@ -243,8 +283,10 @@ public static class FrameworkMappings
             },
             ["EP09"] = new()
             {
+                CIS = "10.3",
                 NIST = "3.4.1, 3.4.2",
                 CMMC = "CM.L2-3.4.1, CM.L2-3.4.2",
+                HIPAA = "164.308(a)(5)(ii)(B)",
                 PCI = "2.2.1, 2.2.2",
                 SOC2 = "CC6.1, CC8.1",
                 ISO27001 = "A.8.9, A.8.19",
@@ -255,8 +297,10 @@ public static class FrameworkMappings
             },
             ["EP10"] = new()
             {
+                CIS = "2.1, 2.2",
                 NIST = "3.8.9",
                 CMMC = "MP.L2-3.8.9",
+                HIPAA = "164.308(a)(5)(ii)(B)",
                 PCI = "9.4.1, 9.4.5",
                 SOC2 = "CC6.7",
                 ISO27001 = "A.7.9, A.8.1",
@@ -271,8 +315,10 @@ public static class FrameworkMappings
             // ──────────────────────────────────────────────
             ["LM01"] = new()
             {
+                CIS = "8.2, 8.9",
                 NIST = "3.3.1, 3.3.2",
                 CMMC = "AU.L2-3.3.1, AU.L2-3.3.2",
+                HIPAA = "164.312(b), 164.308(a)(1)(ii)(D)",
                 PCI = "10.2.1, 10.2.2",
                 SOC2 = "CC7.2, CC7.3",
                 ISO27001 = "A.8.15, A.8.16",
@@ -281,8 +327,10 @@ public static class FrameworkMappings
             },
             ["LM02"] = new()
             {
+                CIS = "8.2, 8.5, 8.9",
                 NIST = "3.3.1, 3.3.4",
                 CMMC = "AU.L2-3.3.1, AU.L2-3.3.4",
+                HIPAA = "164.312(b), 164.308(a)(1)(ii)(D)",
                 PCI = "10.3.1, 10.3.3",
                 SOC2 = "CC7.2, CC7.3",
                 ISO27001 = "A.8.15, A.8.16",
@@ -292,8 +340,10 @@ public static class FrameworkMappings
             },
             ["LM03"] = new()
             {
+                CIS = "8.2, 8.5, 8.8",
                 NIST = "3.3.1, 3.3.2, 3.3.8",
                 CMMC = "AU.L2-3.3.1, AU.L2-3.3.2",
+                HIPAA = "164.312(b)",
                 PCI = "10.2.1, 10.2.2, 10.6.3",
                 SOC2 = "CC7.2, CC7.3",
                 ISO27001 = "A.8.15, A.8.16",
@@ -303,8 +353,10 @@ public static class FrameworkMappings
             },
             ["LM04"] = new()
             {
+                CIS = "8.2, 8.5, 8.9",
                 NIST = "3.3.1, 3.13.1",
                 CMMC = "AU.L2-3.3.1, SC.L2-3.13.1",
+                HIPAA = "164.312(b)",
                 PCI = "10.2.1, 1.2.1",
                 SOC2 = "CC7.2",
                 ISO27001 = "A.8.15, A.8.20",
@@ -313,8 +365,10 @@ public static class FrameworkMappings
             },
             ["LM05"] = new()
             {
+                CIS = "8.5",
                 NIST = "3.3.3, 3.3.4",
                 CMMC = "AU.L2-3.3.3, AU.L2-3.3.4",
+                HIPAA = "164.312(b), 164.308(a)(1)(ii)(D)",
                 PCI = "10.3.1, 10.3.2",
                 SOC2 = "CC7.2, CC7.3",
                 ISO27001 = "A.8.15, A.8.16",
@@ -323,8 +377,10 @@ public static class FrameworkMappings
             },
             ["LM06"] = new()
             {
+                CIS = "3.14",
                 NIST = "3.3.5",
                 CMMC = "AU.L2-3.3.5",
+                HIPAA = "164.312(b), 164.312(c)(2)",
                 PCI = "10.3.4, 10.5.1",
                 SOC2 = "CC7.2, CC7.4",
                 ISO27001 = "A.8.15",
@@ -333,8 +389,10 @@ public static class FrameworkMappings
             },
             ["LM07"] = new()
             {
+                CIS = "8.1, 8.9, 8.10",
                 NIST = "3.3.4, 3.3.8",
                 CMMC = "AU.L2-3.3.4, AU.L2-3.3.8",
+                HIPAA = "164.312(b), 164.530(j)(2)",
                 PCI = "10.5.1, 10.7.1",
                 SOC2 = "CC7.2",
                 ISO27001 = "A.8.15",
@@ -343,8 +401,10 @@ public static class FrameworkMappings
             },
             ["LM08"] = new()
             {
+                CIS = "17.1, 17.2, 17.4",
                 NIST = "3.3.1, 3.6.1",
                 CMMC = "AU.L2-3.3.1, IR.L2-3.6.1",
+                HIPAA = "164.308(a)(6)(i), 164.308(a)(6)(ii)",
                 PCI = "10.4.1, 10.7.2",
                 SOC2 = "CC7.2, CC7.3",
                 ISO27001 = "A.8.15, A.8.16",
@@ -358,8 +418,10 @@ public static class FrameworkMappings
             // ──────────────────────────────────────────────
             ["NA01"] = new()
             {
+                CIS = "12.2, 12.8",
                 NIST = "3.13.1, 3.13.2",
                 CMMC = "SC.L2-3.13.1, SC.L2-3.13.2",
+                HIPAA = "164.312(e)(1)",
                 PCI = "1.2.1, 1.3.1, 1.3.2",
                 SOC2 = "CC6.1, CC6.6",
                 ISO27001 = "A.8.20, A.8.22",
@@ -368,8 +430,10 @@ public static class FrameworkMappings
             },
             ["NA02"] = new()
             {
+                CIS = "12.2",
                 NIST = "3.13.1, 3.13.2",
                 CMMC = "SC.L2-3.13.1, SC.L2-3.13.2",
+                HIPAA = "164.312(e)(1)",
                 PCI = "1.2.1, 1.3.1",
                 SOC2 = "CC6.1",
                 ISO27001 = "A.8.20, A.8.22",
@@ -378,8 +442,10 @@ public static class FrameworkMappings
             },
             ["NA03"] = new()
             {
+                CIS = "12.6",
                 NIST = "3.13.2, 3.13.6",
                 CMMC = "SC.L2-3.13.2, SC.L2-3.13.6",
+                HIPAA = "164.312(e)(1)",
                 PCI = "1.2.1, 1.3.2",
                 SOC2 = "CC6.6",
                 ISO27001 = "A.8.20",
@@ -389,8 +455,10 @@ public static class FrameworkMappings
             },
             ["NA04"] = new()
             {
+                CIS = "1.1, 1.2, 12.1",
                 NIST = "3.13.1, 3.13.7",
                 CMMC = "SC.L2-3.13.1",
+                HIPAA = "164.310(d)(2)(iii)",
                 PCI = "11.3.1, 11.3.2",
                 SOC2 = "CC7.1",
                 ISO27001 = "A.8.20, A.8.21",
@@ -399,8 +467,10 @@ public static class FrameworkMappings
             },
             ["NA05"] = new()
             {
+                CIS = "1.4, 12.5",
                 NIST = "3.1.20",
                 CMMC = "AC.L2-3.1.20",
+                HIPAA = "164.312(a)(1)",
                 PCI = "1.4.1",
                 SOC2 = "CC6.6",
                 ISO27001 = "A.8.20",
@@ -409,8 +479,10 @@ public static class FrameworkMappings
             },
             ["NA06"] = new()
             {
+                CIS = "12.2, 12.7",
                 NIST = "3.13.3",
                 CMMC = "SC.L2-3.13.3",
+                HIPAA = "164.312(e)(1)",
                 PCI = "11.4.1",
                 SOC2 = "CC7.1, CC7.2",
                 ISO27001 = "A.8.16, A.8.23",
@@ -419,8 +491,10 @@ public static class FrameworkMappings
             },
             ["NA07"] = new()
             {
+                CIS = "1.4, 12.2, 12.5",
                 NIST = "3.13.1",
                 CMMC = "SC.L2-3.13.1",
+                HIPAA = "164.312(e)(1)",
                 PCI = "1.2.5",
                 SOC2 = "CC6.6",
                 ISO27001 = "A.8.20",
@@ -429,12 +503,14 @@ public static class FrameworkMappings
             },
 
             // ──────────────────────────────────────────────
-            //  Network Protocols (NP01 – NP10)
+            //  Network Perimeter (NP01 – NP10)
             // ──────────────────────────────────────────────
             ["NP01"] = new()
             {
+                CIS = "4.4, 4.5, 9.2",
                 NIST = "3.13.1, 3.13.5",
                 CMMC = "SC.L2-3.13.1, SC.L2-3.13.5",
+                HIPAA = "164.312(e)(1)",
                 PCI = "1.2.1, 1.3.1, 1.4.1",
                 SOC2 = "CC6.1, CC6.6",
                 ISO27001 = "A.8.20, A.8.21",
@@ -444,8 +520,10 @@ public static class FrameworkMappings
             },
             ["NP02"] = new()
             {
+                CIS = "4.1, 4.4, 9.2",
                 NIST = "3.13.1, 3.13.5",
                 CMMC = "SC.L2-3.13.1, SC.L2-3.13.5",
+                HIPAA = "164.312(e)(1)",
                 PCI = "11.3.1, 11.3.2",
                 SOC2 = "CC6.6, CC7.1",
                 ISO27001 = "A.8.20, A.8.34",
@@ -455,8 +533,10 @@ public static class FrameworkMappings
             },
             ["NP03"] = new()
             {
+                CIS = "6.3, 6.4",
                 NIST = "3.1.12, 3.1.20",
                 CMMC = "AC.L2-3.1.12, AC.L2-3.1.20",
+                HIPAA = "164.312(d), 164.312(e)(1)",
                 PCI = "1.4.1, 8.2.1",
                 SOC2 = "CC6.1, CC6.6",
                 ISO27001 = "A.8.20",
@@ -467,8 +547,10 @@ public static class FrameworkMappings
             },
             ["NP04"] = new()
             {
+                CIS = "9.2, 9.3",
                 NIST = "3.13.1, 3.13.15",
                 CMMC = "SC.L2-3.13.1",
+                HIPAA = "164.312(e)(1)",
                 PCI = "1.2.5, 11.5.1",
                 SOC2 = "CC6.6, CC6.8",
                 ISO27001 = "A.8.20, A.8.23",
@@ -478,8 +560,10 @@ public static class FrameworkMappings
             },
             ["NP05"] = new()
             {
+                CIS = "4.4, 4.5, 9.3",
                 NIST = "3.13.1, 3.13.6",
                 CMMC = "SC.L2-3.13.1, SC.L2-3.13.6",
+                HIPAA = "164.312(e)(1)",
                 PCI = "1.2.1, 1.3.1",
                 SOC2 = "CC6.6",
                 ISO27001 = "A.8.20, A.8.21",
@@ -489,8 +573,10 @@ public static class FrameworkMappings
             },
             ["NP06"] = new()
             {
+                CIS = "4.5",
                 NIST = "3.13.1, 3.13.8",
                 CMMC = "SC.L2-3.13.1, SC.L2-3.13.8",
+                HIPAA = "164.312(e)(1)",
                 PCI = "11.5.1",
                 SOC2 = "CC6.6, CC7.1",
                 ISO27001 = "A.8.20, A.8.21",
@@ -500,8 +586,10 @@ public static class FrameworkMappings
             },
             ["NP07"] = new()
             {
+                CIS = "13.3, 13.6",
                 NIST = "3.13.1, 3.14.6",
                 CMMC = "SC.L2-3.13.1, SI.L2-3.14.6",
+                HIPAA = "164.312(e)(1)",
                 PCI = "11.5.1, 11.6.1",
                 SOC2 = "CC6.8, CC7.1",
                 ISO27001 = "A.8.16, A.8.23",
@@ -510,8 +598,10 @@ public static class FrameworkMappings
             },
             ["NP08"] = new()
             {
+                CIS = "9.3, 13.3",
                 NIST = "3.13.8, 3.13.11",
                 CMMC = "SC.L2-3.13.8, SC.L2-3.13.11",
+                HIPAA = "164.312(e)(1)",
                 PCI = "4.2.1, 4.2.2",
                 SOC2 = "CC6.1, CC6.7",
                 ISO27001 = "A.8.24",
@@ -520,8 +610,10 @@ public static class FrameworkMappings
             },
             ["NP09"] = new()
             {
+                CIS = "4.1, 4.4",
                 NIST = "3.13.1, 3.13.5",
                 CMMC = "SC.L2-3.13.1, SC.L2-3.13.5",
+                HIPAA = "164.312(e)(1)",
                 PCI = "1.2.1, 1.3.1",
                 SOC2 = "CC6.6",
                 ISO27001 = "A.8.20",
@@ -531,8 +623,10 @@ public static class FrameworkMappings
             },
             ["NP10"] = new()
             {
+                CIS = "2.1, 7.1",
                 NIST = "3.4.8, 3.14.1",
                 CMMC = "CM.L2-3.4.8, SI.L2-3.14.1",
+                HIPAA = "164.312(a)(1)",
                 PCI = "6.3.1, 6.3.3",
                 SOC2 = "CC7.1, CC8.1",
                 ISO27001 = "A.8.8, A.8.19",
@@ -547,8 +641,10 @@ public static class FrameworkMappings
             // ──────────────────────────────────────────────
             ["BR01"] = new()
             {
+                CIS = "11.1, 11.2, 11.3",
                 NIST = "3.8.9",
                 CMMC = "MP.L2-3.8.9",
+                HIPAA = "164.308(a)(7)(ii)(A), 164.310(d)(2)(iv)",
                 PCI = "12.10.1",
                 SOC2 = "CC7.5, A1.2",
                 ISO27001 = "A.8.13",
@@ -558,8 +654,10 @@ public static class FrameworkMappings
             },
             ["BR02"] = new()
             {
+                CIS = "11.3, 11.4",
                 NIST = "3.8.9",
                 CMMC = "MP.L2-3.8.9",
+                HIPAA = "164.308(a)(7)(ii)(A)",
                 PCI = "12.10.1",
                 SOC2 = "CC7.5, A1.2",
                 ISO27001 = "A.8.13, A.8.14",
@@ -569,8 +667,10 @@ public static class FrameworkMappings
             },
             ["BR03"] = new()
             {
+                CIS = "11.4, 11.5",
                 NIST = "3.6.1, 3.6.2",
                 CMMC = "IR.L2-3.6.1, IR.L2-3.6.2",
+                HIPAA = "164.308(a)(7)(ii)(D)",
                 PCI = "12.10.1, 12.10.2",
                 SOC2 = "CC7.4, CC7.5, A1.2",
                 ISO27001 = "A.5.29, A.5.30, A.8.14",
@@ -580,8 +680,10 @@ public static class FrameworkMappings
             },
             ["BR04"] = new()
             {
+                CIS = "11.1",
                 NIST = "3.8.9",
                 CMMC = "MP.L2-3.8.9",
+                HIPAA = "164.308(a)(7)(ii)(B)",
                 PCI = "12.10.1",
                 SOC2 = "A1.2",
                 ISO27001 = "A.8.13",
@@ -591,8 +693,10 @@ public static class FrameworkMappings
             },
             ["BR05"] = new()
             {
+                CIS = "3.6, 3.10",
                 NIST = "3.6.1, 3.6.3",
                 CMMC = "IR.L2-3.6.1, IR.L2-3.6.3",
+                HIPAA = "164.312(a)(2)(iv), 164.312(e)(2)(ii)",
                 PCI = "12.10.1, 12.10.2",
                 SOC2 = "CC7.4, CC7.5, A1.2",
                 ISO27001 = "A.5.29, A.5.30",
@@ -602,8 +706,10 @@ public static class FrameworkMappings
             },
             ["BR06"] = new()
             {
+                CIS = "11.2",
                 NIST = "3.8.9",
                 CMMC = "MP.L2-3.8.9",
+                HIPAA = "164.308(a)(7)(ii)(A)",
                 PCI = "12.10.1",
                 SOC2 = "A1.2, A1.3",
                 ISO27001 = "A.8.13",
@@ -613,8 +719,10 @@ public static class FrameworkMappings
             },
             ["BR07"] = new()
             {
+                CIS = "11.5",
                 NIST = "3.13.11",
                 CMMC = "SC.L2-3.13.11",
+                HIPAA = "164.308(a)(7)(i), 164.308(a)(7)(ii)(B-D)",
                 PCI = "3.5.1, 9.4.1",
                 SOC2 = "CC6.7, A1.2",
                 ISO27001 = "A.8.13, A.8.24",
@@ -624,8 +732,10 @@ public static class FrameworkMappings
             },
             ["BR08"] = new()
             {
+                CIS = "11.1, 11.2",
                 NIST = "3.6.1",
                 CMMC = "IR.L2-3.6.1",
+                HIPAA = "164.308(a)(7)(ii)(A), 164.310(d)(2)(iv)",
                 PCI = "12.10.1",
                 SOC2 = "CC7.5, A1.2",
                 ISO27001 = "A.5.29, A.8.13",
@@ -635,12 +745,14 @@ public static class FrameworkMappings
             },
 
             // ──────────────────────────────────────────────
-            //  Configuration (CF01 – CF08)
+            //  Common Findings (CF01 – CF08)
             // ──────────────────────────────────────────────
             ["CF01"] = new()
             {
+                CIS = "5.2, 5.4, 5.5",
                 NIST = "3.1.5, 3.7.5, 3.13.8",
                 CMMC = "AC.L2-3.1.5, SC.L2-3.13.8",
+                HIPAA = "164.312(a)(1), 164.312(d)",
                 PCI = "7.2.2, 8.6.1, 8.6.2",
                 SOC2 = "CC6.1, CC6.3",
                 ISO27001 = "A.5.15, A.5.17, A.8.5",
@@ -651,8 +763,10 @@ public static class FrameworkMappings
             },
             ["CF02"] = new()
             {
+                CIS = "4.4, 4.5, 9.3",
                 NIST = "3.4.6, 3.4.7",
                 CMMC = "CM.L2-3.4.6, CM.L2-3.4.7",
+                HIPAA = "164.312(e)(1)",
                 PCI = "2.2.4, 2.2.7",
                 SOC2 = "CC6.1, CC6.8",
                 ISO27001 = "A.8.19, A.8.20",
@@ -662,8 +776,10 @@ public static class FrameworkMappings
             },
             ["CF03"] = new()
             {
+                CIS = "11.4, 11.5",
                 NIST = "3.2.1, 3.2.2",
                 CMMC = "AT.L2-3.2.1, AT.L2-3.2.2",
+                HIPAA = "164.308(a)(7)(ii)(D)",
                 PCI = "12.6.1, 12.6.2",
                 SOC2 = "CC1.4, CC2.2",
                 ISO27001 = "A.6.3",
@@ -673,8 +789,10 @@ public static class FrameworkMappings
             },
             ["CF04"] = new()
             {
+                CIS = "5.1, 5.3",
                 NIST = "3.1.1, 3.1.2",
                 CMMC = "AC.L2-3.1.1, AC.L2-3.1.2",
+                HIPAA = "164.308(a)(3)(ii)(C), 164.312(a)(2)(ii)",
                 PCI = "7.2.1, 7.2.4",
                 SOC2 = "CC6.1, CC6.3",
                 ISO27001 = "A.5.15, A.8.3",
@@ -684,8 +802,10 @@ public static class FrameworkMappings
             },
             ["CF05"] = new()
             {
+                CIS = "4.5",
                 NIST = "3.1.1, 3.8.1",
                 CMMC = "AC.L2-3.1.1, MP.L2-3.8.1",
+                HIPAA = "164.312(e)(1)",
                 PCI = "7.2.4",
                 SOC2 = "CC6.1, CC6.3",
                 ISO27001 = "A.5.15, A.8.3",
@@ -695,8 +815,10 @@ public static class FrameworkMappings
             },
             ["CF06"] = new()
             {
+                CIS = "12.2, 12.8",
                 NIST = "3.1.17",
                 CMMC = "AC.L2-3.1.17",
+                HIPAA = "164.312(e)(1)",
                 PCI = "7.2.5",
                 SOC2 = "CC6.1",
                 ISO27001 = "A.5.15, A.8.20",
@@ -706,8 +828,10 @@ public static class FrameworkMappings
             },
             ["CF07"] = new()
             {
+                CIS = "5.4, 5.5",
                 NIST = "3.1.5, 3.1.6",
                 CMMC = "AC.L2-3.1.5, AC.L2-3.1.6",
+                HIPAA = "164.312(a)(1)",
                 PCI = "7.2.1, 7.2.2",
                 SOC2 = "CC6.1, CC6.3",
                 ISO27001 = "A.5.15, A.8.2",
@@ -718,8 +842,10 @@ public static class FrameworkMappings
             },
             ["CF08"] = new()
             {
+                CIS = "9.2, 9.3",
                 NIST = "3.14.1, 3.14.6",
                 CMMC = "SI.L2-3.14.1, SI.L2-3.14.6",
+                HIPAA = "164.312(e)(1)",
                 PCI = "5.2.1, 11.5.1",
                 SOC2 = "CC7.1, CC7.2",
                 ISO27001 = "A.8.7, A.8.8",
@@ -729,12 +855,14 @@ public static class FrameworkMappings
             },
 
             // ──────────────────────────────────────────────
-            //  Physical Security (PS01 – PS06)
+            //  Policies & Standards (PS01 – PS06)
             // ──────────────────────────────────────────────
             ["PS01"] = new()
             {
+                CIS = "1.1",
                 NIST = "3.12.1, 3.12.4",
                 CMMC = "CA.L2-3.12.1, CA.L2-3.12.4",
+                HIPAA = "164.310(a)(1), 164.310(a)(2)(ii-iv)",
                 PCI = "12.1.1, 12.1.2",
                 SOC2 = "CC1.1, CC1.2, CC5.2",
                 ISO27001 = "A.5.1, A.5.2",
@@ -743,8 +871,10 @@ public static class FrameworkMappings
             },
             ["PS02"] = new()
             {
+                CIS = "1.1",
                 NIST = "3.12.1, 3.12.3",
                 CMMC = "CA.L2-3.12.1, CA.L2-3.12.3",
+                HIPAA = "164.310(a)(2)(iii), 164.310(b)",
                 PCI = "12.1.1",
                 SOC2 = "CC1.1, CC1.2",
                 ISO27001 = "A.5.1",
@@ -753,8 +883,10 @@ public static class FrameworkMappings
             },
             ["PS03"] = new()
             {
+                CIS = "1.1",
                 NIST = "3.6.1, 3.6.2, 3.6.3",
                 CMMC = "IR.L2-3.6.1, IR.L2-3.6.2, IR.L2-3.6.3",
+                HIPAA = "164.310(a)(2)(iii), 164.310(d)(1)",
                 PCI = "12.10.1, 12.10.2",
                 SOC2 = "CC7.3, CC7.4, CC7.5",
                 ISO27001 = "A.5.24, A.5.25, A.5.26",
@@ -763,8 +895,10 @@ public static class FrameworkMappings
             },
             ["PS04"] = new()
             {
+                CIS = "5.2",
                 NIST = "3.12.1",
                 CMMC = "CA.L2-3.12.1",
+                HIPAA = "164.310(b), 164.310(c)",
                 PCI = "12.4.1",
                 SOC2 = "CC1.1, CC4.1, CC4.2",
                 ISO27001 = "A.5.35, A.5.36",
@@ -773,8 +907,10 @@ public static class FrameworkMappings
             },
             ["PS05"] = new()
             {
+                CIS = "1.4, 12.5",
                 NIST = "3.12.2",
                 CMMC = "CA.L2-3.12.2",
+                HIPAA = "164.310(c)",
                 PCI = "12.1.2, 12.3.1",
                 SOC2 = "CC3.1, CC3.2",
                 ISO27001 = "A.5.7, A.5.8",
@@ -783,8 +919,10 @@ public static class FrameworkMappings
             },
             ["PS06"] = new()
             {
+                CIS = "1.1",
                 NIST = "3.2.1, 3.2.2",
                 CMMC = "AT.L2-3.2.1, AT.L2-3.2.2",
+                HIPAA = "164.310(a)(2)(ii)",
                 PCI = "12.6.1, 12.6.2, 12.6.3",
                 SOC2 = "CC1.4, CC2.2",
                 ISO27001 = "A.6.3",

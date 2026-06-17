@@ -16,6 +16,8 @@ public sealed class AuditState
     public string Grade { get; set; } = "";
     public int RansomwareScore { get; set; }
     public string RansomwareGrade { get; set; } = "";
+    public int DomainMaturityScore { get; set; }
+    public string DomainMaturityGrade { get; set; } = "";
     public List<CheckState> Checks { get; set; } = [];
 
     private static readonly JsonSerializerOptions SerializerOptions = new()

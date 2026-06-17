@@ -50,15 +50,15 @@ public class ExportTests
     }
 
     [Fact]
-    public void Json_Compliance_Has_Nine_Frameworks()
+    public void Json_Compliance_Has_Eleven_Frameworks()
     {
         var (checks, env) = CreateTestData();
         var json = JsonExporter.Export(checks, env, 85, "B", 70, "C", ScanProfileType.Full);
         var doc = JsonDocument.Parse(json);
         var frameworks = doc.RootElement.GetProperty("compliance_frameworks");
 
-        Assert.True(frameworks.EnumerateObject().Count() >= 9,
-            $"Expected at least 9 frameworks, got {frameworks.EnumerateObject().Count()}");
+        Assert.True(frameworks.EnumerateObject().Count() >= 11,
+            $"Expected at least 11 frameworks, got {frameworks.EnumerateObject().Count()}");
     }
 
     [Fact]
@@ -102,6 +102,26 @@ public class ExportTests
     }
 
     [Fact]
+    public void Json_Findings_Include_D3Fend_Data()
+    {
+        var (checks, env) = CreateTestData();
+        var json = JsonExporter.Export(checks, env, 85, "B", 70, "C", ScanProfileType.Full);
+        var doc = JsonDocument.Parse(json);
+        var findings = doc.RootElement.GetProperty("findings");
+
+        var hasD3Fend = false;
+        foreach (var finding in findings.EnumerateArray())
+        {
+            if (finding.TryGetProperty("d3_fend_stages", out var stages) && stages.GetArrayLength() > 0)
+            {
+                hasD3Fend = true;
+                break;
+            }
+        }
+        Assert.True(hasD3Fend, "At least one finding should have D3FEND stages");
+    }
+
+    [Fact]
     public void Csv_Has_Correct_Column_Count()
     {
         var (checks, env) = CreateTestData();
@@ -110,7 +130,7 @@ public class ExportTests
 
         Assert.True(lines.Length > 1);
         var headerCommas = lines[0].Count(c => c == ',');
-        Assert.Equal(14, headerCommas); // 15 columns = 14 commas
+        Assert.Equal(23, headerCommas); // 24 columns = 23 commas
     }
 
     [Fact]

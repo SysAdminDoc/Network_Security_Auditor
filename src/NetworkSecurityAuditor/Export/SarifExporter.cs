@@ -18,6 +18,7 @@ public static class SarifExporter
         {
             var mapping = FrameworkMappings.All.GetValueOrDefault(c.Id);
             var mitre = MitreMappings.All.GetValueOrDefault(c.Id);
+            var defend = D3FendMappings.All.GetValueOrDefault(c.Id);
 
             return new
             {
@@ -41,7 +42,9 @@ public static class SarifExporter
                     ["severity"] = c.Severity.ToString(),
                     ["weight"] = c.Weight,
                     ["compliance"] = mapping?.FormatAll(),
-                    ["mitre-attack"] = mitre is not null ? string.Join(", ", mitre.Techniques) : null
+                    ["mitre-attack"] = mitre is not null ? string.Join(", ", mitre.Techniques) : null,
+                    ["d3fend-techniques"] = defend is not null ? string.Join(", ", defend.Techniques) : null,
+                    ["d3fend-stages"] = defend is not null ? string.Join(", ", defend.Stages) : null
                 }
             };
         }).ToArray();

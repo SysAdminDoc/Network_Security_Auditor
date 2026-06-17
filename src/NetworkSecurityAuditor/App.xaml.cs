@@ -207,6 +207,8 @@ public partial class App : Application
         int exitCode;
         if (score < 60 || rwScore < 40)
             exitCode = 1;
+        else if (HasFrameworkBelowThreshold(checkVms, 60))
+            exitCode = 3;
         else if (failCount > 0)
             exitCode = 2;
         else
@@ -214,6 +216,31 @@ public partial class App : Application
 
         Console.WriteLine($"  Exit code: {exitCode}");
         Shutdown(exitCode);
+    }
+
+    private static bool HasFrameworkBelowThreshold(
+        System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel> checks, int threshold)
+    {
+        var statusLookup = checks.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
+        foreach (var (_, selector) in Data.FrameworkDefinitions.All)
+        {
+            var mapped = Data.FrameworkMappings.All
+                .Where(kv => selector(kv.Value) is not null)
+                .Select(kv => kv.Key)
+                .ToList();
+            int total = 0, passing = 0;
+            foreach (var checkId in mapped)
+            {
+                if (!statusLookup.TryGetValue(checkId, out var status)) continue;
+                if (status is Models.CheckStatus.NA or Models.CheckStatus.NotAssessed) continue;
+                total++;
+                if (status is Models.CheckStatus.Pass or Models.CheckStatus.Partial)
+                    passing++;
+            }
+            if (total > 0 && (double)passing / total * 100 < threshold)
+                return true;
+        }
+        return false;
     }
 
     private static bool IsRunningAsAdmin()

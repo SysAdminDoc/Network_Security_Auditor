@@ -29,6 +29,8 @@ public static class JsonlExporter
             if (check.Status == CheckStatus.NotAssessed) continue;
 
             var compliance = FrameworkMappings.All.GetValueOrDefault(check.Id);
+            var mitre = MitreMappings.All.GetValueOrDefault(check.Id);
+            var defend = D3FendMappings.All.GetValueOrDefault(check.Id);
             var findings = check.Findings;
             var evidence = check.Evidence;
             var findingsTruncated = false;
@@ -66,13 +68,21 @@ public static class JsonlExporter
                 findings_truncated = findingsTruncated,
                 evidence,
                 evidence_truncated = evidenceTruncated,
+                cis = compliance?.CIS,
                 nist = compliance?.NIST,
                 cmmc = compliance?.CMMC,
+                hipaa = compliance?.HIPAA,
                 pci = compliance?.PCI,
                 soc2 = compliance?.SOC2,
                 iso27001 = compliance?.ISO27001,
                 stig = compliance?.STIG,
-                fedramp = compliance?.FedRAMP
+                fedramp = compliance?.FedRAMP,
+                e8 = compliance?.E8,
+                cyber_essentials = compliance?.CyberEssentials,
+                mitre_tactics = mitre?.Tactics,
+                mitre_techniques = mitre?.Techniques,
+                d3fend_stages = defend?.Stages,
+                d3fend_techniques = defend?.Techniques
             };
 
             sb.AppendLine(JsonSerializer.Serialize(evt, Options));

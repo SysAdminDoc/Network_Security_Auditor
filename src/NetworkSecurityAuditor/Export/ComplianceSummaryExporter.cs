@@ -32,15 +32,8 @@ public static class ComplianceSummaryExporter
                     return new { Total = assessed.Count, Passing = passing, Pct = assessed.Count > 0 ? Math.Round((double)passing / assessed.Count * 100, 1) : 0.0 };
                 });
 
-        var fwDefs = new (string name, Func<ComplianceMapping, string?> sel)[]
-        {
-            ("NIST 800-171", m => m.NIST), ("CMMC Level 2", m => m.CMMC), ("PCI-DSS 4.0.1", m => m.PCI),
-            ("SOC 2 Type II", m => m.SOC2), ("ISO 27001:2022", m => m.ISO27001), ("DISA STIG", m => m.STIG),
-            ("FedRAMP Moderate", m => m.FedRAMP), ("Essential Eight", m => m.E8), ("Cyber Essentials", m => m.CyberEssentials),
-        };
-
         var frameworkScores = new Dictionary<string, object>();
-        foreach (var (name, sel) in fwDefs)
+        foreach (var (name, sel) in FrameworkDefinitions.All)
         {
             var mapped = FrameworkMappings.All.Where(kv => sel(kv.Value) is not null).Select(kv => kv.Key).ToList();
             int total = 0, passing = 0;

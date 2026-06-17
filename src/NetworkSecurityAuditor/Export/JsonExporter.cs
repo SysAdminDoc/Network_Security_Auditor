@@ -65,6 +65,7 @@ public static class JsonExporter
             {
                 var mapping = FrameworkMappings.All.GetValueOrDefault(c.Id);
                 var mitre = MitreMappings.All.GetValueOrDefault(c.Id);
+                var defend = D3FendMappings.All.GetValueOrDefault(c.Id);
 
                 return new FindingEntry
                 {
@@ -84,10 +85,16 @@ public static class JsonExporter
                     MitreTactics = mitre?.Tactics,
                     MitreTechniques = mitre?.Techniques,
                     MitreDescription = mitre?.Description,
+                    D3FendStages = defend?.Stages,
+                    D3FendTechniques = defend?.Techniques,
+                    D3FendLabels = defend?.Labels,
+                    D3FendDescription = defend?.Description,
                     FrameworkControls = mapping is not null ? new FrameworkControlIds
                     {
+                        Cis = mapping.CIS,
                         Nist = mapping.NIST,
                         Cmmc = mapping.CMMC,
+                        Hipaa = mapping.HIPAA,
                         Pci = mapping.PCI,
                         Soc2 = mapping.SOC2,
                         Iso27001 = mapping.ISO27001,
@@ -107,22 +114,9 @@ public static class JsonExporter
     private static Dictionary<string, ComplianceFrameworkSummary> BuildComplianceSummary(
         Dictionary<string, CheckStatus> statusLookup)
     {
-        var frameworkDefs = new (string name, Func<ComplianceMapping, string?> selector)[]
-        {
-            ("NIST 800-171", m => m.NIST),
-            ("CMMC Level 2", m => m.CMMC),
-            ("PCI-DSS 4.0.1", m => m.PCI),
-            ("SOC 2 Type II", m => m.SOC2),
-            ("ISO 27001:2022", m => m.ISO27001),
-            ("DISA STIG", m => m.STIG),
-            ("FedRAMP Moderate", m => m.FedRAMP),
-            ("ACSC Essential Eight", m => m.E8),
-            ("Cyber Essentials", m => m.CyberEssentials),
-        };
-
         var result = new Dictionary<string, ComplianceFrameworkSummary>();
 
-        foreach (var (name, selector) in frameworkDefs)
+        foreach (var (name, selector) in FrameworkDefinitions.All)
         {
             var mappedChecks = FrameworkMappings.All
                 .Where(kv => selector(kv.Value) is not null)
@@ -207,13 +201,19 @@ public static class JsonExporter
         public string[]? MitreTactics { get; set; }
         public string[]? MitreTechniques { get; set; }
         public string? MitreDescription { get; set; }
+        public string[]? D3FendStages { get; set; }
+        public string[]? D3FendTechniques { get; set; }
+        public string[]? D3FendLabels { get; set; }
+        public string? D3FendDescription { get; set; }
         public FrameworkControlIds? FrameworkControls { get; set; }
     }
 
     private sealed class FrameworkControlIds
     {
+        public string? Cis { get; set; }
         public string? Nist { get; set; }
         public string? Cmmc { get; set; }
+        public string? Hipaa { get; set; }
         public string? Pci { get; set; }
         public string? Soc2 { get; set; }
         public string? Iso27001 { get; set; }

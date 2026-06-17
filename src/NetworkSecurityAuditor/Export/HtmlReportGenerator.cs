@@ -105,13 +105,7 @@ public static class HtmlReportGenerator
         sb.AppendLine("<table class=\"category-table\">");
         sb.AppendLine("<tr><th>Framework</th><th>Mapped Checks</th><th>Passing</th><th>Coverage</th></tr>");
         var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
-        var fwDefs = new (string name, Func<ComplianceMapping, string?> sel)[]
-        {
-            ("NIST 800-171", m => m.NIST), ("CMMC Level 2", m => m.CMMC), ("PCI-DSS 4.0.1", m => m.PCI),
-            ("SOC 2 Type II", m => m.SOC2), ("ISO 27001:2022", m => m.ISO27001), ("DISA STIG", m => m.STIG),
-            ("FedRAMP Moderate", m => m.FedRAMP), ("Essential Eight", m => m.E8), ("Cyber Essentials", m => m.CyberEssentials),
-        };
-        foreach (var (fwName, sel) in fwDefs)
+        foreach (var (fwName, sel) in FrameworkDefinitions.All)
         {
             var mapped = FrameworkMappings.All.Where(kv => sel(kv.Value) is not null).Select(kv => kv.Key).ToList();
             int fwTotal = 0, fwPass = 0;
@@ -137,6 +131,29 @@ public static class HtmlReportGenerator
             var controls = mapping?.FormatAll() ?? "";
             if (string.IsNullOrWhiteSpace(controls)) continue;
             sb.AppendLine($"<tr><td>{check.Id}</td><td>{EscapeHtml(check.Label)}</td><td style=\"font-size:12px\">{EscapeHtml(controls)}</td></tr>");
+        }
+        sb.AppendLine("</table>");
+
+        // D3FEND Coverage
+        sb.AppendLine("<h2>MITRE D3FEND Defensive Coverage</h2>");
+        sb.AppendLine("<table class=\"category-table\">");
+        sb.AppendLine("<tr><th>Stage</th><th>Checks</th><th>Techniques</th></tr>");
+        var stageChecks = new Dictionary<string, List<(string id, string[] techniques)>>();
+        foreach (var check in checkList)
+        {
+            var defend = D3FendMappings.All.GetValueOrDefault(check.Id);
+            if (defend is null) continue;
+            foreach (var stage in defend.Stages)
+            {
+                if (!stageChecks.ContainsKey(stage))
+                    stageChecks[stage] = [];
+                stageChecks[stage].Add((check.Id, defend.Techniques));
+            }
+        }
+        foreach (var (stage, checks2) in stageChecks.OrderBy(kv => kv.Key))
+        {
+            var allTechniques = checks2.SelectMany(c => c.techniques).Distinct().OrderBy(t => t).ToList();
+            sb.AppendLine($"<tr><td style=\"font-weight:600\">{stage}</td><td>{checks2.Count}</td><td style=\"font-size:12px\">{EscapeHtml(string.Join(", ", allTechniques))}</td></tr>");
         }
         sb.AppendLine("</table>");
 
