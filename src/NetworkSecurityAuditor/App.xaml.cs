@@ -167,15 +167,33 @@ public partial class App : Application
         await File.WriteAllTextAsync(htmlPath, html);
         Console.WriteLine($"  HTML: {htmlPath}");
 
-        var csvPath = Path.Combine(outputDir, $"{baseName}.csv");
-        var csv = CsvExporter.Export(checkVms, env, score, grade);
-        await File.WriteAllTextAsync(csvPath, csv);
-        Console.WriteLine($"  CSV: {csvPath}");
+        if (args.ExportCsv)
+        {
+            var csvPath = Path.Combine(outputDir, $"{baseName}.csv");
+            await File.WriteAllTextAsync(csvPath, CsvExporter.Export(checkVms, env, score, grade));
+            Console.WriteLine($"  CSV: {csvPath}");
+        }
 
-        var jsonlPath = Path.Combine(outputDir, $"{baseName}_siem.jsonl");
-        var jsonl = JsonlExporter.Export(checkVms, env, score, grade, args.ScanProfile);
-        await File.WriteAllTextAsync(jsonlPath, jsonl);
-        Console.WriteLine($"  JSONL: {jsonlPath}");
+        if (args.ExportJsonl)
+        {
+            var jsonlPath = Path.Combine(outputDir, $"{baseName}_siem.jsonl");
+            await File.WriteAllTextAsync(jsonlPath, JsonlExporter.Export(checkVms, env, score, grade, args.ScanProfile));
+            Console.WriteLine($"  JSONL: {jsonlPath}");
+        }
+
+        if (args.ExportDefectDojo)
+        {
+            var ddPath = Path.Combine(outputDir, $"{baseName}_defectdojo.json");
+            await File.WriteAllTextAsync(ddPath, DefectDojoExporter.Export(checkVms, env, score, grade));
+            Console.WriteLine($"  DefectDojo: {ddPath}");
+        }
+
+        if (args.ExportNavigator)
+        {
+            var navPath = Path.Combine(outputDir, $"{baseName}_navigator.json");
+            await File.WriteAllTextAsync(navPath, NavigatorExporter.Export(checkVms));
+            Console.WriteLine($"  Navigator: {navPath}");
+        }
 
         Console.WriteLine();
 
@@ -225,6 +243,24 @@ public partial class App : Application
                 result.Client = args[++i];
             else if ((arg.Equals("--auditor", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Auditor", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
                 result.Auditor = args[++i];
+            else if (arg.Equals("--export-csv", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportCSV", StringComparison.OrdinalIgnoreCase))
+                result.ExportCsv = true;
+            else if (arg.Equals("--export-jsonl", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportJSONL", StringComparison.OrdinalIgnoreCase))
+                result.ExportJsonl = true;
+            else if (arg.Equals("--export-defectdojo", StringComparison.OrdinalIgnoreCase))
+                result.ExportDefectDojo = true;
+            else if (arg.Equals("--export-sarif", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportSARIF", StringComparison.OrdinalIgnoreCase))
+                result.ExportSarif = true;
+            else if (arg.Equals("--export-navigator", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportNavigator", StringComparison.OrdinalIgnoreCase))
+                result.ExportNavigator = true;
+            else if (arg.Equals("--export-all", StringComparison.OrdinalIgnoreCase))
+            {
+                result.ExportCsv = true;
+                result.ExportJsonl = true;
+                result.ExportDefectDojo = true;
+                result.ExportSarif = true;
+                result.ExportNavigator = true;
+            }
         }
 
         return result;
@@ -236,6 +272,11 @@ public partial class App : Application
         public bool NoElevate;
         public bool NoInternet;
         public bool PrivacyMode;
+        public bool ExportCsv;
+        public bool ExportJsonl;
+        public bool ExportDefectDojo;
+        public bool ExportSarif;
+        public bool ExportNavigator;
         public ScanProfileType ScanProfile = ScanProfileType.Full;
         public string OutputPath = "";
         public string Client = "";
