@@ -21,6 +21,14 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FilteredChecks))]
+    private string _searchText = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredChecks))]
+    private string _statusFilter = "All";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredChecks))]
     private bool _isScanning;
 
     [ObservableProperty]
@@ -28,6 +36,9 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     private ScanProfileType _selectedProfile = ScanProfileType.Full;
+
+    [ObservableProperty]
+    private bool _privacyMode;
 
     [ObservableProperty]
     private string _selectedTheme = "Catppuccin Mocha";
@@ -62,14 +73,46 @@ public partial class MainViewModel : ViewModelBase
 
     public string[] Categories { get; private set; } = ["All"];
 
+    public string[] StatusFilters { get; } = ["All", "Pass", "Partial", "Fail", "N/A", "Not Assessed"];
+
     public string[] AvailableThemes { get; } = ["Catppuccin Mocha"];
 
     public ScanProfileType[] AvailableProfiles { get; } = Enum.GetValues<ScanProfileType>();
 
-    public IEnumerable<CheckItemViewModel> FilteredChecks =>
-        SelectedCategory == "All"
-            ? Checks
-            : Checks.Where(c => c.Category == SelectedCategory);
+    public IEnumerable<CheckItemViewModel> FilteredChecks
+    {
+        get
+        {
+            IEnumerable<CheckItemViewModel> result = Checks;
+
+            if (SelectedCategory != "All")
+                result = result.Where(c => c.Category == SelectedCategory);
+
+            if (!string.IsNullOrWhiteSpace(SearchText))
+            {
+                var search = SearchText.Trim();
+                result = result.Where(c =>
+                    c.Id.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    c.Label.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    c.Category.Contains(search, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (StatusFilter != "All")
+            {
+                result = StatusFilter switch
+                {
+                    "Pass" => result.Where(c => c.Status == CheckStatus.Pass),
+                    "Partial" => result.Where(c => c.Status == CheckStatus.Partial),
+                    "Fail" => result.Where(c => c.Status == CheckStatus.Fail),
+                    "N/A" => result.Where(c => c.Status == CheckStatus.NA),
+                    "Not Assessed" => result.Where(c => c.Status == CheckStatus.NotAssessed),
+                    _ => result
+                };
+            }
+
+            return result;
+        }
+    }
 
     public string Grade => RiskScoreEngine.GradeFromScore(OverallScore);
 
@@ -179,6 +222,19 @@ public partial class MainViewModel : ViewModelBase
 
     private bool CanStopScan() => IsScanning;
 
+    private void ApplyPrivacyRedaction()
+    {
+        if (!PrivacyMode) return;
+        var redactor = new Services.PrivacyRedactor(true,
+            Environment.ComputerName, Environment.DomainName,
+            System.Environment.UserName);
+        foreach (var check in Checks)
+        {
+            check.Findings = redactor.Redact(check.Findings);
+            check.Evidence = redactor.Redact(check.Evidence);
+        }
+    }
+
     [RelayCommand]
     private async Task ExportHtmlAsync()
     {
@@ -191,9 +247,10 @@ public partial class MainViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
+            ApplyPrivacyRedaction();
             var html = Export.HtmlReportGenerator.Generate(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
             await File.WriteAllTextAsync(dialog.FileName, html);
-            ScanStatus = $"HTML report exported: {dialog.FileName}";
+            ScanStatus = $"HTML report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 
@@ -209,9 +266,10 @@ public partial class MainViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
+            ApplyPrivacyRedaction();
             var json = Export.JsonExporter.Export(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
             await File.WriteAllTextAsync(dialog.FileName, json);
-            ScanStatus = $"JSON report exported: {dialog.FileName}";
+            ScanStatus = $"JSON report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 
