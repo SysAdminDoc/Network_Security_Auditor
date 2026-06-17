@@ -127,6 +127,7 @@ public partial class App : Application
 
         var (score, grade) = RiskScoreEngine.Calculate(checkVms);
         var (rwScore, rwGrade) = RansomwareReadinessEngine.Calculate(checkVms);
+        var (dmScore, dmGrade, _) = DomainMaturityEngine.Calculate(checkVms);
         var passCount = checkVms.Count(c => c.Status == CheckStatus.Pass);
         var failCount = checkVms.Count(c => c.Status == CheckStatus.Fail);
         var partialCount = checkVms.Count(c => c.Status == CheckStatus.Partial);
@@ -134,6 +135,7 @@ public partial class App : Application
         Console.WriteLine();
         Console.WriteLine($"  Score: {score}% (Grade: {grade})");
         Console.WriteLine($"  Ransomware Readiness: {rwScore}% ({rwGrade})");
+        Console.WriteLine($"  Domain Maturity: {dmScore}% ({dmGrade})");
         Console.WriteLine($"  Pass: {passCount} | Fail: {failCount} | Partial: {partialCount}");
 
         if (args.PrivacyMode)
@@ -156,12 +158,12 @@ public partial class App : Application
         var baseName = $"SecurityAudit_{options.Client}_{DateTime.Now:yyyy-MM-dd_HHmm}";
 
         var jsonPath = Path.Combine(outputDir, $"{baseName}_findings.json");
-        var json = JsonExporter.Export(checkVms, env, score, grade, rwScore, rwGrade, args.ScanProfile);
+        var json = JsonExporter.Export(checkVms, env, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade);
         await File.WriteAllTextAsync(jsonPath, json);
         Console.WriteLine($"  JSON: {jsonPath}");
 
         var htmlPath = Path.Combine(outputDir, $"{baseName}.html");
-        var html = HtmlReportGenerator.Generate(checkVms, env, score, grade, rwScore, rwGrade);
+        var html = HtmlReportGenerator.Generate(checkVms, env, score, grade, rwScore, rwGrade, dmScore, dmGrade);
         await File.WriteAllTextAsync(htmlPath, html);
         Console.WriteLine($"  HTML: {htmlPath}");
 

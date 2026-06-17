@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Scoring;
 using NetworkSecurityAuditor.ViewModels;
 
 namespace NetworkSecurityAuditor.Export;
@@ -21,13 +23,18 @@ public static class JsonExporter
         string grade,
         int ransomwareScore,
         string ransomwareGrade,
-        ScanProfileType scanProfile)
+        ScanProfileType scanProfile,
+        int domainMaturityScore = 0,
+        string domainMaturityGrade = "N/A")
     {
+        var checkList = checks.ToList();
+        var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
+
         var report = new AuditReport
         {
             Tool = "Network Security Auditor",
             ToolVersion = "5.0.0",
-            SchemaVersion = "1.0",
+            SchemaVersion = "2.0",
             Timestamp = DateTime.UtcNow.ToString("o"),
             Client = "",
             Auditor = "",
@@ -50,43 +57,97 @@ public static class JsonExporter
                 Overall = overallScore,
                 Grade = grade,
                 RansomwareReadiness = ransomwareScore,
-                RansomwareGrade = ransomwareGrade
+                RansomwareGrade = ransomwareGrade,
+                DomainMaturity = domainMaturityScore,
+                DomainMaturityGrade = domainMaturityGrade
             },
-            Findings = checks.Select(c => new FindingEntry
+            Findings = checkList.Select(c =>
             {
-                Id = c.Id,
-                Label = c.Label,
-                Category = c.Category,
-                Severity = c.Severity.ToString(),
-                Status = c.Status.ToString(),
-                Findings = c.Findings,
-                Evidence = c.Evidence,
-                Compliance = c.Compliance,
-                Notes = c.Notes,
-                RemediationAssignee = c.RemediationAssignee,
-                RemediationDueDate = c.RemediationDueDate?.ToString("yyyy-MM-dd")
+                var mapping = FrameworkMappings.All.GetValueOrDefault(c.Id);
+                var mitre = MitreMappings.All.GetValueOrDefault(c.Id);
+
+                return new FindingEntry
+                {
+                    Id = c.Id,
+                    Label = c.Label,
+                    Category = c.Category,
+                    Severity = c.Severity.ToString(),
+                    Status = c.Status.ToString(),
+                    Findings = c.Findings,
+                    Evidence = c.Evidence,
+                    Compliance = c.Compliance,
+                    Notes = c.Notes,
+                    RemediationAssignee = c.RemediationAssignee,
+                    RemediationDueDate = c.RemediationDueDate?.ToString("yyyy-MM-dd"),
+                    RemediationUrl = c.RemediationUrl,
+                    EvidenceMode = c.EvidenceMode.ToString(),
+                    MitreTactics = mitre?.Tactics,
+                    MitreTechniques = mitre?.Techniques,
+                    MitreDescription = mitre?.Description,
+                    FrameworkControls = mapping is not null ? new FrameworkControlIds
+                    {
+                        Nist = mapping.NIST,
+                        Cmmc = mapping.CMMC,
+                        Pci = mapping.PCI,
+                        Soc2 = mapping.SOC2,
+                        Iso27001 = mapping.ISO27001,
+                        Stig = mapping.STIG,
+                        FedRamp = mapping.FedRAMP,
+                        E8 = mapping.E8,
+                        CyberEssentials = mapping.CyberEssentials
+                    } : null
+                };
             }).ToArray(),
-            ComplianceFrameworks = BuildComplianceSummary(checks)
+            ComplianceFrameworks = BuildComplianceSummary(statusLookup)
         };
 
         return JsonSerializer.Serialize(report, SerializerOptions);
     }
 
     private static Dictionary<string, ComplianceFrameworkSummary> BuildComplianceSummary(
-        IEnumerable<CheckItemViewModel> checks)
+        Dictionary<string, CheckStatus> statusLookup)
     {
-        var assessed = checks.Where(c => c.Status is not (CheckStatus.NA or CheckStatus.NotAssessed)).ToList();
-        var total = assessed.Count;
-        var passing = assessed.Count(c => c.Status is CheckStatus.Pass or CheckStatus.Partial);
-
-        var frameworks = new Dictionary<string, ComplianceFrameworkSummary>
+        var frameworkDefs = new (string name, Func<ComplianceMapping, string?> selector)[]
         {
-            ["NIST 800-171"] = new() { TotalControls = total, PassingControls = passing, Coverage = total > 0 ? Math.Round((double)passing / total * 100, 1) : 0 },
-            ["CMMC L2"] = new() { TotalControls = total, PassingControls = passing, Coverage = total > 0 ? Math.Round((double)passing / total * 100, 1) : 0 },
-            ["PCI DSS"] = new() { TotalControls = total, PassingControls = passing, Coverage = total > 0 ? Math.Round((double)passing / total * 100, 1) : 0 },
+            ("NIST 800-171", m => m.NIST),
+            ("CMMC Level 2", m => m.CMMC),
+            ("PCI-DSS 4.0.1", m => m.PCI),
+            ("SOC 2 Type II", m => m.SOC2),
+            ("ISO 27001:2022", m => m.ISO27001),
+            ("DISA STIG", m => m.STIG),
+            ("FedRAMP Moderate", m => m.FedRAMP),
+            ("ACSC Essential Eight", m => m.E8),
+            ("Cyber Essentials", m => m.CyberEssentials),
         };
 
-        return frameworks;
+        var result = new Dictionary<string, ComplianceFrameworkSummary>();
+
+        foreach (var (name, selector) in frameworkDefs)
+        {
+            var mappedChecks = FrameworkMappings.All
+                .Where(kv => selector(kv.Value) is not null)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            int total = 0, passing = 0;
+            foreach (var checkId in mappedChecks)
+            {
+                if (!statusLookup.TryGetValue(checkId, out var status)) continue;
+                if (status is CheckStatus.NA or CheckStatus.NotAssessed) continue;
+                total++;
+                if (status is CheckStatus.Pass or CheckStatus.Partial)
+                    passing++;
+            }
+
+            result[name] = new ComplianceFrameworkSummary
+            {
+                TotalControls = total,
+                PassingControls = passing,
+                Coverage = total > 0 ? Math.Round((double)passing / total * 100, 1) : 0
+            };
+        }
+
+        return result;
     }
 
     private sealed class AuditReport
@@ -124,6 +185,8 @@ public static class JsonExporter
         public string Grade { get; set; } = "";
         public int RansomwareReadiness { get; set; }
         public string RansomwareGrade { get; set; } = "";
+        public int DomainMaturity { get; set; }
+        public string DomainMaturityGrade { get; set; } = "";
     }
 
     private sealed class FindingEntry
@@ -139,6 +202,25 @@ public static class JsonExporter
         public string Notes { get; set; } = "";
         public string RemediationAssignee { get; set; } = "";
         public string? RemediationDueDate { get; set; }
+        public string? RemediationUrl { get; set; }
+        public string? EvidenceMode { get; set; }
+        public string[]? MitreTactics { get; set; }
+        public string[]? MitreTechniques { get; set; }
+        public string? MitreDescription { get; set; }
+        public FrameworkControlIds? FrameworkControls { get; set; }
+    }
+
+    private sealed class FrameworkControlIds
+    {
+        public string? Nist { get; set; }
+        public string? Cmmc { get; set; }
+        public string? Pci { get; set; }
+        public string? Soc2 { get; set; }
+        public string? Iso27001 { get; set; }
+        public string? Stig { get; set; }
+        public string? FedRamp { get; set; }
+        public string? E8 { get; set; }
+        public string? CyberEssentials { get; set; }
     }
 
     private sealed class ComplianceFrameworkSummary

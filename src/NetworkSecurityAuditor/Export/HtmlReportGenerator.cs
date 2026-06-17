@@ -1,4 +1,5 @@
 using System.Text;
+using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.ViewModels;
 
@@ -12,7 +13,9 @@ public static class HtmlReportGenerator
         int overallScore,
         string grade,
         int ransomwareScore,
-        string ransomwareGrade)
+        string ransomwareGrade,
+        int domainMaturityScore = 0,
+        string domainMaturityGrade = "N/A")
     {
         var checkList = checks.ToList();
         var sb = new StringBuilder();
@@ -39,6 +42,7 @@ public static class HtmlReportGenerator
         sb.AppendLine("<div class=\"summary-grid\">");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(grade)}\">{grade}</div><div class=\"score-value\">{overallScore}/100</div><div class=\"score-label\">Overall Score</div></div>");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(ransomwareGrade)}\">{ransomwareGrade}</div><div class=\"score-value\">{ransomwareScore}/100</div><div class=\"score-label\">Ransomware Readiness</div></div>");
+        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(domainMaturityGrade)}\">{domainMaturityGrade}</div><div class=\"score-value\">{domainMaturityScore}/100</div><div class=\"score-label\">Domain Maturity</div></div>");
 
         var passCount = checkList.Count(c => c.Status == CheckStatus.Pass);
         var failCount = checkList.Count(c => c.Status == CheckStatus.Fail);
@@ -74,16 +78,21 @@ public static class HtmlReportGenerator
         {
             sb.AppendLine($"<h3>{group.Key}</h3>");
             sb.AppendLine("<table class=\"findings-table\">");
-            sb.AppendLine("<tr><th>ID</th><th>Check</th><th>Severity</th><th>Status</th><th>Findings</th><th>Evidence</th></tr>");
+            sb.AppendLine("<tr><th>ID</th><th>Check</th><th>Severity</th><th>Status</th><th>ATT&amp;CK</th><th>Findings</th><th>Evidence</th></tr>");
             foreach (var check in group.OrderBy(c => c.Id))
             {
                 var severityClass = check.Severity.ToString().ToLowerInvariant();
                 var statusClass = check.Status.ToString().ToLowerInvariant();
+                var mitre = MitreMappings.All.GetValueOrDefault(check.Id);
+                var mitreCell = mitre is not null
+                    ? string.Join(", ", mitre.Techniques.Select(t => $"<span class=\"badge severity-medium\">{t}</span>"))
+                    : "";
                 sb.AppendLine($"<tr>");
                 sb.AppendLine($"<td class=\"id-cell\">{check.Id}</td>");
-                sb.AppendLine($"<td>{check.Label}</td>");
+                sb.AppendLine($"<td>{EscapeHtml(check.Label)}{(check.RemediationUrl is not null ? $" <a href=\"{check.RemediationUrl}\" style=\"color:#89b4fa;font-size:11px\">[remediation]</a>" : "")}</td>");
                 sb.AppendLine($"<td><span class=\"badge severity-{severityClass}\">{check.SeverityLabel}</span></td>");
                 sb.AppendLine($"<td><span class=\"badge status-{statusClass}\">{check.Status}</span></td>");
+                sb.AppendLine($"<td class=\"mitre-cell\">{mitreCell}</td>");
                 sb.AppendLine($"<td class=\"findings-cell\">{EscapeHtml(check.Findings)}</td>");
                 sb.AppendLine($"<td class=\"evidence-cell\">{EscapeHtml(check.Evidence)}</td>");
                 sb.AppendLine("</tr>");
@@ -91,13 +100,43 @@ public static class HtmlReportGenerator
             sb.AppendLine("</table>");
         }
 
-        // Compliance
+        // Per-framework compliance scores
         sb.AppendLine("<h2>Compliance Framework Coverage</h2>");
-        sb.AppendLine("<table class=\"compliance-table\">");
-        sb.AppendLine("<tr><th>Check ID</th><th>Label</th><th>Compliance Mappings</th></tr>");
-        foreach (var check in checkList.Where(c => !string.IsNullOrWhiteSpace(c.Compliance)).OrderBy(c => c.Id))
+        sb.AppendLine("<table class=\"category-table\">");
+        sb.AppendLine("<tr><th>Framework</th><th>Mapped Checks</th><th>Passing</th><th>Coverage</th></tr>");
+        var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
+        var fwDefs = new (string name, Func<ComplianceMapping, string?> sel)[]
         {
-            sb.AppendLine($"<tr><td>{check.Id}</td><td>{check.Label}</td><td>{EscapeHtml(check.Compliance)}</td></tr>");
+            ("NIST 800-171", m => m.NIST), ("CMMC Level 2", m => m.CMMC), ("PCI-DSS 4.0.1", m => m.PCI),
+            ("SOC 2 Type II", m => m.SOC2), ("ISO 27001:2022", m => m.ISO27001), ("DISA STIG", m => m.STIG),
+            ("FedRAMP Moderate", m => m.FedRAMP), ("Essential Eight", m => m.E8), ("Cyber Essentials", m => m.CyberEssentials),
+        };
+        foreach (var (fwName, sel) in fwDefs)
+        {
+            var mapped = FrameworkMappings.All.Where(kv => sel(kv.Value) is not null).Select(kv => kv.Key).ToList();
+            int fwTotal = 0, fwPass = 0;
+            foreach (var cid in mapped)
+            {
+                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed) continue;
+                fwTotal++;
+                if (st is CheckStatus.Pass or CheckStatus.Partial) fwPass++;
+            }
+            var pct = fwTotal > 0 ? Math.Round((double)fwPass / fwTotal * 100) : 0;
+            var color = pct >= 80 ? "#a6e3a1" : pct >= 60 ? "#f9e2af" : "#f38ba8";
+            sb.AppendLine($"<tr><td>{fwName}</td><td>{mapped.Count}</td><td class=\"pass-cell\">{fwPass}/{fwTotal}</td><td style=\"color:{color};font-weight:600\">{pct}%</td></tr>");
+        }
+        sb.AppendLine("</table>");
+
+        // Detailed compliance per check
+        sb.AppendLine("<h3>Per-Check Framework Control IDs</h3>");
+        sb.AppendLine("<table class=\"compliance-table\">");
+        sb.AppendLine("<tr><th>Check ID</th><th>Label</th><th>Framework Controls</th></tr>");
+        foreach (var check in checkList.OrderBy(c => c.Id))
+        {
+            var mapping = FrameworkMappings.All.GetValueOrDefault(check.Id);
+            var controls = mapping?.FormatAll() ?? "";
+            if (string.IsNullOrWhiteSpace(controls)) continue;
+            sb.AppendLine($"<tr><td>{check.Id}</td><td>{EscapeHtml(check.Label)}</td><td style=\"font-size:12px\">{EscapeHtml(controls)}</td></tr>");
         }
         sb.AppendLine("</table>");
 
@@ -145,7 +184,7 @@ public static class HtmlReportGenerator
         h2 { color: #cba6f7; margin: 24px 0 12px; font-size: 20px; }
         h3 { color: #b5bcd6; margin: 16px 0 8px; font-size: 16px; }
         .summary-grid {
-            display: grid; grid-template-columns: repeat(3, 1fr);
+            display: grid; grid-template-columns: repeat(4, 1fr);
             gap: 16px; margin-bottom: 24px;
         }
         .score-card {
@@ -181,6 +220,7 @@ public static class HtmlReportGenerator
         .partial-cell { color: #f9e2af; font-weight: 600; }
         .fail-cell { color: #f38ba8; font-weight: 600; }
         .findings-cell, .evidence-cell { max-width: 300px; word-wrap: break-word; font-size: 13px; color: #b5bcd6; }
+        .mitre-cell { max-width: 200px; font-size: 11px; }
         .badge {
             display: inline-block; padding: 2px 10px; border-radius: 6px;
             font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;

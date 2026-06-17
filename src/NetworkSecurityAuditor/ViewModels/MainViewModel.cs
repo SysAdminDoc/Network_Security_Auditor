@@ -191,7 +191,7 @@ public partial class MainViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
-            var html = Export.HtmlReportGenerator.Generate(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade);
+            var html = Export.HtmlReportGenerator.Generate(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
             await File.WriteAllTextAsync(dialog.FileName, html);
             ScanStatus = $"HTML report exported: {dialog.FileName}";
         }
@@ -209,7 +209,7 @@ public partial class MainViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
-            var json = Export.JsonExporter.Export(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile);
+            var json = Export.JsonExporter.Export(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
             await File.WriteAllTextAsync(dialog.FileName, json);
             ScanStatus = $"JSON report exported: {dialog.FileName}";
         }

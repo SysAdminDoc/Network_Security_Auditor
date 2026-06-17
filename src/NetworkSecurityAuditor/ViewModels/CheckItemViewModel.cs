@@ -11,6 +11,9 @@ public partial class CheckItemViewModel : ViewModelBase
     public required Severity Severity { get; init; }
     public int Weight { get; init; } = 1;
     public string Compliance { get; init; } = "";
+    public string? RemediationUrl { get; init; }
+    public EvidenceMode EvidenceMode { get; init; }
+    public RiskTier RiskTier { get; init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusColor))]
@@ -69,6 +72,9 @@ public partial class CheckItemViewModel : ViewModelBase
         Category = meta.Category,
         Severity = meta.Severity,
         Weight = meta.Weight,
-        Compliance = meta.Compliance
+        Compliance = meta.Compliance,
+        RemediationUrl = meta.RemediationUrl,
+        EvidenceMode = meta.EvidenceMode,
+        RiskTier = meta.RiskTier
     };
 }
