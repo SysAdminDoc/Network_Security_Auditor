@@ -95,7 +95,7 @@ public static class MitreMappings
             ["EP01"] = new AttackMapping
             {
                 Tactics = ["TA0005", "TA0002"],
-                Techniques = ["T1562.001", "T1562.004", "T1059"],
+                Techniques = ["T1685.001", "T1686.003", "T1059"],
                 Description = "Disabled AV allows malware execution"
             },
             ["EP02"] = new AttackMapping
@@ -125,7 +125,7 @@ public static class MitreMappings
             ["EP06"] = new AttackMapping
             {
                 Tactics = ["TA0005", "TA0011"],
-                Techniques = ["T1562.004", "T1071", "T1048"],
+                Techniques = ["T1686.003", "T1071", "T1048"],
                 Description = "Firewall gaps allow C2 and data exfiltration"
             },
             ["EP07"] = new AttackMapping
@@ -143,7 +143,7 @@ public static class MitreMappings
             ["EP09"] = new AttackMapping
             {
                 Tactics = ["TA0005", "TA0003"],
-                Techniques = ["T1562.001", "T1112"],
+                Techniques = ["T1685.001", "T1112"],
                 Description = "Misconfigured AutoRun expands attack surface"
             },
             ["EP10"] = new AttackMapping
@@ -157,49 +157,49 @@ public static class MitreMappings
             ["LM01"] = new AttackMapping
             {
                 Tactics = ["TA0005"],
-                Techniques = ["T1562.002", "T1070.001"],
+                Techniques = ["T1685.002", "T1070.001"],
                 Description = "Inadequate audit policy creates blind spots"
             },
             ["LM02"] = new AttackMapping
             {
                 Tactics = ["TA0005", "TA0040"],
-                Techniques = ["T1562.002", "T1485"],
+                Techniques = ["T1685.002", "T1485"],
                 Description = "No SIEM means no correlation or alerting"
             },
             ["LM03"] = new AttackMapping
             {
                 Tactics = ["TA0002", "TA0005"],
-                Techniques = ["T1059.001", "T1059.003", "T1562.002", "T1070"],
+                Techniques = ["T1059.001", "T1059.003", "T1685.002", "T1070"],
                 Description = "Missing PS logging allows script-based attacks without trace"
             },
             ["LM04"] = new AttackMapping
             {
                 Tactics = ["TA0005", "TA0011"],
-                Techniques = ["T1562.002", "T1071"],
+                Techniques = ["T1685.002", "T1071"],
                 Description = "No firewall logging means network attacks go undetected"
             },
             ["LM05"] = new AttackMapping
             {
                 Tactics = ["TA0005"],
-                Techniques = ["T1562.002", "T1070.001", "T1070.002"],
+                Techniques = ["T1685.002", "T1070.001", "T1070.002"],
                 Description = "Logs without integrity protection can be tampered with"
             },
             ["LM06"] = new AttackMapping
             {
                 Tactics = ["TA0005"],
-                Techniques = ["T1070.001", "T1562.002"],
+                Techniques = ["T1070.001", "T1685.002"],
                 Description = "Missing log review means alerts never acted upon"
             },
             ["LM07"] = new AttackMapping
             {
                 Tactics = ["TA0005"],
-                Techniques = ["T1070.001", "T1562.002"],
+                Techniques = ["T1070.001", "T1685.002"],
                 Description = "Small log sizes cause critical events to be overwritten"
             },
             ["LM08"] = new AttackMapping
             {
                 Tactics = ["TA0005", "TA0011"],
-                Techniques = ["T1562.002", "T1071"],
+                Techniques = ["T1685.002", "T1071"],
                 Description = "Missing alerting means attacks proceed without response"
             },
 
@@ -251,7 +251,7 @@ public static class MitreMappings
             ["NP01"] = new AttackMapping
             {
                 Tactics = ["TA0005", "TA0011"],
-                Techniques = ["T1562.004", "T1071"],
+                Techniques = ["T1686.003", "T1071"],
                 Description = "Weak firewall rules expose attack surface"
             },
             ["NP02"] = new AttackMapping
@@ -269,7 +269,7 @@ public static class MitreMappings
             ["NP04"] = new AttackMapping
             {
                 Tactics = ["TA0001", "TA0005"],
-                Techniques = ["T1190", "T1562.004"],
+                Techniques = ["T1190", "T1686.003"],
                 Description = "WAF gaps allow web app exploitation"
             },
             ["NP05"] = new AttackMapping
@@ -287,7 +287,7 @@ public static class MitreMappings
             ["NP07"] = new AttackMapping
             {
                 Tactics = ["TA0005", "TA0011"],
-                Techniques = ["T1071", "T1568", "T1562.004"],
+                Techniques = ["T1071", "T1568", "T1686.003"],
                 Description = "No IDS/IPS means network attacks bypass perimeter"
             },
             ["NP08"] = new AttackMapping
@@ -405,7 +405,7 @@ public static class MitreMappings
             ["CF08"] = new AttackMapping
             {
                 Tactics = ["TA0001", "TA0005"],
-                Techniques = ["T1190", "T1211", "T1562.001"],
+                Techniques = ["T1190", "T1211", "T1685.001"],
                 Description = "Missing vulnerability management leaves known CVEs exploitable"
             },
 
