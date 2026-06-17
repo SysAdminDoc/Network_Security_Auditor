@@ -202,6 +202,20 @@ public partial class App : Application
             Console.WriteLine($"  SARIF: {sarifPath}");
         }
 
+        if (args.ExportOcsf)
+        {
+            var ocsfPath = Path.Combine(outputDir, $"{baseName}_ocsf.jsonl");
+            await File.WriteAllTextAsync(ocsfPath, OcsfExporter.Export(checkVms, env, score, grade, args.ScanProfile.ToString()));
+            Console.WriteLine($"  OCSF: {ocsfPath}");
+        }
+
+        if (args.ExportOscal)
+        {
+            var oscalPath = Path.Combine(outputDir, $"{baseName}_oscal.json");
+            await File.WriteAllTextAsync(oscalPath, OscalExporter.Export(checkVms, env, score, grade));
+            Console.WriteLine($"  OSCAL: {oscalPath}");
+        }
+
         Console.WriteLine();
 
         int exitCode;
@@ -287,6 +301,10 @@ public partial class App : Application
                 result.ExportSarif = true;
             else if (arg.Equals("--export-navigator", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportNavigator", StringComparison.OrdinalIgnoreCase))
                 result.ExportNavigator = true;
+            else if (arg.Equals("--export-ocsf", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportOCSF", StringComparison.OrdinalIgnoreCase))
+                result.ExportOcsf = true;
+            else if (arg.Equals("--export-oscal", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportOSCAL", StringComparison.OrdinalIgnoreCase))
+                result.ExportOscal = true;
             else if (arg.Equals("--export-all", StringComparison.OrdinalIgnoreCase))
             {
                 result.ExportCsv = true;
@@ -294,6 +312,8 @@ public partial class App : Application
                 result.ExportDefectDojo = true;
                 result.ExportSarif = true;
                 result.ExportNavigator = true;
+                result.ExportOcsf = true;
+                result.ExportOscal = true;
             }
         }
 
@@ -311,6 +331,8 @@ public partial class App : Application
         public bool ExportDefectDojo;
         public bool ExportSarif;
         public bool ExportNavigator;
+        public bool ExportOcsf;
+        public bool ExportOscal;
         public ScanProfileType ScanProfile = ScanProfileType.Full;
         public string OutputPath = "";
         public string Client = "";

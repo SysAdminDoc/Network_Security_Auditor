@@ -358,6 +358,40 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task ExportOcsfAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "OCSF JSONL|*.jsonl",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_ocsf.jsonl",
+            DefaultExt = ".jsonl"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            ApplyPrivacyRedaction();
+            await File.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(Checks, Environment, OverallScore, Grade, SelectedProfile.ToString()));
+            ScanStatus = $"OCSF exported: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportOscalAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "OSCAL JSON|*.json",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_oscal.json",
+            DefaultExt = ".json"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            ApplyPrivacyRedaction();
+            await File.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(Checks, Environment, OverallScore, Grade));
+            ScanStatus = $"OSCAL exported: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
     private async Task ExportComplianceSummaryAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

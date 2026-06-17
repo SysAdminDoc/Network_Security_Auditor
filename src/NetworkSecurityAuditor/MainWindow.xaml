@@ -139,6 +139,12 @@
                     <Button Content="DefectDojo" Command="{Binding ExportDefectDojoCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="2"
                             Padding="10,5" FontSize="10" />
+                    <Button Content="OCSF" Command="{Binding ExportOcsfCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
+                    <Button Content="OSCAL" Command="{Binding ExportOscalCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
                     <Button Content="Summary" Command="{Binding ExportComplianceSummaryCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="2"
                             Padding="10,5" FontSize="10" />

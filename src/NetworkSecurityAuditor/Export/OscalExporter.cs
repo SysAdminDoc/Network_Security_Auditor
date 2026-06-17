@@ -1,0 +1,133 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using NetworkSecurityAuditor.Data;
+using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.ViewModels;
+
+namespace NetworkSecurityAuditor.Export;
+
+/// <summary>
+/// NIST OSCAL v1.1.3 Assessment Results exporter.
+/// Produces observations, findings, and risks per the OSCAL assessment-results model.
+/// </summary>
+public static class OscalExporter
+{
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.KebabCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    public static string Export(
+        IEnumerable<CheckItemViewModel> checks,
+        EnvironmentInfo env,
+        int overallScore,
+        string grade)
+    {
+        var checkList = checks.ToList();
+        var timestamp = DateTime.UtcNow.ToString("o");
+        var runId = Guid.NewGuid().ToString();
+
+        var observations = new List<object>();
+        var findings = new List<object>();
+        var risks = new List<object>();
+
+        foreach (var check in checkList)
+        {
+            if (check.Status == CheckStatus.NotAssessed) continue;
+            var mapping = FrameworkMappings.All.GetValueOrDefault(check.Id);
+
+            var obsId = $"obs-{check.Id.ToLowerInvariant()}";
+            observations.Add(new
+            {
+                uuid = Guid.NewGuid().ToString(),
+                title = $"[{check.Id}] {check.Label}",
+                description = check.Findings.Length > 0 ? check.Findings : "No findings recorded.",
+                methods = new[] { check.EvidenceMode == EvidenceMode.Automated ? "EXAMINE" : "INTERVIEW" },
+                types = new[] { "finding" },
+                collected = timestamp,
+                subjects = new[]
+                {
+                    new { subject_uuid = runId, type = "component", title = env.ComputerName }
+                },
+                relevant_evidence = check.Evidence.Length > 0 ? new[]
+                {
+                    new { description = check.Evidence.Length > 2000 ? check.Evidence[..2000] : check.Evidence }
+                } : null
+            });
+
+            if (check.Status is CheckStatus.Fail or CheckStatus.Partial)
+            {
+                var findingId = $"finding-{check.Id.ToLowerInvariant()}";
+                findings.Add(new
+                {
+                    uuid = Guid.NewGuid().ToString(),
+                    title = $"[{check.Id}] {check.Label}",
+                    description = check.Findings,
+                    target = new
+                    {
+                        type = "objective-id",
+                        target_id = mapping?.NIST ?? check.Id,
+                        status = new { state = check.Status == CheckStatus.Fail ? "not-satisfied" : "other" }
+                    },
+                    related_observations = new[]
+                    {
+                        new { observation_uuid = obsId }
+                    }
+                });
+
+                if (check.Status == CheckStatus.Fail && check.Severity >= Severity.High)
+                {
+                    risks.Add(new
+                    {
+                        uuid = Guid.NewGuid().ToString(),
+                        title = $"Risk: {check.Label}",
+                        description = check.Findings,
+                        status = "open",
+                        risk_level = check.Severity == Severity.Critical ? "high" : "moderate"
+                    });
+                }
+            }
+        }
+
+        var oscal = new
+        {
+            assessment_results = new
+            {
+                uuid = Guid.NewGuid().ToString(),
+                metadata = new
+                {
+                    title = $"Security Assessment - {env.ComputerName}",
+                    last_modified = timestamp,
+                    version = "1.0.0",
+                    oscal_version = "1.1.3",
+                    roles = new[]
+                    {
+                        new { id = "assessor", title = "Security Assessor" }
+                    },
+                    parties = new[]
+                    {
+                        new { uuid = Guid.NewGuid().ToString(), type = "tool", name = "Network Security Auditor v5.1.0" }
+                    }
+                },
+                results = new[]
+                {
+                    new
+                    {
+                        uuid = runId,
+                        title = $"Assessment of {env.ComputerName}",
+                        description = $"Automated security assessment: score {overallScore}/100 ({grade})",
+                        start = timestamp,
+                        end = timestamp,
+                        observations,
+                        findings,
+                        risks
+                    }
+                }
+            }
+        };
+
+        return JsonSerializer.Serialize(oscal, Options);
+    }
+}
