@@ -22,6 +22,7 @@ public sealed class EnvironmentInfo
     public string TenantName { get; set; } = "";
     public int OSBuild { get; set; }
     public string OSVersion { get; set; } = "";
+    public bool IsServer2025OrLater { get; set; }
     public bool HasWindowsLAPS { get; set; }
     public bool HasLegacyLAPS { get; set; }
     public string PSVersion { get; set; } = "";

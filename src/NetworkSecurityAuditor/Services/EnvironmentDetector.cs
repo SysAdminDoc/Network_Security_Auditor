@@ -24,6 +24,9 @@ public static class EnvironmentDetector
         DetectOSBuild(env);
         DetectLAPS(env);
 
+        // Server 2025 = build 26100+; also covers Win11 24H2+ (26100+)
+        env.IsServer2025OrLater = env.IsServer && env.OSBuild >= 26100;
+
         return env;
     }
 

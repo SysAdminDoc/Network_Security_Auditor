@@ -44,6 +44,15 @@ public sealed class EP03_SmbNtlmCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             CheckKerberosDelegation(sb, evidence, ref failCount, ref totalChecks);
 
+            // Server 2025 annotation
+            if (env.IsServer2025OrLater)
+            {
+                evidence.AppendLine("\n[Server 2025+ Defaults]");
+                evidence.AppendLine("  SMB signing: mandatory by default for this OS version");
+                evidence.AppendLine("  LDAP signing: required by default for new AD deployments");
+                evidence.AppendLine("  RC4/DES: disabled by default (AES only)");
+            }
+
             // Summary
             var status = failCount == 0
                 ? CheckStatus.Pass

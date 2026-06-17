@@ -162,6 +162,13 @@ public sealed class IA11_KerberosEncryptionCheck : ISecurityCheck
 
             evidence.AppendLine($"  Domain msDS-SupportedEncryptionTypes = 0x{domainEncTypes:X}");
 
+            if (env.IsServer2025OrLater)
+            {
+                evidence.AppendLine("\n[Server 2025+ Defaults]");
+                evidence.AppendLine("  RC4 disabled by default; AES-only Kerberos is the OS default");
+                evidence.AppendLine("  Accounts relying on RC4 will fail authentication unless explicitly re-enabled");
+            }
+
             return Task.FromResult(new CheckResult
             {
                 Status = hasIssue ? CheckStatus.Fail : CheckStatus.Pass,

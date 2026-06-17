@@ -37,6 +37,13 @@ public sealed class EP08_CredentialGuardCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             CheckUefiLock(sb, evidence, ref failCount, ref totalChecks);
 
+            if (env.IsServer2025OrLater)
+            {
+                evidence.AppendLine("\n[Server 2025+ Defaults]");
+                evidence.AppendLine("  Credential Guard: enabled by default on new deployments");
+                evidence.AppendLine("  VBS: enabled by default with UEFI lock");
+            }
+
             var status = failCount == 0
                 ? CheckStatus.Pass
                 : failCount < totalChecks ? CheckStatus.Partial : CheckStatus.Fail;
