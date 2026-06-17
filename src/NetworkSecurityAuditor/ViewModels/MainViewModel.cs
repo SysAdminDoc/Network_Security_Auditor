@@ -215,6 +215,89 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    private async Task SaveStateAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Audit State|*.audit.json",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.audit.json",
+            DefaultExt = ".audit.json"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            var state = new AuditState
+            {
+                Client = Environment.ComputerName,
+                Auditor = System.Environment.UserName,
+                ScanProfile = SelectedProfile.ToString(),
+                Theme = SelectedTheme,
+                OverallScore = OverallScore,
+                Grade = Grade,
+                RansomwareScore = RansomwareScore,
+                RansomwareGrade = RansomwareGrade
+            };
+
+            foreach (var check in Checks)
+            {
+                state.Checks.Add(new CheckState
+                {
+                    Id = check.Id,
+                    Status = check.Status,
+                    Findings = check.Findings,
+                    Evidence = check.Evidence,
+                    Notes = check.Notes,
+                    RemediationAssignee = check.RemediationAssignee,
+                    RemediationDueDate = check.RemediationDueDate?.ToString("yyyy-MM-dd")
+                });
+            }
+
+            await File.WriteAllTextAsync(dialog.FileName, state.Serialize());
+            ScanStatus = $"State saved: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task LoadStateAsync()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Audit State|*.audit.json|All JSON|*.json",
+            DefaultExt = ".audit.json"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            var json = await File.ReadAllTextAsync(dialog.FileName);
+            var state = AuditState.Deserialize(json);
+            if (state is null)
+            {
+                ScanStatus = "Failed to load state file.";
+                return;
+            }
+
+            var lookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+            var restored = 0;
+
+            foreach (var cs in state.Checks)
+            {
+                if (!lookup.TryGetValue(cs.Id, out var vm)) continue;
+                vm.Status = cs.Status;
+                vm.Findings = cs.Findings;
+                vm.Evidence = cs.Evidence;
+                vm.Notes = cs.Notes;
+                vm.RemediationAssignee = cs.RemediationAssignee;
+                if (DateTime.TryParse(cs.RemediationDueDate, out var due))
+                    vm.RemediationDueDate = due;
+                restored++;
+            }
+
+            UpdateScoreCounts();
+            ScanStatus = $"State loaded: {restored} checks restored from {Path.GetFileName(dialog.FileName)}";
+        }
+    }
+
     private void UpdateScoreCounts()
     {
         PassCount = Checks.Count(c => c.Status == CheckStatus.Pass);
