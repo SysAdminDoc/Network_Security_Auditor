@@ -3,6 +3,7 @@ namespace NetworkSecurityAuditor.Models;
 public sealed class ComplianceMapping
 {
     public string? NIST { get; init; }
+    public string? NIST_R3 { get; init; }
     public string? CMMC { get; init; }
     public string? PCI { get; init; }
     public string? SOC2 { get; init; }
@@ -15,7 +16,8 @@ public sealed class ComplianceMapping
     public string FormatAll()
     {
         var parts = new List<string>();
-        if (NIST is not null) parts.Add($"800-171: {NIST}");
+        if (NIST is not null) parts.Add($"800-171r2: {NIST}");
+        if (NIST_R3 is not null) parts.Add($"800-171r3: {NIST_R3}");
         if (CMMC is not null) parts.Add($"CMMC: {CMMC}");
         if (PCI is not null) parts.Add($"PCI: {PCI}");
         if (SOC2 is not null) parts.Add($"SOC2: {SOC2}");
