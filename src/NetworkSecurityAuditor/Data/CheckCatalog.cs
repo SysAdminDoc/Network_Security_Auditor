@@ -420,7 +420,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF DE.CM-1, DE.AE-2 | CIS Control 8.5 | HIPAA 164.312(b), 164.308(a)(1)(ii)(D)",
-            EvidenceMode = EvidenceMode.Heuristic
+            EvidenceMode = EvidenceMode.Heuristic,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4625"
         });
 
         Add(checks, new CheckMetadata
@@ -434,7 +435,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF DE.CM-1, DE.CM-5 | CIS Control 3.14 | HIPAA 164.312(b), 164.312(c)(2)",
-            EvidenceMode = EvidenceMode.Checklist
+            EvidenceMode = EvidenceMode.Checklist,
+            RemediationUrl = "https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon"
         });
 
         Add(checks, new CheckMetadata
@@ -448,7 +450,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF DE.CM-1, PR.PT-1 | CIS Control 8.1, 8.9, 8.10 | HIPAA 164.312(b), 164.530(j)(2)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/advanced-security-auditing"
         });
 
         Add(checks, new CheckMetadata
@@ -462,7 +465,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF DE.DP-4, RS.CO-2, RS.CO-3 | CIS Control 17.1, 17.2, 17.4 | HIPAA 164.308(a)(6)(i), 164.308(a)(6)(ii)",
-            EvidenceMode = EvidenceMode.InterviewRequired
+            EvidenceMode = EvidenceMode.InterviewRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/azure/sentinel/create-analytics-rules"
         });
 
         // ── Network Architecture (NA01-NA07) ────────────────────────────────
@@ -477,7 +481,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5 | CIS Control 12.2, 12.8 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.Heuristic
+            EvidenceMode = EvidenceMode.Heuristic,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/technologies/network-segmentation"
         });
 
         Add(checks, new CheckMetadata
@@ -491,7 +496,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5 | CIS Control 12.2 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/technologies/vrss/vrss-top"
         });
 
         Add(checks, new CheckMetadata
@@ -505,7 +511,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-3, PR.AC-5 | CIS Control 12.6 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/technologies/nps/nps-top"
         });
 
         Add(checks, new CheckMetadata
@@ -519,7 +526,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF ID.AM-1, ID.AM-2, ID.AM-4 | CIS Control 1.1, 1.2, 12.1 | HIPAA 164.310(d)(2)(iii)",
-            EvidenceMode = EvidenceMode.Checklist
+            EvidenceMode = EvidenceMode.Checklist,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/"
         });
 
         Add(checks, new CheckMetadata
@@ -533,7 +541,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-1, PR.AC-3 | CIS Control 1.4, 12.5 | HIPAA 164.312(a)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/technologies/nps/nps-top"
         });
 
         Add(checks, new CheckMetadata
@@ -547,7 +556,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5, PR.PT-3 | CIS Control 12.2, 12.7 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/administration/server-manager/"
         });
 
         Add(checks, new CheckMetadata
@@ -561,7 +571,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5, PR.PT-4 | CIS Control 1.4, 12.2, 12.5 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/technologies/nps/nps-top"
         });
 
         // ── Network Perimeter (NP01-NP10) ───────────────────────────────────
@@ -576,7 +587,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5, PR.PT-4 | CIS Control 4.4, 4.5, 9.2 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/"
         });
 
         Add(checks, new CheckMetadata
@@ -590,7 +602,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5, DE.CM-7 | CIS Control 4.1, 4.4, 9.2 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/"
         });
 
         Add(checks, new CheckMetadata
@@ -604,7 +617,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-3, PR.AC-7 | CIS Control 6.3, 6.4 | HIPAA 164.312(d), 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/remote/remote-access/vpn/always-on-vpn/"
         });
 
         Add(checks, new CheckMetadata
@@ -618,7 +632,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.Probing,
             Compliance = "NIST CSF PR.DS-5, DE.CM-1 | CIS Control 9.2, 9.3 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/dns/dns-overview"
         });
 
         Add(checks, new CheckMetadata
@@ -632,7 +647,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5, PR.DS-5, DE.CM-1 | CIS Control 4.4, 4.5, 9.3 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/"
         });
 
         Add(checks, new CheckMetadata
@@ -646,7 +662,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5 | CIS Control 4.5 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/"
         });
 
         Add(checks, new CheckMetadata
@@ -660,7 +677,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF DE.CM-1, DE.DP-2 | CIS Control 13.3, 13.6 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/"
         });
 
         Add(checks, new CheckMetadata
@@ -674,7 +692,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF DE.CM-1 | CIS Control 9.3, 13.3 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/security/tls/tls-registry-settings"
         });
 
         Add(checks, new CheckMetadata
@@ -688,7 +707,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5 | CIS Control 4.1, 4.4 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/technologies/netsh/netsh"
         });
 
         Add(checks, new CheckMetadata
@@ -702,7 +722,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.IP-12, ID.RA-1 | CIS Control 2.1, 7.1 | HIPAA 164.312(a)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/deployment/update/windows-update-overview"
         });
 
         // ── Backup & Recovery (BR01-BR08) ───────────────────────────────────
@@ -717,7 +738,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.IP-4 | CIS Control 11.1, 11.2, 11.3 | HIPAA 164.308(a)(7)(ii)(A), 164.310(d)(2)(iv)",
-            EvidenceMode = EvidenceMode.Heuristic
+            EvidenceMode = EvidenceMode.Heuristic,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/administration/windows-server-backup/windows-server-backup-overview"
         });
 
         Add(checks, new CheckMetadata
@@ -731,7 +753,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.IP-4 | CIS Control 11.3, 11.4 | HIPAA 164.308(a)(7)(ii)(A)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/azure/backup/backup-overview"
         });
 
         Add(checks, new CheckMetadata
@@ -745,7 +768,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.IP-4, PR.IP-9 | CIS Control 11.4, 11.5 | HIPAA 164.308(a)(7)(ii)(D)",
-            EvidenceMode = EvidenceMode.InterviewRequired
+            EvidenceMode = EvidenceMode.InterviewRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/azure/backup/backup-azure-restore-windows-server"
         });
 
         Add(checks, new CheckMetadata
@@ -759,7 +783,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF ID.BE-5, PR.IP-9, RC.RP-1 | CIS Control 11.1 | HIPAA 164.308(a)(7)(ii)(B)",
-            EvidenceMode = EvidenceMode.InterviewRequired
+            EvidenceMode = EvidenceMode.InterviewRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/azure/backup/backup-overview"
         });
 
         Add(checks, new CheckMetadata
@@ -773,7 +798,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.DS-1, PR.DS-2 | CIS Control 3.6, 3.10 | HIPAA 164.312(a)(2)(iv), 164.312(e)(2)(ii)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/azure/backup/backup-encryption"
         });
 
         Add(checks, new CheckMetadata
@@ -787,7 +813,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF DE.CM-3, DE.DP-4 | CIS Control 11.2 | HIPAA 164.308(a)(7)(ii)(A)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/azure/backup/backup-azure-monitoring-built-in-monitor"
         });
 
         Add(checks, new CheckMetadata
@@ -801,7 +828,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.IP-9, RC.RP-1, RC.IM-1 | CIS Control 11.5 | HIPAA 164.308(a)(7)(i), 164.308(a)(7)(ii)(B-D)",
-            EvidenceMode = EvidenceMode.Checklist
+            EvidenceMode = EvidenceMode.Checklist,
+            RemediationUrl = "https://learn.microsoft.com/en-us/azure/site-recovery/site-recovery-overview"
         });
 
         Add(checks, new CheckMetadata
@@ -815,7 +843,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.IP-4 | CIS Control 11.1, 11.2 | HIPAA 164.308(a)(7)(ii)(A), 164.310(d)(2)(iv)",
-            EvidenceMode = EvidenceMode.ExternalRequired
+            EvidenceMode = EvidenceMode.ExternalRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/microsoft-365/enterprise/microsoft-365-overview"
         });
 
         // ── Common Findings (CF01-CF08) ─────────────────────────────────────
@@ -830,7 +859,8 @@ public static class CheckCatalog
             Type = CheckType.AD,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-1, PR.AC-4 | CIS Control 5.2, 5.4, 5.5 | HIPAA 164.312(a)(1), 164.312(d)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/best-practices-for-securing-active-directory"
         });
 
         Add(checks, new CheckMetadata
@@ -844,7 +874,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.Probing,
             Compliance = "NIST CSF PR.AC-5, PR.DS-5 | CIS Control 4.4, 4.5, 9.3 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/"
         });
 
         Add(checks, new CheckMetadata
@@ -858,7 +889,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.IP-4, PR.IP-9 | CIS Control 11.4, 11.5 | HIPAA 164.308(a)(7)(ii)(D)",
-            EvidenceMode = EvidenceMode.InterviewRequired
+            EvidenceMode = EvidenceMode.InterviewRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-awareness-training"
         });
 
         Add(checks, new CheckMetadata
@@ -872,7 +904,8 @@ public static class CheckCatalog
             Type = CheckType.AD,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-1, PR.AC-6 | CIS Control 5.1, 5.3 | HIPAA 164.308(a)(3)(ii)(C), 164.312(a)(2)(ii)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/entra/identity/users/clean-up-stale-accounts"
         });
 
         Add(checks, new CheckMetadata
@@ -886,7 +919,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5, ID.AM-4 | CIS Control 4.5 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-security-hardening"
         });
 
         Add(checks, new CheckMetadata
@@ -900,7 +934,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5 | CIS Control 12.2, 12.8 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.Heuristic
+            EvidenceMode = EvidenceMode.Heuristic,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/technologies/network-segmentation"
         });
 
         Add(checks, new CheckMetadata
@@ -914,7 +949,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-4, PR.AC-6 | CIS Control 5.4, 5.5 | HIPAA 164.312(a)(1)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/"
         });
 
         Add(checks, new CheckMetadata
@@ -928,7 +964,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.Probing,
             Compliance = "NIST CSF DE.CM-1, PR.DS-5 | CIS Control 9.2, 9.3 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.Automated
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/networking/dns/dns-overview"
         });
 
         // ── Policies & Standards (PS01-PS06) ────────────────────────────────
@@ -943,7 +980,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-2 | CIS Control 1.1 | HIPAA 164.310(a)(1), 164.310(a)(2)(ii-iv)",
-            EvidenceMode = EvidenceMode.Checklist
+            EvidenceMode = EvidenceMode.Checklist,
+            RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-policy"
         });
 
         Add(checks, new CheckMetadata
@@ -957,7 +995,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-2 | CIS Control 1.1 | HIPAA 164.310(a)(2)(iii), 164.310(b)",
-            EvidenceMode = EvidenceMode.Checklist
+            EvidenceMode = EvidenceMode.Checklist,
+            RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-policy"
         });
 
         Add(checks, new CheckMetadata
@@ -971,7 +1010,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-2, DE.CM-2 | CIS Control 1.1 | HIPAA 164.310(a)(2)(iii), 164.310(d)(1)",
-            EvidenceMode = EvidenceMode.Checklist
+            EvidenceMode = EvidenceMode.Checklist,
+            RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/incident-response-overview"
         });
 
         Add(checks, new CheckMetadata
@@ -985,7 +1025,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-2, PR.AT-1 | CIS Control 5.2 | HIPAA 164.310(b), 164.310(c)",
-            EvidenceMode = EvidenceMode.Checklist
+            EvidenceMode = EvidenceMode.Checklist,
+            RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-policy"
         });
 
         Add(checks, new CheckMetadata
@@ -999,7 +1040,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-2, PR.AC-5 | CIS Control 1.4, 12.5 | HIPAA 164.310(c)",
-            EvidenceMode = EvidenceMode.InterviewRequired
+            EvidenceMode = EvidenceMode.InterviewRequired,
+            RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/risk-management"
         });
 
         Add(checks, new CheckMetadata
@@ -1013,7 +1055,8 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.PT-5 | CIS Control 1.1 | HIPAA 164.310(a)(2)(ii)",
-            EvidenceMode = EvidenceMode.Checklist
+            EvidenceMode = EvidenceMode.Checklist,
+            RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-awareness-training"
         });
 
         return checks.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
