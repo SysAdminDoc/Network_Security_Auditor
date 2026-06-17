@@ -54,6 +54,12 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _ransomwareGrade = "N/A";
 
+    [ObservableProperty]
+    private int _domainMaturityScore;
+
+    [ObservableProperty]
+    private string _domainMaturityGrade = "N/A";
+
     public string[] Categories { get; private set; } = ["All"];
 
     public string[] AvailableThemes { get; } = ["Catppuccin Mocha"];
@@ -222,6 +228,10 @@ public partial class MainViewModel : ViewModelBase
         var (rwScore, rwGrade) = RansomwareReadinessEngine.Calculate(Checks);
         RansomwareScore = rwScore;
         RansomwareGrade = rwGrade;
+
+        var (dmScore, dmGrade, _) = DomainMaturityEngine.Calculate(Checks);
+        DomainMaturityScore = dmScore;
+        DomainMaturityGrade = dmGrade;
 
         OnPropertyChanged(nameof(FilteredChecks));
     }
