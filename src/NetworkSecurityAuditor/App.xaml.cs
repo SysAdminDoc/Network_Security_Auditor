@@ -136,6 +136,18 @@ public partial class App : Application
         Console.WriteLine($"  Ransomware Readiness: {rwScore}% ({rwGrade})");
         Console.WriteLine($"  Pass: {passCount} | Fail: {failCount} | Partial: {partialCount}");
 
+        if (args.PrivacyMode)
+        {
+            var redactor = new PrivacyRedactor(true, env.ComputerName, env.DomainName,
+                System.Environment.UserName, options.Client);
+            foreach (var vm in checkVms)
+            {
+                vm.Findings = redactor.Redact(vm.Findings);
+                vm.Evidence = redactor.Redact(vm.Evidence);
+            }
+            Console.WriteLine("  Privacy mode: PII redacted with SHA256 pseudonyms");
+        }
+
         var outputDir = args.OutputPath.Length > 0
             ? Path.GetDirectoryName(args.OutputPath) ?? System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop)
             : System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
@@ -198,6 +210,8 @@ public partial class App : Application
                 result.NoElevate = true;
             else if (arg.Equals("--no-internet", StringComparison.OrdinalIgnoreCase) || arg.Equals("-NoInternet", StringComparison.OrdinalIgnoreCase))
                 result.NoInternet = true;
+            else if (arg.Equals("--privacy", StringComparison.OrdinalIgnoreCase) || arg.Equals("-PrivacyMode", StringComparison.OrdinalIgnoreCase))
+                result.PrivacyMode = true;
             else if ((arg.Equals("--profile", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ScanProfile", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
             {
                 if (Enum.TryParse<ScanProfileType>(args[++i], true, out var profile))
@@ -219,6 +233,7 @@ public partial class App : Application
         public bool Silent;
         public bool NoElevate;
         public bool NoInternet;
+        public bool PrivacyMode;
         public ScanProfileType ScanProfile = ScanProfileType.Full;
         public string OutputPath = "";
         public string Client = "";
