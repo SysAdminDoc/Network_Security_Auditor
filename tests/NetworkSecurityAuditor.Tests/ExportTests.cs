@@ -198,4 +198,163 @@ public class ExportTests
             Assert.True(finding.TryGetProperty("description", out _));
         }
     }
+
+    [Fact]
+    public void Oscal_Observation_Finding_UUIDs_Match()
+    {
+        var checks = new ObservableCollection<CheckItemViewModel>();
+        foreach (var meta in CheckCatalog.All.Values.Take(3))
+        {
+            var vm = CheckItemViewModel.FromMetadata(meta);
+            vm.Status = CheckStatus.Fail;
+            vm.Findings = "Test finding";
+            vm.Evidence = "Test evidence";
+            checks.Add(vm);
+        }
+        var env = new EnvironmentInfo { ComputerName = "TEST", OSCaption = "Windows 11", IsDomainJoined = true, DomainName = "TEST.LOCAL" };
+
+        var json = OscalExporter.Export(checks, env, 50, "F");
+
+        var obsUuids = new HashSet<string>();
+        foreach (var line in json.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Contains("\"uuid\"") && !trimmed.Contains("assessment") && !trimmed.Contains("subject"))
+            {
+                var start = trimmed.IndexOf(": \"") + 3;
+                var end = trimmed.LastIndexOf('"');
+                if (start > 2 && end > start)
+                    obsUuids.Add(trimmed[start..end]);
+            }
+        }
+
+        Assert.True(obsUuids.Count > 0, "Should have UUIDs in output");
+        Assert.True(json.Contains("observation") && json.Contains("finding"),
+            "OSCAL output should contain both observations and findings");
+    }
+
+    [Fact]
+    public void Sarif_Has_Schema_And_Version()
+    {
+        var (checks, env) = CreateTestData();
+        var json = SarifExporter.Export(checks, env);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        Assert.Equal("2.1.0", root.GetProperty("version").GetString());
+        Assert.True(root.TryGetProperty("schema", out _));
+        var runs = root.GetProperty("runs");
+        Assert.True(runs.GetArrayLength() > 0);
+        var driver = runs[0].GetProperty("tool").GetProperty("driver");
+        Assert.True(driver.TryGetProperty("rules", out var rules));
+        Assert.True(rules.GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public void Sarif_Rules_Have_Security_Severity()
+    {
+        var (checks, env) = CreateTestData();
+        var json = SarifExporter.Export(checks, env);
+        var doc = JsonDocument.Parse(json);
+        var rules = doc.RootElement.GetProperty("runs")[0].GetProperty("tool").GetProperty("driver").GetProperty("rules");
+
+        foreach (var rule in rules.EnumerateArray())
+        {
+            var props = rule.GetProperty("properties");
+            Assert.True(props.TryGetProperty("security-severity", out var sev),
+                $"Rule {rule.GetProperty("id").GetString()} missing security-severity");
+            Assert.True(sev.GetDouble() >= 1.0 && sev.GetDouble() <= 10.0);
+        }
+    }
+
+    [Fact]
+    public void Intune_Export_Has_Required_Fields()
+    {
+        var (checks, env) = CreateTestData();
+        var json = IntuneExporter.Export(checks, env, 85, "B", 70, "C");
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        Assert.True(root.TryGetProperty("security_audit_grade", out _));
+        Assert.True(root.TryGetProperty("security_audit_score", out _));
+        Assert.True(root.TryGetProperty("compliance_flags", out _));
+        Assert.True(root.TryGetProperty("tool_version", out _));
+    }
+
+    [Fact]
+    public void Full_Catalog_Export_Roundtrip()
+    {
+        var checks = new ObservableCollection<CheckItemViewModel>();
+        foreach (var meta in CheckCatalog.All.Values)
+        {
+            var vm = CheckItemViewModel.FromMetadata(meta);
+            vm.Status = CheckStatus.Fail;
+            vm.Findings = $"Finding for {meta.Id}";
+            vm.Evidence = $"Evidence for {meta.Id}";
+            checks.Add(vm);
+        }
+
+        var env = new EnvironmentInfo
+        {
+            ComputerName = "FULLTEST",
+            OSCaption = "Windows Server 2025",
+            OSVersion = "26100",
+            IsDomainJoined = true,
+            DomainName = "FULL.LOCAL"
+        };
+
+        Assert.Equal(69, checks.Count);
+
+        var json = JsonExporter.Export(checks, env, 30, "F", 20, "F", ScanProfileType.Full, 10, "F");
+        Assert.True(json.Length > 1000);
+        var jsonDoc = JsonDocument.Parse(json);
+        Assert.Equal(69, jsonDoc.RootElement.GetProperty("findings").GetArrayLength());
+
+        var csv = CsvExporter.Export(checks, env, 30, "F");
+        var csvLines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(70, csvLines.Length); // 1 header + 69 data rows
+
+        var html = HtmlReportGenerator.Generate(checks, env, 30, "F", 20, "F", 10, "F");
+        Assert.Contains("Detailed Findings", html);
+        Assert.Contains("D3FEND", html);
+
+        var jsonl = JsonlExporter.Export(checks, env, 30, "F", ScanProfileType.Full);
+        var jsonlLines = jsonl.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(69, jsonlLines.Length);
+
+        var sarif = SarifExporter.Export(checks, env);
+        Assert.True(sarif.Length > 1000);
+
+        var nav = NavigatorExporter.Export(checks);
+        Assert.True(nav.Length > 500);
+
+        var dd = DefectDojoExporter.Export(checks, env, 30, "F");
+        Assert.True(dd.Length > 1000);
+
+        var ocsf = OcsfExporter.Export(checks, env, 30, "F", "Full");
+        Assert.True(ocsf.Length > 1000);
+
+        var oscal = OscalExporter.Export(checks, env, 30, "F");
+        Assert.True(oscal.Length > 1000);
+
+        var summary = ComplianceSummaryExporter.Export(checks, env, 30, "F", 20, "F", 10, "F");
+        Assert.True(summary.Length > 100);
+
+        var intune = IntuneExporter.Export(checks, env, 30, "F", 20, "F");
+        Assert.True(intune.Length > 100);
+    }
+
+    [Fact]
+    public void Html_Executive_Tier_Omits_Technical_Details()
+    {
+        var (checks, env) = CreateTestData();
+        checks[0].Status = CheckStatus.Fail;
+        var html = HtmlReportGenerator.Generate(checks, env, 50, "F", 30, "F", 20, "F", tier: ReportTier.Executive);
+
+        Assert.Contains("Overall Score", html);
+        Assert.Contains("Top Findings", html);
+        Assert.DoesNotContain("Detailed Findings", html);
+        Assert.DoesNotContain("D3FEND", html);
+        Assert.DoesNotContain("Score by Category", html);
+    }
 }
