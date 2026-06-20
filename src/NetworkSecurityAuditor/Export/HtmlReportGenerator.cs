@@ -16,25 +16,50 @@ public static class HtmlReportGenerator
         string ransomwareGrade,
         int domainMaturityScore = 0,
         string domainMaturityGrade = "N/A",
-        ReportTier tier = ReportTier.All)
+        ReportTier tier = ReportTier.All,
+        BrandingConfig? branding = null)
     {
         var checkList = checks.ToList();
         var sb = new StringBuilder();
+        var brandColor = branding?.EffectivePrimary ?? "#cba6f7";
 
         sb.AppendLine("<!DOCTYPE html>");
         sb.AppendLine("<html lang=\"en\">");
         sb.AppendLine("<head>");
         sb.AppendLine("<meta charset=\"UTF-8\">");
         sb.AppendLine("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
-        sb.AppendLine("<title>Network Security Audit Report</title>");
+        var title = branding?.CompanyName.Length > 0
+            ? $"{branding.CompanyName} - Security Audit Report"
+            : "Network Security Audit Report";
+        sb.AppendLine($"<title>{EscapeHtml(title)}</title>");
         sb.AppendLine("<style>");
         sb.AppendLine(GetCss());
+        if (branding is not null)
+            sb.AppendLine(GetBrandingCss(branding));
         sb.AppendLine("</style>");
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
 
+        if (branding is { ShowCoverPage: true, CompanyName.Length: > 0 })
+        {
+            sb.AppendLine("<div class=\"cover-page\">");
+            if (branding.HasLogo)
+                sb.AppendLine($"<img src=\"data:image/png;base64,{branding.LogoBase64}\" alt=\"{EscapeHtml(branding.CompanyName)}\" class=\"cover-logo\" />");
+            sb.AppendLine($"<h1 class=\"cover-title\">{EscapeHtml(branding.CompanyName)}</h1>");
+            if (branding.Tagline.Length > 0)
+                sb.AppendLine($"<p class=\"cover-tagline\">{EscapeHtml(branding.Tagline)}</p>");
+            sb.AppendLine($"<p class=\"cover-subtitle\">Security Assessment Report</p>");
+            sb.AppendLine($"<p class=\"cover-date\">{DateTime.Now:MMMM d, yyyy}</p>");
+            sb.AppendLine("</div>");
+        }
+
         sb.AppendLine("<div class=\"header\">");
-        sb.AppendLine("<h1>Network Security Audit Report</h1>");
+        if (branding is { HasLogo: true, ShowCoverPage: false })
+            sb.AppendLine($"<img src=\"data:image/png;base64,{branding.LogoBase64}\" alt=\"\" style=\"height:40px;margin-bottom:12px\" />");
+        var h1 = branding?.CompanyName.Length > 0
+            ? $"{branding.CompanyName} Security Audit Report"
+            : "Network Security Audit Report";
+        sb.AppendLine($"<h1>{EscapeHtml(h1)}</h1>");
         sb.AppendLine($"<p class=\"subtitle\">Generated {DateTime.Now:yyyy-MM-dd HH:mm} | {env.ComputerName} | {env.OSCaption}</p>");
         sb.AppendLine("</div>");
 
@@ -55,7 +80,19 @@ public static class HtmlReportGenerator
         if (tier is ReportTier.Technical or ReportTier.All)
             AppendTechnical(sb, checkList);
 
-        sb.AppendLine($"<div class=\"footer\">Network Security Auditor v{VersionInfo.Version}</div>");
+        if (branding is not null && branding.FooterText.Length > 0)
+        {
+            sb.AppendLine($"<div class=\"footer\">{EscapeHtml(branding.FooterText)}");
+            if (branding.ContactEmail.Length > 0)
+                sb.AppendLine($" | <a href=\"mailto:{branding.ContactEmail}\" style=\"color:#89b4fa\">{EscapeHtml(branding.ContactEmail)}</a>");
+            if (branding.ContactPhone.Length > 0)
+                sb.AppendLine($" | {EscapeHtml(branding.ContactPhone)}");
+            sb.AppendLine("</div>");
+        }
+        else
+        {
+            sb.AppendLine($"<div class=\"footer\">Network Security Auditor v{VersionInfo.Version}</div>");
+        }
         sb.AppendLine("</body>");
         sb.AppendLine("</html>");
 
@@ -342,6 +379,31 @@ public static class HtmlReportGenerator
             th { background: #eee; color: #7c3aed; }
             td { border-top-color: #ddd; }
             .findings-cell, .evidence-cell, .subtitle { color: #666; }
+            .cover-page { page-break-after: always; }
+        }
+        """;
+
+    private static string GetBrandingCss(BrandingConfig branding) => $$"""
+        .header { border-left-color: {{branding.EffectivePrimary}}; }
+        .header h1 { color: {{branding.EffectivePrimary}}; }
+        h2 { color: {{branding.EffectivePrimary}}; }
+        th { color: {{branding.EffectivePrimary}}; }
+        .id-cell { color: {{branding.EffectivePrimary}}; }
+        .cover-page {
+            text-align: center; padding: 120px 40px; margin-bottom: 32px;
+            background: linear-gradient(135deg, #1e1e2e 0%, #313244 100%);
+            border-radius: 8px;
+        }
+        .cover-logo { max-height: 120px; margin-bottom: 32px; }
+        .cover-title { font-size: 42px; font-weight: 700; color: {{branding.EffectivePrimary}}; margin-bottom: 12px; }
+        .cover-tagline { font-size: 18px; color: #b5bcd6; margin-bottom: 24px; }
+        .cover-subtitle { font-size: 24px; color: #cdd6f4; margin-bottom: 8px; }
+        .cover-date { font-size: 16px; color: #7f839b; }
+        @media print {
+            .header { border-left-color: {{branding.EffectivePrimary}}; }
+            .header h1 { color: {{branding.EffectivePrimary}}; }
+            th { color: {{branding.EffectivePrimary}}; }
+            .cover-title { color: {{branding.EffectivePrimary}}; }
         }
         """;
 }

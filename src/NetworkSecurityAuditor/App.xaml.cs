@@ -186,8 +186,18 @@ public partial class App : Application
         await File.WriteAllTextAsync(jsonPath, json);
         Console.WriteLine($"  JSON: {jsonPath}");
 
+        BrandingConfig? branding = null;
+        if (args.BrandingPath.Length > 0)
+        {
+            branding = await BrandingConfig.LoadAsync(args.BrandingPath);
+            if (branding is not null)
+                Console.WriteLine($"  Branding: {branding.CompanyName}");
+            else
+                Console.WriteLine($"  WARNING: Branding config not found: {args.BrandingPath}");
+        }
+
         var htmlPath = Path.Combine(outputDir, $"{baseName}.html");
-        var html = HtmlReportGenerator.Generate(checkVms, env, score, grade, rwScore, rwGrade, dmScore, dmGrade, tier: args.ReportTier);
+        var html = HtmlReportGenerator.Generate(checkVms, env, score, grade, rwScore, rwGrade, dmScore, dmGrade, tier: args.ReportTier, branding: branding);
         await File.WriteAllTextAsync(htmlPath, html);
         Console.WriteLine($"  HTML: {htmlPath}");
 
@@ -341,6 +351,8 @@ public partial class App : Application
             }
             else if ((arg.Equals("--waivers", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Waivers", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
                 result.WaiversPath = args[++i];
+            else if ((arg.Equals("--branding", StringComparison.OrdinalIgnoreCase) || arg.Equals("-BrandingConfig", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
+                result.BrandingPath = args[++i];
             else if (arg.Equals("--export-csv", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportCSV", StringComparison.OrdinalIgnoreCase))
                 result.ExportCsv = true;
             else if (arg.Equals("--export-jsonl", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportJSONL", StringComparison.OrdinalIgnoreCase))
@@ -400,5 +412,6 @@ public partial class App : Application
         public string Client = "";
         public string Auditor = "";
         public string WaiversPath = "";
+        public string BrandingPath = "";
     }
 }
