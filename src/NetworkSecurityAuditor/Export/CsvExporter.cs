@@ -58,13 +58,15 @@ public static class CsvExporter
         if (string.IsNullOrEmpty(value)) return "\"\"";
 
         var sanitized = value;
+        bool formulaPrefixed = false;
         if (sanitized.StartsWith('=') || sanitized.StartsWith('+') ||
             sanitized.StartsWith('-') || sanitized.StartsWith('@'))
         {
             sanitized = "'" + sanitized;
+            formulaPrefixed = true;
         }
 
-        if (sanitized.Contains('"') || sanitized.Contains(',') ||
+        if (formulaPrefixed || sanitized.Contains('"') || sanitized.Contains(',') ||
             sanitized.Contains('\n') || sanitized.Contains('\r'))
         {
             return "\"" + sanitized.Replace("\"", "\"\"") + "\"";

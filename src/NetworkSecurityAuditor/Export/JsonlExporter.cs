@@ -51,7 +51,7 @@ public static class JsonlExporter
             {
                 event_type = "security_finding",
                 tool = "NetworkSecurityAuditor",
-                tool_version = "5.0.0",
+                tool_version = VersionInfo.Version,
                 timestamp,
                 host = env.ComputerName,
                 os = env.OSCaption,

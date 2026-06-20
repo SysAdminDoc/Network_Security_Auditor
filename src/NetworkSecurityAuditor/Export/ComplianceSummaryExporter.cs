@@ -55,7 +55,7 @@ public static class ComplianceSummaryExporter
         {
             schema_version = "2.1",
             tool = "NetworkSecurityAuditor",
-            tool_version = "5.0.0",
+            tool_version = VersionInfo.Version,
             timestamp = DateTime.UtcNow.ToString("o"),
             host = env.ComputerName,
             os = env.OSCaption,

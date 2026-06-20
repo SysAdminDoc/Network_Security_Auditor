@@ -38,10 +38,10 @@ public static class OscalExporter
             if (check.Status == CheckStatus.NotAssessed) continue;
             var mapping = FrameworkMappings.All.GetValueOrDefault(check.Id);
 
-            var obsId = $"obs-{check.Id.ToLowerInvariant()}";
+            var obsUuid = Guid.NewGuid().ToString();
             observations.Add(new
             {
-                uuid = Guid.NewGuid().ToString(),
+                uuid = obsUuid,
                 title = $"[{check.Id}] {check.Label}",
                 description = check.Findings.Length > 0 ? check.Findings : "No findings recorded.",
                 methods = new[] { check.EvidenceMode == EvidenceMode.Automated ? "EXAMINE" : "INTERVIEW" },
@@ -59,7 +59,6 @@ public static class OscalExporter
 
             if (check.Status is CheckStatus.Fail or CheckStatus.Partial)
             {
-                var findingId = $"finding-{check.Id.ToLowerInvariant()}";
                 findings.Add(new
                 {
                     uuid = Guid.NewGuid().ToString(),
@@ -73,7 +72,7 @@ public static class OscalExporter
                     },
                     related_observations = new[]
                     {
-                        new { observation_uuid = obsId }
+                        new { observation_uuid = obsUuid }
                     }
                 });
 
@@ -108,7 +107,7 @@ public static class OscalExporter
                     },
                     parties = new[]
                     {
-                        new { uuid = Guid.NewGuid().ToString(), type = "tool", name = "Network Security Auditor v5.1.0" }
+                        new { uuid = Guid.NewGuid().ToString(), type = "tool", name = $"Network Security Auditor v{VersionInfo.Version}" }
                     }
                 },
                 results = new[]

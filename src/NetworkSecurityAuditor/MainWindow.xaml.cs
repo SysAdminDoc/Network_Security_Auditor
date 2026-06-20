@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = $"Network Security Auditor v{VersionInfo.Version}";
         DataContext = _viewModel;
         Loaded += OnLoaded;
     }

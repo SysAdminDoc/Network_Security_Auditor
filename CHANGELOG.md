@@ -2,6 +2,14 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.2.0] - 2026-06-19
+
+- Fixed: OSCAL observation-finding UUID cross-reference. Findings now correctly reference their parent observation UUIDs instead of string IDs that never matched.
+- Fixed: CSV formula injection quoting. Values with formula prefixes (`=`, `+`, `-`, `@`) are now unconditionally quoted to prevent malformed rows when the value also contains commas.
+- Fixed: Privacy redaction no longer mutates ViewModel state. Exports with privacy mode operate on copies, preserving original data for subsequent non-private exports.
+- Changed: Version strings centralized via `VersionInfo.cs`. All exports, silent mode banner, window title, and audit state now read version from assembly metadata instead of hardcoded literals.
+- Fixed: CSV column count test corrected from 24 to 23 (matching actual header).
+
 ## [v5.1.0] - 2026-06-16
 
 - Added: MITRE D3FEND defensive technique data in all exports (JSON, HTML, CSV, JSONL, SARIF, DefectDojo). Each finding includes D3FEND stages, techniques, labels, and description.

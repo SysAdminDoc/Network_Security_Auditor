@@ -71,7 +71,7 @@ public partial class App : Application
         AttachConsole(-1);
 
         Console.WriteLine();
-        Console.WriteLine($"Network Security Auditor v5.0.0 - Silent Mode");
+        Console.WriteLine($"Network Security Auditor v{VersionInfo.Version} - Silent Mode");
         Console.WriteLine($"Profile: {args.ScanProfile} | ReadOnly: true");
         Console.WriteLine();
 

@@ -6,7 +6,7 @@ namespace NetworkSecurityAuditor.Models;
 public sealed class AuditState
 {
     public string SchemaVersion { get; set; } = "1.0";
-    public string ToolVersion { get; set; } = "5.0.0";
+    public string ToolVersion { get; set; } = VersionInfo.Version;
     public string Client { get; set; } = "";
     public string Auditor { get; set; } = "";
     public DateTime SavedAt { get; set; } = DateTime.UtcNow;

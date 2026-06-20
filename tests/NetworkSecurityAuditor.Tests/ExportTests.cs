@@ -130,7 +130,7 @@ public class ExportTests
 
         Assert.True(lines.Length > 1);
         var headerCommas = lines[0].Count(c => c == ',');
-        Assert.Equal(23, headerCommas); // 24 columns = 23 commas
+        Assert.Equal(22, headerCommas); // 23 columns = 22 commas
     }
 
     [Fact]

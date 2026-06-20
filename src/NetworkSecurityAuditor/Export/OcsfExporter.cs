@@ -71,7 +71,7 @@ public static class OcsfExporter
                     product = new
                     {
                         name = "Network Security Auditor",
-                        version = "5.1.0",
+                        version = VersionInfo.Version,
                         vendor_name = "SysAdminDoc"
                     },
                     profiles = new[] { "security_control" }

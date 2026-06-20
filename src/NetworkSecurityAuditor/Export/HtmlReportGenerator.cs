@@ -161,7 +161,7 @@ public static class HtmlReportGenerator
         }
         sb.AppendLine("</table>");
 
-        sb.AppendLine("<div class=\"footer\">Network Security Auditor v5.0.0</div>");
+        sb.AppendLine($"<div class=\"footer\">Network Security Auditor v{VersionInfo.Version}</div>");
         sb.AppendLine("</body>");
         sb.AppendLine("</html>");
 

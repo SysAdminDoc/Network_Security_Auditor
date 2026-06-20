@@ -33,7 +33,7 @@ public static class JsonExporter
         var report = new AuditReport
         {
             Tool = "Network Security Auditor",
-            ToolVersion = "5.0.0",
+            ToolVersion = VersionInfo.Version,
             SchemaVersion = "2.0",
             Timestamp = DateTime.UtcNow.ToString("o"),
             Client = "",

@@ -222,17 +222,32 @@ public partial class MainViewModel : ViewModelBase
 
     private bool CanStopScan() => IsScanning;
 
-    private void ApplyPrivacyRedaction()
+    private IEnumerable<CheckItemViewModel> GetExportChecks()
     {
-        if (!PrivacyMode) return;
+        if (!PrivacyMode) return Checks;
         var redactor = new Services.PrivacyRedactor(true,
             Environment.ComputerName, Environment.DomainName,
             System.Environment.UserName);
+        var redacted = new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>();
         foreach (var check in Checks)
         {
-            check.Findings = redactor.Redact(check.Findings);
-            check.Evidence = redactor.Redact(check.Evidence);
+            var copy = CheckItemViewModel.FromMetadata(
+                Data.CheckCatalog.All.GetValueOrDefault(check.Id)
+                ?? new Models.CheckMetadata
+                {
+                    Id = check.Id, Category = check.Category, Label = check.Label,
+                    Hint = "", Severity = check.Severity, Weight = check.Weight,
+                    Type = Models.CheckType.Local, RiskTier = Models.RiskTier.ReadOnly, Compliance = ""
+                });
+            copy.Status = check.Status;
+            copy.Findings = redactor.Redact(check.Findings);
+            copy.Evidence = redactor.Redact(check.Evidence);
+            copy.Notes = check.Notes;
+            copy.RemediationAssignee = check.RemediationAssignee;
+            copy.RemediationDueDate = check.RemediationDueDate;
+            redacted.Add(copy);
         }
+        return redacted;
     }
 
     [RelayCommand]
@@ -247,8 +262,8 @@ public partial class MainViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
-            ApplyPrivacyRedaction();
-            var html = Export.HtmlReportGenerator.Generate(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
+            var exportChecks = GetExportChecks();
+            var html = Export.HtmlReportGenerator.Generate(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
             await File.WriteAllTextAsync(dialog.FileName, html);
             ScanStatus = $"HTML report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
@@ -266,8 +281,8 @@ public partial class MainViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
-            ApplyPrivacyRedaction();
-            var json = Export.JsonExporter.Export(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
+            var exportChecks = GetExportChecks();
+            var json = Export.JsonExporter.Export(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
             await File.WriteAllTextAsync(dialog.FileName, json);
             ScanStatus = $"JSON report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
@@ -284,9 +299,9 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            ApplyPrivacyRedaction();
-            await File.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(Checks, Environment, OverallScore, Grade));
-            ScanStatus = $"CSV exported: {dialog.FileName}";
+            var exportChecks = GetExportChecks();
+            await File.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>(exportChecks), Environment, OverallScore, Grade));
+            ScanStatus = $"CSV exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 
@@ -301,9 +316,9 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            ApplyPrivacyRedaction();
-            await File.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(Checks, Environment, OverallScore, Grade, SelectedProfile));
-            ScanStatus = $"JSONL exported: {dialog.FileName}";
+            var exportChecks = GetExportChecks();
+            await File.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>(exportChecks), Environment, OverallScore, Grade, SelectedProfile));
+            ScanStatus = $"JSONL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 
@@ -318,9 +333,9 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            ApplyPrivacyRedaction();
-            await File.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(Checks, Environment));
-            ScanStatus = $"SARIF exported: {dialog.FileName}";
+            var exportChecks = GetExportChecks();
+            await File.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(exportChecks, Environment));
+            ScanStatus = $"SARIF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 
@@ -351,9 +366,9 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            ApplyPrivacyRedaction();
-            await File.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(Checks, Environment, OverallScore, Grade));
-            ScanStatus = $"DefectDojo exported: {dialog.FileName}";
+            var exportChecks = GetExportChecks();
+            await File.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>(exportChecks), Environment, OverallScore, Grade));
+            ScanStatus = $"DefectDojo exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 
@@ -368,9 +383,9 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            ApplyPrivacyRedaction();
-            await File.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(Checks, Environment, OverallScore, Grade, SelectedProfile.ToString()));
-            ScanStatus = $"OCSF exported: {dialog.FileName}";
+            var exportChecks = GetExportChecks();
+            await File.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(exportChecks, Environment, OverallScore, Grade, SelectedProfile.ToString()));
+            ScanStatus = $"OCSF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 
@@ -385,9 +400,9 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            ApplyPrivacyRedaction();
-            await File.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(Checks, Environment, OverallScore, Grade));
-            ScanStatus = $"OSCAL exported: {dialog.FileName}";
+            var exportChecks = GetExportChecks();
+            await File.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(exportChecks, Environment, OverallScore, Grade));
+            ScanStatus = $"OSCAL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 
@@ -402,9 +417,9 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            ApplyPrivacyRedaction();
-            await File.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(Checks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
-            ScanStatus = $"Compliance summary exported: {dialog.FileName}";
+            var exportChecks = GetExportChecks();
+            await File.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
+            ScanStatus = $"Compliance summary exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 

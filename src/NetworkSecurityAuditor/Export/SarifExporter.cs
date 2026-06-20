@@ -98,7 +98,7 @@ public static class SarifExporter
                         driver = new
                         {
                             name = "Network Security Auditor",
-                            version = "5.0.0",
+                            version = VersionInfo.Version,
                             informationUri = "https://github.com/SysAdminDoc/Network_Security_Auditor",
                             rules
                         }

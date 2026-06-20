@@ -4,7 +4,7 @@
         xmlns:vm="clr-namespace:NetworkSecurityAuditor.ViewModels"
         xmlns:models="clr-namespace:NetworkSecurityAuditor.Models"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
-        Title="Network Security Auditor v5.0.0"
+        Title="Network Security Auditor"
         Width="1400" Height="900"
         MinWidth="1000" MinHeight="700"
         Background="{StaticResource WindowBg}"
