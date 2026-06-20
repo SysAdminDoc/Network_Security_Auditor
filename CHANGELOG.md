@@ -14,6 +14,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Added: `--export-compliance-summary` CLI flag for silent mode. Produces the compact RMM dashboard payload alongside other exports. `--export-all` now includes both Intune and compliance summary.
 - Added: Three-tier HTML report generation (Executive/Management/Technical). `--report-tier Executive` produces a 1-page score summary with top 5 findings. `--report-tier Management` adds category breakdown, compliance framework coverage, and remediation roadmap. `--report-tier Technical` adds full per-check findings with evidence, ATT&CK mapping, framework control IDs, and D3FEND coverage. `--report-tier All` (default) produces all three tiers.
 - Added: PDF export via Edge/Chrome headless rendering. GUI button and `--export-pdf` CLI flag with 30-second timeout and diagnostic fallback message.
+- Added: Waiver store integration for silent mode. `--waivers path.json` loads risk waivers during silent scans. Active waivers annotate check notes with `[ACCEPTED RISK]` justification, approver, and expiration. Expired waivers produce console warnings.
 - Added: OSCAL observation-finding UUID linkage test, SARIF schema/security-severity validation tests, Intune export test, full-catalog (69-check) export roundtrip test covering all 11 exporters, and HTML Executive tier isolation test. Test suite now has 80 tests.
 - Fixed: CSV column count test corrected from 24 to 23 (matching actual header).
 

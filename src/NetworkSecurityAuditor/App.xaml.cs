@@ -125,6 +125,30 @@ public partial class App : Application
             checkVms.Add(vm);
         }
 
+        WaiverStore? waiverStore = null;
+        if (args.WaiversPath.Length > 0)
+        {
+            waiverStore = await WaiverStore.LoadFromFileAsync(args.WaiversPath);
+            var expired = waiverStore.GetExpired();
+            if (expired.Count > 0)
+            {
+                Console.WriteLine($"  WARNING: {expired.Count} expired waiver(s):");
+                foreach (var ew in expired)
+                    Console.WriteLine($"    {ew.CheckId}: expired {ew.ExpirationDate:yyyy-MM-dd} ({ew.Justification})");
+            }
+            var activeCount = 0;
+            foreach (var vm in checkVms)
+            {
+                var waiver = waiverStore.GetActive(vm.Id);
+                if (waiver is not null)
+                {
+                    vm.Notes = $"[ACCEPTED RISK] {waiver.Justification} (approved by {waiver.ApprovedBy}{(waiver.ExpirationDate.HasValue ? $", expires {waiver.ExpirationDate:yyyy-MM-dd}" : "")})";
+                    activeCount++;
+                }
+            }
+            Console.WriteLine($"  Waivers: {activeCount} active, {expired.Count} expired");
+        }
+
         var (score, grade) = RiskScoreEngine.Calculate(checkVms);
         var (rwScore, rwGrade) = RansomwareReadinessEngine.Calculate(checkVms);
         var (dmScore, dmGrade, _) = DomainMaturityEngine.Calculate(checkVms);
@@ -315,6 +339,8 @@ public partial class App : Application
                 if (Enum.TryParse<ReportTier>(args[++i], true, out var rt))
                     result.ReportTier = rt;
             }
+            else if ((arg.Equals("--waivers", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Waivers", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
+                result.WaiversPath = args[++i];
             else if (arg.Equals("--export-csv", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportCSV", StringComparison.OrdinalIgnoreCase))
                 result.ExportCsv = true;
             else if (arg.Equals("--export-jsonl", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportJSONL", StringComparison.OrdinalIgnoreCase))
@@ -373,5 +399,6 @@ public partial class App : Application
         public string OutputPath = "";
         public string Client = "";
         public string Auditor = "";
+        public string WaiversPath = "";
     }
 }
