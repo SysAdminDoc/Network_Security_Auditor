@@ -31,6 +31,8 @@ public static class SprsScoreEngine
         ["3.14.4"] = 3, ["3.14.5"] = 3, ["3.14.6"] = 3,
     };
 
+    public static int GetWeight(string controlId) => ControlWeights.GetValueOrDefault(controlId, 1);
+
     public static (int Score, string Confidence) Calculate(IEnumerable<CheckItemViewModel> checks)
     {
         var statusLookup = checks.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);

@@ -319,6 +319,17 @@ public partial class App : Application
             Console.WriteLine($"  SIEM configs: {siemDir}");
         }
 
+        if (args.ExportCmmc)
+        {
+            var cmmcHtmlPath = Path.Combine(outputDir, $"{baseName}_cmmc.html");
+            await File.WriteAllTextAsync(cmmcHtmlPath, CmmcReportGenerator.ExportHtml(checkVms, env, score, grade));
+            Console.WriteLine($"  CMMC HTML: {cmmcHtmlPath}");
+
+            var cmmcJsonPath = Path.Combine(outputDir, $"{baseName}_cmmc.json");
+            await File.WriteAllTextAsync(cmmcJsonPath, CmmcReportGenerator.ExportJson(checkVms, env));
+            Console.WriteLine($"  CMMC JSON: {cmmcJsonPath}");
+        }
+
         if (args.ExportPdf)
         {
             var pdfPath = Path.Combine(outputDir, $"{baseName}.pdf");
@@ -435,6 +446,8 @@ public partial class App : Application
                 result.ExportIntune = true;
             else if (arg.Equals("--export-siem", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportSIEM", StringComparison.OrdinalIgnoreCase))
                 result.ExportSiem = true;
+            else if (arg.Equals("--export-cmmc", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportCMMC", StringComparison.OrdinalIgnoreCase))
+                result.ExportCmmc = true;
             else if (arg.Equals("--export-pdf", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportPDF", StringComparison.OrdinalIgnoreCase))
                 result.ExportPdf = true;
             else if (arg.Equals("--export-compliance-summary", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportComplianceSummary", StringComparison.OrdinalIgnoreCase))
@@ -474,6 +487,7 @@ public partial class App : Application
         public bool ExportOscal;
         public bool ExportIntune;
         public bool ExportSiem;
+        public bool ExportCmmc;
         public bool ExportPdf;
         public bool ExportComplianceSummary;
         public ScanProfileType ScanProfile = ScanProfileType.Full;
