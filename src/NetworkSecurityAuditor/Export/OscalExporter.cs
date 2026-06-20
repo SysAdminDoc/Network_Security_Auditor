@@ -43,15 +43,21 @@ public static class OscalExporter
             {
                 uuid = obsUuid,
                 title = $"[{check.Id}] {check.Label}",
-                description = check.Findings.Length > 0 ? check.Findings : "No findings recorded.",
-                methods = new[] { check.EvidenceMode == EvidenceMode.Automated ? "EXAMINE" : "INTERVIEW" },
+                description = !string.IsNullOrEmpty(check.Findings) ? check.Findings : "No findings recorded.",
+                methods = new[] { check.EvidenceMode switch
+                {
+                    EvidenceMode.Automated => "TEST",
+                    EvidenceMode.Heuristic => "EXAMINE",
+                    EvidenceMode.InterviewRequired => "INTERVIEW",
+                    _ => "EXAMINE"
+                }},
                 types = new[] { "finding" },
                 collected = timestamp,
                 subjects = new[]
                 {
                     new { subject_uuid = runId, type = "component", title = env.ComputerName }
                 },
-                relevant_evidence = check.Evidence.Length > 0 ? new[]
+                relevant_evidence = !string.IsNullOrEmpty(check.Evidence) ? new[]
                 {
                     new { description = check.Evidence.Length > 2000 ? check.Evidence[..2000] : check.Evidence }
                 } : null

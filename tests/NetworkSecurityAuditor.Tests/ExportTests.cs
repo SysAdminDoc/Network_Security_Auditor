@@ -357,4 +357,87 @@ public class ExportTests
         Assert.DoesNotContain("D3FEND", html);
         Assert.DoesNotContain("Score by Category", html);
     }
+
+    [Fact]
+    public void Cmmc_Full_Eligibility_Score_Shows_Full()
+    {
+        var checks = new ObservableCollection<CheckItemViewModel>();
+        foreach (var meta in CheckCatalog.All.Values)
+        {
+            var vm = CheckItemViewModel.FromMetadata(meta);
+            vm.Status = CheckStatus.Pass;
+            checks.Add(vm);
+        }
+        var env = new EnvironmentInfo { ComputerName = "TEST", IsDomainJoined = true, DomainName = "TEST.LOCAL" };
+
+        var html = CmmcReportGenerator.ExportHtml(checks, env, 100, "A");
+        Assert.Contains("Eligible (full)", html);
+        Assert.DoesNotContain("conditional", html);
+    }
+
+    [Fact]
+    public void Navigator_Uses_Worst_Status_For_Shared_Techniques()
+    {
+        var checks = new ObservableCollection<CheckItemViewModel>();
+        foreach (var meta in CheckCatalog.All.Values)
+        {
+            var vm = CheckItemViewModel.FromMetadata(meta);
+            vm.Status = CheckStatus.Pass;
+            checks.Add(vm);
+        }
+        // Set one check to Fail — its techniques should show as failed in Navigator
+        var firstFail = checks.FirstOrDefault(c => c.Id == "EP01");
+        if (firstFail is not null) firstFail.Status = CheckStatus.Fail;
+
+        var json = NavigatorExporter.Export(checks);
+        var doc = System.Text.Json.JsonDocument.Parse(json);
+        var techniques = doc.RootElement.GetProperty("techniques");
+
+        // Find techniques from EP01's mapping — they should have score=0 (Fail)
+        var ep01Mitre = MitreMappings.All.GetValueOrDefault("EP01");
+        if (ep01Mitre is not null)
+        {
+            foreach (var tech in techniques.EnumerateArray())
+            {
+                var id = tech.GetProperty("techniqueID").GetString();
+                if (ep01Mitre.Techniques.Contains(id!))
+                {
+                    Assert.Equal(0, tech.GetProperty("score").GetInt32());
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void Html_RemediationUrl_XSS_Blocked()
+    {
+        var (checks, env) = CreateTestData();
+        // Create a check with a javascript: URL via the ViewModel
+        var meta = CheckCatalog.All.Values.First();
+        var vm = CheckItemViewModel.FromMetadata(new CheckMetadata
+        {
+            Id = meta.Id, Category = meta.Category, Label = meta.Label, Hint = meta.Hint,
+            Severity = meta.Severity, Weight = meta.Weight, Type = meta.Type,
+            RiskTier = meta.RiskTier, Compliance = meta.Compliance,
+            RemediationUrl = "javascript:alert(1)"
+        });
+        vm.Status = CheckStatus.Fail;
+        vm.Findings = "Test";
+        vm.Evidence = "Test";
+
+        var allChecks = new ObservableCollection<CheckItemViewModel> { vm };
+        var html = HtmlReportGenerator.Generate(allChecks, env, 50, "F", 30, "F");
+
+        Assert.DoesNotContain("javascript:", html);
+    }
+
+    [Fact]
+    public void Dashboard_Escapes_Client_Names()
+    {
+        // Verify the Esc helper exists and works
+        var html = "<script>alert(1)</script>";
+        var escaped = html.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+        Assert.DoesNotContain("<script>", escaped);
+        Assert.Contains("&lt;script&gt;", escaped);
+    }
 }

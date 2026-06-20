@@ -30,8 +30,8 @@ public static class JsonlExporter
             var compliance = FrameworkMappings.All.GetValueOrDefault(check.Id);
             var mitre = MitreMappings.All.GetValueOrDefault(check.Id);
             var defend = D3FendMappings.All.GetValueOrDefault(check.Id);
-            var findings = check.Findings;
-            var evidence = check.Evidence;
+            var findings = check.Findings ?? "";
+            var evidence = check.Evidence ?? "";
             var findingsTruncated = false;
             var evidenceTruncated = false;
 

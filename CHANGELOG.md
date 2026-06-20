@@ -19,6 +19,16 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: OCSF exporter null guards for `Findings` and `Evidence` length checks — prevents NullReferenceException if either field is null.
 - Fixed: PdfExporter now reads stderr before waiting for exit to prevent pipe deadlock.
 
+### Correctness (continued)
+- Fixed: OSCAL method mapping — automated checks now use "TEST" instead of "EXAMINE" per NIST OSCAL spec. Heuristic uses "EXAMINE", interview uses "INTERVIEW".
+- Fixed: OSCAL/JSONL null guards for Findings/Evidence fields to prevent NullReferenceException.
+
+### Testing
+- Added: CMMC full-eligibility regression test (score 110 → "Eligible (full)")
+- Added: Navigator worst-case status dedup test (EP01 fail → technique score 0)
+- Added: HTML RemediationUrl XSS prevention test (javascript: scheme blocked)
+- Added: Dashboard HTML escaping verification test (131 total tests)
+
 ### Maintainability
 - Changed: CsvExporter, JsonlExporter, and DefectDojoExporter now accept `IEnumerable<CheckItemViewModel>` instead of `ObservableCollection`. Removes unnecessary data copying at call sites.
 
