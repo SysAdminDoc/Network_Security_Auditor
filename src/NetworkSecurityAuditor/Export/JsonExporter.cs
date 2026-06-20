@@ -60,6 +60,7 @@ public static class JsonExporter
                 var mapping = FrameworkMappings.All.GetValueOrDefault(c.Id);
                 var mitre = MitreMappings.All.GetValueOrDefault(c.Id);
                 var defend = D3FendMappings.All.GetValueOrDefault(c.Id);
+                var meta = CheckCatalog.All.GetValueOrDefault(c.Id);
 
                 return new FindingEntry
                 {
@@ -96,7 +97,9 @@ public static class JsonExporter
                         FedRamp = mapping.FedRAMP,
                         E8 = mapping.E8,
                         CyberEssentials = mapping.CyberEssentials
-                    } : null
+                    } : null,
+                    CisBenchmark = meta?.CisBenchmark,
+                    DurationMs = Math.Round(c.DurationMs, 1)
                 };
             }).ToArray(),
             ComplianceFrameworks = BuildComplianceSummary(statusLookup)
@@ -222,6 +225,8 @@ public static class JsonExporter
         public string[]? D3FendLabels { get; set; }
         public string? D3FendDescription { get; set; }
         public FrameworkControlIds? FrameworkControls { get; set; }
+        public string? CisBenchmark { get; set; }
+        public double DurationMs { get; set; }
     }
 
     private sealed class FrameworkControlIds

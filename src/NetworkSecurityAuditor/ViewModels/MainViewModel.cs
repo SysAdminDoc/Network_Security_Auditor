@@ -180,6 +180,7 @@ public partial class MainViewModel : ViewModelBase
                 vm.Status = update.result.Status;
                 vm.Findings = update.result.Findings;
                 vm.Evidence = update.result.Evidence;
+                vm.DurationMs = update.result.Duration.TotalMilliseconds;
                 vm.IsRunning = false;
             }
 

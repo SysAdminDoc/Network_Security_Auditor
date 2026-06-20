@@ -1059,7 +1059,38 @@ public static class CheckCatalog
             RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-awareness-training"
         });
 
-        return checks.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        return ApplyCisBenchmarks(checks).ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static Dictionary<string, CheckMetadata> ApplyCisBenchmarks(Dictionary<string, CheckMetadata> checks)
+    {
+        foreach (var (id, meta) in checks.ToList())
+        {
+            if (meta.CisBenchmark is not null) continue;
+
+            var benchmark = id switch
+            {
+                "EP01" or "EP02" or "EP03" or "EP04" or "EP05" or "EP06" or "EP07" or "EP08" or "EP09" or "EP10"
+                    => "CIS Windows 11 Enterprise v5.0.0 / Windows Server 2025 v2.0.0",
+                "LM03" or "LM04" or "LM05" or "LM07"
+                    => "CIS Windows 11 Enterprise v5.0.0 / Windows Server 2025 v2.0.0",
+                _ when meta.Compliance.Contains("CIS Control")
+                    => "CIS Controls v8.1",
+                _ => null
+            };
+
+            if (benchmark is not null)
+            {
+                checks[id] = new CheckMetadata
+                {
+                    Id = meta.Id, Category = meta.Category, Label = meta.Label, Hint = meta.Hint,
+                    Severity = meta.Severity, Weight = meta.Weight, Type = meta.Type, RiskTier = meta.RiskTier,
+                    Compliance = meta.Compliance, EvidenceMode = meta.EvidenceMode, RemediationUrl = meta.RemediationUrl,
+                    CisImplementationGroup = meta.CisImplementationGroup, CisBenchmark = benchmark
+                };
+            }
+        }
+        return checks;
     }
 
     private static void Add(Dictionary<string, CheckMetadata> dict, CheckMetadata meta)

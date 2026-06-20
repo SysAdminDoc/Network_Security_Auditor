@@ -17,6 +17,8 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Added: PreflightChecker output tests (7 tests) — admin/non-admin, domain/non-domain, result count, name/detail validation.
 - Added: WaiverStore operations tests (10 tests) — add, replace, get active, case-insensitive lookup, expiration, remove, serialize/deserialize roundtrip, file I/O.
 - Fixed: DashboardGenerator.GenerateCsv synchronous `.Wait()` wrapper replaced with public async `GenerateCsvAsync()`. Eliminates potential deadlock on UI SynchronizationContext.
+- Added: CIS Benchmark version metadata (`cis_benchmark`) on all checks. Endpoint/OS checks reference CIS Windows 11 Enterprise v5.0.0 / Windows Server 2025 v2.0.0. All other checks reference CIS Controls v8.1. Field included in JSON export per finding.
+- Added: Per-check scan duration (`duration_ms`) in JSON findings and JSONL events. Duration captured from CheckRunner timeout-aware execution and threaded through CheckItemViewModel to all export formats.
 
 ## [v5.2.0] - 2026-06-19
 

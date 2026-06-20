@@ -14,4 +14,5 @@ public sealed class CheckMetadata
     public EvidenceMode EvidenceMode { get; init; } = EvidenceMode.Automated;
     public string? RemediationUrl { get; init; }
     public int CisImplementationGroup { get; init; }
+    public string? CisBenchmark { get; init; }
 }

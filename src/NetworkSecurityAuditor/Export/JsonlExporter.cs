@@ -82,7 +82,8 @@ public static class JsonlExporter
                 mitre_tactics = mitre?.Tactics,
                 mitre_techniques = mitre?.Techniques,
                 d3fend_stages = defend?.Stages,
-                d3fend_techniques = defend?.Techniques
+                d3fend_techniques = defend?.Techniques,
+                duration_ms = Math.Round(check.DurationMs, 1)
             };
 
             sb.AppendLine(JsonSerializer.Serialize(evt, Options));

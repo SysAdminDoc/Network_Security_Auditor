@@ -37,6 +37,9 @@ public partial class CheckItemViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isRunning;
 
+    [ObservableProperty]
+    private double _durationMs;
+
     public string StatusColor => Status switch
     {
         CheckStatus.Pass => "#a6e3a1",

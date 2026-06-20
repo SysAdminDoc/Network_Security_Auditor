@@ -169,6 +169,7 @@ public partial class App : Application
                 vm.Status = result.Status;
                 vm.Findings = result.Findings;
                 vm.Evidence = result.Evidence;
+                vm.DurationMs = result.Duration.TotalMilliseconds;
             }
             checkVms.Add(vm);
         }
