@@ -8,6 +8,11 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: Navigator GUI export now respects PrivacyMode. Previously bypassed `GetExportChecks()` and leaked un-redacted data.
 - Fixed: Removed unused variable `eventTriggered` in LM08_AlertingCheck. Build now produces zero warnings.
 - Fixed: JSON export from silent mode now includes computed Client and Auditor names instead of empty strings.
+- Changed: GUI PDF export now explicitly passes `ReportTier.All` to HTML generator for clarity.
+- Changed: `--export-all` now includes SIEM content packs, CMMC report, and PDF in addition to previous 9 formats.
+- Added: CLI argument parsing tests (22 tests) covering all flag variants, `--export-all` completeness, PowerShell-style aliases, and edge cases.
+- Added: AuditState save/load roundtrip test (4 tests) validating serialization fidelity, ToolVersion from assembly, and error handling.
+- Changed: `ParseArgs()` and `CliArgs` made `internal` with `InternalsVisibleTo` for testability.
 
 ## [v5.2.0] - 2026-06-19
 

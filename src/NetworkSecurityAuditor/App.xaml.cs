@@ -383,7 +383,7 @@ public partial class App : Application
         return principal.IsInRole(WindowsBuiltInRole.Administrator);
     }
 
-    private static CliArgs ParseArgs(string[] args)
+    internal static CliArgs ParseArgs(string[] args)
     {
         var result = new CliArgs();
 
@@ -463,13 +463,16 @@ public partial class App : Application
                 result.ExportOscal = true;
                 result.ExportIntune = true;
                 result.ExportComplianceSummary = true;
+                result.ExportSiem = true;
+                result.ExportCmmc = true;
+                result.ExportPdf = true;
             }
         }
 
         return result;
     }
 
-    private sealed class CliArgs
+    internal sealed class CliArgs
     {
         public bool Dashboard;
         public string InputDir = "";

@@ -465,7 +465,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var exportChecks = GetExportChecks();
-            var html = Export.HtmlReportGenerator.Generate(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
+            var html = Export.HtmlReportGenerator.Generate(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade, tier: Models.ReportTier.All);
             var tempHtml = Path.Combine(Path.GetTempPath(), $"nsa_report_{Guid.NewGuid():N}.html");
             try
             {
