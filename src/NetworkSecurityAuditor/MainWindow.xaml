@@ -145,6 +145,9 @@
                     <Button Content="OSCAL" Command="{Binding ExportOscalCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="2"
                             Padding="10,5" FontSize="10" />
+                    <Button Content="Intune" Command="{Binding ExportIntuneCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
                     <Button Content="Summary" Command="{Binding ExportComplianceSummaryCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="2"
                             Padding="10,5" FontSize="10" />

@@ -424,6 +424,23 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task ExportIntuneAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Intune JSON|*.json",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_intune.json",
+            DefaultExt = ".json"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            var exportChecks = GetExportChecks();
+            await File.WriteAllTextAsync(dialog.FileName, Export.IntuneExporter.Export(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade));
+            ScanStatus = $"Intune exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
     private async Task SaveStateAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

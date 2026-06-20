@@ -216,20 +216,32 @@ public partial class App : Application
             Console.WriteLine($"  OSCAL: {oscalPath}");
         }
 
+        if (args.ExportIntune)
+        {
+            var intunePath = Path.Combine(outputDir, $"{baseName}_intune.json");
+            await File.WriteAllTextAsync(intunePath, IntuneExporter.Export(checkVms, env, score, grade, rwScore, rwGrade));
+            Console.WriteLine($"  Intune: {intunePath}");
+        }
+
+        if (args.ExportComplianceSummary)
+        {
+            var summaryPath = Path.Combine(outputDir, $"{baseName}_summary.json");
+            await File.WriteAllTextAsync(summaryPath, ComplianceSummaryExporter.Export(checkVms, env, score, grade, rwScore, rwGrade, dmScore, dmGrade));
+            Console.WriteLine($"  Summary: {summaryPath}");
+        }
+
         Console.WriteLine();
 
-        int exitCode;
+        var exitCode = ExitCode.Green;
         if (score < 60 || rwScore < 40)
-            exitCode = 1;
+            exitCode = ExitCode.ImmediateAlert;
         else if (HasFrameworkBelowThreshold(checkVms, 60))
-            exitCode = 3;
+            exitCode = ExitCode.ComplianceAlert;
         else if (failCount > 0)
-            exitCode = 2;
-        else
-            exitCode = 0;
+            exitCode = ExitCode.ReviewNeeded;
 
-        Console.WriteLine($"  Exit code: {exitCode}");
-        Shutdown(exitCode);
+        Console.WriteLine($"  Exit code: {(int)exitCode}");
+        Shutdown((int)exitCode);
     }
 
     private static bool HasFrameworkBelowThreshold(
@@ -305,6 +317,10 @@ public partial class App : Application
                 result.ExportOcsf = true;
             else if (arg.Equals("--export-oscal", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportOSCAL", StringComparison.OrdinalIgnoreCase))
                 result.ExportOscal = true;
+            else if (arg.Equals("--export-intune", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportIntune", StringComparison.OrdinalIgnoreCase))
+                result.ExportIntune = true;
+            else if (arg.Equals("--export-compliance-summary", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportComplianceSummary", StringComparison.OrdinalIgnoreCase))
+                result.ExportComplianceSummary = true;
             else if (arg.Equals("--export-all", StringComparison.OrdinalIgnoreCase))
             {
                 result.ExportCsv = true;
@@ -314,6 +330,8 @@ public partial class App : Application
                 result.ExportNavigator = true;
                 result.ExportOcsf = true;
                 result.ExportOscal = true;
+                result.ExportIntune = true;
+                result.ExportComplianceSummary = true;
             }
         }
 
@@ -333,6 +351,8 @@ public partial class App : Application
         public bool ExportNavigator;
         public bool ExportOcsf;
         public bool ExportOscal;
+        public bool ExportIntune;
+        public bool ExportComplianceSummary;
         public ScanProfileType ScanProfile = ScanProfileType.Full;
         public string OutputPath = "";
         public string Client = "";

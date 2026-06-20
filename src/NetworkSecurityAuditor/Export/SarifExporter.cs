@@ -38,6 +38,13 @@ public static class SarifExporter
                 },
                 properties = new Dictionary<string, object?>
                 {
+                    ["security-severity"] = c.Severity switch
+                    {
+                        Severity.Critical => 9.5,
+                        Severity.High => 8.0,
+                        Severity.Medium => 5.5,
+                        _ => 3.0
+                    },
                     ["category"] = c.Category,
                     ["severity"] = c.Severity.ToString(),
                     ["weight"] = c.Weight,
