@@ -52,6 +52,14 @@ public partial class App : Application
             catch { }
         }
 
+        if (args.Dashboard)
+        {
+            base.OnStartup(e);
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _ = RunDashboardAsync(args);
+            return;
+        }
+
         if (args.Silent)
         {
             base.OnStartup(e);
@@ -64,6 +72,46 @@ public partial class App : Application
         var window = new MainWindow();
         MainWindow = window;
         window.Show();
+    }
+
+    private async Task RunDashboardAsync(CliArgs args)
+    {
+        AttachConsole(-1);
+        Console.WriteLine();
+        Console.WriteLine($"Network Security Auditor v{VersionInfo.Version} - Dashboard Mode");
+
+        var inputDir = args.InputDir.Length > 0
+            ? args.InputDir
+            : System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
+
+        if (!Directory.Exists(inputDir))
+        {
+            Console.WriteLine($"  ERROR: Input directory not found: {inputDir}");
+            Shutdown(1);
+            return;
+        }
+
+        Console.WriteLine($"  Input: {inputDir}");
+        Console.WriteLine($"  Stale threshold: {args.StaleDays} days");
+
+        var html = await DashboardGenerator.GenerateAsync(inputDir, args.StaleDays);
+
+        var outputDir = args.OutputPath.Length > 0
+            ? Path.GetDirectoryName(args.OutputPath) ?? inputDir
+            : inputDir;
+        Directory.CreateDirectory(outputDir);
+
+        var dashPath = Path.Combine(outputDir, $"SecurityDashboard_{DateTime.Now:yyyy-MM-dd_HHmm}.html");
+        await File.WriteAllTextAsync(dashPath, html);
+        Console.WriteLine($"  Dashboard: {dashPath}");
+
+        var csvPath = Path.ChangeExtension(dashPath, ".csv");
+        var csv = DashboardGenerator.GenerateCsv(inputDir, args.StaleDays);
+        await File.WriteAllTextAsync(csvPath, csv);
+        Console.WriteLine($"  CSV: {csvPath}");
+
+        Console.WriteLine();
+        Shutdown(0);
     }
 
     private async Task RunSilentAsync(CliArgs args)
@@ -325,7 +373,16 @@ public partial class App : Application
         {
             var arg = args[i];
 
-            if (arg.Equals("--silent", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Silent", StringComparison.OrdinalIgnoreCase))
+            if (arg.Equals("--dashboard", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Dashboard", StringComparison.OrdinalIgnoreCase))
+                result.Dashboard = true;
+            else if ((arg.Equals("--input-dir", StringComparison.OrdinalIgnoreCase) || arg.Equals("-InputDir", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
+                result.InputDir = args[++i];
+            else if ((arg.Equals("--stale-days", StringComparison.OrdinalIgnoreCase) || arg.Equals("-StaleDays", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
+            {
+                if (int.TryParse(args[++i], out var sd))
+                    result.StaleDays = sd;
+            }
+            else if (arg.Equals("--silent", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Silent", StringComparison.OrdinalIgnoreCase))
                 result.Silent = true;
             else if (arg.Equals("--no-elevate", StringComparison.OrdinalIgnoreCase))
                 result.NoElevate = true;
@@ -392,6 +449,9 @@ public partial class App : Application
 
     private sealed class CliArgs
     {
+        public bool Dashboard;
+        public string InputDir = "";
+        public int StaleDays = 30;
         public bool Silent;
         public bool NoElevate;
         public bool NoInternet;
