@@ -20,5 +20,6 @@ public partial class MainWindow : Window
     {
         _viewModel.Environment = EnvironmentDetector.Detect();
         _viewModel.LoadCheckCatalog();
+        _viewModel.RunPreflight();
     }
 }

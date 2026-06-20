@@ -128,6 +128,18 @@ public partial class MainViewModel : ViewModelBase
 
     public EnvironmentInfo Environment { get; set; } = new();
 
+    [ObservableProperty]
+    private string _preflightSummary = "";
+
+    public void RunPreflight()
+    {
+        var results = Services.PreflightChecker.Run(Environment);
+        var passed = results.Count(r => r.Passed);
+        var lines = results.Select(r => $"{(r.Passed ? "PASS" : "WARN")}  {r.Name}: {r.Detail}");
+        PreflightSummary = $"Pre-flight: {passed}/{results.Count} passed\n{string.Join("\n", lines)}";
+        ScanStatus = $"Pre-flight complete: {passed}/{results.Count} checks passed";
+    }
+
     public void LoadCheckCatalog()
     {
         Checks.Clear();

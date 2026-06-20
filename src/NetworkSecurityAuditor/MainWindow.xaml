@@ -37,6 +37,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -84,8 +85,15 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Pre-flight Summary -->
+                <TextBlock Grid.Row="2" Text="{Binding PreflightSummary}"
+                           Foreground="{StaticResource TextSecondary}" FontSize="10"
+                           FontFamily="Cascadia Code, Consolas" TextWrapping="Wrap"
+                           Margin="0,0,0,8"
+                           AutomationProperties.Name="Pre-flight connectivity check results" />
+
                 <!-- Category List -->
-                <DockPanel Grid.Row="2" Margin="0,0,0,12">
+                <DockPanel Grid.Row="3" Margin="0,0,0,12">
                     <TextBlock DockPanel.Dock="Top" Text="CATEGORIES" FontSize="11" FontWeight="SemiBold"
                                Foreground="{StaticResource BorderDim}" Margin="0,0,0,6" />
                     <ListBox ItemsSource="{Binding Categories}"
@@ -96,28 +104,28 @@
                 </DockPanel>
 
                 <!-- Scan Profile -->
-                <TextBlock Grid.Row="3" Text="SCAN PROFILE" FontSize="11" FontWeight="SemiBold"
+                <TextBlock Grid.Row="4" Text="SCAN PROFILE" FontSize="11" FontWeight="SemiBold"
                            Foreground="{StaticResource BorderDim}" Margin="0,0,0,4" />
-                <ComboBox Grid.Row="4" ItemsSource="{Binding AvailableProfiles}"
+                <ComboBox Grid.Row="5" ItemsSource="{Binding AvailableProfiles}"
                           SelectedItem="{Binding SelectedProfile}"
                           Style="{StaticResource DarkComboBox}"
                           Margin="0,0,0,12"
                           AutomationProperties.Name="Scan profile selector" />
 
                 <!-- Scan Buttons -->
-                <Button Grid.Row="5" Content="Start Scan"
+                <Button Grid.Row="6" Content="Start Scan"
                         Command="{Binding StartScanCommand}"
                         Style="{StaticResource AccentButton}"
                         Margin="0,0,0,6"
                         AutomationProperties.Name="Start security scan" />
-                <Button Grid.Row="6" Content="Stop Scan"
+                <Button Grid.Row="7" Content="Stop Scan"
                         Command="{Binding StopScanCommand}"
                         Style="{StaticResource SecondaryButton}"
                         Margin="0,0,0,12"
                         AutomationProperties.Name="Stop running scan" />
 
                 <!-- Export Buttons -->
-                <WrapPanel Grid.Row="7" HorizontalAlignment="Center">
+                <WrapPanel Grid.Row="8" HorizontalAlignment="Center">
                     <Button Content="HTML" Command="{Binding ExportHtmlCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="2"
                             Padding="10,5" FontSize="10" />
