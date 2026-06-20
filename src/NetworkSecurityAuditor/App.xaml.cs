@@ -312,6 +312,13 @@ public partial class App : Application
             Console.WriteLine($"  Summary: {summaryPath}");
         }
 
+        if (args.ExportSiem)
+        {
+            var siemDir = Path.Combine(outputDir, $"{baseName}_siem_configs");
+            var siemFiles = SiemContentPackExporter.ExportAll(siemDir);
+            Console.WriteLine($"  SIEM configs: {siemDir}");
+        }
+
         if (args.ExportPdf)
         {
             var pdfPath = Path.Combine(outputDir, $"{baseName}.pdf");
@@ -426,6 +433,8 @@ public partial class App : Application
                 result.ExportOscal = true;
             else if (arg.Equals("--export-intune", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportIntune", StringComparison.OrdinalIgnoreCase))
                 result.ExportIntune = true;
+            else if (arg.Equals("--export-siem", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportSIEM", StringComparison.OrdinalIgnoreCase))
+                result.ExportSiem = true;
             else if (arg.Equals("--export-pdf", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportPDF", StringComparison.OrdinalIgnoreCase))
                 result.ExportPdf = true;
             else if (arg.Equals("--export-compliance-summary", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportComplianceSummary", StringComparison.OrdinalIgnoreCase))
@@ -464,6 +473,7 @@ public partial class App : Application
         public bool ExportOcsf;
         public bool ExportOscal;
         public bool ExportIntune;
+        public bool ExportSiem;
         public bool ExportPdf;
         public bool ExportComplianceSummary;
         public ScanProfileType ScanProfile = ScanProfileType.Full;
