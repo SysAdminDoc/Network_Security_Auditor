@@ -163,7 +163,7 @@ public partial class App : Application
         Console.WriteLine($"  JSON: {jsonPath}");
 
         var htmlPath = Path.Combine(outputDir, $"{baseName}.html");
-        var html = HtmlReportGenerator.Generate(checkVms, env, score, grade, rwScore, rwGrade, dmScore, dmGrade);
+        var html = HtmlReportGenerator.Generate(checkVms, env, score, grade, rwScore, rwGrade, dmScore, dmGrade, tier: args.ReportTier);
         await File.WriteAllTextAsync(htmlPath, html);
         Console.WriteLine($"  HTML: {htmlPath}");
 
@@ -310,6 +310,11 @@ public partial class App : Application
                 result.Client = args[++i];
             else if ((arg.Equals("--auditor", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Auditor", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
                 result.Auditor = args[++i];
+            else if ((arg.Equals("--report-tier", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ReportTier", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
+            {
+                if (Enum.TryParse<ReportTier>(args[++i], true, out var rt))
+                    result.ReportTier = rt;
+            }
             else if (arg.Equals("--export-csv", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportCSV", StringComparison.OrdinalIgnoreCase))
                 result.ExportCsv = true;
             else if (arg.Equals("--export-jsonl", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportJSONL", StringComparison.OrdinalIgnoreCase))
@@ -364,6 +369,7 @@ public partial class App : Application
         public bool ExportPdf;
         public bool ExportComplianceSummary;
         public ScanProfileType ScanProfile = ScanProfileType.Full;
+        public ReportTier ReportTier = ReportTier.All;
         public string OutputPath = "";
         public string Client = "";
         public string Auditor = "";

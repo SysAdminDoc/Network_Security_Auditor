@@ -15,7 +15,8 @@ public static class HtmlReportGenerator
         int ransomwareScore,
         string ransomwareGrade,
         int domainMaturityScore = 0,
-        string domainMaturityGrade = "N/A")
+        string domainMaturityGrade = "N/A",
+        ReportTier tier = ReportTier.All)
     {
         var checkList = checks.ToList();
         var sb = new StringBuilder();
@@ -32,26 +33,47 @@ public static class HtmlReportGenerator
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
 
-        // Header
         sb.AppendLine("<div class=\"header\">");
         sb.AppendLine("<h1>Network Security Audit Report</h1>");
         sb.AppendLine($"<p class=\"subtitle\">Generated {DateTime.Now:yyyy-MM-dd HH:mm} | {env.ComputerName} | {env.OSCaption}</p>");
         sb.AppendLine("</div>");
 
-        // Executive Summary
+        var passCount = checkList.Count(c => c.Status == CheckStatus.Pass);
+        var failCount = checkList.Count(c => c.Status == CheckStatus.Fail);
+        var partialCount = checkList.Count(c => c.Status == CheckStatus.Partial);
+        var naCount = checkList.Count(c => c.Status is CheckStatus.NA or CheckStatus.NotAssessed);
+        var (sprsScore, sprsConf) = Scoring.SprsScoreEngine.Calculate(checkList);
+
+        if (tier is ReportTier.Executive or ReportTier.All)
+            AppendExecutive(sb, checkList, overallScore, grade, ransomwareScore, ransomwareGrade,
+                domainMaturityScore, domainMaturityGrade, sprsScore, sprsConf,
+                passCount, failCount, partialCount, naCount);
+
+        if (tier is ReportTier.Management or ReportTier.All)
+            AppendManagement(sb, checkList, passCount, failCount);
+
+        if (tier is ReportTier.Technical or ReportTier.All)
+            AppendTechnical(sb, checkList);
+
+        sb.AppendLine($"<div class=\"footer\">Network Security Auditor v{VersionInfo.Version}</div>");
+        sb.AppendLine("</body>");
+        sb.AppendLine("</html>");
+
+        return sb.ToString();
+    }
+
+    private static void AppendExecutive(StringBuilder sb, List<CheckItemViewModel> checkList,
+        int overallScore, string grade, int ransomwareScore, string ransomwareGrade,
+        int domainMaturityScore, string domainMaturityGrade, int sprsScore, string sprsConf,
+        int passCount, int failCount, int partialCount, int naCount)
+    {
         sb.AppendLine("<div class=\"summary-grid\">");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(grade)}\">{grade}</div><div class=\"score-value\">{overallScore}/100</div><div class=\"score-label\">Overall Score</div></div>");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(ransomwareGrade)}\">{ransomwareGrade}</div><div class=\"score-value\">{ransomwareScore}/100</div><div class=\"score-label\">Ransomware Readiness</div></div>");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(domainMaturityGrade)}\">{domainMaturityGrade}</div><div class=\"score-value\">{domainMaturityScore}/100</div><div class=\"score-label\">Domain Maturity</div></div>");
 
-        var (sprsScore, sprsConf) = Scoring.SprsScoreEngine.Calculate(checkList);
         var sprsColor = sprsScore >= 88 ? "#a6e3a1" : sprsScore >= 50 ? "#f9e2af" : "#f38ba8";
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{sprsColor};font-size:48px\">{sprsScore}</div><div class=\"score-value\">of 110</div><div class=\"score-label\">SPRS Score ({sprsConf})</div></div>");
-
-        var passCount = checkList.Count(c => c.Status == CheckStatus.Pass);
-        var failCount = checkList.Count(c => c.Status == CheckStatus.Fail);
-        var partialCount = checkList.Count(c => c.Status == CheckStatus.Partial);
-        var naCount = checkList.Count(c => c.Status is CheckStatus.NA or CheckStatus.NotAssessed);
 
         sb.AppendLine("<div class=\"score-card\">");
         sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot pass\"></span> Pass: {passCount}</div>");
@@ -62,7 +84,31 @@ public static class HtmlReportGenerator
         sb.AppendLine("</div>");
         sb.AppendLine("</div>");
 
-        // Category Breakdown
+        var topFindings = checkList
+            .Where(c => c.Status == CheckStatus.Fail)
+            .OrderByDescending(c => c.Severity)
+            .Take(5)
+            .ToList();
+
+        if (topFindings.Count > 0)
+        {
+            sb.AppendLine("<h2>Top Findings</h2>");
+            sb.AppendLine("<table class=\"category-table\">");
+            sb.AppendLine("<tr><th>ID</th><th>Check</th><th>Severity</th><th>Recommendation</th></tr>");
+            foreach (var check in topFindings)
+            {
+                var hint = CheckCatalog.All.TryGetValue(check.Id, out var meta) ? meta.Hint : "";
+                sb.AppendLine($"<tr><td class=\"id-cell\">{check.Id}</td><td>{EscapeHtml(check.Label)}</td>");
+                sb.AppendLine($"<td><span class=\"badge severity-{check.Severity.ToString().ToLowerInvariant()}\">{check.SeverityLabel}</span></td>");
+                sb.AppendLine($"<td style=\"font-size:13px;color:#b5bcd6\">{EscapeHtml(hint.Length > 200 ? hint[..200] + "..." : hint)}</td></tr>");
+            }
+            sb.AppendLine("</table>");
+        }
+    }
+
+    private static void AppendManagement(StringBuilder sb, List<CheckItemViewModel> checkList,
+        int passCount, int failCount)
+    {
         sb.AppendLine("<h2>Score by Category</h2>");
         sb.AppendLine("<table class=\"category-table\">");
         sb.AppendLine("<tr><th>Category</th><th>Pass</th><th>Partial</th><th>Fail</th><th>N/A</th></tr>");
@@ -76,7 +122,49 @@ public static class HtmlReportGenerator
         }
         sb.AppendLine("</table>");
 
-        // Detailed Findings
+        var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
+
+        sb.AppendLine("<h2>Compliance Framework Coverage</h2>");
+        sb.AppendLine("<table class=\"category-table\">");
+        sb.AppendLine("<tr><th>Framework</th><th>Mapped Checks</th><th>Passing</th><th>Coverage</th></tr>");
+        foreach (var (fwName, sel) in FrameworkDefinitions.All)
+        {
+            var mapped = FrameworkMappings.All.Where(kv => sel(kv.Value) is not null).Select(kv => kv.Key).ToList();
+            int fwTotal = 0, fwPass = 0;
+            foreach (var cid in mapped)
+            {
+                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed) continue;
+                fwTotal++;
+                if (st is CheckStatus.Pass or CheckStatus.Partial) fwPass++;
+            }
+            var pct = fwTotal > 0 ? Math.Round((double)fwPass / fwTotal * 100) : 0;
+            var color = pct >= 80 ? "#a6e3a1" : pct >= 60 ? "#f9e2af" : "#f38ba8";
+            sb.AppendLine($"<tr><td>{fwName}</td><td>{mapped.Count}</td><td class=\"pass-cell\">{fwPass}/{fwTotal}</td><td style=\"color:{color};font-weight:600\">{pct}%</td></tr>");
+        }
+        sb.AppendLine("</table>");
+
+        if (failCount > 0)
+        {
+            sb.AppendLine("<h2>Remediation Roadmap</h2>");
+            sb.AppendLine("<table class=\"category-table\">");
+            sb.AppendLine("<tr><th>Priority</th><th>ID</th><th>Check</th><th>Category</th><th>Assignee</th><th>Due</th></tr>");
+            var priorityOrder = 1;
+            foreach (var check in checkList
+                .Where(c => c.Status == CheckStatus.Fail)
+                .OrderByDescending(c => c.Severity)
+                .ThenBy(c => c.Category))
+            {
+                sb.AppendLine($"<tr><td>{priorityOrder++}</td><td class=\"id-cell\">{check.Id}</td>");
+                sb.AppendLine($"<td>{EscapeHtml(check.Label)}</td><td>{check.Category}</td>");
+                sb.AppendLine($"<td>{EscapeHtml(check.RemediationAssignee)}</td>");
+                sb.AppendLine($"<td>{(check.RemediationDueDate.HasValue ? check.RemediationDueDate.Value.ToString("yyyy-MM-dd") : "")}</td></tr>");
+            }
+            sb.AppendLine("</table>");
+        }
+    }
+
+    private static void AppendTechnical(StringBuilder sb, List<CheckItemViewModel> checkList)
+    {
         sb.AppendLine("<h2>Detailed Findings</h2>");
         foreach (var group in checkList.GroupBy(c => c.Category).OrderBy(g => g.Key))
         {
@@ -104,28 +192,6 @@ public static class HtmlReportGenerator
             sb.AppendLine("</table>");
         }
 
-        // Per-framework compliance scores
-        sb.AppendLine("<h2>Compliance Framework Coverage</h2>");
-        sb.AppendLine("<table class=\"category-table\">");
-        sb.AppendLine("<tr><th>Framework</th><th>Mapped Checks</th><th>Passing</th><th>Coverage</th></tr>");
-        var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
-        foreach (var (fwName, sel) in FrameworkDefinitions.All)
-        {
-            var mapped = FrameworkMappings.All.Where(kv => sel(kv.Value) is not null).Select(kv => kv.Key).ToList();
-            int fwTotal = 0, fwPass = 0;
-            foreach (var cid in mapped)
-            {
-                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed) continue;
-                fwTotal++;
-                if (st is CheckStatus.Pass or CheckStatus.Partial) fwPass++;
-            }
-            var pct = fwTotal > 0 ? Math.Round((double)fwPass / fwTotal * 100) : 0;
-            var color = pct >= 80 ? "#a6e3a1" : pct >= 60 ? "#f9e2af" : "#f38ba8";
-            sb.AppendLine($"<tr><td>{fwName}</td><td>{mapped.Count}</td><td class=\"pass-cell\">{fwPass}/{fwTotal}</td><td style=\"color:{color};font-weight:600\">{pct}%</td></tr>");
-        }
-        sb.AppendLine("</table>");
-
-        // Detailed compliance per check
         sb.AppendLine("<h3>Per-Check Framework Control IDs</h3>");
         sb.AppendLine("<table class=\"compliance-table\">");
         sb.AppendLine("<tr><th>Check ID</th><th>Label</th><th>Framework Controls</th></tr>");
@@ -138,7 +204,6 @@ public static class HtmlReportGenerator
         }
         sb.AppendLine("</table>");
 
-        // D3FEND Coverage
         sb.AppendLine("<h2>MITRE D3FEND Defensive Coverage</h2>");
         sb.AppendLine("<table class=\"category-table\">");
         sb.AppendLine("<tr><th>Stage</th><th>Checks</th><th>Techniques</th></tr>");
@@ -160,12 +225,6 @@ public static class HtmlReportGenerator
             sb.AppendLine($"<tr><td style=\"font-weight:600\">{stage}</td><td>{checks2.Count}</td><td style=\"font-size:12px\">{EscapeHtml(string.Join(", ", allTechniques))}</td></tr>");
         }
         sb.AppendLine("</table>");
-
-        sb.AppendLine($"<div class=\"footer\">Network Security Auditor v{VersionInfo.Version}</div>");
-        sb.AppendLine("</body>");
-        sb.AppendLine("</html>");
-
-        return sb.ToString();
     }
 
     private static string GradeColor(string grade) => grade switch
