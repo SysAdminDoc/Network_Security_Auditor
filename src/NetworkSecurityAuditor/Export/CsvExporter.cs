@@ -15,6 +15,7 @@ public static class CsvExporter
     {
         var sb = new StringBuilder();
 
+        sb.AppendLine($"# Host: {Escape(env.ComputerName)} | Score: {overallScore}/100 ({grade}) | Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC");
         sb.AppendLine("CheckID,Category,Label,Severity,Status,Findings,Evidence,Notes,CIS,NIST,CMMC,HIPAA,PCI,SOC2,ISO27001,STIG,FedRAMP,E8,CyberEssentials,MitreTactics,MitreTechniques,D3FendStages,D3FendTechniques");
 
         foreach (var check in checks)

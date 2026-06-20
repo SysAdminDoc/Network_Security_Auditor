@@ -1,10 +1,11 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace NetworkSecurityAuditor.Models;
 
-public sealed class BrandingConfig
+public sealed partial class BrandingConfig
 {
     public string CompanyName { get; set; } = "";
     public string LogoBase64 { get; set; } = "";
@@ -35,8 +36,14 @@ public sealed class BrandingConfig
     public bool HasLogo => LogoBase64.Length > 0;
 
     [JsonIgnore]
-    public string EffectivePrimary => PrimaryColor.Length > 0 ? PrimaryColor : "#cba6f7";
+    public string EffectivePrimary => IsSafeCssColor(PrimaryColor) ? PrimaryColor : "#cba6f7";
 
     [JsonIgnore]
-    public string EffectiveAccent => AccentColor.Length > 0 ? AccentColor : "#89b4fa";
+    public string EffectiveAccent => IsSafeCssColor(AccentColor) ? AccentColor : "#89b4fa";
+
+    private static bool IsSafeCssColor(string value) =>
+        !string.IsNullOrEmpty(value) && SafeCssColorPattern().IsMatch(value);
+
+    [GeneratedRegex(@"^#[0-9a-fA-F]{3,8}$|^[a-zA-Z]{1,20}$|^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$")]
+    private static partial Regex SafeCssColorPattern();
 }

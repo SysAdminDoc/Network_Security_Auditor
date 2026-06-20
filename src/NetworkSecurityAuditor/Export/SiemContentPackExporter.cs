@@ -74,13 +74,20 @@ public static class SiemContentPackExporter
                     properties = new Dictionary<string, object>
                     {
                         ["timestamp"] = new { type = "date" },
+                        ["event_type"] = new { type = "keyword" },
+                        ["tool"] = new { type = "keyword" },
+                        ["tool_version"] = new { type = "keyword" },
                         ["check_id"] = new { type = "keyword" },
+                        ["label"] = new { type = "text" },
                         ["category"] = new { type = "keyword" },
                         ["severity"] = new { type = "keyword" },
                         ["status"] = new { type = "keyword" },
                         ["findings"] = new { type = "text" },
+                        ["findings_truncated"] = new { type = "boolean" },
                         ["evidence"] = new { type = "text" },
+                        ["evidence_truncated"] = new { type = "boolean" },
                         ["host"] = new { type = "keyword" },
+                        ["os"] = new { type = "keyword" },
                         ["domain"] = new { type = "keyword" },
                         ["scan_profile"] = new { type = "keyword" },
                         ["overall_score"] = new { type = "integer" },
@@ -88,11 +95,19 @@ public static class SiemContentPackExporter
                         ["cis"] = new { type = "keyword" },
                         ["nist"] = new { type = "keyword" },
                         ["cmmc"] = new { type = "keyword" },
+                        ["hipaa"] = new { type = "keyword" },
+                        ["pci"] = new { type = "keyword" },
+                        ["soc2"] = new { type = "keyword" },
+                        ["iso27001"] = new { type = "keyword" },
                         ["stig"] = new { type = "keyword" },
+                        ["fedramp"] = new { type = "keyword" },
+                        ["e8"] = new { type = "keyword" },
+                        ["cyber_essentials"] = new { type = "keyword" },
                         ["mitre_tactics"] = new { type = "keyword" },
                         ["mitre_techniques"] = new { type = "keyword" },
                         ["d3fend_stages"] = new { type = "keyword" },
-                        ["d3fend_techniques"] = new { type = "keyword" }
+                        ["d3fend_techniques"] = new { type = "keyword" },
+                        ["duration_ms"] = new { type = "double" }
                     }
                 }
             }
@@ -110,18 +125,40 @@ public static class SiemContentPackExporter
             columns = new[]
             {
                 new { name = "TimeGenerated", type = "datetime" },
+                new { name = "EventType_s", type = "string" },
+                new { name = "Tool_s", type = "string" },
+                new { name = "ToolVersion_s", type = "string" },
                 new { name = "CheckId_s", type = "string" },
+                new { name = "Label_s", type = "string" },
                 new { name = "Category_s", type = "string" },
                 new { name = "Severity_s", type = "string" },
                 new { name = "Status_s", type = "string" },
                 new { name = "Findings_s", type = "string" },
+                new { name = "FindingsTruncated_b", type = "boolean" },
                 new { name = "Evidence_s", type = "string" },
+                new { name = "EvidenceTruncated_b", type = "boolean" },
                 new { name = "Host_s", type = "string" },
+                new { name = "OS_s", type = "string" },
                 new { name = "Domain_s", type = "string" },
-                new { name = "OverallScore_d", type = "int" },
+                new { name = "ScanProfile_s", type = "string" },
+                new { name = "OverallScore_d", type = "double" },
                 new { name = "OverallGrade_s", type = "string" },
+                new { name = "CIS_s", type = "string" },
+                new { name = "NIST_s", type = "string" },
+                new { name = "CMMC_s", type = "string" },
+                new { name = "HIPAA_s", type = "string" },
+                new { name = "PCI_s", type = "string" },
+                new { name = "SOC2_s", type = "string" },
+                new { name = "ISO27001_s", type = "string" },
+                new { name = "STIG_s", type = "string" },
+                new { name = "FedRAMP_s", type = "string" },
+                new { name = "E8_s", type = "string" },
+                new { name = "CyberEssentials_s", type = "string" },
                 new { name = "MitreTactics_s", type = "string" },
-                new { name = "MitreTechniques_s", type = "string" }
+                new { name = "MitreTechniques_s", type = "string" },
+                new { name = "D3FendStages_s", type = "string" },
+                new { name = "D3FendTechniques_s", type = "string" },
+                new { name = "DurationMs_d", type = "double" }
             }
         };
 
@@ -191,12 +228,25 @@ public static class SiemContentPackExporter
                 new { field = "status", type = "string", description = "Pass/Fail/Partial/NA" },
                 new { field = "findings", type = "string", description = "Finding text (max 4000 chars)" },
                 new { field = "evidence", type = "string", description = "Evidence text (max 2000 chars)" },
+                new { field = "label", type = "string", description = "Check display name" },
+                new { field = "findings_truncated", type = "boolean", description = "True if findings were truncated at 4000 chars" },
+                new { field = "evidence_truncated", type = "boolean", description = "True if evidence was truncated at 2000 chars" },
                 new { field = "cis", type = "string", description = "CIS Controls mapping" },
                 new { field = "nist", type = "string", description = "NIST 800-171 control mapping" },
+                new { field = "cmmc", type = "string", description = "CMMC Level 2 control mapping" },
+                new { field = "hipaa", type = "string", description = "HIPAA Security Rule mapping" },
+                new { field = "pci", type = "string", description = "PCI-DSS 4.0.1 mapping" },
+                new { field = "soc2", type = "string", description = "SOC 2 Type II mapping" },
+                new { field = "iso27001", type = "string", description = "ISO 27001:2022 mapping" },
+                new { field = "stig", type = "string", description = "DISA STIG mapping" },
+                new { field = "fedramp", type = "string", description = "FedRAMP Moderate mapping" },
+                new { field = "e8", type = "string", description = "ACSC Essential Eight mapping" },
+                new { field = "cyber_essentials", type = "string", description = "Cyber Essentials mapping" },
                 new { field = "mitre_tactics", type = "array", description = "MITRE ATT&CK tactic IDs" },
                 new { field = "mitre_techniques", type = "array", description = "MITRE ATT&CK technique IDs" },
                 new { field = "d3fend_stages", type = "array", description = "MITRE D3FEND stage names" },
-                new { field = "d3fend_techniques", type = "array", description = "MITRE D3FEND technique IDs" }
+                new { field = "d3fend_techniques", type = "array", description = "MITRE D3FEND technique IDs" },
+                new { field = "duration_ms", type = "number", description = "Check execution time in milliseconds" }
             }
         };
 

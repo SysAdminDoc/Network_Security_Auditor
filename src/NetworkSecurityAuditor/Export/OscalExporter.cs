@@ -65,6 +65,18 @@ public static class OscalExporter
 
             if (check.Status is CheckStatus.Fail or CheckStatus.Partial)
             {
+                var props = new List<object>();
+                if (mapping?.CIS is not null) props.Add(new { name = "cis", value = mapping.CIS });
+                if (mapping?.CMMC is not null) props.Add(new { name = "cmmc", value = mapping.CMMC });
+                if (mapping?.HIPAA is not null) props.Add(new { name = "hipaa", value = mapping.HIPAA });
+                if (mapping?.PCI is not null) props.Add(new { name = "pci-dss", value = mapping.PCI });
+                if (mapping?.SOC2 is not null) props.Add(new { name = "soc2", value = mapping.SOC2 });
+                if (mapping?.ISO27001 is not null) props.Add(new { name = "iso27001", value = mapping.ISO27001 });
+                if (mapping?.STIG is not null) props.Add(new { name = "stig", value = mapping.STIG });
+                if (mapping?.FedRAMP is not null) props.Add(new { name = "fedramp", value = mapping.FedRAMP });
+                if (mapping?.E8 is not null) props.Add(new { name = "essential-eight", value = mapping.E8 });
+                if (mapping?.CyberEssentials is not null) props.Add(new { name = "cyber-essentials", value = mapping.CyberEssentials });
+
                 findings.Add(new
                 {
                     uuid = Guid.NewGuid().ToString(),
@@ -79,7 +91,8 @@ public static class OscalExporter
                     related_observations = new[]
                     {
                         new { observation_uuid = obsUuid }
-                    }
+                    },
+                    props = props.Count > 0 ? props : null
                 });
 
                 if (check.Status == CheckStatus.Fail && check.Severity >= Severity.High)

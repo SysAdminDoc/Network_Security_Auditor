@@ -2,6 +2,24 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.2.3] - 2026-06-20
+
+### Compliance & Data
+- Fixed: OCSF exporter now includes all 11 compliance frameworks in requirements (was 5 of 11).
+- Fixed: DefectDojo exporter now includes all 11 frameworks in references (was 5 of 11).
+- Fixed: OSCAL exporter now includes all 11 frameworks as props on findings (was NIST-only).
+- Fixed: Sentinel SIEM schema expanded to 35 columns matching full JSONL event schema. `OverallScore_d` type corrected from `"int"` to `"double"`.
+- Fixed: Elastic index template expanded to 31 fields matching full JSONL schema (was 18).
+- Fixed: SIEM field mapping document now includes all 11 compliance frameworks plus duration_ms.
+- Added: CSV export now includes metadata comment line with host, score, grade, and UTC timestamp.
+
+### Security
+- Fixed: CSS injection via branding color values blocked. `EffectivePrimary`/`EffectiveAccent` now validated against strict CSS color regex (hex, named colors, rgb() only).
+
+### Reliability
+- Fixed: All exporters now use `DateTime.UtcNow` consistently (DefectDojo, HTML report, CMMC report, Dashboard were using local time).
+- Fixed: DashboardGenerator no longer silently swallows JSON parsing errors. Skipped files and error reasons are shown in dashboard HTML and CSV output.
+
 ## [v5.2.2] - 2026-06-20
 
 ### Security

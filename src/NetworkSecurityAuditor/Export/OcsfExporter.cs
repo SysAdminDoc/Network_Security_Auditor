@@ -122,9 +122,15 @@ public static class OcsfExporter
         var reqs = new List<string>();
         if (mapping.CIS is not null) reqs.Add($"CIS {mapping.CIS}");
         if (mapping.NIST is not null) reqs.Add($"NIST 800-171 {mapping.NIST}");
+        if (mapping.CMMC is not null) reqs.Add($"CMMC {mapping.CMMC}");
         if (mapping.HIPAA is not null) reqs.Add($"HIPAA {mapping.HIPAA}");
         if (mapping.PCI is not null) reqs.Add($"PCI-DSS {mapping.PCI}");
+        if (mapping.SOC2 is not null) reqs.Add($"SOC 2 {mapping.SOC2}");
+        if (mapping.ISO27001 is not null) reqs.Add($"ISO 27001 {mapping.ISO27001}");
         if (mapping.STIG is not null) reqs.Add($"DISA STIG {mapping.STIG}");
+        if (mapping.FedRAMP is not null) reqs.Add($"FedRAMP {mapping.FedRAMP}");
+        if (mapping.E8 is not null) reqs.Add($"Essential Eight {mapping.E8}");
+        if (mapping.CyberEssentials is not null) reqs.Add($"Cyber Essentials {mapping.CyberEssentials}");
         return reqs.Count > 0 ? reqs.ToArray() : null;
     }
 }

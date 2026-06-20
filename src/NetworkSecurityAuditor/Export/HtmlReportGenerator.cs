@@ -49,7 +49,7 @@ public static class HtmlReportGenerator
             if (branding.Tagline.Length > 0)
                 sb.AppendLine($"<p class=\"cover-tagline\">{EscapeHtml(branding.Tagline)}</p>");
             sb.AppendLine($"<p class=\"cover-subtitle\">Security Assessment Report</p>");
-            sb.AppendLine($"<p class=\"cover-date\">{DateTime.Now:MMMM d, yyyy}</p>");
+            sb.AppendLine($"<p class=\"cover-date\">{DateTime.UtcNow:MMMM d, yyyy}</p>");
             sb.AppendLine("</div>");
         }
 
@@ -60,7 +60,7 @@ public static class HtmlReportGenerator
             ? $"{branding.CompanyName} Security Audit Report"
             : "Network Security Audit Report";
         sb.AppendLine($"<h1>{EscapeHtml(h1)}</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">Generated {DateTime.Now:yyyy-MM-dd HH:mm} | {env.ComputerName} | {env.OSCaption}</p>");
+        sb.AppendLine($"<p class=\"subtitle\">Generated {DateTime.UtcNow:yyyy-MM-dd HH:mm} | {env.ComputerName} | {env.OSCaption}</p>");
         sb.AppendLine("</div>");
 
         var passCount = checkList.Count(c => c.Status == CheckStatus.Pass);

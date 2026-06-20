@@ -128,8 +128,9 @@ public class ExportTests
         var csv = CsvExporter.Export(checks, env, 85, "B");
         var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-        Assert.True(lines.Length > 1);
-        var headerCommas = lines[0].Count(c => c == ',');
+        Assert.True(lines.Length > 2); // comment + header + data
+        var headerLine = lines.First(l => !l.StartsWith('#'));
+        var headerCommas = headerLine.Count(c => c == ',');
         Assert.Equal(22, headerCommas); // 23 columns = 22 commas
     }
 
@@ -312,7 +313,7 @@ public class ExportTests
 
         var csv = CsvExporter.Export(checks, env, 30, "F");
         var csvLines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(70, csvLines.Length); // 1 header + 69 data rows
+        Assert.Equal(71, csvLines.Length); // 1 comment + 1 header + 69 data rows
 
         var html = HtmlReportGenerator.Generate(checks, env, 30, "F", 20, "F", 10, "F");
         Assert.Contains("Detailed Findings", html);

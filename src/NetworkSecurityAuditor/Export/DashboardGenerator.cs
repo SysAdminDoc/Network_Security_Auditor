@@ -10,6 +10,7 @@ public static class DashboardGenerator
     {
         var jsonFiles = Directory.GetFiles(inputDir, "*_findings.json", SearchOption.TopDirectoryOnly);
         var clients = new List<ClientSummary>();
+        var skippedFiles = new List<(string file, string reason)>();
 
         foreach (var file in jsonFiles.OrderBy(f => f))
         {
@@ -60,10 +61,13 @@ public static class DashboardGenerator
 
                 clients.Add(client);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                skippedFiles.Add((Path.GetFileName(file), ex.Message));
+            }
         }
 
-        return BuildHtml(clients, staleDays);
+        return BuildHtml(clients, staleDays, skippedFiles);
     }
 
     public static async Task<string> GenerateCsvAsync(string inputDir, int staleDays = 30)
@@ -102,12 +106,15 @@ public static class DashboardGenerator
 
                 sb.AppendLine($"{CsvEsc(client)},{CsvEsc(host)},{CsvEsc(os)},{score},{CsvEsc(grade)},{rw},{critCount},{failCount},{stale},{CsvEsc(timestamp)},{CsvEsc(Path.GetFileName(file))}");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                sb.AppendLine($"# SKIPPED: {CsvEsc(Path.GetFileName(file))} — {CsvEsc(ex.Message)}");
+            }
         }
         return sb.ToString();
     }
 
-    private static string BuildHtml(List<ClientSummary> clients, int staleDays)
+    private static string BuildHtml(List<ClientSummary> clients, int staleDays, List<(string file, string reason)>? skippedFiles = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">");
@@ -137,7 +144,7 @@ public static class DashboardGenerator
         sb.AppendLine("</style></head><body>");
 
         sb.AppendLine("<h1>Multi-Client Security Dashboard</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">Generated {Esc(DateTime.Now.ToString("yyyy-MM-dd HH:mm"))} | {clients.Count} clients | Stale threshold: {staleDays} days</p>");
+        sb.AppendLine($"<p class=\"subtitle\">Generated {Esc(DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm"))} UTC | {clients.Count} clients | Stale threshold: {staleDays} days</p>");
 
         var avgScore = clients.Count > 0 ? clients.Average(c => c.OverallScore) : 0;
         var totalCritical = clients.Sum(c => c.CriticalCount);
@@ -173,6 +180,15 @@ public static class DashboardGenerator
             sb.AppendLine("</tr>");
         }
         sb.AppendLine("</table>");
+
+        if (skippedFiles is { Count: > 0 })
+        {
+            sb.AppendLine($"<p style=\"color:#f38ba8;margin-top:16px;font-size:13px\">{skippedFiles.Count} file(s) could not be parsed:</p>");
+            sb.AppendLine("<ul style=\"color:#9399b2;font-size:12px;margin-top:4px\">");
+            foreach (var (file, reason) in skippedFiles)
+                sb.AppendLine($"<li>{Esc(file)}: {Esc(reason)}</li>");
+            sb.AppendLine("</ul>");
+        }
 
         sb.AppendLine($"<div class=\"footer\">Network Security Auditor v{VersionInfo.Version} - Dashboard</div>");
         sb.AppendLine("</body></html>");
