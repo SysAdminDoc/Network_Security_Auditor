@@ -2,6 +2,13 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.2.1] - 2026-06-20
+
+- Fixed: Assembly version bumped to 5.2.0 (was still 5.0.0 in csproj). All exports and window title now report correct version.
+- Fixed: Navigator GUI export now respects PrivacyMode. Previously bypassed `GetExportChecks()` and leaked un-redacted data.
+- Fixed: Removed unused variable `eventTriggered` in LM08_AlertingCheck. Build now produces zero warnings.
+- Fixed: JSON export from silent mode now includes computed Client and Auditor names instead of empty strings.
+
 ## [v5.2.0] - 2026-06-19
 
 - Fixed: OSCAL observation-finding UUID cross-reference. Findings now correctly reference their parent observation UUIDs instead of string IDs that never matched.

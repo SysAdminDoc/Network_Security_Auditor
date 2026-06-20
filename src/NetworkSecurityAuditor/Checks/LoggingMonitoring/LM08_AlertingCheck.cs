@@ -195,15 +195,11 @@ public sealed class LM08_AlertingCheck : ISecurityCheck
         const string taskKey = @"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks";
         var taskGuids = RegistryHelper.GetSubKeyNames(taskKey);
 
-        int eventTriggered = 0;
         // Sample up to 50 tasks to avoid long runtime
         foreach (string guid in taskGuids.Take(50))
         {
-            int triggers = RegistryHelper.GetValue<int>(
+            RegistryHelper.GetValue<int>(
                 $@"{taskKey}\{guid}", "Triggers", -1);
-            // A non-default triggers value suggests the task has trigger data
-            // We can't parse the full XML from registry alone, but the presence
-            // of many tasks is itself a signal
         }
 
         evidence.AppendLine($"  Total registered tasks scanned: {Math.Min(taskGuids.Length, 50)}/{taskGuids.Length}");

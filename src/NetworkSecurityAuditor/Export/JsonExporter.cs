@@ -25,7 +25,9 @@ public static class JsonExporter
         string ransomwareGrade,
         ScanProfileType scanProfile,
         int domainMaturityScore = 0,
-        string domainMaturityGrade = "N/A")
+        string domainMaturityGrade = "N/A",
+        string client = "",
+        string auditor = "")
     {
         var checkList = checks.ToList();
         var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
@@ -36,8 +38,8 @@ public static class JsonExporter
             ToolVersion = VersionInfo.Version,
             SchemaVersion = "2.0",
             Timestamp = DateTime.UtcNow.ToString("o"),
-            Client = "",
-            Auditor = "",
+            Client = client,
+            Auditor = auditor,
             ScanProfile = scanProfile.ToString(),
             Environment = new EnvironmentSection
             {

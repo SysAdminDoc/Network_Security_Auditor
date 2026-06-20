@@ -230,7 +230,7 @@ public partial class App : Application
         var baseName = $"SecurityAudit_{options.Client}_{DateTime.Now:yyyy-MM-dd_HHmm}";
 
         var jsonPath = Path.Combine(outputDir, $"{baseName}_findings.json");
-        var json = JsonExporter.Export(checkVms, env, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade);
+        var json = JsonExporter.Export(checkVms, env, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade, client: options.Client, auditor: options.Auditor);
         await File.WriteAllTextAsync(jsonPath, json);
         Console.WriteLine($"  JSON: {jsonPath}");
 

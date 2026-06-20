@@ -362,8 +362,9 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            await File.WriteAllTextAsync(dialog.FileName, Export.NavigatorExporter.Export(Checks));
-            ScanStatus = $"Navigator layer exported: {dialog.FileName}";
+            var exportChecks = GetExportChecks();
+            await File.WriteAllTextAsync(dialog.FileName, Export.NavigatorExporter.Export(exportChecks));
+            ScanStatus = $"Navigator layer exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
 
