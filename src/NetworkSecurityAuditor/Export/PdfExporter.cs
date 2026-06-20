@@ -20,7 +20,6 @@ public static class PdfExporter
             {
                 "--headless",
                 "--disable-gpu",
-                "--no-sandbox",
                 $"--print-to-pdf={Path.GetFullPath(pdfPath)}",
                 htmlUri
             },
@@ -30,18 +29,21 @@ public static class PdfExporter
             RedirectStandardError = true
         };
 
+        Process? process = null;
         try
         {
-            using var process = Process.Start(psi);
+            process = Process.Start(psi);
             if (process is null)
                 return (false, "Failed to start browser process.");
+
+            var stderrTask = process.StandardError.ReadToEndAsync();
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             await process.WaitForExitAsync(cts.Token);
 
             if (process.ExitCode != 0)
             {
-                var stderr = await process.StandardError.ReadToEndAsync();
+                var stderr = await stderrTask;
                 return (false, $"Browser exited with code {process.ExitCode}: {stderr}");
             }
 
@@ -51,11 +53,16 @@ public static class PdfExporter
         }
         catch (OperationCanceledException)
         {
+            try { process?.Kill(entireProcessTree: true); } catch { }
             return (false, "PDF generation timed out after 30 seconds.");
         }
         catch (Exception ex)
         {
             return (false, $"PDF export failed: {ex.Message}");
+        }
+        finally
+        {
+            process?.Dispose();
         }
     }
 

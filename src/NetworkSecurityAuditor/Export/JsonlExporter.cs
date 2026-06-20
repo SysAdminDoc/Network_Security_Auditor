@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using NetworkSecurityAuditor.Data;
@@ -15,7 +14,7 @@ public static class JsonlExporter
     };
 
     public static string Export(
-        ObservableCollection<CheckItemViewModel> checks,
+        IEnumerable<CheckItemViewModel> checks,
         EnvironmentInfo env,
         int overallScore,
         string grade,

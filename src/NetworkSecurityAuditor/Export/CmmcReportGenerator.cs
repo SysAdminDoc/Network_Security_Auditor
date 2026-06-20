@@ -40,7 +40,7 @@ public static class CmmcReportGenerator
 
         sb.AppendLine("<div class=\"header\">");
         sb.AppendLine("<h1>CMMC Level 2 Self-Assessment Report</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">NIST SP 800-171 Rev 2 | {env.ComputerName} | {DateTime.Now:yyyy-MM-dd}</p>");
+        sb.AppendLine($"<p class=\"subtitle\">NIST SP 800-171 Rev 2 | {EscapeHtml(env.ComputerName)} | {DateTime.Now:yyyy-MM-dd}</p>");
         sb.AppendLine("</div>");
 
         var sprsColor = sprsScore >= 88 ? "#a6e3a1" : sprsScore >= 50 ? "#f9e2af" : "#f38ba8";
@@ -51,8 +51,8 @@ public static class CmmcReportGenerator
         var partialCount = controlData.Count(c => c.Status == "Partially Met");
         var naCount = controlData.Count(c => c.Status == "N/A");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"stat-row\"><span style=\"color:#a6e3a1\">Met: {metCount}</span></div><div class=\"stat-row\"><span style=\"color:#f9e2af\">Partial: {partialCount}</span></div><div class=\"stat-row\"><span style=\"color:#f38ba8\">Not Met: {notMetCount}</span></div><div class=\"stat-row\"><span style=\"color:#7f839b\">N/A: {naCount}</span></div><div class=\"score-label\">Control Status</div></div>");
-        var eligible = sprsScore >= 88 ? "Eligible (conditional with POA&M)" : sprsScore >= 110 ? "Eligible (full)" : "Not Eligible";
-        var eligColor = sprsScore >= 88 ? "#f9e2af" : sprsScore >= 110 ? "#a6e3a1" : "#f38ba8";
+        var eligible = sprsScore >= 110 ? "Eligible (full)" : sprsScore >= 88 ? "Eligible (conditional with POA&M)" : "Not Eligible";
+        var eligColor = sprsScore >= 110 ? "#a6e3a1" : sprsScore >= 88 ? "#f9e2af" : "#f38ba8";
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{eligColor};font-size:24px\">{eligible}</div><div class=\"score-label\">CMMC Level 2 Eligibility</div></div>");
         sb.AppendLine("</div>");
 

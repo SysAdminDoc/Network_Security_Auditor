@@ -2,6 +2,26 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.2.2] - 2026-06-20
+
+### Security
+- Fixed: XSS in Dashboard HTML — client names, hostnames, and OS strings from JSON files now HTML-escaped. Previously injected raw values.
+- Fixed: XSS in CMMC report — `env.ComputerName` now HTML-escaped in subtitle.
+- Fixed: XSS via `RemediationUrl` in HTML reports — URLs now validated for http/https scheme before rendering as links. Prevents `javascript:` URI injection.
+- Fixed: XSS via `LogoBase64` and `ContactEmail` in HTML reports — values now HTML-escaped in attribute contexts.
+- Fixed: CSV injection in Dashboard CSV — values now properly escaped with double-quote handling instead of raw interpolation.
+- Fixed: PDF browser process now killed on timeout instead of being orphaned. Removed `--no-sandbox` flag.
+
+### Correctness
+- Fixed: CMMC Level 2 eligibility logic — `>= 110` (full) now checked before `>= 88` (conditional). Previously the full-eligibility branch was unreachable dead code; a score of 110 would incorrectly show "conditional with POA&M".
+- Fixed: ATT&CK Navigator exporter now uses worst-case status for techniques mapped to multiple checks, instead of first-seen-wins which silently dropped failures.
+- Fixed: OCSF exporter now includes all MITRE ATT&CK techniques per finding instead of only the first.
+- Fixed: OCSF exporter null guards for `Findings` and `Evidence` length checks — prevents NullReferenceException if either field is null.
+- Fixed: PdfExporter now reads stderr before waiting for exit to prevent pipe deadlock.
+
+### Maintainability
+- Changed: CsvExporter, JsonlExporter, and DefectDojoExporter now accept `IEnumerable<CheckItemViewModel>` instead of `ObservableCollection`. Removes unnecessary data copying at call sites.
+
 ## [v5.2.1] - 2026-06-20
 
 - Fixed: Assembly version bumped to 5.2.0 (was still 5.0.0 in csproj). All exports and window title now report correct version.

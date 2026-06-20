@@ -44,7 +44,7 @@ public static class HtmlReportGenerator
         {
             sb.AppendLine("<div class=\"cover-page\">");
             if (branding.HasLogo)
-                sb.AppendLine($"<img src=\"data:image/png;base64,{branding.LogoBase64}\" alt=\"{EscapeHtml(branding.CompanyName)}\" class=\"cover-logo\" />");
+                sb.AppendLine($"<img src=\"data:image/png;base64,{EscapeHtml(branding.LogoBase64)}\" alt=\"{EscapeHtml(branding.CompanyName)}\" class=\"cover-logo\" />");
             sb.AppendLine($"<h1 class=\"cover-title\">{EscapeHtml(branding.CompanyName)}</h1>");
             if (branding.Tagline.Length > 0)
                 sb.AppendLine($"<p class=\"cover-tagline\">{EscapeHtml(branding.Tagline)}</p>");
@@ -55,7 +55,7 @@ public static class HtmlReportGenerator
 
         sb.AppendLine("<div class=\"header\">");
         if (branding is { HasLogo: true, ShowCoverPage: false })
-            sb.AppendLine($"<img src=\"data:image/png;base64,{branding.LogoBase64}\" alt=\"\" style=\"height:40px;margin-bottom:12px\" />");
+            sb.AppendLine($"<img src=\"data:image/png;base64,{EscapeHtml(branding.LogoBase64)}\" alt=\"\" style=\"height:40px;margin-bottom:12px\" />");
         var h1 = branding?.CompanyName.Length > 0
             ? $"{branding.CompanyName} Security Audit Report"
             : "Network Security Audit Report";
@@ -84,7 +84,7 @@ public static class HtmlReportGenerator
         {
             sb.AppendLine($"<div class=\"footer\">{EscapeHtml(branding.FooterText)}");
             if (branding.ContactEmail.Length > 0)
-                sb.AppendLine($" | <a href=\"mailto:{branding.ContactEmail}\" style=\"color:#89b4fa\">{EscapeHtml(branding.ContactEmail)}</a>");
+                sb.AppendLine($" | <a href=\"mailto:{EscapeHtml(branding.ContactEmail)}\" style=\"color:#89b4fa\">{EscapeHtml(branding.ContactEmail)}</a>");
             if (branding.ContactPhone.Length > 0)
                 sb.AppendLine($" | {EscapeHtml(branding.ContactPhone)}");
             sb.AppendLine("</div>");
@@ -218,7 +218,9 @@ public static class HtmlReportGenerator
                     : "";
                 sb.AppendLine($"<tr>");
                 sb.AppendLine($"<td class=\"id-cell\">{check.Id}</td>");
-                sb.AppendLine($"<td>{EscapeHtml(check.Label)}{(check.RemediationUrl is not null ? $" <a href=\"{check.RemediationUrl}\" style=\"color:#89b4fa;font-size:11px\">[remediation]</a>" : "")}</td>");
+                var safeUrl = check.RemediationUrl is not null && (check.RemediationUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || check.RemediationUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                    ? $" <a href=\"{EscapeHtml(check.RemediationUrl)}\" style=\"color:#89b4fa;font-size:11px\">[remediation]</a>" : "";
+                sb.AppendLine($"<td>{EscapeHtml(check.Label)}{safeUrl}</td>");
                 sb.AppendLine($"<td><span class=\"badge severity-{severityClass}\">{check.SeverityLabel}</span></td>");
                 sb.AppendLine($"<td><span class=\"badge status-{statusClass}\">{check.Status}</span></td>");
                 sb.AppendLine($"<td class=\"mitre-cell\">{mitreCell}</td>");

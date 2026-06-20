@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NetworkSecurityAuditor.Data;
@@ -10,7 +9,7 @@ namespace NetworkSecurityAuditor.Export;
 public static class DefectDojoExporter
 {
     public static string Export(
-        ObservableCollection<CheckItemViewModel> checks,
+        IEnumerable<CheckItemViewModel> checks,
         EnvironmentInfo env,
         int overallScore,
         string grade)

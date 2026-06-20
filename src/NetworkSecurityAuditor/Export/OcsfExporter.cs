@@ -64,7 +64,7 @@ public static class OcsfExporter
                 type_uid = 200301,
                 type_name = "Compliance Finding: Create",
                 time = timestamp,
-                message = check.Findings.Length > 0 ? check.Findings : check.Label,
+                message = !string.IsNullOrEmpty(check.Findings) ? check.Findings : check.Label,
                 metadata = new
                 {
                     version = "1.4.0",
@@ -98,16 +98,13 @@ public static class OcsfExporter
                     uid = env.ComputerName,
                     labels = new[] { $"os:{env.OSCaption}", $"domain:{env.DomainName}", $"profile:{scanProfile}" }
                 },
-                attacks = mitre is not null ? new[]
+                attacks = mitre is not null ? mitre.Techniques.Select(tech => new
                 {
-                    new
-                    {
-                        tactics = mitre.Tactics.Select(t => new { uid = t, name = t }).ToArray(),
-                        technique = new { uid = mitre.Techniques.FirstOrDefault() ?? "", name = mitre.Description },
-                        version = "19.0"
-                    }
-                } : null,
-                evidences = check.Evidence.Length > 0 ? new[]
+                    tactics = mitre.Tactics.Select(t => new { uid = t, name = t }).ToArray(),
+                    technique = new { uid = tech, name = mitre.Description },
+                    version = "19.0"
+                }).ToArray() : null,
+                evidences = !string.IsNullOrEmpty(check.Evidence) ? new[]
                 {
                     new { data = check.Evidence.Length > 2000 ? check.Evidence[..2000] : check.Evidence }
                 } : null

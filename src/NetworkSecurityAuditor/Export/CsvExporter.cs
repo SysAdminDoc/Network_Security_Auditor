@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Text;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
@@ -9,7 +8,7 @@ namespace NetworkSecurityAuditor.Export;
 public static class CsvExporter
 {
     public static string Export(
-        ObservableCollection<CheckItemViewModel> checks,
+        IEnumerable<CheckItemViewModel> checks,
         EnvironmentInfo env,
         int overallScore,
         string grade)

@@ -100,7 +100,7 @@ public static class DashboardGenerator
                 }
                 var stale = DateTime.TryParse(timestamp, out var d) && (DateTime.UtcNow - d).TotalDays > staleDays;
 
-                sb.AppendLine($"\"{client}\",\"{host}\",\"{os}\",{score},\"{grade}\",{rw},{critCount},{failCount},{stale},{timestamp},\"{Path.GetFileName(file)}\"");
+                sb.AppendLine($"{CsvEsc(client)},{CsvEsc(host)},{CsvEsc(os)},{score},{CsvEsc(grade)},{rw},{critCount},{failCount},{stale},{CsvEsc(timestamp)},{CsvEsc(Path.GetFileName(file))}");
             }
             catch { }
         }
@@ -137,7 +137,7 @@ public static class DashboardGenerator
         sb.AppendLine("</style></head><body>");
 
         sb.AppendLine("<h1>Multi-Client Security Dashboard</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">Generated {DateTime.Now:yyyy-MM-dd HH:mm} | {clients.Count} clients | Stale threshold: {staleDays} days</p>");
+        sb.AppendLine($"<p class=\"subtitle\">Generated {Esc(DateTime.Now.ToString("yyyy-MM-dd HH:mm"))} | {clients.Count} clients | Stale threshold: {staleDays} days</p>");
 
         var avgScore = clients.Count > 0 ? clients.Average(c => c.OverallScore) : 0;
         var totalCritical = clients.Sum(c => c.CriticalCount);
@@ -161,14 +161,14 @@ public static class DashboardGenerator
             var reportLink = c.ReportPath is not null ? $"<a href=\"{c.ReportPath}\">View</a>" : "";
 
             sb.AppendLine($"<tr>");
-            sb.AppendLine($"<td>{c.Client}</td>");
-            sb.AppendLine($"<td>{c.Host} <span style=\"font-size:11px;color:#7f839b\">{c.OS}</span></td>");
+            sb.AppendLine($"<td>{Esc(c.Client)}</td>");
+            sb.AppendLine($"<td>{Esc(c.Host)} <span style=\"font-size:11px;color:#7f839b\">{Esc(c.OS)}</span></td>");
             sb.AppendLine($"<td>{c.OverallScore}%</td>");
-            sb.AppendLine($"<td class=\"{gradeClass}\" style=\"font-size:20px;font-weight:700\">{c.Grade}</td>");
+            sb.AppendLine($"<td class=\"{gradeClass}\" style=\"font-size:20px;font-weight:700\">{Esc(c.Grade)}</td>");
             sb.AppendLine($"<td>{c.RansomwareScore}%</td>");
             sb.AppendLine($"<td style=\"color:{(c.CriticalCount > 0 ? "#f38ba8" : "#a6e3a1")}\">{c.CriticalCount}</td>");
             sb.AppendLine($"<td>{c.FailCount}</td>");
-            sb.AppendLine($"<td>{dateDisplay}{staleFlag}</td>");
+            sb.AppendLine($"<td>{Esc(dateDisplay)}{staleFlag}</td>");
             sb.AppendLine($"<td>{reportLink}</td>");
             sb.AppendLine("</tr>");
         }
@@ -178,6 +178,18 @@ public static class DashboardGenerator
         sb.AppendLine("</body></html>");
 
         return sb.ToString();
+    }
+
+    private static string Esc(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
+    }
+
+    private static string CsvEsc(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "\"\"";
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 
     private sealed class ClientSummary

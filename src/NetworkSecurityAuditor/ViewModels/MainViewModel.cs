@@ -313,7 +313,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>(exportChecks), Environment, OverallScore, Grade));
+            await File.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(exportChecks, Environment, OverallScore, Grade));
             ScanStatus = $"CSV exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -330,7 +330,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>(exportChecks), Environment, OverallScore, Grade, SelectedProfile));
+            await File.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(exportChecks, Environment, OverallScore, Grade, SelectedProfile));
             ScanStatus = $"JSONL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -381,7 +381,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>(exportChecks), Environment, OverallScore, Grade));
+            await File.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(exportChecks, Environment, OverallScore, Grade));
             ScanStatus = $"DefectDojo exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }

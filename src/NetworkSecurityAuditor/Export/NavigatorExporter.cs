@@ -13,45 +13,58 @@ public static class NavigatorExporter
         var checkList = checks.ToList();
         var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
 
-        var techniques = new List<object>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var techniqueScores = new Dictionary<string, (int worstScore, CheckStatus worstStatus, List<string> checkIds)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var (checkId, mapping) in MitreMappings.All)
         {
             if (!statusLookup.TryGetValue(checkId, out var status))
                 continue;
 
+            int score = status switch
+            {
+                CheckStatus.Pass => 100,
+                CheckStatus.Partial => 50,
+                CheckStatus.Fail => 0,
+                _ => -1
+            };
+
             foreach (var techId in mapping.Techniques)
             {
-                if (!seen.Add(techId)) continue;
-
-                int score = status switch
+                if (techniqueScores.TryGetValue(techId, out var existing))
                 {
-                    CheckStatus.Pass => 100,
-                    CheckStatus.Partial => 50,
-                    CheckStatus.Fail => 0,
-                    _ => -1
-                };
-
-                string color = status switch
+                    if (score < existing.worstScore)
+                        techniqueScores[techId] = (score, status, [..existing.checkIds, checkId]);
+                    else
+                        existing.checkIds.Add(checkId);
+                }
+                else
                 {
-                    CheckStatus.Pass => "#a6e3a1",
-                    CheckStatus.Partial => "#f9e2af",
-                    CheckStatus.Fail => "#f38ba8",
-                    _ => "#585b70"
-                };
-
-                techniques.Add(new
-                {
-                    techniqueID = techId,
-                    score,
-                    color,
-                    comment = $"[{checkId}] {mapping.Description}",
-                    enabled = true,
-                    showSubtechniques = true
-                });
+                    techniqueScores[techId] = (score, status, [checkId]);
+                }
             }
         }
+
+        var techniques = techniqueScores.Select(kv =>
+        {
+            var (techId, (worstScore, worstStatus, checkIds)) = (kv.Key, kv.Value);
+            string color = worstStatus switch
+            {
+                CheckStatus.Pass => "#a6e3a1",
+                CheckStatus.Partial => "#f9e2af",
+                CheckStatus.Fail => "#f38ba8",
+                _ => "#585b70"
+            };
+
+            return new
+            {
+                techniqueID = techId,
+                score = worstScore,
+                color,
+                comment = string.Join(", ", checkIds.Select(id => $"[{id}]")),
+                enabled = true,
+                showSubtechniques = true
+            };
+        }).Cast<object>().ToList();
 
         var layer = new
         {
