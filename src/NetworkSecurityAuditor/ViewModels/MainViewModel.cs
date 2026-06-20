@@ -441,6 +441,35 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task ExportPdfAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "PDF Report|*.pdf",
+            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.pdf",
+            DefaultExt = ".pdf"
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            var exportChecks = GetExportChecks();
+            var html = Export.HtmlReportGenerator.Generate(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
+            var tempHtml = Path.Combine(Path.GetTempPath(), $"nsa_report_{Guid.NewGuid():N}.html");
+            try
+            {
+                await File.WriteAllTextAsync(tempHtml, html);
+                var (success, message) = await Export.PdfExporter.ExportAsync(tempHtml, dialog.FileName);
+                ScanStatus = success
+                    ? $"PDF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}"
+                    : $"PDF export failed: {message}";
+            }
+            finally
+            {
+                try { File.Delete(tempHtml); } catch { }
+            }
+        }
+    }
+
+    [RelayCommand]
     private async Task SaveStateAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

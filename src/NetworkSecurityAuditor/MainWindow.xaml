@@ -121,6 +121,9 @@
                     <Button Content="HTML" Command="{Binding ExportHtmlCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="2"
                             Padding="10,5" FontSize="10" />
+                    <Button Content="PDF" Command="{Binding ExportPdfCommand}"
+                            Style="{StaticResource SecondaryButton}" Margin="2"
+                            Padding="10,5" FontSize="10" />
                     <Button Content="JSON" Command="{Binding ExportJsonCommand}"
                             Style="{StaticResource SecondaryButton}" Margin="2"
                             Padding="10,5" FontSize="10" />

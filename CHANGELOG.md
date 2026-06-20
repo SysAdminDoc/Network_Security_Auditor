@@ -12,6 +12,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Added: SARIF `security-severity` property (0.1-10.0) on all rules for GitHub Code Scanning severity display (Critical=9.5, High=8.0, Medium=5.5, Low=3.0).
 - Added: Intune compliance JSON export. GUI button and `--export-intune` CLI flag produce `SecurityAuditGrade`, `SecurityAuditScore`, compliance flags, and critical failures in Intune-compatible JSON.
 - Added: `--export-compliance-summary` CLI flag for silent mode. Produces the compact RMM dashboard payload alongside other exports. `--export-all` now includes both Intune and compliance summary.
+- Added: PDF export via Edge/Chrome headless rendering. GUI button and `--export-pdf` CLI flag with 30-second timeout and diagnostic fallback message.
 - Fixed: CSV column count test corrected from 24 to 23 (matching actual header).
 
 ## [v5.1.0] - 2026-06-16

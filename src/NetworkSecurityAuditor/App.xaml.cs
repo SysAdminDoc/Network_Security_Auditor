@@ -230,6 +230,13 @@ public partial class App : Application
             Console.WriteLine($"  Summary: {summaryPath}");
         }
 
+        if (args.ExportPdf)
+        {
+            var pdfPath = Path.Combine(outputDir, $"{baseName}.pdf");
+            var (pdfOk, pdfMsg) = await PdfExporter.ExportAsync(htmlPath, pdfPath);
+            Console.WriteLine(pdfOk ? $"  PDF: {pdfPath}" : $"  PDF: {pdfMsg}");
+        }
+
         Console.WriteLine();
 
         var exitCode = ExitCode.Green;
@@ -319,6 +326,8 @@ public partial class App : Application
                 result.ExportOscal = true;
             else if (arg.Equals("--export-intune", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportIntune", StringComparison.OrdinalIgnoreCase))
                 result.ExportIntune = true;
+            else if (arg.Equals("--export-pdf", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportPDF", StringComparison.OrdinalIgnoreCase))
+                result.ExportPdf = true;
             else if (arg.Equals("--export-compliance-summary", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportComplianceSummary", StringComparison.OrdinalIgnoreCase))
                 result.ExportComplianceSummary = true;
             else if (arg.Equals("--export-all", StringComparison.OrdinalIgnoreCase))
@@ -352,6 +361,7 @@ public partial class App : Application
         public bool ExportOcsf;
         public bool ExportOscal;
         public bool ExportIntune;
+        public bool ExportPdf;
         public bool ExportComplianceSummary;
         public ScanProfileType ScanProfile = ScanProfileType.Full;
         public string OutputPath = "";
