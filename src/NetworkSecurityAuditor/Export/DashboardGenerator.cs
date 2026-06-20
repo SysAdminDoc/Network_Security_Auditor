@@ -66,14 +66,7 @@ public static class DashboardGenerator
         return BuildHtml(clients, staleDays);
     }
 
-    public static string GenerateCsv(string inputDir, int staleDays = 30)
-    {
-        var task = GenerateCsvAsync(inputDir, staleDays);
-        task.Wait();
-        return task.Result;
-    }
-
-    private static async Task<string> GenerateCsvAsync(string inputDir, int staleDays = 30)
+    public static async Task<string> GenerateCsvAsync(string inputDir, int staleDays = 30)
     {
         var jsonFiles = Directory.GetFiles(inputDir, "*_findings.json", SearchOption.TopDirectoryOnly);
         var sb = new StringBuilder();

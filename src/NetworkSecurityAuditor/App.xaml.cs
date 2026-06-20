@@ -106,7 +106,7 @@ public partial class App : Application
         Console.WriteLine($"  Dashboard: {dashPath}");
 
         var csvPath = Path.ChangeExtension(dashPath, ".csv");
-        var csv = DashboardGenerator.GenerateCsv(inputDir, args.StaleDays);
+        var csv = await DashboardGenerator.GenerateCsvAsync(inputDir, args.StaleDays);
         await File.WriteAllTextAsync(csvPath, csv);
         Console.WriteLine($"  CSV: {csvPath}");
 

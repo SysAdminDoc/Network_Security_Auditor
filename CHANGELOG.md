@@ -13,6 +13,10 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Added: CLI argument parsing tests (22 tests) covering all flag variants, `--export-all` completeness, PowerShell-style aliases, and edge cases.
 - Added: AuditState save/load roundtrip test (4 tests) validating serialization fidelity, ToolVersion from assembly, and error handling.
 - Changed: `ParseArgs()` and `CliArgs` made `internal` with `InternalsVisibleTo` for testability.
+- Added: BrandingConfig loading tests (4 tests) — valid JSON, missing file, empty JSON defaults, unknown fields ignored.
+- Added: PreflightChecker output tests (7 tests) — admin/non-admin, domain/non-domain, result count, name/detail validation.
+- Added: WaiverStore operations tests (10 tests) — add, replace, get active, case-insensitive lookup, expiration, remove, serialize/deserialize roundtrip, file I/O.
+- Fixed: DashboardGenerator.GenerateCsv synchronous `.Wait()` wrapper replaced with public async `GenerateCsvAsync()`. Eliminates potential deadlock on UI SynchronizationContext.
 
 ## [v5.2.0] - 2026-06-19
 
