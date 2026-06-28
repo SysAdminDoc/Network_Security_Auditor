@@ -2,6 +2,15 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.2.4] - 2026-06-28
+
+### Correctness
+- Fixed: C# `Cloud` profile no longer expands to all local and Active Directory checks. It is explicitly disabled until Graph-backed CLxx checks are implemented, and CLI/GUI scans now report that state instead of running misleading endpoint/domain coverage.
+- Added: Regression tests proving the C# Cloud profile resolves to no local/AD checks and the runner returns no results for it.
+
+### Documentation
+- Changed: README now separates the production PowerShell artifact from the C# rewrite, removes stale hosted-workflow validation examples, documents local C# test/build/publish commands, and clarifies C# Cloud profile behavior.
+
 ## [v5.2.3] - 2026-06-20
 
 ### Compliance & Data

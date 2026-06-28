@@ -6,7 +6,8 @@ namespace NetworkSecurityAuditor.Data;
 /// <summary>
 /// Scan profile definitions mapping each <see cref="ScanProfileType"/> to its included check IDs.
 /// Empty arrays indicate dynamic population: Full/CMMC/ISO27001/STIG/FedRAMP = all checks,
-/// ADOnly/LocalOnly = filtered by <see cref="CheckType"/>.
+/// ADOnly/LocalOnly = filtered by <see cref="CheckType"/>. Cloud is intentionally empty
+/// until the C# Graph-backed CLxx checks are implemented.
 /// </summary>
 public static class ScanProfiles
 {
@@ -48,7 +49,7 @@ public static class ScanProfiles
             [ScanProfileType.ADOnly] = Array.Empty<string>(),
             [ScanProfileType.LocalOnly] = Array.Empty<string>(),
 
-            // Cloud profile placeholder (Graph-backed checks)
+            // Cloud profile placeholder. Do not expand this to local/AD checks.
             [ScanProfileType.Cloud] = Array.Empty<string>(),
 
             // ── Framework-Specific Profiles ─────────────────────────────────
@@ -123,8 +124,8 @@ public static class ScanProfiles
 
     /// <summary>
     /// Resolves the effective check ID list for a profile, expanding empty arrays
-    /// to all checks (Full/CMMC/ISO27001/STIG/FedRAMP) or filtering by <see cref="CheckType"/>
-    /// (ADOnly/LocalOnly).
+    /// to all checks (Full/CMMC/ISO27001/STIG/FedRAMP), filtering by <see cref="CheckType"/>
+    /// (ADOnly/LocalOnly), or no checks for currently unsupported placeholder profiles.
     /// </summary>
     public static string[] Resolve(ScanProfileType profile)
     {
@@ -149,7 +150,10 @@ public static class ScanProfiles
                 .Order()
                 .ToArray();
 
-        // Full / CMMC / ISO27001 / STIG / FedRAMP / Cloud = all checks
+        if (profile == ScanProfileType.Cloud)
+            return Array.Empty<string>();
+
+        // Full / CMMC / ISO27001 / STIG / FedRAMP = all checks
         return CheckCatalog.All.Keys.Order().ToArray();
     }
 }

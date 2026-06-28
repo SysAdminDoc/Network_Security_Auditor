@@ -172,6 +172,7 @@ public partial class MainViewModel : ViewModelBase
         var runner = new CheckRunner(allChecks);
         var completed = 0;
         var checkLookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+        var unsupportedProfile = false;
 
         var progress = new Progress<(string checkId, CheckResult result)>(update =>
         {
@@ -193,6 +194,13 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var profileIds = ScanProfiles.Resolve(options.ScanProfile);
+            if (profileIds.Length == 0)
+            {
+                unsupportedProfile = true;
+                ScanStatus = $"{options.ScanProfile} profile is not implemented in the C# rewrite yet. No local or AD checks were run.";
+                return;
+            }
+
             foreach (var id in profileIds)
             {
                 if (checkLookup.TryGetValue(id, out var vm))
@@ -213,9 +221,12 @@ public partial class MainViewModel : ViewModelBase
             foreach (var vm in Checks) vm.IsRunning = false;
             IsScanning = false;
             var total = ScanProfiles.Resolve(options.ScanProfile).Length;
-            ScanStatus = _scanCts.Token.IsCancellationRequested
-                ? $"Scan cancelled ({completed}/{total} completed)"
-                : $"Scan complete ({completed}/{total} checks)";
+            if (!unsupportedProfile)
+            {
+                ScanStatus = _scanCts.Token.IsCancellationRequested
+                    ? $"Scan cancelled ({completed}/{total} completed)"
+                    : $"Scan complete ({completed}/{total} checks)";
+            }
             _scanCts.Dispose();
             _scanCts = null;
 

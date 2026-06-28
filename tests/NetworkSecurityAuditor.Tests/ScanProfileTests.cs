@@ -1,4 +1,5 @@
 using NetworkSecurityAuditor.Data;
+using NetworkSecurityAuditor.Checks;
 using NetworkSecurityAuditor.Models;
 
 namespace NetworkSecurityAuditor.Tests;
@@ -34,6 +35,27 @@ public class ScanProfileTests
     {
         var ids = ScanProfiles.Resolve(ScanProfileType.Full);
         Assert.Equal(69, ids.Length);
+    }
+
+    [Fact]
+    public void Cloud_Profile_Is_Explicitly_Disabled_Until_CSharp_Cloud_Checks_Exist()
+    {
+        var ids = ScanProfiles.Resolve(ScanProfileType.Cloud);
+
+        Assert.Empty(ids);
+        Assert.DoesNotContain(ids, id => CheckCatalog.All.TryGetValue(id, out var meta)
+            && meta.Type is CheckType.Local or CheckType.AD);
+    }
+
+    [Fact]
+    public async Task Cloud_Profile_Does_Not_Run_Local_Or_Ad_Checks()
+    {
+        var runner = new CheckRunner(CheckRegistry.GetAllChecks());
+        var options = new AuditOptions { ScanProfile = ScanProfileType.Cloud };
+
+        var results = await runner.RunAsync(new EnvironmentInfo { IsDomainJoined = true }, options, null, CancellationToken.None);
+
+        Assert.Empty(results);
     }
 
     [Fact]

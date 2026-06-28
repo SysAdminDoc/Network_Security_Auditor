@@ -141,6 +141,14 @@ public partial class App : Application
         var completed = 0;
         var profileIds = ScanProfiles.Resolve(args.ScanProfile);
 
+        if (profileIds.Length == 0)
+        {
+            Console.WriteLine($"Profile {args.ScanProfile} is not implemented in the C# rewrite yet.");
+            Console.WriteLine("No local or Active Directory checks were run. Use the PowerShell artifact for the current cloud assessment path.");
+            Shutdown((int)ExitCode.ReviewNeeded);
+            return;
+        }
+
         var progress = new Progress<(string checkId, CheckResult result)>(update =>
         {
             completed++;

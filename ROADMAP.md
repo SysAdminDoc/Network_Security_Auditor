@@ -1388,20 +1388,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 ## Research-Driven Additions
 
-- [ ] P0 - Fix C# Cloud profile semantics
-  Why: The C# `Cloud` profile currently resolves to all 69 local/AD checks because `ScanProfiles.Resolve()` treats every empty profile as all checks.
-  Evidence: `src/NetworkSecurityAuditor/Data/ScanProfiles.cs`; `tests/NetworkSecurityAuditor.Tests/ScanProfileTests.cs`; Microsoft Graph Secure Score/Conditional Access/authentication methods docs; Maester cloud-test model.
-  Touches: `src/NetworkSecurityAuditor/Data/ScanProfiles.cs`, `src/NetworkSecurityAuditor/Checks/CheckRunner.cs`, `src/NetworkSecurityAuditor/Models/Enums.cs`, `tests/NetworkSecurityAuditor.Tests/ScanProfileTests.cs`, README wording after implementation.
-  Acceptance: `ScanProfileType.Cloud` either resolves only real `CLxx` cloud checks or is disabled with an explicit unsupported result; tests assert Cloud never runs local/AD checks by placeholder expansion.
-  Complexity: M
-
-- [ ] P0 - Reconcile README with current local-build and dual-track product state
-  Why: README still presents the project as primarily single-file PowerShell and includes GitHub Actions badges/examples after workflows were removed, which undermines release trust.
-  Evidence: `README.md`; commit `3419bcf`; `src/NetworkSecurityAuditor/NetworkSecurityAuditor.csproj`.
-  Touches: `README.md`, release download section, development validation section, project structure section, CI/CD example section, screenshots after any UI wording change.
-  Acceptance: README clearly separates production PowerShell artifact behavior from C# rewrite behavior, removes workflow/badge claims, documents local validation/build commands, and matches the actual repo tree.
-  Complexity: M
-
 - [ ] P1 - Port PowerShell MSP automation parity into the C# CLI
   Why: The C# silent mode lacks PowerShell v4.11 MSP workflows such as RMM field writes, remote fleet scanning, continuous history/delta, benchmark import, cloud assessment import, remediation dry-run, and write-suppression flags.
   Evidence: `NetworkSecurityAudit.ps1`; `src/NetworkSecurityAuditor/App.xaml.cs`; PingCastle console aggregation; Prowler scheduled scans; HardeningKitty audit/config/backup modes.

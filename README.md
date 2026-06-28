@@ -1,14 +1,15 @@
 # Network Security Auditor
 
-A single-file PowerShell security audit tool. Runs 69 automated checks across 8 security domains, maps findings to 11 compliance frameworks, MITRE ATT&CK, and MITRE D3FEND, generates multi-tier reports, and integrates with every major RMM platform for headless deployment.
+Windows security assessment tooling for MSPs, consultants, and internal administrators. The production artifact is `NetworkSecurityAudit.ps1`, a single-file PowerShell 5.1 tool with 69 automated checks, 11 compliance frameworks, MITRE ATT&CK and MITRE D3FEND mappings, multi-tier reports, and RMM-friendly headless deployment.
 
-One script. No dependencies to pre-install. Works on any Windows machine from standalone workstations to enterprise domain controllers.
+The repo also contains an active .NET 9/WPF C# rewrite under `src/NetworkSecurityAuditor`. The rewrite is locally buildable and test-covered, but the PowerShell script remains the production path for workflows not yet ported to C#.
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
+![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![Version](https://img.shields.io/badge/Version-4.11.0-brightgreen)
+![PowerShell Version](https://img.shields.io/badge/PowerShell-4.11.0-brightgreen)
+![C%23 Rewrite](https://img.shields.io/badge/C%23_Rewrite-5.2.4-blueviolet)
 ![License](https://img.shields.io/badge/License-MIT-green)
-[![PowerShell Validation](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml/badge.svg)](https://github.com/SysAdminDoc/Network_Security_Auditor/actions/workflows/powershell-validation.yml)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
 
@@ -66,6 +67,29 @@ The tool auto-elevates to admin, detects your environment (domain/workgroup/hybr
 
 # Full scan with all export formats
 .\NetworkSecurityAudit.ps1 -Silent -ExportJSON -ExportCSV -ExportJSONL
+```
+
+### C# Rewrite Preview
+
+The C# rewrite is built and validated locally. It is useful for testing the new WPF/MVVM architecture and exporters, but it does not yet replace every PowerShell MSP workflow.
+
+```powershell
+dotnet restore .\NetworkSecurityAuditor.slnx
+dotnet test .\NetworkSecurityAuditor.slnx --no-restore
+dotnet build .\NetworkSecurityAuditor.slnx --no-restore
+dotnet publish .\src\NetworkSecurityAuditor\NetworkSecurityAuditor.csproj -c Release -o .\publish\NetworkSecurityAuditor --no-restore
+```
+
+Run the C# GUI:
+
+```powershell
+dotnet run --project .\src\NetworkSecurityAuditor
+```
+
+Run the C# silent mode:
+
+```powershell
+.\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --profile Full --output C:\Reports
 ```
 
 ### Multi-Client Dashboard
@@ -458,8 +482,7 @@ gh attestation verify NetworkSecurityAudit.ps1 --owner SysAdminDoc
 ## Development Validation
 
 The quality gate is static and never executes a real audit check or modifies the
-host. It runs in GitHub Actions on every push and pull request across
-`windows-2022` and `windows-2025`, and can be run locally:
+host. Builds, tests, validation, and releases are run locally from the repo:
 
 ```powershell
 # 1. Static validation gate (parser, catalog/profile/framework/risk/D3FEND IDs,
@@ -471,6 +494,10 @@ Invoke-ScriptAnalyzer -Path .\NetworkSecurityAudit.ps1 -Settings .\PSScriptAnaly
 
 # 3. Pester suite (wraps the gate, adds catalog/version/export/lint assertions)
 Invoke-Pester -Path .\tools\NetworkSecurityAudit.Tests.ps1
+
+# 4. C# rewrite test/build gate
+dotnet test .\NetworkSecurityAuditor.slnx --no-restore
+dotnet build .\NetworkSecurityAuditor.slnx --no-restore
 ```
 
 `PSScriptAnalyzerSettings.psd1` enforces syntax, correctness, and security rules;
@@ -544,13 +571,18 @@ reported separately from true `Fail` findings. When `-PrivacyMode` is used,
 imported cloud tenant names, tenant IDs, source paths, and token-like values are
 pseudonymized in report/export provenance.
 
-`-ScanProfile Cloud` runs the Microsoft Graph cloud assessment path without an
-on-premises domain. It currently emits CL01 Secure Score, CL02 Conditional
-Access baseline gaps/exclusions, and CL06 stale guest lifecycle evidence; CL01
-through CL12 are declared in the cloud manifest with permissions, license
-prerequisites, endpoints, output fields, skip states, and privacy classes. Cloud
-provenance is also carried into JSONL, CSV, SARIF, Intune, compliance summary,
-and dashboard exports with the same privacy redaction rules.
+In the PowerShell artifact, `-ScanProfile Cloud` runs the Microsoft Graph cloud
+assessment path without an on-premises domain. It currently emits CL01 Secure
+Score, CL02 Conditional Access baseline gaps/exclusions, and CL06 stale guest
+lifecycle evidence; CL01 through CL12 are declared in the cloud manifest with
+permissions, license prerequisites, endpoints, output fields, skip states, and
+privacy classes. Cloud provenance is also carried into JSONL, CSV, SARIF,
+Intune, compliance summary, and dashboard exports with the same privacy
+redaction rules.
+
+In the C# rewrite, the Cloud profile is intentionally disabled until real CLxx
+checks exist. Selecting it exits without running local or Active Directory checks
+so a cloud scan cannot be mistaken for endpoint/domain coverage.
 
 ---
 
@@ -563,7 +595,7 @@ and dashboard exports with the same privacy redaction rules.
 | **Full** | 69 | ~60 min | Comprehensive audit |
 | **ADOnly** | ~14 | ~10 min | Domain-focused checks only |
 | **LocalOnly** | ~55 | ~45 min | Endpoint-only (no AD required) |
-| **Cloud** | 3 live / 12 manifest | ~5 min | Microsoft Graph cloud assessment |
+| **Cloud** | PowerShell: 3 live / 12 manifest; C#: disabled until CLxx checks land | ~5 min | Microsoft Graph cloud assessment |
 | **HIPAA** | 49 | ~30 min | Healthcare compliance |
 | **PCI** | 51 | ~35 min | Payment card compliance |
 | **CMMC** | 69 | ~60 min | Defense contractor compliance |
@@ -643,49 +675,32 @@ Audit state (all check statuses, findings, evidence, notes, remediation tracking
 
 ## Project Structure
 
-This is a single-file tool by design. One `.ps1` file, no modules, no config files, no build process. Download it and run it.
+The production PowerShell artifact stays single-file for low-friction RMM deployment. The C# rewrite uses a normal multi-project .NET structure for maintainability, local tests, and release publishing.
 
 ```
-NetworkSecurityAudit.ps1                    # The entire tool (~11,200 lines)
+NetworkSecurityAudit.ps1                    # Production single-file PowerShell artifact
 README.md                                   # This file
 PSScriptAnalyzerSettings.psd1               # Lint rule set (correctness/security gate)
 tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
 tools/NetworkSecurityAudit.Tests.ps1        # Pester v5 quality-gate suite
 tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
-.github/workflows/powershell-validation.yml # CI: static gate + lint + Pester on push/PR
-.github/workflows/release.yml               # Release workflow with checksums and attestation
+src/NetworkSecurityAuditor/                 # .NET 9 WPF rewrite
+tests/NetworkSecurityAuditor.Tests/         # xUnit tests for the C# rewrite
+publish/NetworkSecurityAuditor/             # Local publish output, generated and not committed
 ```
 
 ---
 
-## CI/CD Integration (SARIF)
+## Local SARIF Export
 
-The C# rewrite exports SARIF 2.1.0, which integrates directly with GitHub Advanced Security and Azure DevOps code scanning. This is unique among free AD/Windows security tools.
+The C# rewrite exports SARIF 2.1.0 for tools that ingest code-scanning results. Generate it locally during a silent run:
 
-```yaml
-# .github/workflows/security-audit.yml
-name: Security Audit
-on:
-  schedule:
-    - cron: '0 6 * * 1'  # Weekly Monday 6 AM
-  workflow_dispatch:
-
-jobs:
-  audit:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-      - run: dotnet publish src/NetworkSecurityAuditor -c Release -o publish
-      - run: ./publish/NetworkSecurityAuditor.exe --silent --export-sarif --output "$env:GITHUB_WORKSPACE"
-      - uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: SecurityAudit_*.sarif
+```powershell
+dotnet publish .\src\NetworkSecurityAuditor\NetworkSecurityAuditor.csproj -c Release -o .\publish\NetworkSecurityAuditor --no-restore
+.\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --export-sarif --output C:\Reports
 ```
 
-Findings appear as security alerts in the repository's Security tab with severity, category, and remediation links.
+The generated `.sarif` file includes severity, category, stable logical check locations, and remediation links for downstream import.
 
 ---
 
