@@ -95,7 +95,7 @@ Primary local evidence:
 | Reports | Three-tier HTML report with compliance matrix, attack paths, remediation, scorecards | `NetworkSecurityAudit.ps1:7333` | Strong | Add white-label and PowerPoint export. |
 | Structured exports | JSON, JSONL, CSV, summary JSON, SARIF, Intune JSON, PDF | `NetworkSecurityAudit.ps1:8120` | Strong | Add schema snapshots and output contract tests. |
 | RMM integration | NinjaRMM, Datto, ConnectWise, Syncro, HaloPSA, registry | `NetworkSecurityAudit.ps1:8858` | Strong | Add `-NoRmmWrite`, dry-run, and integration field docs. |
-| Docs | README, changelog, roadmap, CLAUDE notes | `README.md`, `CHANGELOG.md`, `ROADMAP.md`, `CLAUDE.md` | Medium | Changelog malformed; screenshot mismatch; README lacks trust/safety page. |
+| Docs | README, changelog, roadmap | `README.md`, `CHANGELOG.md`, `ROADMAP.md` | Medium | Changelog malformed; screenshot mismatch; README lacks trust/safety page. |
 | Validation | Static parser/catalog/profile/framework/version gate | `tools/Test-NetworkSecurityAudit.ps1`, GitHub Actions | Initial | Add Pester and PSScriptAnalyzer coverage without executing host-modifying checks. |
 
 ---
@@ -1292,7 +1292,7 @@ High.
 
 | Date | Cycle | Research Area | Sources / Files Reviewed | Key Findings | Roadmap Changes |
 |---|---|---|---|---|---|
-| 2026-06-06 | Cycle 1: Repository comprehension | Repo instructions, current roadmap, README, changelog, git history | `CLAUDE.md`, `AGENTS.md`, `README.md`, `CHANGELOG.md`, `ROADMAP.md`, `git log -10` | Project is a single-file PS/WPF auditor; existing roadmap was thin; recent commits include roadmap/branding cleanup; repo has untracked `AGENTS.md`. | Rebuilt roadmap structure and preserved prior roadmap ideas. |
+| 2026-06-06 | Cycle 1: Repository comprehension | Repo instructions, current roadmap, README, changelog, git history | `README.md`, `CHANGELOG.md`, `ROADMAP.md`, `git log -10` | Project is a single-file PS/WPF auditor; existing roadmap was thin; recent commits include roadmap/branding cleanup. | Rebuilt roadmap structure and preserved prior roadmap ideas. |
 | 2026-06-06 | Cycle 2: Current feature inventory | Main script structure and key sections | `NetworkSecurityAudit.ps1` sections for params, env detection, themes, checks, profiles, mappings, scoring, exports, silent mode | 67-check single-file architecture is strong but needs validation, schema, and version authority. | Added feature inventory, architecture improvements, and P0 quality items. |
 | 2026-06-06 | Cycle 3: Quality and UX audit | Parser validation, test/lint search, screenshot review | `NetworkSecurityAudit.ps1`, `screenshot.png`, `rg` for tests/CI, PowerShell parser | Parser errors: 0 via `ParseInput`; PSScriptAnalyzer not installed; no committed tests/CI found; local screenshot appears unrelated. | Added NSA-001, NSA-002, NSA-013, UX findings, continuation notes. |
 | 2026-06-06 | Cycle 4: Competitive landscape | AD/compliance/cloud assessment tools | PingCastle, Purple Knight, Microsoft Graph Secure Score, Microsoft SCT, CIS-CAT, Wazuh SCA, Tenable Nessus, CISA KEV, NIST OSCAL, Lynis | Competitors emphasize trust/safety, hybrid identity, repeatable scoring, dashboards, exact benchmark evidence, policy-as-data, and remediation guidance. | Added competitive research table, pain points, and P1/P2 feature specs. |
@@ -1397,7 +1397,7 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 - [ ] P0 - Reconcile README with current local-build and dual-track product state
   Why: README still presents the project as primarily single-file PowerShell and includes GitHub Actions badges/examples after workflows were removed, which undermines release trust.
-  Evidence: `README.md`; commit `3419bcf`; `src/NetworkSecurityAuditor/NetworkSecurityAuditor.csproj`; `CLAUDE.md`.
+  Evidence: `README.md`; commit `3419bcf`; `src/NetworkSecurityAuditor/NetworkSecurityAuditor.csproj`.
   Touches: `README.md`, release download section, development validation section, project structure section, CI/CD example section, screenshots after any UI wording change.
   Acceptance: README clearly separates production PowerShell artifact behavior from C# rewrite behavior, removes workflow/badge claims, documents local validation/build commands, and matches the actual repo tree.
   Complexity: M
