@@ -205,13 +205,41 @@
         </Border>
 
         <!-- Main Content Area -->
-        <ScrollViewer Grid.Column="1" Grid.Row="0"
-                      VerticalScrollBarVisibility="Auto"
-                      Background="{StaticResource WindowBg}"
-                      Padding="16">
-            <ItemsControl ItemsSource="{Binding FilteredChecks}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="{x:Type vm:CheckItemViewModel}">
+        <ListBox Grid.Column="1" Grid.Row="0"
+                 ItemsSource="{Binding FilteredChecks}"
+                 Background="{StaticResource WindowBg}"
+                 BorderThickness="0"
+                 Margin="16"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.CanContentScroll="True"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 AutomationProperties.Name="Filtered security checks">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <VirtualizingStackPanel />
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderThickness" Value="0" />
+                    <Setter Property="Focusable" Value="False" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <ContentPresenter />
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:CheckItemViewModel}">
                         <Border Background="{StaticResource CardBg}" CornerRadius="8"
                                 Margin="0,0,0,8" Padding="16"
                                 BorderBrush="{StaticResource SurfaceBg}" BorderThickness="1">
@@ -247,7 +275,7 @@
                                         CornerRadius="4" Padding="8,2" Margin="8,0"
                                         VerticalAlignment="Center">
                                     <TextBlock Text="{Binding SeverityLabel}" FontSize="10"
-                                                FontWeight="Bold" VerticalAlignment="Center"
+                                               FontWeight="Bold" VerticalAlignment="Center"
                                                Foreground="{StaticResource OnAccent}" />
                                 </Border>
 
@@ -350,9 +378,8 @@
                             </Grid>
                         </Border>
                     </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+            </ListBox.ItemTemplate>
+        </ListBox>
 
         <!-- Status Bar -->
         <Border Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1"

@@ -83,6 +83,24 @@ public class MainWindowXamlTests
     }
 
     [Fact]
+    public void Main_Window_Uses_Virtualized_Check_List()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+        var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
+
+        Assert.Contains("<ListBox Grid.Column=\"1\" Grid.Row=\"0\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding FilteredChecks}\"", xaml);
+        Assert.Contains("VirtualizingPanel.IsVirtualizing=\"True\"", xaml);
+        Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", xaml);
+        Assert.Contains("<VirtualizingStackPanel />", xaml);
+        Assert.DoesNotContain("<ItemsControl ItemsSource=\"{Binding FilteredChecks}\">", xaml);
+        Assert.Contains("public ICollectionView FilteredChecks { get; }", mainVm);
+        Assert.Contains("CollectionViewSource.GetDefaultView(Checks)", mainVm);
+        Assert.DoesNotContain("NotifyPropertyChangedFor(nameof(FilteredChecks))", mainVm);
+        Assert.DoesNotContain("IEnumerable<CheckItemViewModel> FilteredChecks", mainVm);
+    }
+
+    [Fact]
     public void Main_Window_Detects_Environment_Off_Dispatcher()
     {
         var source = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml.cs");

@@ -12,6 +12,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# dashboard exports now reuse the shared CSV escaping routine and constrain grade CSS classes to an allowlist before rendering HTML attributes.
 
 ### Correctness
+- Fixed: C# GUI check filtering now uses a stable `ICollectionView` and a recycling virtualized `ListBox` instead of recreating a heavy `ItemsControl` enumerable on each filter/status update.
 - Fixed: C# GUI grade, severity, status, overlay, selected-list, and accent foreground colors now resolve through WPF theme tokens instead of hardcoded hex values in XAML/view models.
 - Fixed: C# GUI muted labels now use a higher-contrast `TextMuted` token and the 3px status bar no longer uses a pill corner radius.
 - Fixed: C# GUI startup now shows an unassessed overall-grade empty state (dash / `Not scanned`) until at least one check has a Pass, Partial, or Fail result.

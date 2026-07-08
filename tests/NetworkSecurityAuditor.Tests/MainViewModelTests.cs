@@ -57,4 +57,28 @@ public class MainViewModelTests
         Assert.Equal("0/100", vm.OverallScoreDisplay);
         Assert.Equal("F", vm.Grade);
     }
+
+    [Fact]
+    public void Filtered_Checks_Uses_Stable_View_And_Refreshes_Filters()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+        var view = vm.FilteredChecks;
+        var check = vm.Checks[0];
+
+        Assert.Same(view, vm.FilteredChecks);
+        Assert.Equal(vm.Checks.Count, view.Cast<CheckItemViewModel>().Count());
+
+        vm.SearchText = check.Id;
+        Assert.Same(view, vm.FilteredChecks);
+        Assert.Single(view.Cast<CheckItemViewModel>());
+
+        vm.StatusFilter = "Pass";
+        Assert.Empty(view.Cast<CheckItemViewModel>());
+
+        check.Status = CheckStatus.Pass;
+
+        Assert.Same(view, vm.FilteredChecks);
+        Assert.Contains(check, view.Cast<CheckItemViewModel>());
+    }
 }

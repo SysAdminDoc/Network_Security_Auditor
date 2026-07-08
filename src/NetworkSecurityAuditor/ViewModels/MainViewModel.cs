@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NetworkSecurityAuditor.Checks;
@@ -16,20 +17,18 @@ public partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<CheckItemViewModel> Checks { get; } = [];
 
+    public ICollectionView FilteredChecks { get; }
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FilteredChecks))]
     private string _selectedCategory = "All";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FilteredChecks))]
     private string _searchText = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FilteredChecks))]
     private string _statusFilter = "All";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FilteredChecks))]
     [NotifyCanExecuteChangedFor(nameof(StartScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopScanCommand))]
     private bool _isScanning;
@@ -85,40 +84,45 @@ public partial class MainViewModel : ViewModelBase
 
     public ScanProfileType[] AvailableProfiles { get; } = Enum.GetValues<ScanProfileType>();
 
-    public IEnumerable<CheckItemViewModel> FilteredChecks
+    public MainViewModel()
     {
-        get
-        {
-            IEnumerable<CheckItemViewModel> result = Checks;
-
-            if (SelectedCategory != "All")
-                result = result.Where(c => c.Category == SelectedCategory);
-
-            if (!string.IsNullOrWhiteSpace(SearchText))
-            {
-                var search = SearchText.Trim();
-                result = result.Where(c =>
-                    c.Id.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                    c.Label.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                    c.Category.Contains(search, StringComparison.OrdinalIgnoreCase));
-            }
-
-            if (StatusFilter != "All")
-            {
-                result = StatusFilter switch
-                {
-                    "Pass" => result.Where(c => c.Status == CheckStatus.Pass),
-                    "Partial" => result.Where(c => c.Status == CheckStatus.Partial),
-                    "Fail" => result.Where(c => c.Status == CheckStatus.Fail),
-                    "N/A" => result.Where(c => c.Status == CheckStatus.NA),
-                    "Not Assessed" => result.Where(c => c.Status == CheckStatus.NotAssessed),
-                    _ => result
-                };
-            }
-
-            return result;
-        }
+        FilteredChecks = CollectionViewSource.GetDefaultView(Checks);
+        FilteredChecks.Filter = FilterCheck;
     }
+
+    private bool FilterCheck(object item)
+    {
+        if (item is not CheckItemViewModel check)
+            return false;
+
+        if (SelectedCategory != "All" && check.Category != SelectedCategory)
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            var search = SearchText.Trim();
+            if (!check.Id.Contains(search, StringComparison.OrdinalIgnoreCase) &&
+                !check.Label.Contains(search, StringComparison.OrdinalIgnoreCase) &&
+                !check.Category.Contains(search, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+
+        return StatusFilter switch
+        {
+            "Pass" => check.Status == CheckStatus.Pass,
+            "Partial" => check.Status == CheckStatus.Partial,
+            "Fail" => check.Status == CheckStatus.Fail,
+            "N/A" => check.Status == CheckStatus.NA,
+            "Not Assessed" => check.Status == CheckStatus.NotAssessed,
+            _ => true
+        };
+    }
+
+    partial void OnSelectedCategoryChanged(string value) => FilteredChecks.Refresh();
+
+    partial void OnSearchTextChanged(string value) => FilteredChecks.Refresh();
+
+    partial void OnStatusFilterChanged(string value) => FilteredChecks.Refresh();
 
     public bool HasAssessedChecks => Checks.Any(c => c.Status is CheckStatus.Pass or CheckStatus.Partial or CheckStatus.Fail);
 
@@ -163,7 +167,7 @@ public partial class MainViewModel : ViewModelBase
 
         Categories = ["All", .. CheckCatalog.Categories];
         OnPropertyChanged(nameof(Categories));
-        OnPropertyChanged(nameof(FilteredChecks));
+        FilteredChecks.Refresh();
         UpdateScoreCounts();
     }
 
@@ -180,7 +184,7 @@ public partial class MainViewModel : ViewModelBase
         if (e.PropertyName != nameof(CheckItemViewModel.Status)) return;
 
         UpdateScoreCounts();
-        OnPropertyChanged(nameof(FilteredChecks));
+        FilteredChecks.Refresh();
     }
 
     [RelayCommand(CanExecute = nameof(CanStartScan))]
@@ -653,6 +657,5 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(Grade));
         OnPropertyChanged(nameof(GradeBrushKey));
         OnPropertyChanged(nameof(OverallScoreDisplay));
-        OnPropertyChanged(nameof(FilteredChecks));
     }
 }
