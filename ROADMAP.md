@@ -1402,13 +1402,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
   Acceptance: Cloud profile runs CL01 Secure Score, CL02 Conditional Access baseline/exclusions, MFA registration/auth methods, stale guests/sign-in activity, privileged role exposure, and MDE/Intune availability checks with permission/license skip states.
   Complexity: XL
 
-- [ ] P1 - Make WPF scan progress state sequential and testable
-  Why: `StartScanAsync()` marks every selected check as running before execution, causing misleading overlays and crowded status during long scans.
-  Evidence: `src/NetworkSecurityAuditor/ViewModels/MainViewModel.cs`; `src/NetworkSecurityAuditor/Checks/CheckRunner.cs`.
-  Touches: `src/NetworkSecurityAuditor/ViewModels/MainViewModel.cs`, possible progress payload model, view-model unit tests.
-  Acceptance: Only the actively executing check shows `IsRunning`; queued checks remain idle; cancellation clears the active check; a unit test verifies state transitions for a multi-check profile.
-  Complexity: M
-
 - [ ] P1 - Add GUI export parity and a compact export settings flow
   Why: WPF exposes most exports as crowded sidebar buttons but omits SIEM content packs and CMMC reports that the CLI already supports.
   Evidence: `src/NetworkSecurityAuditor/MainWindow.xaml`; `src/NetworkSecurityAuditor/App.xaml.cs`; Prowler OCSF/SARIF/export examples.

@@ -14,6 +14,14 @@ namespace NetworkSecurityAuditor.ViewModels;
 public partial class MainViewModel : ViewModelBase
 {
     private CancellationTokenSource? _scanCts;
+    private readonly RunChecksAsync _runChecksAsync;
+
+    internal delegate Task<Dictionary<string, CheckResult>> RunChecksAsync(
+        EnvironmentInfo env,
+        AuditOptions options,
+        IProgress<(string checkId, CheckResult result)>? progress,
+        CancellationToken ct,
+        IProgress<(string checkId, int index, int total)>? startedProgress);
 
     public ObservableCollection<CheckItemViewModel> Checks { get; } = [];
 
@@ -84,10 +92,26 @@ public partial class MainViewModel : ViewModelBase
 
     public ScanProfileType[] AvailableProfiles { get; } = Enum.GetValues<ScanProfileType>();
 
-    public MainViewModel()
+    public MainViewModel() : this(DefaultRunChecksAsync)
     {
+    }
+
+    internal MainViewModel(RunChecksAsync runChecksAsync)
+    {
+        _runChecksAsync = runChecksAsync;
         FilteredChecks = CollectionViewSource.GetDefaultView(Checks);
         FilteredChecks.Filter = FilterCheck;
+    }
+
+    private static Task<Dictionary<string, CheckResult>> DefaultRunChecksAsync(
+        EnvironmentInfo env,
+        AuditOptions options,
+        IProgress<(string checkId, CheckResult result)>? progress,
+        CancellationToken ct,
+        IProgress<(string checkId, int index, int total)>? startedProgress)
+    {
+        var runner = new CheckRunner(CheckRegistry.GetAllChecks());
+        return runner.RunAsync(env, options, progress, ct, startedProgress);
     }
 
     private bool FilterCheck(object item)
@@ -202,8 +226,6 @@ public partial class MainViewModel : ViewModelBase
             ScanProfile = SelectedProfile
         };
 
-        var allChecks = CheckRegistry.GetAllChecks();
-        var runner = new CheckRunner(allChecks);
         var completed = 0;
         var runningTotal = 0;
         var checkLookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
@@ -212,7 +234,7 @@ public partial class MainViewModel : ViewModelBase
         var startedProgress = new InlineProgress<(string checkId, int index, int total)>(update =>
         {
             runningTotal = update.total;
-            foreach (var checkVm in Checks) checkVm.IsRunning = false;
+            SetRunningCheck(update.checkId);
             ScanProgressPercent = update.total > 0
                 ? (double)(update.index - 1) / update.total * 100
                 : 0;
@@ -252,7 +274,7 @@ public partial class MainViewModel : ViewModelBase
             UpdateScoreCounts();
         });
 
-        foreach (var vm in Checks) vm.IsRunning = false;
+        ClearRunningChecks();
 
         try
         {
@@ -266,7 +288,7 @@ public partial class MainViewModel : ViewModelBase
                 return;
             }
 
-            var results = await runner.RunAsync(Environment, options, progress, _scanCts.Token, startedProgress);
+            var results = await _runChecksAsync(Environment, options, progress, _scanCts.Token, startedProgress);
             completed = results.Count;
         }
         catch (OperationCanceledException)
@@ -275,7 +297,7 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
-            foreach (var vm in Checks) vm.IsRunning = false;
+            ClearRunningChecks();
             IsScanning = false;
             var total = runningTotal;
             if (!unsupportedProfile)
@@ -304,6 +326,22 @@ public partial class MainViewModel : ViewModelBase
     }
 
     private bool CanStopScan() => IsScanning;
+
+    private void SetRunningCheck(string checkId)
+    {
+        foreach (var checkVm in Checks)
+        {
+            checkVm.IsRunning = string.Equals(checkVm.Id, checkId, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private void ClearRunningChecks()
+    {
+        foreach (var checkVm in Checks)
+        {
+            checkVm.IsRunning = false;
+        }
+    }
 
     partial void OnIsScanningChanged(bool value) => NotifyExportCommandCanExecuteChanged();
 

@@ -120,4 +120,59 @@ public class MainViewModelTests
 
         Assert.All(exportCanExecute, canExecute => Assert.True(canExecute()));
     }
+
+    [Fact]
+    public async Task StartScan_Marks_Only_Active_Check_And_Clears_On_Cancel()
+    {
+        MainViewModel vm = null!;
+        var secondCheckStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runningSnapshots = new List<string>();
+
+        vm = new MainViewModel(async (_, _, progress, ct, startedProgress) =>
+        {
+            startedProgress?.Report(("EP01", 1, 2));
+            runningSnapshots.Add(RunningIds(vm));
+
+            progress?.Report(("EP01", PassingResult("EP01")));
+            runningSnapshots.Add(RunningIds(vm));
+
+            startedProgress?.Report(("EP02", 2, 2));
+            runningSnapshots.Add(RunningIds(vm));
+            secondCheckStarted.SetResult(true);
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return new Dictionary<string, CheckResult>();
+        });
+        vm.LoadCheckCatalog();
+        vm.SelectedProfile = ScanProfileType.Quick;
+
+        var scanTask = vm.StartScanCommand.ExecuteAsync(null);
+        await secondCheckStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal("EP01", runningSnapshots[0]);
+        Assert.Equal("", runningSnapshots[1]);
+        Assert.Equal("EP02", runningSnapshots[2]);
+        Assert.Single(vm.Checks, c => c.IsRunning);
+        Assert.True(vm.Checks.Single(c => c.Id == "EP02").IsRunning);
+
+        vm.StopScanCommand.Execute(null);
+        await scanTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(vm.IsScanning);
+        Assert.DoesNotContain(vm.Checks, c => c.IsRunning);
+        Assert.Equal(CheckStatus.Pass, vm.Checks.Single(c => c.Id == "EP01").Status);
+        Assert.Contains("Scan cancelled", vm.ScanStatus);
+    }
+
+    private static string RunningIds(MainViewModel vm)
+    {
+        return string.Join(",", vm.Checks.Where(c => c.IsRunning).Select(c => c.Id).OrderBy(id => id));
+    }
+
+    private static CheckResult PassingResult(string checkId) => new()
+    {
+        Status = CheckStatus.Pass,
+        Findings = $"{checkId} passed",
+        Evidence = "Synthetic test result"
+    };
 }
