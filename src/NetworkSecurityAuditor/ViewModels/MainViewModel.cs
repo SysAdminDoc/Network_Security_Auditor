@@ -282,32 +282,16 @@ public partial class MainViewModel : ViewModelBase
         public void Report(T value) => handler(value);
     }
 
-    private IEnumerable<CheckItemViewModel> GetExportChecks()
+    private (IEnumerable<CheckItemViewModel> checks, EnvironmentInfo env) GetExportData()
     {
-        if (!PrivacyMode) return Checks;
-        var redactor = new Services.PrivacyRedactor(true,
-            Environment.ComputerName, Environment.DomainName,
-            System.Environment.UserName);
-        var redacted = new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>();
-        foreach (var check in Checks)
-        {
-            var copy = CheckItemViewModel.FromMetadata(
-                Data.CheckCatalog.All.GetValueOrDefault(check.Id)
-                ?? new Models.CheckMetadata
-                {
-                    Id = check.Id, Category = check.Category, Label = check.Label,
-                    Hint = "", Severity = check.Severity, Weight = check.Weight,
-                    Type = Models.CheckType.Local, RiskTier = Models.RiskTier.ReadOnly, Compliance = ""
-                });
-            copy.Status = check.Status;
-            copy.Findings = redactor.Redact(check.Findings);
-            copy.Evidence = redactor.Redact(check.Evidence);
-            copy.Notes = check.Notes;
-            copy.RemediationAssignee = check.RemediationAssignee;
-            copy.RemediationDueDate = check.RemediationDueDate;
-            redacted.Add(copy);
-        }
-        return redacted;
+        var redactor = Export.PrivacyExportSanitizer.CreateRedactor(
+            PrivacyMode,
+            Environment,
+            System.Environment.UserName,
+            Environment.ComputerName);
+        return (
+            Export.PrivacyExportSanitizer.RedactChecks(Checks, redactor),
+            Export.PrivacyExportSanitizer.RedactEnvironment(Environment, redactor));
     }
 
     [RelayCommand]
@@ -322,8 +306,8 @@ public partial class MainViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            var html = Export.HtmlReportGenerator.Generate(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
+            var (exportChecks, exportEnv) = GetExportData();
+            var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
             await File.WriteAllTextAsync(dialog.FileName, html);
             ScanStatus = $"HTML report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
@@ -341,8 +325,8 @@ public partial class MainViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            var json = Export.JsonExporter.Export(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
+            var (exportChecks, exportEnv) = GetExportData();
+            var json = Export.JsonExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
             await File.WriteAllTextAsync(dialog.FileName, json);
             ScanStatus = $"JSON report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
@@ -359,8 +343,8 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(exportChecks, Environment, OverallScore, Grade));
+            var (exportChecks, exportEnv) = GetExportData();
+            await File.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
             ScanStatus = $"CSV exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -376,8 +360,8 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(exportChecks, Environment, OverallScore, Grade, SelectedProfile));
+            var (exportChecks, exportEnv) = GetExportData();
+            await File.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile));
             ScanStatus = $"JSONL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -393,8 +377,8 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(exportChecks, Environment));
+            var (exportChecks, exportEnv) = GetExportData();
+            await File.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(exportChecks, exportEnv));
             ScanStatus = $"SARIF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -410,7 +394,7 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
+            var (exportChecks, _) = GetExportData();
             await File.WriteAllTextAsync(dialog.FileName, Export.NavigatorExporter.Export(exportChecks));
             ScanStatus = $"Navigator layer exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
@@ -427,8 +411,8 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(exportChecks, Environment, OverallScore, Grade));
+            var (exportChecks, exportEnv) = GetExportData();
+            await File.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
             ScanStatus = $"DefectDojo exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -444,8 +428,8 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(exportChecks, Environment, OverallScore, Grade, SelectedProfile.ToString()));
+            var (exportChecks, exportEnv) = GetExportData();
+            await File.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile.ToString()));
             ScanStatus = $"OCSF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -461,8 +445,8 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(exportChecks, Environment, OverallScore, Grade));
+            var (exportChecks, exportEnv) = GetExportData();
+            await File.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
             ScanStatus = $"OSCAL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -478,8 +462,8 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
+            var (exportChecks, exportEnv) = GetExportData();
+            await File.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
             ScanStatus = $"Compliance summary exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -495,8 +479,8 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            await File.WriteAllTextAsync(dialog.FileName, Export.IntuneExporter.Export(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade));
+            var (exportChecks, exportEnv) = GetExportData();
+            await File.WriteAllTextAsync(dialog.FileName, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));
             ScanStatus = $"Intune exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -512,8 +496,8 @@ public partial class MainViewModel : ViewModelBase
         };
         if (dialog.ShowDialog() == true)
         {
-            var exportChecks = GetExportChecks();
-            var html = Export.HtmlReportGenerator.Generate(exportChecks, Environment, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade, tier: Models.ReportTier.All);
+            var (exportChecks, exportEnv) = GetExportData();
+            var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade, tier: Models.ReportTier.All);
             var tempHtml = Path.Combine(Path.GetTempPath(), $"nsa_report_{Guid.NewGuid():N}.html");
             try
             {

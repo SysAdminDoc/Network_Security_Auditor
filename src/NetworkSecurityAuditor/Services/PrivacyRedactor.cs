@@ -10,7 +10,7 @@ public sealed partial class PrivacyRedactor
 
     public bool IsEnabled { get; }
 
-    public PrivacyRedactor(bool enabled, string? computerName = null, string? domainName = null, string? userName = null, string? clientName = null)
+    public PrivacyRedactor(bool enabled, string? computerName = null, string? domainName = null, string? userName = null, string? clientName = null, string? tenantName = null)
     {
         IsEnabled = enabled;
         if (!enabled) return;
@@ -23,6 +23,8 @@ public sealed partial class PrivacyRedactor
             AddTarget(userName, "USER");
         if (!string.IsNullOrEmpty(clientName) && clientName != computerName)
             AddTarget(clientName, "CLIENT");
+        if (!string.IsNullOrEmpty(tenantName) && tenantName != domainName && tenantName != computerName)
+            AddTarget(tenantName, "TENANT");
     }
 
     private void AddTarget(string value, string tag)

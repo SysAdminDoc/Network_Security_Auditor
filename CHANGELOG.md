@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# privacy mode now uses redacted environment clones and redacted check copies across GUI and silent exporters, including notes, remediation assignees, auditor/client strings, tenant names, and client-derived filenames.
 - Fixed: C# HTML reports now escape environment subtitle fields (`ComputerName` and `OSCaption`) to block stored report XSS from hostile local system metadata.
 - Fixed: C# `--output` now treats the supplied value as the report output directory and sanitizes client-derived filename segments before writing dashboard or silent-mode artifacts.
 - Fixed: C# app-level exception handling now writes crash logs for dispatcher, unobserved task, AppDomain, and corrupt audit-state load failures instead of hard-crashing without diagnostics.

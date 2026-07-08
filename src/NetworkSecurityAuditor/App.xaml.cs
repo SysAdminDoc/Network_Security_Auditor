@@ -281,27 +281,27 @@ public partial class App : Application
         Console.WriteLine($"  Domain Maturity: {dmScore}% ({dmGrade})");
         Console.WriteLine($"  Pass: {passCount} | Fail: {failCount} | Partial: {partialCount}");
 
+        var redactor = PrivacyExportSanitizer.CreateRedactor(
+            args.PrivacyMode,
+            env,
+            System.Environment.UserName,
+            options.Client);
+        var exportEnv = PrivacyExportSanitizer.RedactEnvironment(env, redactor);
+        var exportChecks = PrivacyExportSanitizer.RedactChecks(checkVms, redactor);
+        var exportClient = redactor.Redact(options.Client);
+        var exportAuditor = redactor.Redact(options.Auditor);
         if (args.PrivacyMode)
-        {
-            var redactor = new PrivacyRedactor(true, env.ComputerName, env.DomainName,
-                System.Environment.UserName, options.Client);
-            foreach (var vm in checkVms)
-            {
-                vm.Findings = redactor.Redact(vm.Findings);
-                vm.Evidence = redactor.Redact(vm.Evidence);
-            }
             Console.WriteLine("  Privacy mode: PII redacted with SHA256 pseudonyms");
-        }
 
         var outputDir = ResolveOutputDirectory(
             args.OutputPath,
             System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop));
         Directory.CreateDirectory(outputDir);
 
-        var baseName = $"SecurityAudit_{SafeFileNameSegment(options.Client, "Client")}_{DateTime.Now:yyyy-MM-dd_HHmm}";
+        var baseName = $"SecurityAudit_{SafeFileNameSegment(exportClient, "Client")}_{DateTime.Now:yyyy-MM-dd_HHmm}";
 
         var jsonPath = Path.Combine(outputDir, $"{baseName}_findings.json");
-        var json = JsonExporter.Export(checkVms, env, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade, client: options.Client, auditor: options.Auditor);
+        var json = JsonExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade, client: exportClient, auditor: exportAuditor);
         await File.WriteAllTextAsync(jsonPath, json);
         Console.WriteLine($"  JSON: {jsonPath}");
 
@@ -316,70 +316,70 @@ public partial class App : Application
         }
 
         var htmlPath = Path.Combine(outputDir, $"{baseName}.html");
-        var html = HtmlReportGenerator.Generate(checkVms, env, score, grade, rwScore, rwGrade, dmScore, dmGrade, tier: args.ReportTier, branding: branding);
+        var html = HtmlReportGenerator.Generate(exportChecks, exportEnv, score, grade, rwScore, rwGrade, dmScore, dmGrade, tier: args.ReportTier, branding: branding);
         await File.WriteAllTextAsync(htmlPath, html);
         Console.WriteLine($"  HTML: {htmlPath}");
 
         if (args.ExportCsv)
         {
             var csvPath = Path.Combine(outputDir, $"{baseName}.csv");
-            await File.WriteAllTextAsync(csvPath, CsvExporter.Export(checkVms, env, score, grade));
+            await File.WriteAllTextAsync(csvPath, CsvExporter.Export(exportChecks, exportEnv, score, grade));
             Console.WriteLine($"  CSV: {csvPath}");
         }
 
         if (args.ExportJsonl)
         {
             var jsonlPath = Path.Combine(outputDir, $"{baseName}_siem.jsonl");
-            await File.WriteAllTextAsync(jsonlPath, JsonlExporter.Export(checkVms, env, score, grade, args.ScanProfile));
+            await File.WriteAllTextAsync(jsonlPath, JsonlExporter.Export(exportChecks, exportEnv, score, grade, args.ScanProfile));
             Console.WriteLine($"  JSONL: {jsonlPath}");
         }
 
         if (args.ExportDefectDojo)
         {
             var ddPath = Path.Combine(outputDir, $"{baseName}_defectdojo.json");
-            await File.WriteAllTextAsync(ddPath, DefectDojoExporter.Export(checkVms, env, score, grade));
+            await File.WriteAllTextAsync(ddPath, DefectDojoExporter.Export(exportChecks, exportEnv, score, grade));
             Console.WriteLine($"  DefectDojo: {ddPath}");
         }
 
         if (args.ExportNavigator)
         {
             var navPath = Path.Combine(outputDir, $"{baseName}_navigator.json");
-            await File.WriteAllTextAsync(navPath, NavigatorExporter.Export(checkVms));
+            await File.WriteAllTextAsync(navPath, NavigatorExporter.Export(exportChecks));
             Console.WriteLine($"  Navigator: {navPath}");
         }
 
         if (args.ExportSarif)
         {
             var sarifPath = Path.Combine(outputDir, $"{baseName}.sarif");
-            await File.WriteAllTextAsync(sarifPath, SarifExporter.Export(checkVms, env));
+            await File.WriteAllTextAsync(sarifPath, SarifExporter.Export(exportChecks, exportEnv));
             Console.WriteLine($"  SARIF: {sarifPath}");
         }
 
         if (args.ExportOcsf)
         {
             var ocsfPath = Path.Combine(outputDir, $"{baseName}_ocsf.jsonl");
-            await File.WriteAllTextAsync(ocsfPath, OcsfExporter.Export(checkVms, env, score, grade, args.ScanProfile.ToString()));
+            await File.WriteAllTextAsync(ocsfPath, OcsfExporter.Export(exportChecks, exportEnv, score, grade, args.ScanProfile.ToString()));
             Console.WriteLine($"  OCSF: {ocsfPath}");
         }
 
         if (args.ExportOscal)
         {
             var oscalPath = Path.Combine(outputDir, $"{baseName}_oscal.json");
-            await File.WriteAllTextAsync(oscalPath, OscalExporter.Export(checkVms, env, score, grade));
+            await File.WriteAllTextAsync(oscalPath, OscalExporter.Export(exportChecks, exportEnv, score, grade));
             Console.WriteLine($"  OSCAL: {oscalPath}");
         }
 
         if (args.ExportIntune)
         {
             var intunePath = Path.Combine(outputDir, $"{baseName}_intune.json");
-            await File.WriteAllTextAsync(intunePath, IntuneExporter.Export(checkVms, env, score, grade, rwScore, rwGrade));
+            await File.WriteAllTextAsync(intunePath, IntuneExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade));
             Console.WriteLine($"  Intune: {intunePath}");
         }
 
         if (args.ExportComplianceSummary)
         {
             var summaryPath = Path.Combine(outputDir, $"{baseName}_summary.json");
-            await File.WriteAllTextAsync(summaryPath, ComplianceSummaryExporter.Export(checkVms, env, score, grade, rwScore, rwGrade, dmScore, dmGrade));
+            await File.WriteAllTextAsync(summaryPath, ComplianceSummaryExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade, dmScore, dmGrade));
             Console.WriteLine($"  Summary: {summaryPath}");
         }
 
@@ -393,11 +393,11 @@ public partial class App : Application
         if (args.ExportCmmc)
         {
             var cmmcHtmlPath = Path.Combine(outputDir, $"{baseName}_cmmc.html");
-            await File.WriteAllTextAsync(cmmcHtmlPath, CmmcReportGenerator.ExportHtml(checkVms, env, score, grade));
+            await File.WriteAllTextAsync(cmmcHtmlPath, CmmcReportGenerator.ExportHtml(exportChecks, exportEnv, score, grade));
             Console.WriteLine($"  CMMC HTML: {cmmcHtmlPath}");
 
             var cmmcJsonPath = Path.Combine(outputDir, $"{baseName}_cmmc.json");
-            await File.WriteAllTextAsync(cmmcJsonPath, CmmcReportGenerator.ExportJson(checkVms, env));
+            await File.WriteAllTextAsync(cmmcJsonPath, CmmcReportGenerator.ExportJson(exportChecks, exportEnv));
             Console.WriteLine($"  CMMC JSON: {cmmcJsonPath}");
         }
 
