@@ -9,6 +9,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# dashboard exports now reuse the shared CSV escaping routine and constrain grade CSS classes to an allowlist before rendering HTML attributes.
 
 ### Correctness
+- Fixed: C# D3FEND IA01 mapping now uses the valid `D3-UGPH` technique ID instead of malformed `D3F-UGPH`.
 - Fixed: C# SPRS scoring now treats Partial checks as unmet controls instead of awarding full SPRS credit.
 - Fixed: C# overall risk scoring now matches the documented per-category weighted-average formula and no longer squares severity by multiplying severity and check weight.
 - Fixed: C# Domain Maturity scoring now normalizes by domains that have assessed checks so all-N/A identity domains no longer cap endpoint-only results.
@@ -42,6 +43,9 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# dashboard and silent headless modes now observe runner exceptions, write failures to stderr, and always shut down with a non-zero exit code instead of leaving a hung WPF process.
 - Fixed: C# `Cloud` profile no longer expands to all local and Active Directory checks. It is explicitly disabled until Graph-backed CLxx checks are implemented, and CLI/GUI scans now report that state instead of running misleading endpoint/domain coverage.
 - Added: Regression tests proving the C# Cloud profile resolves to no local/AD checks and the runner returns no results for it.
+
+### Testing
+- Added: Structural tests now enforce catalog/MITRE/D3FEND/framework key parity, ATT&CK and D3FEND ID formats, and duplicate check-ID fail-fast behavior.
 
 ### Documentation
 - Changed: README now separates the production PowerShell artifact from the C# rewrite, removes stale hosted-workflow validation examples, documents local C# test/build/publish commands, and clarifies C# Cloud profile behavior.

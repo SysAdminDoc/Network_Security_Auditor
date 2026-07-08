@@ -1095,7 +1095,7 @@ public static class CheckCatalog
 
     private static void Add(Dictionary<string, CheckMetadata> dict, CheckMetadata meta)
     {
-        dict[meta.Id] = meta;
+        dict.Add(meta.Id, meta);
     }
 
     /// <summary>Returns all check IDs for a given category name.</summary>

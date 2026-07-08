@@ -1494,7 +1494,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 **Checks (fail-open / masking)**
 
 **Export / scoring**
-- [ ] **P2 — Add missing structural tests:** mapping-key parity (catalog == MITRE == D3FEND == Framework keys), technique-ID format (`^T\d{4}(\.\d{3})?$`, `^TA\d{4}$`, `^D3-[A-Z]+$`), and `dict.Add` duplicate-ID fail-fast. Where: `tests/NetworkSecurityAuditor.Tests/`. (Do this early per instructions.)
 
 **App / silent mode**
 - [ ] **P2 — Silent-mode self-elevation returns exit code 0 (Green) immediately and detaches the real scan** — RMM/scheduler sees success regardless of result; UAC stalls unattended runs. Where: `App.xaml.cs:31-53`. Fix: skip auto-elevation in silent/dashboard mode (warn + run degraded) or `WaitForExit` and forward the child's exit code.
@@ -1556,12 +1555,10 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 - [ ] P3 — `Dashboard_Escapes_Client_Names` test is tautological (tests an inline `string.Replace`, never calls `DashboardGenerator`); dead `brandColor` at HtmlReportGenerator.cs:24. `ExportTests.cs:436-443`. Make dashboard HTML testable.
 
 **Data / scoring / models**
-- [ ] P3 — Malformed D3FEND ID `"D3F-UGPH"` (only non-`D3-` prefix). `D3FendMappings.cs:24`. (Format test catches it.)
 - [ ] P3 — NP05 `Weight=8` with `Severity.High(=7)` — sole Weight!=Severity outlier (legacy carryover; double-counted by RiskScoreEngine). `CheckCatalog.cs:645-646`.
 - [ ] P3 — "Physical Security" weight+accent for a category with zero checks (dead fossil behind the PS mapping drift). `CategoryWeights.cs:25,57`. Remove.
 - [ ] P3 — E8/CyberEssentials profile membership inconsistent with framework columns (IA01/IA02 in E8/CE profiles but no E8/CE column; NA03 has an E8 column but isn't in the E8 profile). `FrameworkMappings.cs:14-37,453` vs `ScanProfiles.cs:82-90`.
 - [ ] P3 — Banker's rounding at grade boundaries (`Math.Round` ToEven; 89.5->90 but 88.5->88). RiskScoreEngine:35, RansomwareReadinessEngine:54, DomainMaturityEngine:52/56. Use `MidpointRounding.AwayFromZero`.
-- [ ] P3 — Duplicate check/mapping ID silently overwrites (`dict[id]=` vs `dict.Add`). `CheckCatalog.cs:1096-1099` + mapping initializers. (Covered by the fail-fast test above.)
 - [ ] P3 — Waiver expiry compares unspecified-kind JSON `DateTime` against `DateTime.UtcNow` (flips by UTC offset). `Models/RiskWaiver.cs:16`. Normalize to UTC date / `DateOnly`.
 
 **Legacy PS1**

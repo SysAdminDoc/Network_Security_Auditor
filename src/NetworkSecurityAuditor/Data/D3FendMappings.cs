@@ -21,7 +21,7 @@ public static class D3FendMappings
             ["IA01"] = new DefendMapping
             {
                 Stages = ["Model", "Isolate"],
-                Techniques = ["D3-AM", "D3F-UGPH", "D3-UAP"],
+                Techniques = ["D3-AM", "D3-UGPH", "D3-UAP"],
                 Labels = ["Access Modeling", "User Group Permissions", "User Account Permissions"],
                 Description = "Models and restricts privileged identities"
             },

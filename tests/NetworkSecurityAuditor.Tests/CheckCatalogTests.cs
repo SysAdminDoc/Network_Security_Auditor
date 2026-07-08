@@ -1,3 +1,4 @@
+using System.Reflection;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
 
@@ -30,6 +31,35 @@ public class CheckCatalogTests
         foreach (var (key, meta) in CheckCatalog.All)
         {
             Assert.Equal(key, meta.Id);
+        }
+    }
+
+    [Fact]
+    public void Mapping_Keys_Match_Catalog_Keys()
+    {
+        var catalogIds = CheckCatalog.All.Keys.Order(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        Assert.Equal(catalogIds, MitreMappings.All.Keys.Order(StringComparer.OrdinalIgnoreCase).ToArray());
+        Assert.Equal(catalogIds, D3FendMappings.All.Keys.Order(StringComparer.OrdinalIgnoreCase).ToArray());
+        Assert.Equal(catalogIds, FrameworkMappings.All.Keys.Order(StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    [Fact]
+    public void Mapping_Technique_Ids_Use_Expected_Formats()
+    {
+        foreach (var (checkId, mapping) in MitreMappings.All)
+        {
+            foreach (var tactic in mapping.Tactics)
+                Assert.Matches(@"^TA\d{4}$", tactic);
+
+            foreach (var technique in mapping.Techniques)
+                Assert.Matches(@"^T\d{4}(\.\d{3})?$", technique);
+        }
+
+        foreach (var (checkId, mapping) in D3FendMappings.All)
+        {
+            foreach (var technique in mapping.Techniques)
+                Assert.Matches(@"^D3-[A-Z]+$", technique);
         }
     }
 
@@ -256,4 +286,32 @@ public class CheckCatalogTests
                 $"{meta.Id} has weight {meta.Weight} outside valid range [{(int)Severity.Low}-{(int)Severity.Critical}]");
         }
     }
+
+    [Fact]
+    public void Catalog_Add_Rejects_Duplicate_Check_Ids()
+    {
+        var addMethod = typeof(CheckCatalog).GetMethod("Add", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(addMethod);
+
+        var dict = new Dictionary<string, CheckMetadata>(StringComparer.OrdinalIgnoreCase);
+        var meta = TestMetadata("ZZ99");
+
+        addMethod.Invoke(null, [dict, meta]);
+        var exception = Assert.Throws<TargetInvocationException>(() => addMethod.Invoke(null, [dict, meta]));
+
+        Assert.IsType<ArgumentException>(exception.InnerException);
+    }
+
+    private static CheckMetadata TestMetadata(string id) => new()
+    {
+        Id = id,
+        Category = "Endpoint Security",
+        Label = "Duplicate test",
+        Hint = "Duplicate test",
+        Severity = Severity.Low,
+        Weight = (int)Severity.Low,
+        Type = CheckType.Local,
+        RiskTier = RiskTier.ReadOnly,
+        Compliance = "Test"
+    };
 }
