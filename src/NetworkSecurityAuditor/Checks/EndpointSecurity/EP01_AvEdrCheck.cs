@@ -138,12 +138,11 @@ public sealed class EP01_AvEdrCheck : ISecurityCheck
             {
                 string name = obj["displayName"]?.ToString() ?? "Unknown";
                 uint state = Convert.ToUInt32(obj["productState"] ?? 0);
+                var decoded = DecodeSecurityCenterProductState(state);
 
-                // Bits 12-15 of productState = scanner state; bits 4-7 = definitions state
-                bool enabled = ((state >> 12) & 0xF) == 1;
-                bool upToDate = ((state >> 4) & 0xF) == 0;
-
-                evidence.AppendLine($"  {name}: enabled={enabled}, upToDate={upToDate} (state=0x{state:X8})");
+                evidence.AppendLine(
+                    $"  {name}: enabled={decoded.Enabled}, upToDate={decoded.SignaturesUpToDate} " +
+                    $"(state=0x{state:X6}, provider=0x{decoded.Provider:X2}, scanner=0x{decoded.ScannerState:X2}, signatures=0x{decoded.SignatureStatus:X2})");
 
                 if (!name.Contains("Windows Defender", StringComparison.OrdinalIgnoreCase))
                     products.Add(name);
@@ -156,6 +155,27 @@ public sealed class EP01_AvEdrCheck : ISecurityCheck
 
         return products;
     }
+
+    internal static SecurityCenterProductState DecodeSecurityCenterProductState(uint state)
+    {
+        var provider = (byte)((state >> 16) & 0xFF);
+        var scannerState = (byte)((state >> 8) & 0xFF);
+        var signatureStatus = (byte)(state & 0xFF);
+
+        return new SecurityCenterProductState(
+            provider,
+            scannerState,
+            signatureStatus,
+            Enabled: scannerState is 0x10 or 0x11,
+            SignaturesUpToDate: signatureStatus == 0x00);
+    }
+
+    internal readonly record struct SecurityCenterProductState(
+        byte Provider,
+        byte ScannerState,
+        byte SignatureStatus,
+        bool Enabled,
+        bool SignaturesUpToDate);
 
     private static List<string> DetectEDR(StringBuilder evidence)
     {

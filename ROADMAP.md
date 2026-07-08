@@ -1443,7 +1443,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 ### P3 — Medium / Low
 
 **Checks**
-- [ ] P3 — EP01 SecurityCenter2 `productState` bit decode is non-standard (`>>12&0xF`, `>>4&0xF`) -> misreports enabled/up-to-date (evidence text only). `EP01:143-144`.
 - [ ] P3 — EP02/EP08 treat non-admin / unsupported-OS WMI unavailability as `Fail` instead of `NA` -> false failures. `EP02:87-94`, `EP08:121-133,187-190`.
 - [ ] P3 — BR03/BR06/LM05 iterate full `EventLog.Entries` via the COM indexer (slow/O(n^2) on large logs). Prefer `EventLogReader` + XPath.
 - [ ] P3 — NP03 infers split-tunnel from `defaultRoutes > 1` -> false positive on multi-NIC machines. `NP03:190-207`.
