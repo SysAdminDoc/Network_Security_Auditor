@@ -586,32 +586,40 @@ public partial class MainViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
-            var json = await File.ReadAllTextAsync(dialog.FileName);
-            var state = AuditState.Deserialize(json);
-            if (state is null)
+            try
             {
-                ScanStatus = "Failed to load state file.";
-                return;
+                var json = await File.ReadAllTextAsync(dialog.FileName);
+                var state = AuditState.Deserialize(json);
+                if (state is null)
+                {
+                    ScanStatus = "Failed to load state file.";
+                    return;
+                }
+
+                var lookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+                var restored = 0;
+
+                foreach (var cs in state.Checks)
+                {
+                    if (!lookup.TryGetValue(cs.Id, out var vm)) continue;
+                    vm.Status = cs.Status;
+                    vm.Findings = cs.Findings;
+                    vm.Evidence = cs.Evidence;
+                    vm.Notes = cs.Notes;
+                    vm.RemediationAssignee = cs.RemediationAssignee;
+                    if (DateTime.TryParse(cs.RemediationDueDate, out var due))
+                        vm.RemediationDueDate = due;
+                    restored++;
+                }
+
+                UpdateScoreCounts();
+                ScanStatus = $"State loaded: {restored} checks restored from {Path.GetFileName(dialog.FileName)}";
             }
-
-            var lookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
-            var restored = 0;
-
-            foreach (var cs in state.Checks)
+            catch (Exception ex)
             {
-                if (!lookup.TryGetValue(cs.Id, out var vm)) continue;
-                vm.Status = cs.Status;
-                vm.Findings = cs.Findings;
-                vm.Evidence = cs.Evidence;
-                vm.Notes = cs.Notes;
-                vm.RemediationAssignee = cs.RemediationAssignee;
-                if (DateTime.TryParse(cs.RemediationDueDate, out var due))
-                    vm.RemediationDueDate = due;
-                restored++;
+                var logPath = Services.CrashLogWriter.Write(ex, "LoadStateAsync");
+                ScanStatus = $"Failed to load state file. Crash log: {logPath}";
             }
-
-            UpdateScoreCounts();
-            ScanStatus = $"State loaded: {restored} checks restored from {Path.GetFileName(dialog.FileName)}";
         }
     }
 

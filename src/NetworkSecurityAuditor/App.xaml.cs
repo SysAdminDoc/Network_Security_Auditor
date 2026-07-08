@@ -15,6 +15,8 @@ namespace NetworkSecurityAuditor;
 
 public partial class App : Application
 {
+    private bool _headlessMode;
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetProcessDPIAware();
@@ -27,6 +29,8 @@ public partial class App : Application
         SetProcessDPIAware();
 
         var args = ParseArgs(e.Args);
+        _headlessMode = args.Dashboard || args.Silent;
+        RegisterGlobalExceptionHandlers();
 
         if (!args.NoElevate && !IsRunningAsAdmin())
         {
@@ -72,6 +76,47 @@ public partial class App : Application
         var window = new MainWindow();
         MainWindow = window;
         window.Show();
+    }
+
+    private void RegisterGlobalExceptionHandlers()
+    {
+        DispatcherUnhandledException += (_, e) =>
+        {
+            e.Handled = true;
+            HandleGlobalException(e.Exception, "DispatcherUnhandledException", canContinue: !_headlessMode);
+            if (_headlessMode)
+                Shutdown((int)ExitCode.ImmediateAlert);
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            HandleGlobalException(e.Exception, "TaskScheduler.UnobservedTaskException", canContinue: true);
+            e.SetObserved();
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception ex)
+                HandleGlobalException(ex, "AppDomain.UnhandledException", canContinue: false);
+        };
+    }
+
+    private void HandleGlobalException(Exception exception, string source, bool canContinue)
+    {
+        var logPath = CrashLogWriter.Write(exception, source);
+
+        if (_headlessMode)
+        {
+            AttachConsole(-1);
+            Console.Error.WriteLine($"ERROR: {source}: {exception.Message}");
+            Console.Error.WriteLine($"Crash log: {logPath}");
+            return;
+        }
+
+        var message = canContinue
+            ? $"An unexpected error was handled. Your current audit state is still open.\n\nCrash log: {logPath}"
+            : $"A fatal error occurred and was written to the crash log.\n\nCrash log: {logPath}";
+        MessageBox.Show(message, "Network Security Auditor", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private async Task RunHeadlessAndShutdownAsync(string modeName, Func<Task<int>> runModeAsync)
