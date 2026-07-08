@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# BR03-BR07 ATT&CK, D3FEND, and compliance mappings now match restore testing, RTO/RPO documentation, backup encryption, backup monitoring, and DR plan catalog entries.
 - Fixed: C# NA03-NA07 ATT&CK, D3FEND, and compliance mappings now match the current wireless, network documentation, 802.1X/NAC, management isolation, and guest isolation catalog entries.
 - Fixed: C# OSCAL export now emits OSCAL kebab-case field names, valid finding status states/reasons, and risk levels as risk properties instead of invalid top-level fields.
 - Fixed: C# privacy mode now uses redacted environment clones and redacted check copies across GUI and silent exporters, including notes, remediation assignees, auditor/client strings, tenant names, and client-derived filenames.

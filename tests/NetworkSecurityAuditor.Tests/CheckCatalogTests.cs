@@ -102,6 +102,35 @@ public class CheckCatalogTests
         }
     }
 
+    [Theory]
+    [InlineData("BR03", "Restore testing", "restore", "File Verification", "3.6.1, 3.6.3", "IR.L2-3.6.1, IR.L2-3.6.3")]
+    [InlineData("BR04", "RTO/RPO documentation", "RTO/RPO", "Access Modeling", "3.6.1", "IR.L2-3.6.1")]
+    [InlineData("BR05", "Backup encryption", "encrypt", "Disk Encryption", "3.8.1, 3.8.6, 3.13.11", "MP.L2-3.8.1, MP.L2-3.8.6, SC.L2-3.13.11")]
+    [InlineData("BR06", "Backup monitoring", "monitor", "Platform Monitoring", "3.6.1, 3.6.2", "IR.L2-3.6.1, IR.L2-3.6.2")]
+    [InlineData("BR07", "DR plan", "DR plan", "Access Modeling", "3.6.1, 3.6.2", "IR.L2-3.6.1, IR.L2-3.6.2")]
+    public void Backup_Recovery_Mappings_Match_Current_Catalog(
+        string id,
+        string expectedLabel,
+        string expectedDescriptionTerm,
+        string expectedDefendLabel,
+        string expectedNist,
+        string expectedCmmc)
+    {
+        var catalog = CheckCatalog.All[id];
+        var attack = MitreMappings.All[id];
+        var defend = D3FendMappings.All[id];
+        var framework = FrameworkMappings.All[id];
+
+        Assert.Equal(expectedLabel, catalog.Label);
+        Assert.True(attack.Description.Contains(expectedDescriptionTerm, StringComparison.OrdinalIgnoreCase),
+            $"{id} ATT&CK description should describe {expectedLabel}.");
+        Assert.True(defend.Description.Contains(expectedDescriptionTerm, StringComparison.OrdinalIgnoreCase),
+            $"{id} D3FEND description should describe {expectedLabel}.");
+        Assert.Contains(expectedDefendLabel, defend.Labels);
+        Assert.Equal(expectedNist, framework.NIST);
+        Assert.Equal(expectedCmmc, framework.CMMC);
+    }
+
     [Fact]
     public void Severity_Weights_Match_Enum_Values()
     {

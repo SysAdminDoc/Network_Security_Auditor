@@ -326,20 +326,20 @@ public static class MitreMappings
             ["BR03"] = new AttackMapping
             {
                 Tactics = ["TA0040"],
-                Techniques = ["T1486", "T1490", "T1485"],
-                Description = "No DR plan means extended downtime during incidents"
+                Techniques = ["T1486", "T1490"],
+                Description = "Untested backups may fail during actual restore and recovery"
             },
             ["BR04"] = new AttackMapping
             {
                 Tactics = ["TA0040"],
-                Techniques = ["T1486", "T1490"],
-                Description = "Untested backups may fail during actual recovery"
+                Techniques = ["T1486", "T1490", "T1489"],
+                Description = "Undefined RTO/RPO leaves responders without recovery targets"
             },
             ["BR05"] = new AttackMapping
             {
-                Tactics = ["TA0040"],
-                Techniques = ["T1486", "T1489"],
-                Description = "No documented RTO/RPO means no recovery expectations"
+                Tactics = ["TA0010", "TA0040"],
+                Techniques = ["T1048", "T1486"],
+                Description = "Unencrypted backups expose data if backup storage is compromised"
             },
             ["BR06"] = new AttackMapping
             {
@@ -349,9 +349,9 @@ public static class MitreMappings
             },
             ["BR07"] = new AttackMapping
             {
-                Tactics = ["TA0040", "TA0010"],
-                Techniques = ["T1486", "T1048"],
-                Description = "Unencrypted backups expose data if storage compromised"
+                Tactics = ["TA0040"],
+                Techniques = ["T1486", "T1490", "T1485"],
+                Description = "No DR plan means extended downtime during incidents"
             },
             ["BR08"] = new AttackMapping
             {

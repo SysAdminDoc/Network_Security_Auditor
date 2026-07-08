@@ -373,24 +373,24 @@ public static class D3FendMappings
             },
             ["BR03"] = new DefendMapping
             {
-                Stages = ["Model"],
-                Techniques = ["D3-AM", "D3-BA"],
-                Labels = ["Access Modeling", "Backup"],
-                Description = "Documents and tests disaster recovery procedures"
-            },
-            ["BR04"] = new DefendMapping
-            {
                 Stages = ["Detect"],
                 Techniques = ["D3-FV", "D3-BA"],
                 Labels = ["File Verification", "Backup"],
                 Description = "Validates backup integrity through restore tests"
             },
-            ["BR05"] = new DefendMapping
+            ["BR04"] = new DefendMapping
             {
                 Stages = ["Model"],
                 Techniques = ["D3-AM"],
                 Labels = ["Access Modeling"],
-                Description = "Defines recovery time and point objectives"
+                Description = "Defines RTO/RPO recovery time and point objectives"
+            },
+            ["BR05"] = new DefendMapping
+            {
+                Stages = ["Harden"],
+                Techniques = ["D3-DENCR", "D3-BA"],
+                Labels = ["Disk Encryption", "Backup"],
+                Description = "Encrypts backup data at rest and in transit"
             },
             ["BR06"] = new DefendMapping
             {
@@ -401,10 +401,10 @@ public static class D3FendMappings
             },
             ["BR07"] = new DefendMapping
             {
-                Stages = ["Harden"],
-                Techniques = ["D3-DENCR", "D3-BA"],
-                Labels = ["Disk Encryption", "Backup"],
-                Description = "Encrypts backup data at rest and in transit"
+                Stages = ["Model"],
+                Techniques = ["D3-AM", "D3-BA"],
+                Labels = ["Access Modeling", "Backup"],
+                Description = "Documents and tests DR plan procedures"
             },
             ["BR08"] = new DefendMapping
             {
