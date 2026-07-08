@@ -13,7 +13,6 @@ public static class FrameworkDefinitions
         ("PCI-DSS 4.0.1", m => m.PCI),
         ("SOC 2 Type II", m => m.SOC2),
         ("ISO 27001:2022", m => m.ISO27001),
-        ("DISA STIG", m => m.STIG),
         ("FedRAMP Moderate", m => m.FedRAMP),
         ("Essential Eight", m => m.E8),
         ("Cyber Essentials", m => m.CyberEssentials),

@@ -158,6 +158,22 @@ public class CheckCatalogTests
     }
 
     [Fact]
+    public void Stig_Mappings_Do_Not_Use_Fabricated_Vulnerability_Ids()
+    {
+        var stigMappedIds = FrameworkMappings.All
+            .Where(kv => kv.Value.STIG is not null)
+            .Select(kv => kv.Key)
+            .Order()
+            .ToArray();
+
+        Assert.Equal(new[] { "IA11", "IA12" }, stigMappedIds);
+        Assert.DoesNotContain(FrameworkMappings.All.Values, mapping =>
+            mapping.STIG?.Contains("V-254", StringComparison.OrdinalIgnoreCase) == true);
+        Assert.DoesNotContain(FrameworkDefinitions.All, framework =>
+            framework.Name.Equals("DISA STIG", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Severity_Weights_Match_Enum_Values()
     {
         foreach (var meta in CheckCatalog.All.Values)

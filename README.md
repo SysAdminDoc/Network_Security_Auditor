@@ -298,6 +298,8 @@ Every check maps to one or more controls across 11 frameworks. Framework-specifi
 | **DISA STIG** | Windows Server/Client | 69 checks |
 | **FedRAMP** | Moderate (NIST 800-53 Rev 5) | 69 checks |
 
+The C# rewrite does not score fabricated sequential STIG V-IDs. Until genuine rule IDs are sourced, its STIG profile is limited to the IA11/IA12 prose-backed readiness checks.
+
 ### MITRE ATT&CK Mapping
 
 All 69 checks map to ATT&CK Enterprise techniques (v19.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.

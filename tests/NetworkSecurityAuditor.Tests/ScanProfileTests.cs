@@ -38,6 +38,14 @@ public class ScanProfileTests
     }
 
     [Fact]
+    public void Stig_Profile_Uses_Only_Prose_Readiness_Checks()
+    {
+        var ids = ScanProfiles.Resolve(ScanProfileType.STIG);
+
+        Assert.Equal(new[] { "IA11", "IA12" }, ids);
+    }
+
+    [Fact]
     public void Cloud_Profile_Is_Explicitly_Disabled_Until_CSharp_Cloud_Checks_Exist()
     {
         var ids = ScanProfiles.Resolve(ScanProfileType.Cloud);

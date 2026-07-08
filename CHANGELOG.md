@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Changed: C# STIG scoring no longer emits fabricated sequential V-IDs; only prose-backed IA11/IA12 STIG readiness notes remain, and the STIG profile is narrowed to those checks.
 - Fixed: C# PS01-PS06 catalog and framework mappings now use policy, incident response, compliance monitoring, risk, and training HIPAA/FedRAMP/CSF citations instead of stale physical-security controls.
 - Fixed: C# BR03-BR07 ATT&CK, D3FEND, and compliance mappings now match restore testing, RTO/RPO documentation, backup encryption, backup monitoring, and DR plan catalog entries.
 - Fixed: C# NA03-NA07 ATT&CK, D3FEND, and compliance mappings now match the current wireless, network documentation, 802.1X/NAC, management isolation, and guest isolation catalog entries.

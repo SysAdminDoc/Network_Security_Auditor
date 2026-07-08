@@ -50,15 +50,15 @@ public class ExportTests
     }
 
     [Fact]
-    public void Json_Compliance_Has_Eleven_Frameworks()
+    public void Json_Compliance_Has_Ten_Scored_Frameworks()
     {
         var (checks, env) = CreateTestData();
         var json = JsonExporter.Export(checks, env, 85, "B", 70, "C", ScanProfileType.Full);
         var doc = JsonDocument.Parse(json);
         var frameworks = doc.RootElement.GetProperty("compliance_frameworks");
 
-        Assert.True(frameworks.EnumerateObject().Count() >= 11,
-            $"Expected at least 11 frameworks, got {frameworks.EnumerateObject().Count()}");
+        Assert.Equal(10, frameworks.EnumerateObject().Count());
+        Assert.False(frameworks.TryGetProperty("DISA STIG", out _));
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public class ExportTests
 
         Assert.Contains("NIST 800-171", html);
         Assert.Contains("PCI-DSS 4.0.1", html);
-        Assert.Contains("DISA STIG", html);
+        Assert.DoesNotContain("DISA STIG", html);
     }
 
     [Fact]
