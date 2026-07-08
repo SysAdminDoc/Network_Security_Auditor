@@ -979,7 +979,7 @@ public static class CheckCatalog
             Weight = 5,
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
-            Compliance = "NIST CSF PR.AC-2 | CIS Control 1.1 | HIPAA 164.310(a)(1), 164.310(a)(2)(ii-iv)",
+            Compliance = "NIST CSF ID.GV-1, ID.GV-3 | CIS Control 1.1 | HIPAA 164.308(a)(1)(i), 164.308(a)(1)(ii)(A), 164.316(b)(1)",
             EvidenceMode = EvidenceMode.Checklist,
             RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-policy"
         });
@@ -994,7 +994,7 @@ public static class CheckCatalog
             Weight = 3,
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
-            Compliance = "NIST CSF PR.AC-2 | CIS Control 1.1 | HIPAA 164.310(a)(2)(iii), 164.310(b)",
+            Compliance = "NIST CSF ID.GV-1, PR.AT-1 | CIS Control 1.1 | HIPAA 164.308(a)(5)(i), 164.316(b)(1)",
             EvidenceMode = EvidenceMode.Checklist,
             RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-policy"
         });
@@ -1009,7 +1009,7 @@ public static class CheckCatalog
             Weight = 7,
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
-            Compliance = "NIST CSF PR.AC-2, DE.CM-2 | CIS Control 1.1 | HIPAA 164.310(a)(2)(iii), 164.310(d)(1)",
+            Compliance = "NIST CSF RS.RP-1, RS.CO-1, RC.RP-1 | CIS Control 17.1, 17.4 | HIPAA 164.308(a)(6)(i), 164.308(a)(6)(ii), 164.316(b)(1)",
             EvidenceMode = EvidenceMode.Checklist,
             RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/incident-response-overview"
         });
@@ -1024,7 +1024,7 @@ public static class CheckCatalog
             Weight = 5,
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
-            Compliance = "NIST CSF PR.AC-2, PR.AT-1 | CIS Control 5.2 | HIPAA 164.310(b), 164.310(c)",
+            Compliance = "NIST CSF ID.GV-3, DE.CM-1, DE.DP-4 | CIS Control 5.2 | HIPAA 164.308(a)(1)(ii)(D), 164.316(b)(2)(iii)",
             EvidenceMode = EvidenceMode.Checklist,
             RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-policy"
         });
@@ -1039,7 +1039,7 @@ public static class CheckCatalog
             Weight = 5,
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
-            Compliance = "NIST CSF PR.AC-2, PR.AC-5 | CIS Control 1.4, 12.5 | HIPAA 164.310(c)",
+            Compliance = "NIST CSF ID.RA-1, ID.RA-4, ID.RM-1 | CIS Control 1.4, 12.5 | HIPAA 164.308(a)(1)(ii)(A), 164.308(a)(1)(ii)(B)",
             EvidenceMode = EvidenceMode.InterviewRequired,
             RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/risk-management"
         });
@@ -1054,7 +1054,7 @@ public static class CheckCatalog
             Weight = 5,
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
-            Compliance = "NIST CSF PR.PT-5 | CIS Control 1.1 | HIPAA 164.310(a)(2)(ii)",
+            Compliance = "NIST CSF PR.AT-1, PR.AT-2 | CIS Control 14.1, 14.2 | HIPAA 164.308(a)(5)(i), 164.308(a)(5)(ii)(A)",
             EvidenceMode = EvidenceMode.Checklist,
             RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-awareness-training"
         });

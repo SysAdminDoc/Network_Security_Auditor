@@ -131,6 +131,32 @@ public class CheckCatalogTests
         Assert.Equal(expectedCmmc, framework.CMMC);
     }
 
+    [Theory]
+    [InlineData("PS01", "Security policies", "ID.GV-1", "164.308(a)(1)(i), 164.308(a)(1)(ii)(A), 164.316(b)(1)", "PL-1, PL-2, PM-1")]
+    [InlineData("PS02", "Acceptable use policy", "PR.AT-1", "164.308(a)(5)(i), 164.316(b)(1)", "AT-1, AT-2, PL-4")]
+    [InlineData("PS03", "Incident response plan", "RS.RP-1", "164.308(a)(6)(i), 164.308(a)(6)(ii), 164.316(b)(1)", "IR-1, IR-4, IR-8")]
+    [InlineData("PS04", "Compliance monitoring", "ID.GV-3", "164.308(a)(1)(ii)(D), 164.316(b)(2)(iii)", "CA-2, CA-7, PM-10")]
+    [InlineData("PS05", "Risk assessment", "ID.RA-1", "164.308(a)(1)(ii)(A), 164.308(a)(1)(ii)(B)", "RA-1, RA-3, RA-5")]
+    [InlineData("PS06", "Security training", "PR.AT-1", "164.308(a)(5)(i), 164.308(a)(5)(ii)(A)", "AT-1, AT-2, AT-3")]
+    public void Policies_Standards_Mappings_Avoid_Physical_Security_Citations(
+        string id,
+        string expectedLabel,
+        string expectedCsfTerm,
+        string expectedHipaa,
+        string expectedFedramp)
+    {
+        var catalog = CheckCatalog.All[id];
+        var framework = FrameworkMappings.All[id];
+
+        Assert.Equal(expectedLabel, catalog.Label);
+        Assert.Contains(expectedCsfTerm, catalog.Compliance);
+        Assert.Equal(expectedHipaa, framework.HIPAA);
+        Assert.Equal(expectedFedramp, framework.FedRAMP);
+        Assert.DoesNotContain("164.310", catalog.Compliance);
+        Assert.DoesNotContain("164.310", framework.HIPAA);
+        Assert.DoesNotContain("PE-", framework.FedRAMP);
+    }
+
     [Fact]
     public void Severity_Weights_Match_Enum_Values()
     {
