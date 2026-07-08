@@ -27,6 +27,7 @@ public static class DomainMaturityEngine
     {
         var lookup = checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
         double totalWeighted = 0;
+        double assessedWeight = 0;
         var domainScores = new int[Domains.Length];
 
         for (int i = 0; i < Domains.Length; i++)
@@ -50,10 +51,14 @@ public static class DomainMaturityEngine
 
             var domainPct = possible > 0 ? earned / possible * 100 : 0;
             domainScores[i] = (int)Math.Round(domainPct);
-            totalWeighted += domainPct * weight;
+            if (possible > 0)
+            {
+                totalWeighted += domainPct * weight;
+                assessedWeight += weight;
+            }
         }
 
-        var score = (int)Math.Round(totalWeighted);
+        var score = assessedWeight > 0 ? (int)Math.Round(totalWeighted / assessedWeight) : 0;
         var grade = RiskScoreEngine.GradeFromScore(score);
         return (score, grade, domainScores);
     }

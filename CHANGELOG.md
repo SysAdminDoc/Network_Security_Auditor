@@ -9,6 +9,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# dashboard exports now reuse the shared CSV escaping routine and constrain grade CSS classes to an allowlist before rendering HTML attributes.
 
 ### Correctness
+- Fixed: C# Domain Maturity scoring now normalizes by domains that have assessed checks so all-N/A identity domains no longer cap endpoint-only results.
 - Fixed: C# SARIF export now emits the strict root `$schema` property instead of `schema`.
 - Fixed: C# ATT&CK Navigator export now lets assessed failures outrank NotAssessed/NA entries when multiple checks map to the same technique.
 - Fixed: C# EP06 host firewall checks now prefer structured `MSFT_NetFirewallProfile` data, parse `netsh` fallback output without fixed spacing, and fail closed when profile status cannot be verified.

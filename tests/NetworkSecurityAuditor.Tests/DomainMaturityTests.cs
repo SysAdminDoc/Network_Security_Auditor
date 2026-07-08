@@ -63,6 +63,25 @@ public class DomainMaturityTests
     }
 
     [Fact]
+    public void All_Na_Domains_Do_Not_Cap_Assessed_Domain_Score()
+    {
+        var checks = CreateChecks(
+            ("EP03", CheckStatus.Pass), ("EP08", CheckStatus.Pass), ("EP04", CheckStatus.Pass),
+            ("EP02", CheckStatus.Pass), ("EP05", CheckStatus.Pass),
+            ("LM02", CheckStatus.Pass), ("LM03", CheckStatus.Pass), ("LM05", CheckStatus.Pass),
+            ("LM08", CheckStatus.Pass));
+
+        var (score, grade, domainScores) = DomainMaturityEngine.Calculate(checks);
+
+        Assert.Equal(100, score);
+        Assert.Equal("A", grade);
+        Assert.Equal(0, domainScores[0]);
+        Assert.Equal(0, domainScores[1]);
+        Assert.Equal(100, domainScores[2]);
+        Assert.Equal(100, domainScores[3]);
+    }
+
+    [Fact]
     public void Returns_Four_Domain_Scores()
     {
         var checks = CreateChecks(("IA01", CheckStatus.Pass));
