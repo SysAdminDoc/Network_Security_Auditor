@@ -1475,7 +1475,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 **Group A — Concurrency & app lifecycle (fix first; several P2/P3 items depend on this)**
 
-- [ ] **P1 — `--output <dir>` writes reports to the parent directory.** Code does `Path.GetDirectoryName(args.OutputPath)`, so `--output C:\Reports` writes everything to `C:\`; the filename portion is never used. README documents directory usage. Where: `App.xaml.cs:99-101,234-236`. Fix: treat `OutputPath` as a directory (or honor a real filename); sanitize with `Path.GetInvalidFileNameChars()`.
 
 **Group B — Export security & schema validity**
 

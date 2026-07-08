@@ -201,4 +201,26 @@ public class CliArgsTests
         Assert.Contains("Silent mode failed", error);
         Assert.Contains("locked export path", error);
     }
+
+    [Fact]
+    public void ResolveOutputDirectory_Treats_Output_As_Directory()
+    {
+        var outputDir = Path.Combine(Path.GetTempPath(), "nsa-output");
+        var fallback = Path.Combine(Path.GetTempPath(), "fallback");
+
+        var resolved = App.ResolveOutputDirectory(outputDir, fallback);
+
+        Assert.Equal(Path.GetFullPath(outputDir), resolved);
+    }
+
+    [Fact]
+    public void SafeFileNameSegment_Replaces_Invalid_Path_Characters()
+    {
+        var segment = App.SafeFileNameSegment(@"ACME:West/Prod", "Client");
+
+        Assert.DoesNotContain(Path.DirectorySeparatorChar, segment);
+        Assert.DoesNotContain(Path.AltDirectorySeparatorChar, segment);
+        Assert.DoesNotContain(':', segment);
+        Assert.StartsWith("ACME", segment);
+    }
 }

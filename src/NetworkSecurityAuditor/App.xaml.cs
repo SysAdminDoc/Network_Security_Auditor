@@ -163,9 +163,7 @@ public partial class App : Application
 
         var html = await DashboardGenerator.GenerateAsync(inputDir, args.StaleDays);
 
-        var outputDir = args.OutputPath.Length > 0
-            ? Path.GetDirectoryName(args.OutputPath) ?? inputDir
-            : inputDir;
+        var outputDir = ResolveOutputDirectory(args.OutputPath, inputDir);
         Directory.CreateDirectory(outputDir);
 
         var dashPath = Path.Combine(outputDir, $"SecurityDashboard_{DateTime.Now:yyyy-MM-dd_HHmm}.html");
@@ -295,12 +293,12 @@ public partial class App : Application
             Console.WriteLine("  Privacy mode: PII redacted with SHA256 pseudonyms");
         }
 
-        var outputDir = args.OutputPath.Length > 0
-            ? Path.GetDirectoryName(args.OutputPath) ?? System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop)
-            : System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
+        var outputDir = ResolveOutputDirectory(
+            args.OutputPath,
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop));
         Directory.CreateDirectory(outputDir);
 
-        var baseName = $"SecurityAudit_{options.Client}_{DateTime.Now:yyyy-MM-dd_HHmm}";
+        var baseName = $"SecurityAudit_{SafeFileNameSegment(options.Client, "Client")}_{DateTime.Now:yyyy-MM-dd_HHmm}";
 
         var jsonPath = Path.Combine(outputDir, $"{baseName}_findings.json");
         var json = JsonExporter.Export(checkVms, env, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade, client: options.Client, auditor: options.Auditor);
@@ -447,6 +445,26 @@ public partial class App : Application
                 return true;
         }
         return false;
+    }
+
+    internal static string ResolveOutputDirectory(string outputPath, string fallbackDirectory)
+    {
+        var directory = string.IsNullOrWhiteSpace(outputPath)
+            ? fallbackDirectory
+            : outputPath;
+
+        return Path.GetFullPath(System.Environment.ExpandEnvironmentVariables(directory));
+    }
+
+    internal static string SafeFileNameSegment(string value, string fallback)
+    {
+        var segment = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        foreach (var invalid in Path.GetInvalidFileNameChars())
+            segment = segment.Replace(invalid, '_');
+
+        segment = segment.Replace(Path.DirectorySeparatorChar, '_')
+            .Replace(Path.AltDirectorySeparatorChar, '_');
+        return string.IsNullOrWhiteSpace(segment) ? fallback : segment;
     }
 
     private static bool IsRunningAsAdmin()
