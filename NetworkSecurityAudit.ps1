@@ -267,18 +267,61 @@ $script:CliBrandingConfig = $BrandingConfig
 # primary_color, accent_color, contact_name, contact_email, contact_phone,
 # website, footer_text, cover_page (bool).
 $script:Branding = $null
+function Test-BrandingLogoDataUri {
+    param([string]$LogoData)
+
+    if ([string]::IsNullOrWhiteSpace($LogoData)) { return $false }
+
+    $match = [regex]::Match(
+        $LogoData,
+        '^data:(image/(?:png|jpeg|jpg|gif|webp|svg\+xml|x-icon|vnd\.microsoft\.icon|bmp));base64,([A-Za-z0-9+/]+={0,2})$',
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if (-not $match.Success) { return $false }
+
+    try {
+        [Convert]::FromBase64String($match.Groups[2].Value) | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Get-BrandingLogoMime {
+    param([string]$Extension)
+
+    switch ($Extension.TrimStart('.').ToLowerInvariant()) {
+        'png'  { return 'image/png' }
+        'jpg'  { return 'image/jpeg' }
+        'jpeg' { return 'image/jpeg' }
+        'gif'  { return 'image/gif' }
+        'webp' { return 'image/webp' }
+        'svg'  { return 'image/svg+xml' }
+        'ico'  { return 'image/x-icon' }
+        'bmp'  { return 'image/bmp' }
+        default { return '' }
+    }
+}
+
 if ($script:CliBrandingConfig -and (Test-Path $script:CliBrandingConfig -ErrorAction SilentlyContinue)) {
     try {
         $raw = Get-Content $script:CliBrandingConfig -Raw -Encoding UTF8
         $cfg = $raw | ConvertFrom-Json
         $logoData = ''
         if ($cfg.logo_base64) {
-            $logoData = $cfg.logo_base64
+            $candidateLogoData = [string]$cfg.logo_base64
+            if (Test-BrandingLogoDataUri -LogoData $candidateLogoData) {
+                $logoData = $candidateLogoData
+            } else {
+                Write-Warning 'Branding logo_base64 ignored: expected a supported data:image/...;base64 URI.'
+            }
         } elseif ($cfg.logo_path -and (Test-Path $cfg.logo_path -ErrorAction SilentlyContinue)) {
-            $bytes = [System.IO.File]::ReadAllBytes($cfg.logo_path)
-            $ext = [System.IO.Path]::GetExtension($cfg.logo_path).TrimStart('.').ToLower()
-            $mime = switch ($ext) { 'svg' { 'image/svg+xml' } 'ico' { 'image/x-icon' } 'gif' { 'image/gif' } 'webp' { 'image/webp' } default { "image/$ext" } }
-            $logoData = "data:$mime;base64,$([Convert]::ToBase64String($bytes))"
+            $mime = Get-BrandingLogoMime -Extension ([System.IO.Path]::GetExtension($cfg.logo_path))
+            if ($mime) {
+                $bytes = [System.IO.File]::ReadAllBytes($cfg.logo_path)
+                $logoData = "data:$mime;base64,$([Convert]::ToBase64String($bytes))"
+            } else {
+                Write-Warning 'Branding logo_path ignored: unsupported image extension.'
+            }
         }
         $script:Branding = @{
             CompanyName  = if ($cfg.company_name) { [string]$cfg.company_name } else { '' }

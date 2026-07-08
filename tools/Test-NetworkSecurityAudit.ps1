@@ -411,6 +411,13 @@ if ($scriptText -notmatch '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterTe
     $scriptText -match '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterText\)\s*\{\s*\$script:Branding\.FooterText\s*\}') {
     Add-Failure 'HTML report branded subtitle must HTML-encode Branding.FooterText.'
 }
+if ($scriptText -notmatch 'function Test-BrandingLogoDataUri' -or
+    $scriptText -notmatch 'function Get-BrandingLogoMime' -or
+    $scriptText -notmatch 'data:\(image/\(\?:png\|jpeg\|jpg\|gif\|webp\|svg\\\+xml\|x-icon\|vnd\\\.microsoft\\\.icon\|bmp\)\);base64,' -or
+    $scriptText -notmatch 'Test-BrandingLogoDataUri -LogoData \$candidateLogoData' -or
+    $scriptText -notmatch 'Get-BrandingLogoMime -Extension') {
+    Add-Failure 'Branding logos must validate logo_base64 data URIs and whitelist logo_path MIME types before HTML rendering.'
+}
 if ($scriptText -notmatch 'findings_truncated' -or $scriptText -notmatch 'findings_original_length' -or $scriptText -notmatch 'evidence_truncated' -or $scriptText -notmatch 'evidence_original_length') {
     Add-Failure 'JSONL truncation must include flags and original lengths.'
 }

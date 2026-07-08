@@ -24,6 +24,7 @@ obj/
 *.DotSettings.user
 packages/
 TestResults/
+testResults.xml
 publish/
 
 # AI config
