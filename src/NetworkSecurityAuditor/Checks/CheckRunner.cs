@@ -21,7 +21,8 @@ public sealed class CheckRunner
         AuditOptions options,
         IProgress<(string checkId, CheckResult result)>? progress,
         CancellationToken ct,
-        IProgress<(string checkId, int index, int total)>? startedProgress = null)
+        IProgress<(string checkId, int index, int total)>? startedProgress = null,
+        Action<(string checkId, CheckResult result)>? completedCallback = null)
     {
         var results = new Dictionary<string, CheckResult>();
         var applicableIds = GetApplicableCheckIds(env, options);
@@ -38,12 +39,14 @@ public sealed class CheckRunner
             {
                 var stub = CheckResult.NotImplemented(checkId);
                 results[checkId] = stub;
+                completedCallback?.Invoke((checkId, stub));
                 progress?.Report((checkId, stub));
                 continue;
             }
 
             var result = await RunSingleCheckAsync(check, env, options, ct);
             results[checkId] = result;
+            completedCallback?.Invoke((checkId, result));
             progress?.Report((checkId, result));
         }
 

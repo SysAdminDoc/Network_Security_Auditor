@@ -228,7 +228,7 @@ public partial class App : Application
             return (int)ExitCode.ReviewNeeded;
         }
 
-        var progress = new Progress<(string checkId, CheckResult result)>(update =>
+        void WriteProgress((string checkId, CheckResult result) update)
         {
             completed++;
             var symbol = update.result.Status switch
@@ -240,12 +240,17 @@ public partial class App : Application
                 _ => "----"
             };
             Console.WriteLine($"  [{completed}/{profileIds.Length}] [{symbol}] {update.checkId}");
-        });
+        }
 
         Console.WriteLine($"Running {profileIds.Length} checks...");
         Console.WriteLine();
 
-        var results = await runner.RunAsync(env, options, progress, CancellationToken.None);
+        var results = await runner.RunAsync(
+            env,
+            options,
+            progress: null,
+            ct: CancellationToken.None,
+            completedCallback: WriteProgress);
 
         var checkVms = new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>();
         foreach (var meta in CheckCatalog.All.Values.OrderBy(m => m.Id))

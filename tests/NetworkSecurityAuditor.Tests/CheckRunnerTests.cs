@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using NetworkSecurityAuditor.Checks;
+using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
 
 namespace NetworkSecurityAuditor.Tests;
@@ -42,7 +43,7 @@ public class CheckRunnerTests
         var completions = new List<string>();
 
         await runner.RunAsync(
-            new EnvironmentInfo(),
+            new EnvironmentInfo { IsDomainJoined = true },
             new AuditOptions { ScanProfile = ScanProfileType.Quick },
             new RecordingProgress<(string checkId, CheckResult result)>(update => completions.Add(update.checkId)),
             CancellationToken.None,
@@ -51,6 +52,26 @@ public class CheckRunnerTests
         Assert.Contains("EP01", starts);
         Assert.Contains("EP01", completions);
         Assert.True(starts.IndexOf("EP01") <= completions.IndexOf("EP01"));
+    }
+
+    [Fact]
+    public async Task RunAsync_Invokes_Completion_Callback_Inline()
+    {
+        var runner = new CheckRunner(new Dictionary<string, ISecurityCheck>
+        {
+            ["EP01"] = new PassingSecurityCheck()
+        });
+        var completions = new List<string>();
+
+        await runner.RunAsync(
+            new EnvironmentInfo { IsDomainJoined = true },
+            new AuditOptions { ScanProfile = ScanProfileType.Quick },
+            progress: null,
+            ct: CancellationToken.None,
+            completedCallback: update => completions.Add(update.checkId));
+
+        Assert.Contains("EP01", completions);
+        Assert.Equal(ScanProfiles.Resolve(ScanProfileType.Quick).Length, completions.Count);
     }
 
     private sealed class BlockingSecurityCheck(ManualResetEventSlim releaseCheck) : ISecurityCheck
