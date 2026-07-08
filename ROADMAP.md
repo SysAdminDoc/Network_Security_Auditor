@@ -1487,7 +1487,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 **Group F — GUI correctness (results have no visual signal / core workflows broken)**
 
-- [ ] **P1 — ComboBoxes render with default light Aero2 chrome in a dark-only app.** `DarkComboBox` sets only brushes; the stock template ignores `Background` and the Popup/items use SystemColors. Affects the Scan Profile selector and the per-card Status dropdown (most-used control). Same class: `ScrollBar` (thumb/arrows stay light) and missing `ToolTip`/`ContextMenu` styles. Where: `Theme/Themes.xaml:42-48,27-29`. Fix: full dark `ControlTemplate` for ComboBox (+ToggleButton+Popup+ItemContainer), ScrollBar, ContextMenu.
 - [ ] **P1 — Six VM features have no UI surface at all:** `SearchText`, `StatusFilter(s)`, `PrivacyMode`, `SelectedTheme/AvailableThemes`, `DomainMaturityScore/Grade`, and `SaveStateCommand`/`LoadStateCommand`. Consequences: GUI manual assessments can't be saved/loaded, GUI exports can never be privacy-redacted, search/filter is dead, Domain Maturity is computed but shown nowhere. Where: `MainViewModel.cs:22-28,41,44,68-72,497-580` vs `MainWindow.xaml`. Fix: add search box, status filter, privacy toggle, Save/Load buttons, Domain Maturity card.
 
 ---

@@ -5,11 +5,32 @@ public class MainWindowXamlTests
     [Fact]
     public void Main_Window_Binds_Security_Color_Surfaces()
     {
-        var xaml = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "NetworkSecurityAuditor", "MainWindow.xaml"));
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
 
         Assert.Contains("Foreground=\"{Binding GradeColor}\"", xaml);
         Assert.Contains("Background=\"{Binding SeverityColor}\"", xaml);
         Assert.Contains("Background=\"{Binding StatusColor}\"", xaml);
+    }
+
+    [Fact]
+    public void Theme_Provides_Dark_Popup_Control_Templates()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
+
+        Assert.Contains("x:Key=\"DarkComboBoxItem\"", xaml);
+        Assert.Contains("ControlTemplate TargetType=\"ComboBox\"", xaml);
+        Assert.Contains("x:Name=\"PART_Popup\"", xaml);
+        Assert.Contains("TargetType=\"ScrollBar\"", xaml);
+        Assert.Contains("ControlTemplate TargetType=\"ToolTip\"", xaml);
+        Assert.Contains("ControlTemplate TargetType=\"ContextMenu\"", xaml);
+    }
+
+    private static string ReadSourceFile(params string[] segments)
+    {
+        var pathSegments = new string[segments.Length + 1];
+        pathSegments[0] = FindRepoRoot();
+        Array.Copy(segments, 0, pathSegments, 1, segments.Length);
+        return File.ReadAllText(Path.Combine(pathSegments));
     }
 
     private static string FindRepoRoot()

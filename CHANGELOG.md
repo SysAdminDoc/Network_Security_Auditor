@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# GUI ComboBox popups/items, scrollbars, tooltips, and context menus now use dark WPF templates instead of default light system chrome.
 - Fixed: C# GUI grade, severity, and per-check status indicators now bind to live color properties instead of hardcoded gray/text-primary brushes.
 - Fixed: C# GUI manual status changes now refresh pass/fail/partial/N/A counters, overall grade, ransomware readiness, domain maturity, and status-filtered views immediately.
 - Fixed: PowerShell fleet mode now validates `-TargetsCsv`, deduplicates target names before queuing jobs, sanitizes per-host artifact names, parses localhost findings JSON from the derived silent-mode path, and forwards v4.11 fleet/remediation/export switches through elevation.
