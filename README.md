@@ -7,7 +7,7 @@ The repo also contains an active .NET 9/WPF C# rewrite under `src/NetworkSecurit
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![PowerShell Version](https://img.shields.io/badge/PowerShell-4.11.0-brightgreen)
+![PowerShell Version](https://img.shields.io/badge/PowerShell_Version-4.11.0-brightgreen)
 ![C%23 Rewrite](https://img.shields.io/badge/C%23_Rewrite-5.2.4-blueviolet)
 ![License](https://img.shields.io/badge/License-MIT-green)
 

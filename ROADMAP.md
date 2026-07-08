@@ -1484,10 +1484,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 **Group E — Legacy PS1 v4.11 fleet scan (newest, least-audited code)**
 
-- [ ] **P1 — Localhost fleet branch never launches the child audit** (subexpression `$(if($NI){'-NoInternet'})` always binds positionally -> `ReportTier` ValidateSet failure, both branches). Every `localhost`/`127.0.0.1`/`$env:COMPUTERNAME` target reported Failed; local machine never scanned. Where: `NetworkSecurityAudit.ps1:335`. Fix: build an args array and splat it (mirror the remote branch at line 349).
-- [ ] **P1 — Localhost fleet output-path mismatch: orchestrator parses the HTML report as JSON.** Child given `-OutputPath "<host>_findings.json"`; silent mode writes HTML to that path verbatim and derives JSON at `<host>_findings_findings.json`; orchestrator reads `<host>_findings.json` (HTML) -> `ConvertFrom-Json` throws -> Failed. Where: `NetworkSecurityAudit.ps1:332,377` vs 13831-13837,13904. Fix: pass `-OutputPath "<host>.html"`, read `<host>_findings.json`.
-- [ ] **P1 — Auto-elevation relaunch drops every v4.11 parameter; a non-admin fleet scan silently degrades to a local scan.** `-TargetsCsv/-ThrottleLimit/-PerHostTimeout/-Credential/-BrandingConfig/-Remediate*/-BenchmarkImportPath/-ExportSIEM` are not forwarded; the elevation block precedes the fleet block, so the elevated child does a full local scan while the parent `exit`s 0. Where: `NetworkSecurityAudit.ps1:177-215`. Fix: forward all new params (note Credential can't cross `Start-Process` — document or refuse pre-elevation fleet with a clear error).
-- [ ] **P1 — Duplicate/case-variant hostnames in the targets CSV hang fleet mode in a 100% CPU busy-loop forever.** `$fleetHosts` not deduped but `$jobs` hashtable is case-insensitive-keyed -> `$completed` can never reach `$fleetHosts.Count`; the no-sleep guard spins. Where: `NetworkSecurityAudit.ps1:301,313-321,360,406-407`. Fix: `Select-Object -Unique` and/or key jobs by unique index.
 
 **Group F — GUI correctness (results have no visual signal / core workflows broken)**
 
@@ -1529,8 +1525,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 - [ ] **P2 — Branding `footer_text` injected unencoded into the report header** (other FooterText sinks encode it) -> XSS in delivered reports. Where: `NetworkSecurityAudit.ps1:11177`. Fix: `HtmlEncode` the value.
 - [ ] **P2 — `logo_base64` injected verbatim into a single-quoted `src` attribute** -> attribute-breakout XSS. Where: `NetworkSecurityAudit.ps1:262-263,11139,11171`. Fix: validate against `^data:image/[a-z+.-]+;base64,[A-Za-z0-9+/=]+$` (and whitelist mime for logo_path).
 - [ ] **P2 — CSV `Client` field allows parameter injection into remote audit runs** (PS 5.1 doesn't escape embedded quotes in native command lines; `x" -ReadOnly "False` flips flags on every fleet host). Where: `NetworkSecurityAudit.ps1:326,349-351`. Fix: reject/escape `"` in CSV fields, or pass values via env/`-EncodedCommand`.
-- [ ] **P2 — Per-host result filename built from raw hostname** — IPv6 (`::1`) throws -> a completed scan recorded Failed; `..\` escapes `$fleetDir`; case variants collide. Where: `NetworkSecurityAudit.ps1:389-390`. Fix: `$safeTarget = $target -replace '[^\w.\-]','_'`.
-- [ ] **P2 — Fleet mode fails open to a local scan on a bad `-TargetsCsv` path** (missing file -> falls through to a full local audit with exports/RMM writes). Where: `NetworkSecurityAudit.ps1:292`. Fix: if `-TargetsCsv` supplied but absent, error + `exit 1`.
 
 **GUI theme / a11y / layout**
 - [ ] **P2 — DatePicker renders light** (calendar popup uses SystemColors). Where: `MainWindow.xaml:311-315`. Fix: dark DatePicker/Calendar template or styled TextBox+validation.

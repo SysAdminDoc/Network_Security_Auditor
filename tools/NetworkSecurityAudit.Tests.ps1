@@ -312,7 +312,7 @@ Describe 'Graph wrapper offline fixtures' {
 Describe 'Cloud Graph profile manifest' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        foreach ($nm in 'Convert-CloudAssessmentStatus','Get-CloudAssessmentStatusSummary','Get-GraphObjectProperty','Convert-GraphAuditErrorStatus','Invoke-GraphAuditRequest','Get-GraphStringArray','Get-CloudMockResponses','New-CloudAssessmentFinding','New-CloudUnavailableFinding','Invoke-CloudSecureScoreAssessment','Invoke-CloudConditionalAccessAssessment','Invoke-CloudGuestLifecycleAssessment','Invoke-CloudProfileAssessment') {
+        foreach ($nm in 'Convert-CloudAssessmentStatus','Get-CloudAssessmentStatusSummary','Get-GraphObjectProperty','Convert-GraphAuditErrorStatus','Invoke-GraphAuditRequest','Get-GraphStringArray','Get-CloudMockResponses','New-CloudAssessmentFinding','New-CloudUnavailableFinding','Invoke-CloudSecureScoreAssessment','Invoke-CloudConditionalAccessAssessment','Invoke-CloudGuestLifecycleAssessment','Invoke-CloudHardMatchAssessment','Invoke-CloudProfileAssessment') {
             $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
             . ([scriptblock]::Create($fn.Extent.Text))
         }
@@ -323,6 +323,7 @@ Describe 'Cloud Graph profile manifest' {
             'CL01' = [ordered]@{ Name='Microsoft Secure Score'; PermissionScopes=@('SecurityEvents.Read.All'); RoleHints=@('Security Reader'); LicensePrerequisites='Secure Score'; ApiVersion='v1.0'; Endpoint='/security/secureScores?$top=1'; OutputFields=@('currentScore'); SkipStates=@('NotConfigured'); PrivacyClassification='Tenant'; Implemented=$true }
             'CL02' = [ordered]@{ Name='Conditional Access policy baseline'; PermissionScopes=@('Policy.Read.All'); RoleHints=@('Conditional Access Reader'); LicensePrerequisites='Entra ID P1/P2'; ApiVersion='v1.0'; Endpoint='/identity/conditionalAccess/policies?$select=id,displayName,state,conditions,grantControls,sessionControls'; OutputFields=@('displayName'); SkipStates=@('NotConfigured'); PrivacyClassification='TenantPolicy'; Implemented=$true }
             'CL06' = [ordered]@{ Name='Stale users and guests'; PermissionScopes=@('User.Read.All','AuditLog.Read.All'); RoleHints=@('Global Reader'); LicensePrerequisites='signInActivity'; ApiVersion='v1.0'; Endpoint='/users?$select=displayName,userPrincipalName,userType,accountEnabled,createdDateTime,signInActivity'; OutputFields=@('displayName'); SkipStates=@('NotConfigured'); PrivacyClassification='UserPII'; Implemented=$true }
+            'CL13' = [ordered]@{ Name='Entra Connect hard-match protection'; PermissionScopes=@('User.Read.All','Directory.Read.All'); RoleHints=@('Global Reader'); LicensePrerequisites='Entra ID'; ApiVersion='v1.0'; Endpoint='/users?$select=displayName,userPrincipalName,onPremisesSyncEnabled,onPremisesImmutableId,onPremisesSamAccountName,userType&$filter=onPremisesSyncEnabled eq true'; OutputFields=@('displayName','userPrincipalName','onPremisesImmutableId'); SkipStates=@('NotConfigured','NotPermitted','NotLicensed','Error'); PrivacyClassification='UserPII'; Implemented=$true }
         }
     }
 
@@ -348,7 +349,7 @@ Describe 'Cloud Graph profile manifest' {
         $script:Text | Should -Match 'CloudUnavailable'
     }
 
-    It 'builds secure score, Conditional Access, and guest lifecycle findings from mock Graph responses' {
+    It 'builds secure score, Conditional Access, guest lifecycle, and hard-match findings from mock Graph responses' {
         $mock = @{
             CL01 = @(
                 [ordered]@{ StatusCode=200; Body=[ordered]@{ value=@([ordered]@{ currentScore=62; maxScore=100; createdDateTime='2026-06-16T12:00:00Z'; azureTenantId='tenant-1' }) } }
@@ -377,6 +378,19 @@ Describe 'Cloud Graph profile manifest' {
                     }
                 ) } }
             )
+            CL13 = @(
+                [ordered]@{ StatusCode=200; Body=[ordered]@{ value=@(
+                    [ordered]@{
+                        displayName='Synced Standard User'
+                        userPrincipalName='synced.user@example.com'
+                        userType='Member'
+                        onPremisesSyncEnabled=$true
+                        onPremisesImmutableId='abcdef0123456789'
+                        onPremisesSamAccountName='synced.user'
+                        assignedRoles=@()
+                    }
+                ) } }
+            )
         }
 
         $assessment = Invoke-CloudProfileAssessment -MockResponsesById $mock
@@ -386,6 +400,7 @@ Describe 'Cloud Graph profile manifest' {
         $assessment.Findings.TestId | Should -Contain 'CL01'
         $assessment.Findings.TestId | Should -Contain 'CL02'
         $assessment.Findings.TestId | Should -Contain 'CL06'
+        $assessment.Findings.TestId | Should -Contain 'CL13'
         ($assessment.Findings | Where-Object TestId -eq 'CL02').Evidence | Should -Match 'Missing required policies'
         ($assessment.Findings | Where-Object TestId -eq 'CL02').Evidence | Should -Match 'Dangerous exclusions'
         ($assessment.Findings | Where-Object TestId -eq 'CL06').Evidence | Should -Match 'age='
@@ -538,6 +553,44 @@ Describe 'Evidence-grade compliance helpers (real functions via AST)' {
         $fc.manual_validation_required | Should -Be 1
         ($fc.controls | Where-Object { $_.check_id -eq 'PS01' }).manual_validation_required | Should -BeTrue
         ($fc.controls | Where-Object { $_.check_id -eq 'IA01' }).observed_fact | Should -Be '12 DAs'
+    }
+}
+
+Describe 'Fleet orchestration safeguards' {
+    BeforeAll {
+        $script:FleetBlock = Get-Block $script:Text '# .*Remote Fleet Scan Mode' '# .*Remediation Engine'
+        $script:ElevationBlock = Get-Block $script:Text '# .*Auto-Elevate to Administrator' '# .*Store CLI config'
+    }
+
+    It 'does not fall through to a local scan when TargetsCsv is missing' {
+        $script:Text | Should -Match 'Targets CSV not found'
+        $script:Text | Should -Match 'Test-Path -LiteralPath \$TargetsCsv'
+    }
+
+    It 'deduplicates target names before queuing jobs' {
+        $script:FleetBlock | Should -Match '\$fleetRowsByHost\s*=\s*@\{\}'
+        $script:FleetBlock | Should -Match 'ContainsKey\(\$targetName\)'
+        $script:FleetBlock | Should -Match '\$fleetHosts\s*=\s*@\(\$fleetHostList\.ToArray\(\)\)'
+    }
+
+    It 'uses a local HTML output path and parses the derived findings JSON' {
+        $script:FleetBlock | Should -Match '\$hostOutFile\s*=\s*Join-Path \$fleetDir "\$\{safeTarget\}\.html"'
+        $script:FleetBlock | Should -Match '\$localJsonPath\s*=\s*\$hostOutFile -replace ''\\\.html\$'', ''_findings\.json'''
+        $script:FleetBlock | Should -Match '\$localJson\s*=\s*\$meta\.JsonPath'
+    }
+
+    It 'builds localhost child parameters as a typed splat' {
+        $script:FleetBlock | Should -Not -Match '\$\(if\(\$NI\)'
+        $script:FleetBlock | Should -Match '\$childParams\s*=\s*@\{'
+        $script:FleetBlock | Should -Match 'ReadOnly\s*=\s*\[bool\]\$using:ReadOnly'
+        $script:FleetBlock | Should -Match 'if \(\$using:fleetNoInternet\) \{ \$childParams\.NoInternet = \$true \}'
+    }
+
+    It 'forwards fleet and v4.11 switches during elevation or fails clearly for credentials' {
+        $script:ElevationBlock | Should -Match 'Credential cannot be forwarded through a UAC relaunch'
+        foreach ($token in '-ExportSIEM','-BrandingConfig','-TargetsCsv','-ThrottleLimit','-PerHostTimeout','-Remediate','-RemediateDryRun','-RemediateChecks','-BenchmarkImportPath') {
+            $script:ElevationBlock | Should -Match ([regex]::Escape($token))
+        }
     }
 }
 

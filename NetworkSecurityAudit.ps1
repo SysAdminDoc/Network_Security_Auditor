@@ -176,6 +176,10 @@ $script:ElevationSkipped = (-not $script:IsAdmin -and $NoElevate.IsPresent)
 # Dashboard mode only reads JSON files and writes HTML/CSV; never elevate for it.
 if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
     try {
+        if ($TargetsCsv -and $Credential) {
+            Write-Host "[Elevation] ERROR: -Credential cannot be forwarded through a UAC relaunch. Re-run from an elevated shell, use -NoElevate, or omit -Credential." -ForegroundColor Red
+            exit 1
+        }
         $argList = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"")
         # Pass through all CLI parameters on re-launch
         if ($Silent)       { $argList += '-Silent' }
@@ -193,6 +197,7 @@ if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
         if ($ExportNavigator) { $argList += '-ExportNavigator' }
         if ($ExportOCSF) { $argList += '-ExportOCSF' }
         if ($ExportOSCAL) { $argList += '-ExportOSCAL' }
+        if ($ExportSIEM) { $argList += '-ExportSIEM' }
         if ($PrivacyMode) { $argList += '-PrivacyMode' }
         if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
         if ($NoInternet)   { $argList += '-NoInternet' }
@@ -205,6 +210,14 @@ if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
         if ($TrendDays -ne 90) { $argList += '-TrendDays'; $argList += $TrendDays }
         if ($HistoryRetentionDays -ne 365) { $argList += '-HistoryRetentionDays'; $argList += $HistoryRetentionDays }
         foreach ($cloudPath in @($CloudAssessmentPath)) { if ($cloudPath) { $argList += '-CloudAssessmentPath'; $argList += "`"$cloudPath`"" } }
+        if ($BrandingConfig) { $argList += '-BrandingConfig'; $argList += "`"$BrandingConfig`"" }
+        if ($TargetsCsv) { $argList += '-TargetsCsv'; $argList += "`"$TargetsCsv`"" }
+        if ($ThrottleLimit -ne 5) { $argList += '-ThrottleLimit'; $argList += $ThrottleLimit }
+        if ($PerHostTimeout -ne 600) { $argList += '-PerHostTimeout'; $argList += $PerHostTimeout }
+        if ($Remediate) { $argList += '-Remediate' }
+        if ($RemediateDryRun) { $argList += '-RemediateDryRun' }
+        foreach ($checkId in @($RemediateChecks)) { if ($checkId) { $argList += '-RemediateChecks'; $argList += $checkId } }
+        foreach ($benchmarkPath in @($BenchmarkImportPath)) { if ($benchmarkPath) { $argList += '-BenchmarkImportPath'; $argList += "`"$benchmarkPath`"" } }
         Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs -WindowStyle Hidden
         exit
     }
@@ -289,18 +302,43 @@ if ($script:CliBrandingConfig -and (Test-Path $script:CliBrandingConfig -ErrorAc
 # When -TargetsCsv is provided in -Silent mode, the tool enters fleet orchestration:
 # reads host list from CSV, runs the audit on each via PSRemoting, collects per-host
 # JSON outputs, and writes an aggregate fleet summary.
-if ($Silent.IsPresent -and $TargetsCsv -and (Test-Path $TargetsCsv -ErrorAction SilentlyContinue)) {
+if ($Silent.IsPresent -and $TargetsCsv -and -not (Test-Path -LiteralPath $TargetsCsv -ErrorAction SilentlyContinue)) {
+    Write-Host "[Fleet Mode] ERROR: Targets CSV not found: $TargetsCsv" -ForegroundColor Red
+    exit 1
+}
+if ($Silent.IsPresent -and $TargetsCsv) {
     Write-Host "[Fleet Mode] Network Security Auditor v$($script:ProductVersion)" -ForegroundColor Cyan
-    $fleetCsv = Import-Csv $TargetsCsv -ErrorAction Stop
+    $fleetCsv = Import-Csv -LiteralPath $TargetsCsv -ErrorAction Stop
     $requiredCol = $fleetCsv | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
     if ('Host' -notin $requiredCol -and 'Hostname' -notin $requiredCol -and 'ComputerName' -notin $requiredCol) {
         Write-Host "[Fleet Mode] ERROR: CSV must have a Host, Hostname, or ComputerName column." -ForegroundColor Red
         exit 1
     }
     $hostCol = if ('Host' -in $requiredCol) { 'Host' } elseif ('Hostname' -in $requiredCol) { 'Hostname' } else { 'ComputerName' }
-    $fleetHosts = @($fleetCsv | ForEach-Object { $_.$hostCol } | Where-Object { $_ })
+    $fleetRowsByHost = @{}
+    $fleetHostList = [System.Collections.Generic.List[string]]::new()
+    foreach ($row in $fleetCsv) {
+        $targetName = ([string]$row.$hostCol).Trim()
+        if (-not $targetName) { continue }
+        if (-not $fleetRowsByHost.ContainsKey($targetName)) {
+            $fleetRowsByHost[$targetName] = $row
+            $fleetHostList.Add($targetName)
+        }
+    }
+    $fleetHosts = @($fleetHostList.ToArray())
+    if ($fleetHosts.Count -eq 0) {
+        Write-Host "[Fleet Mode] ERROR: Targets CSV contains no host values." -ForegroundColor Red
+        exit 1
+    }
     Write-Host "[Fleet Mode] Targets: $($fleetHosts.Count) hosts from $TargetsCsv"
     Write-Host "[Fleet Mode] Profile: $ScanProfile | ReadOnly: $ReadOnly | Throttle: $ThrottleLimit | Timeout: ${PerHostTimeout}s"
+
+    function Get-FleetSafeName {
+        param([string]$Name)
+        $safe = $Name -replace '[^\w.\-]', '_'
+        if (-not $safe) { return 'target' }
+        return $safe
+    }
 
     $scriptContent = Get-Content $PSCommandPath -Raw
     $fleetOutDir = if ($OutputPath) { Split-Path $OutputPath -Parent } else { [Environment]::GetFolderPath('Desktop') }
@@ -322,23 +360,44 @@ if ($Silent.IsPresent -and $TargetsCsv -and (Test-Path $TargetsCsv -ErrorAction 
         while ($jobs.Count -lt $ThrottleLimit -and $hostQueue.Count -gt 0) {
             $target = $null
             if ($hostQueue.TryDequeue([ref]$target)) {
-                $hostRow = $fleetCsv | Where-Object { $_.$hostCol -eq $target } | Select-Object -First 1
+                $hostRow = $fleetRowsByHost[$target]
                 $hostClient = if ($hostRow.PSObject.Properties['Client']) { $hostRow.Client } else { $target }
                 $hostSite   = if ($hostRow.PSObject.Properties['Site']) { $hostRow.Site } else { '' }
                 $hostTags   = if ($hostRow.PSObject.Properties['Tags']) { $hostRow.Tags } else { '' }
+                $safeTarget = Get-FleetSafeName $target
+                $localJsonPath = Join-Path $fleetDir "${safeTarget}_findings.json"
                 Write-Host "[Fleet Mode] [$($completed + $jobs.Count + 1)/$($fleetHosts.Count)] Starting: $target" -ForegroundColor Cyan
 
+                $fleetNoInternet = $NoInternet.IsPresent
                 if ($target -eq 'localhost' -or $target -eq $env:COMPUTERNAME -or $target -eq '127.0.0.1') {
-                    $hostOutFile = Join-Path $fleetDir "${target}_findings.json"
+                    $hostOutFile = Join-Path $fleetDir "${safeTarget}.html"
+                    $localJsonPath = $hostOutFile -replace '\.html$', '_findings.json'
                     $job = Start-Job -ScriptBlock {
-                        param($ScriptPath, $Prof, $RO, $ClientN, $OutP, $NI)
-                        & $ScriptPath -Silent -ScanProfile $Prof -ReadOnly $RO -Client $ClientN -OutputPath $OutP -ExportJSON -NoRmmWrite -NoRegistryWrite $(if($NI){'-NoInternet'})
-                    } -ArgumentList $PSCommandPath, $ScanProfile, $ReadOnly, $hostClient, $hostOutFile, $NoInternet.IsPresent
+                        $childParams = @{
+                            Silent = $true
+                            ScanProfile = $using:ScanProfile
+                            ReadOnly = [bool]$using:ReadOnly
+                            Client = $using:hostClient
+                            OutputPath = $using:hostOutFile
+                            ExportJSON = $true
+                            NoRmmWrite = $true
+                            NoRegistryWrite = $true
+                            NoElevate = $true
+                        }
+                        if ($using:fleetNoInternet) { $childParams.NoInternet = $true }
+                        & $using:PSCommandPath @childParams *>&1 | Out-String
+                    }
                 } else {
                     $job = Start-Job -ScriptBlock {
-                        param($Target, $ScriptContent, $Prof, $RO, $ClientN, $OutDir, $NI, $Cred)
-                        $sessParams = @{ ComputerName = $Target; ErrorAction = 'Stop' }
-                        if ($Cred) { $sessParams['Credential'] = $Cred }
+                        $remoteTarget = $using:target
+                        $remoteScriptContent = $using:scriptContent
+                        $remoteProfile = $using:ScanProfile
+                        $remoteReadOnly = $using:ReadOnly
+                        $remoteClient = $using:hostClient
+                        $remoteNoInternet = $using:fleetNoInternet
+                        $remoteCredential = $using:Credential
+                        $sessParams = @{ ComputerName = $remoteTarget; ErrorAction = 'Stop' }
+                        if ($remoteCredential) { $sessParams['Credential'] = $remoteCredential }
                         $session = New-PSSession @sessParams
                         try {
                             $remoteResult = Invoke-Command -Session $session -ScriptBlock {
@@ -346,18 +405,29 @@ if ($Silent.IsPresent -and $TargetsCsv -and (Test-Path $TargetsCsv -ErrorAction 
                                 $tmpScript = Join-Path $env:TEMP 'NetworkSecurityAudit_fleet.ps1'
                                 $sc | Set-Content $tmpScript -Encoding UTF8
                                 $tmpOut = Join-Path $env:TEMP "SecurityAudit_fleet.html"
-                                $args = @('-Silent', '-ScanProfile', $p, '-ReadOnly', $ro, '-Client', $c, '-OutputPath', $tmpOut, '-ExportJSON', '-NoRmmWrite', '-NoRegistryWrite')
-                                if ($ni) { $args += '-NoInternet' }
-                                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmpScript @args 2>&1
+                                $childParams = @{
+                                    Silent = $true
+                                    ScanProfile = $p
+                                    ReadOnly = [bool]$ro
+                                    Client = $c
+                                    OutputPath = $tmpOut
+                                    ExportJSON = $true
+                                    NoRmmWrite = $true
+                                    NoRegistryWrite = $true
+                                    NoElevate = $true
+                                }
+                                if ($ni) { $childParams.NoInternet = $true }
+                                $auditOutput = & $tmpScript @childParams *>&1 | Out-String
                                 $jsonPath = $tmpOut -replace '\.html$', '_findings.json'
-                                if (Test-Path $jsonPath) { Get-Content $jsonPath -Raw } else { '{}' }
-                            } -ArgumentList $ScriptContent, $Prof, $RO, $ClientN, $NI
-                            $remoteJson = $remoteResult[-1]
-                            @{ Success = $true; Target = $Target; Json = $remoteJson; Output = ($remoteResult[0..($remoteResult.Count-2)] -join "`n") }
+                                $jsonText = if (Test-Path $jsonPath) { Get-Content $jsonPath -Raw } else { '{}' }
+                                [pscustomobject]@{ Json = $jsonText; Output = $auditOutput }
+                            } -ArgumentList $remoteScriptContent, $remoteProfile, $remoteReadOnly, $remoteClient, $remoteNoInternet
+                            $remotePayload = @($remoteResult)[-1]
+                            @{ Success = $true; Target = $remoteTarget; Json = $remotePayload.Json; Output = $remotePayload.Output }
                         } finally { Remove-PSSession $session -ErrorAction SilentlyContinue }
-                    } -ArgumentList $target, $scriptContent, $ScanProfile, $ReadOnly, $hostClient, $fleetDir, $NoInternet.IsPresent, $Credential
+                    }
                 }
-                $jobs[$target] = @{ Job = $job; Client = $hostClient; Site = $hostSite; Tags = $hostTags; StartTime = Get-Date }
+                $jobs[$target] = @{ Job = $job; Client = $hostClient; Site = $hostSite; Tags = $hostTags; JsonPath = $localJsonPath; StartTime = Get-Date }
             }
         }
         $done = @($jobs.GetEnumerator() | Where-Object { $_.Value.Job.State -in 'Completed','Failed','Stopped' })
@@ -374,7 +444,7 @@ if ($Silent.IsPresent -and $TargetsCsv -and (Test-Path $TargetsCsv -ErrorAction 
                 if ($timedOut) { Stop-Job $meta.Job -ErrorAction SilentlyContinue; throw "Timed out after ${PerHostTimeout}s" }
                 $output = Receive-Job $meta.Job -ErrorAction Stop
                 if ($target -eq 'localhost' -or $target -eq $env:COMPUTERNAME -or $target -eq '127.0.0.1') {
-                    $localJson = Join-Path $fleetDir "${target}_findings.json"
+                    $localJson = $meta.JsonPath
                     if (Test-Path $localJson) {
                         $parsed = Get-Content $localJson -Raw | ConvertFrom-Json
                         $result.status = 'Completed'
@@ -386,7 +456,7 @@ if ($Silent.IsPresent -and $TargetsCsv -and (Test-Path $TargetsCsv -ErrorAction 
                     } else { $result.status = 'Completed'; $result.error = 'No JSON output' }
                 } else {
                     $remoteJson = if ($output.Json) { $output.Json } else { '{}' }
-                    $localJson = Join-Path $fleetDir "${target}_findings.json"
+                    $localJson = $meta.JsonPath
                     $remoteJson | Set-Content $localJson -Encoding UTF8
                     try {
                         $parsed = $remoteJson | ConvertFrom-Json
@@ -13887,7 +13957,7 @@ if ($script:SilentMode) {
             foreach ($e in $remResult.Manifest) {
                 $stateLabel = if (-not $e.applicable) { 'N/A' } elseif ($e.applied) { 'APPLIED' } elseif ($e.dry_run -and $e.applicable) { 'WOULD APPLY' } elseif ($e.error) { 'ERROR' } else { 'SKIPPED' }
                 $color = switch -Wildcard ($stateLabel) { 'APPLIED' { 'Green' } 'WOULD*' { 'Cyan' } 'ERROR' { 'Red' } default { 'DarkGray' } }
-                Write-Host "  [$stateLabel] $($e.check_id): $($e.label)$(if($e.before_value -ne $null){" (was: $($e.before_value))"})$(if($e.after_value -ne $null){" (now: $($e.after_value))"})$(if($e.error){" - $($e.error)"})" -ForegroundColor $color
+                Write-Host "  [$stateLabel] $($e.check_id): $($e.label)$(if($null -ne $e.before_value){" (was: $($e.before_value))"})$(if($null -ne $e.after_value){" (now: $($e.after_value))"})$(if($e.error){" - $($e.error)"})" -ForegroundColor $color
             }
             $s = $remResult.Rollback.summary
             Write-Host "[Silent Mode]   Total: $($s.total) | Applicable: $($s.applicable) | Applied: $($s.applied) | Errors: $($s.errors)"
