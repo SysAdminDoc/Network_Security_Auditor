@@ -425,6 +425,10 @@ Automatic platform detection and field population:
 | OCSF | `*_ocsf.jsonl` | OCSF v1.8.0 Security Finding events for vendor-neutral SIEM/MDR |
 | OSCAL | `*_oscal.json` | NIST OSCAL v1.2.2 assessment results for GRC and FedRAMP |
 
+Machine-readable contract schemas for JSON, JSONL, OCSF, OSCAL, Intune,
+compliance summary, dashboard aggregate rows, and SIEM field mappings are
+committed under `schemas/exports` and covered by xUnit golden fixture tests.
+
 Reports and exports label each check as `Automated`, `Heuristic`, `Checklist`,
 `InterviewRequired`, or `ExternalRequired`. Framework scores keep the existing
 default scoring behavior but also expose manual-validation counts and an

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/ocsf-compliance-finding.schema.json",
+  "title": "Network Security Auditor OCSF compliance finding event",
+  "type": "object",
+  "required": ["class_uid", "class_name", "category_uid", "category_name", "severity_id", "severity", "status_id", "status", "activity_id", "activity_name", "type_uid", "type_name", "time", "message", "metadata", "finding_info", "compliance", "resource"],
+  "properties": {
+    "class_uid": { "type": "integer" },
+    "class_name": { "type": "string" },
+    "category_uid": { "type": "integer" },
+    "category_name": { "type": "string" },
+    "severity_id": { "type": "integer" },
+    "severity": { "type": "string" },
+    "status_id": { "type": "integer" },
+    "status": { "type": "string" },
+    "activity_id": { "type": "integer" },
+    "activity_name": { "type": "string" },
+    "type_uid": { "type": "integer" },
+    "type_name": { "type": "string" },
+    "time": { "type": "integer" },
+    "message": { "type": "string" },
+    "metadata": { "type": "object", "required": ["version", "product"] },
+    "finding_info": { "type": "object", "required": ["uid", "title", "desc", "types", "created_time"] },
+    "compliance": { "type": "object", "required": ["status", "status_detail"] },
+    "resource": { "type": "object", "required": ["name", "type", "uid", "labels"] }
+  }
+}

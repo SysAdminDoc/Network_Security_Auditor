@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/jsonl-event.schema.json",
+  "title": "Network Security Auditor JSONL finding event",
+  "type": "object",
+  "required": ["event_type", "tool", "tool_version", "timestamp", "host", "os", "domain", "scan_profile", "overall_score", "overall_grade", "check_id", "category", "label", "severity", "status", "findings", "findings_truncated", "evidence", "evidence_truncated", "duration_ms"],
+  "properties": {
+    "event_type": { "type": "string" },
+    "tool": { "type": "string" },
+    "tool_version": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "host": { "type": "string" },
+    "os": { "type": "string" },
+    "domain": { "type": "string" },
+    "scan_profile": { "type": "string" },
+    "overall_score": { "type": "integer" },
+    "overall_grade": { "type": "string" },
+    "check_id": { "type": "string" },
+    "category": { "type": "string" },
+    "label": { "type": "string" },
+    "severity": { "type": "string" },
+    "status": { "type": "string" },
+    "findings": { "type": "string" },
+    "findings_truncated": { "type": "boolean" },
+    "evidence": { "type": "string" },
+    "evidence_truncated": { "type": "boolean" },
+    "duration_ms": { "type": "number" },
+    "cis": { "type": ["string", "null"] },
+    "nist": { "type": ["string", "null"] },
+    "mitre_tactics": { "type": ["array", "null"], "items": { "type": "string" } },
+    "mitre_techniques": { "type": ["array", "null"], "items": { "type": "string" } }
+  }
+}

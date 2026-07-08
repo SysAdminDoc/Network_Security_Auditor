@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/findings.schema.json",
+  "title": "Network Security Auditor structured findings export",
+  "type": "object",
+  "required": ["tool", "tool_version", "schema_version", "timestamp", "client", "auditor", "scan_profile", "environment", "score", "findings", "compliance_frameworks"],
+  "properties": {
+    "tool": { "type": "string" },
+    "tool_version": { "type": "string" },
+    "schema_version": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "client": { "type": "string" },
+    "auditor": { "type": "string" },
+    "scan_profile": { "type": "string" },
+    "environment": {
+      "type": "object",
+      "required": ["computer_name", "os_caption", "os_version", "os_build", "is_server", "is_domain_joined", "domain_name", "join_type", "azure_ad_joined", "intune_managed"],
+      "properties": {
+        "computer_name": { "type": "string" },
+        "os_caption": { "type": "string" },
+        "os_version": { "type": "string" },
+        "os_build": { "type": "integer" },
+        "is_server": { "type": "boolean" },
+        "is_domain_joined": { "type": "boolean" },
+        "domain_name": { "type": "string" },
+        "join_type": { "type": "string" },
+        "azure_ad_joined": { "type": "boolean" },
+        "intune_managed": { "type": "boolean" }
+      }
+    },
+    "score": {
+      "type": "object",
+      "required": ["overall", "grade", "ransomware_readiness", "ransomware_grade", "domain_maturity", "domain_maturity_grade", "sprs_score", "sprs_confidence"],
+      "properties": {
+        "overall": { "type": "integer" },
+        "grade": { "type": "string" },
+        "ransomware_readiness": { "type": "integer" },
+        "ransomware_grade": { "type": "string" },
+        "domain_maturity": { "type": "integer" },
+        "domain_maturity_grade": { "type": "string" },
+        "sprs_score": { "type": "integer" },
+        "sprs_confidence": { "type": "string" }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "category", "severity", "status", "findings", "evidence", "compliance", "duration_ms"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "category": { "type": "string" },
+          "severity": { "type": "string" },
+          "status": { "type": "string" },
+          "findings": { "type": "string" },
+          "evidence": { "type": "string" },
+          "compliance": { "type": "string" },
+          "duration_ms": { "type": "number" }
+        }
+      }
+    },
+    "compliance_frameworks": { "type": "object" }
+  }
+}

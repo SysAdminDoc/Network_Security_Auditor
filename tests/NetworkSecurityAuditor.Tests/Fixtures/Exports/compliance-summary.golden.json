@@ -1,0 +1,46 @@
+{
+  "schema_version": "2.1",
+  "tool": "NetworkSecurityAuditor",
+  "tool_version": "5.2.4",
+  "timestamp": "2026-07-08T00:00:00Z",
+  "host": "HOST01",
+  "os": "Windows 11 Enterprise",
+  "domain": "EXAMPLE.LOCAL",
+  "score": {
+    "overall": 85,
+    "grade": "B",
+    "ransomware": 70,
+    "ransomware_grade": "C",
+    "domain_maturity": 60,
+    "domain_maturity_grade": "D"
+  },
+  "counts": {
+    "total": 3,
+    "pass": 2,
+    "partial": 0,
+    "fail": 1,
+    "na": 0,
+    "critical_failures": 1
+  },
+  "category_scores": {
+    "Endpoint Security": {
+      "total": 3,
+      "passing": 2,
+      "pct": 66.7
+    }
+  },
+  "framework_scores": {
+    "NIST 800-171": {
+      "total": 3,
+      "passing": 2,
+      "pct": 66.7
+    }
+  },
+  "critical_failures": [
+    {
+      "id": "EP01",
+      "label": "Defender / EDR Deployment + ASR Rules",
+      "category": "Endpoint Security"
+    }
+  ]
+}

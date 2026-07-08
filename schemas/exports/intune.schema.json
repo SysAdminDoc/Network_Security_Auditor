@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/intune.schema.json",
+  "title": "Network Security Auditor Intune compliance export",
+  "type": "object",
+  "required": ["schema_version", "tool", "tool_version", "timestamp", "host", "os", "security_audit_grade", "security_audit_score", "ransomware_readiness_score", "ransomware_readiness_grade", "critical_failures", "critical_failure_count", "compliance_flags", "total_checks", "pass_count", "fail_count", "partial_count"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tool": { "type": "string" },
+    "tool_version": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "host": { "type": "string" },
+    "os": { "type": "string" },
+    "security_audit_grade": { "type": "string" },
+    "security_audit_score": { "type": "integer" },
+    "ransomware_readiness_score": { "type": "integer" },
+    "ransomware_readiness_grade": { "type": "string" },
+    "critical_failures": { "type": "array", "items": { "type": "string" } },
+    "critical_failure_count": { "type": "integer" },
+    "compliance_flags": { "type": "object" },
+    "total_checks": { "type": "integer" },
+    "pass_count": { "type": "integer" },
+    "fail_count": { "type": "integer" },
+    "partial_count": { "type": "integer" }
+  }
+}

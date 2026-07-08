@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/siem-field-mapping.schema.json",
+  "title": "Network Security Auditor SIEM content pack field mapping",
+  "type": "object",
+  "required": ["tool", "version", "source_format", "source_file_pattern", "fields"],
+  "properties": {
+    "tool": { "type": "string" },
+    "version": { "type": "string" },
+    "source_format": { "type": "string" },
+    "source_file_pattern": { "type": "string" },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "type", "description"],
+        "properties": {
+          "field": { "type": "string" },
+          "type": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}

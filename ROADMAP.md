@@ -1416,13 +1416,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
   Acceptance: Dashboard groups scans by stable client/host key, shows latest row per client, adds trend sparkline/data over the selected history window, and lists skipped/duplicate files deterministically in HTML and CSV.
   Complexity: L
 
-- [ ] P1 - Publish export schemas and golden contract fixtures
-  Why: The repo has many machine-readable exports but no committed JSON schemas or golden fixtures to protect SIEM/GRC/RMM consumers from silent field drift.
-  Evidence: `src/NetworkSecurityAuditor/Export/*.cs`; OCSF Compliance Finding schema; OSCAL assessment-results docs; Prowler OCSF/SARIF outputs.
-  Touches: `schemas/` or `docs/schemas/` if allowed by repo hygiene, `tests/NetworkSecurityAuditor.Tests/ExportTests.cs`, all exporters that lack stable schema metadata.
-  Acceptance: JSON, JSONL, OCSF, OSCAL, Intune, compliance summary, dashboard aggregate, and SIEM content pack outputs have schemas or golden fixtures validated in tests.
-  Complexity: L
-
 - [ ] P2 - Restore multi-theme WPF parity or remove theme claims
   Why: C# view-model exposes only Catppuccin Mocha while repo notes and README still describe seven dark themes.
   Evidence: `src/NetworkSecurityAuditor/ViewModels/MainViewModel.cs`; `src/NetworkSecurityAuditor/Theme/Themes.xaml`; README GUI section.

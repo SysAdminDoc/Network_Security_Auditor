@@ -1,0 +1,51 @@
+{
+  "tool": "Network Security Auditor",
+  "tool_version": "5.2.4",
+  "schema_version": "2.0",
+  "timestamp": "2026-07-08T00:00:00Z",
+  "client": "Example Client",
+  "auditor": "Example Auditor",
+  "scan_profile": "Full",
+  "environment": {
+    "computer_name": "HOST01",
+    "os_caption": "Windows 11 Enterprise",
+    "os_version": "24H2",
+    "os_build": 26100,
+    "is_server": false,
+    "is_domain_joined": true,
+    "domain_name": "EXAMPLE.LOCAL",
+    "join_type": "Domain",
+    "azure_ad_joined": false,
+    "intune_managed": true
+  },
+  "score": {
+    "overall": 85,
+    "grade": "B",
+    "ransomware_readiness": 70,
+    "ransomware_grade": "C",
+    "domain_maturity": 60,
+    "domain_maturity_grade": "D",
+    "sprs_score": 80,
+    "sprs_confidence": "High"
+  },
+  "findings": [
+    {
+      "id": "EP01",
+      "label": "Defender / EDR Deployment + ASR Rules",
+      "category": "Endpoint Security",
+      "severity": "Critical",
+      "status": "Pass",
+      "findings": "Protection is enabled.",
+      "evidence": "Synthetic evidence.",
+      "compliance": "NIST 800-171",
+      "duration_ms": 12.3
+    }
+  ],
+  "compliance_frameworks": {
+    "NIST 800-171": {
+      "total_controls": 1,
+      "passing_controls": 1,
+      "coverage": 100
+    }
+  }
+}

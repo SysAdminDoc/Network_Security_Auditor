@@ -1,0 +1,23 @@
+{
+  "tool": "NetworkSecurityAuditor",
+  "version": "5.2.4",
+  "source_format": "JSONL (one event per finding)",
+  "source_file_pattern": "*_siem.jsonl",
+  "fields": [
+    {
+      "field": "event_type",
+      "type": "string",
+      "description": "Always 'security_finding'"
+    },
+    {
+      "field": "tool_version",
+      "type": "string",
+      "description": "Tool version"
+    },
+    {
+      "field": "duration_ms",
+      "type": "number",
+      "description": "Check execution time in milliseconds"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "tool": "NetworkSecurityAuditor",
+  "tool_version": "5.2.4",
+  "timestamp": "2026-07-08T00:00:00Z",
+  "host": "HOST01",
+  "os": "Windows 11 Enterprise",
+  "security_audit_grade": "B",
+  "security_audit_score": 85,
+  "ransomware_readiness_score": 70,
+  "ransomware_readiness_grade": "C",
+  "critical_failures": ["EP01"],
+  "critical_failure_count": 1,
+  "compliance_flags": {
+    "NIST 800-171": true
+  },
+  "total_checks": 3,
+  "pass_count": 2,
+  "fail_count": 1,
+  "partial_count": 0
+}

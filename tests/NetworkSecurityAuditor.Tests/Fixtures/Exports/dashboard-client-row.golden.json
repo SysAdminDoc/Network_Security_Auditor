@@ -1,0 +1,23 @@
+{
+  "client": "Example Client",
+  "host": "HOST01",
+  "os": "Windows 11 Enterprise",
+  "score": 85,
+  "grade": "B",
+  "ransomware": 70,
+  "critical_fails": 1,
+  "total_fails": 2,
+  "stale": false,
+  "scan_date": "2026-07-08",
+  "file": "example_findings.json",
+  "trend": [
+    {
+      "timestamp": "2026-07-01T00:00:00Z",
+      "score": 80
+    },
+    {
+      "timestamp": "2026-07-08T00:00:00Z",
+      "score": 85
+    }
+  ]
+}

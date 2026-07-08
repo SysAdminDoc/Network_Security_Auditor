@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/oscal-assessment-results.schema.json",
+  "title": "Network Security Auditor OSCAL assessment results export",
+  "type": "object",
+  "required": ["assessment-results"],
+  "properties": {
+    "assessment-results": {
+      "type": "object",
+      "required": ["uuid", "metadata", "results"],
+      "properties": {
+        "uuid": { "type": "string" },
+        "metadata": {
+          "type": "object",
+          "required": ["title", "last-modified", "version", "oscal-version", "roles", "parties"]
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "title", "description", "start", "end", "observations", "findings", "risks"]
+          }
+        }
+      }
+    }
+  }
+}

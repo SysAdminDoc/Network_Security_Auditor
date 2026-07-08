@@ -1,0 +1,41 @@
+{
+  "class_uid": 2003,
+  "class_name": "Compliance Finding",
+  "category_uid": 2,
+  "category_name": "Findings",
+  "severity_id": 5,
+  "severity": "Critical",
+  "status_id": 2,
+  "status": "Fail",
+  "activity_id": 1,
+  "activity_name": "Create",
+  "type_uid": 200301,
+  "type_name": "Compliance Finding: Create",
+  "time": 1783468800000,
+  "message": "Protection is disabled.",
+  "metadata": {
+    "version": "1.4.0",
+    "product": {
+      "name": "Network Security Auditor",
+      "version": "5.2.4",
+      "vendor_name": "SysAdminDoc"
+    }
+  },
+  "finding_info": {
+    "uid": "EP01",
+    "title": "[EP01] Defender / EDR Deployment + ASR Rules",
+    "desc": "Protection is disabled.",
+    "types": ["Endpoint Security"],
+    "created_time": 1783468800000
+  },
+  "compliance": {
+    "status": "Fail",
+    "status_detail": "Synthetic evidence."
+  },
+  "resource": {
+    "name": "HOST01",
+    "type": "Workstation",
+    "uid": "HOST01",
+    "labels": ["os:Windows 11 Enterprise", "domain:EXAMPLE.LOCAL", "profile:Full"]
+  }
+}

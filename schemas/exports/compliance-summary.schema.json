@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/compliance-summary.schema.json",
+  "title": "Network Security Auditor compliance summary export",
+  "type": "object",
+  "required": ["schema_version", "tool", "tool_version", "timestamp", "host", "os", "domain", "score", "counts", "category_scores", "framework_scores", "critical_failures"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tool": { "type": "string" },
+    "tool_version": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "host": { "type": "string" },
+    "os": { "type": "string" },
+    "domain": { "type": "string" },
+    "score": {
+      "type": "object",
+      "required": ["overall", "grade", "ransomware", "ransomware_grade", "domain_maturity", "domain_maturity_grade"],
+      "properties": {
+        "overall": { "type": "integer" },
+        "grade": { "type": "string" },
+        "ransomware": { "type": "integer" },
+        "ransomware_grade": { "type": "string" },
+        "domain_maturity": { "type": "integer" },
+        "domain_maturity_grade": { "type": "string" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": ["total", "pass", "partial", "fail", "na", "critical_failures"],
+      "properties": {
+        "total": { "type": "integer" },
+        "pass": { "type": "integer" },
+        "partial": { "type": "integer" },
+        "fail": { "type": "integer" },
+        "na": { "type": "integer" },
+        "critical_failures": { "type": "integer" }
+      }
+    },
+    "category_scores": { "type": "object" },
+    "framework_scores": { "type": "object" },
+    "critical_failures": { "type": "array" }
+  }
+}

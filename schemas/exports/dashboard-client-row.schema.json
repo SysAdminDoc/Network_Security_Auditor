@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/dashboard-client-row.schema.json",
+  "title": "Network Security Auditor dashboard aggregate client row",
+  "type": "object",
+  "required": ["client", "host", "os", "score", "grade", "ransomware", "critical_fails", "total_fails", "stale", "scan_date", "file", "trend"],
+  "properties": {
+    "client": { "type": "string" },
+    "host": { "type": "string" },
+    "os": { "type": "string" },
+    "score": { "type": "integer" },
+    "grade": { "type": "string" },
+    "ransomware": { "type": "integer" },
+    "critical_fails": { "type": "integer" },
+    "total_fails": { "type": "integer" },
+    "stale": { "type": "boolean" },
+    "scan_date": { "type": "string" },
+    "file": { "type": "string" },
+    "trend": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "score"],
+        "properties": {
+          "timestamp": { "type": "string" },
+          "score": { "type": "integer" }
+        }
+      }
+    }
+  }
+}
