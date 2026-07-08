@@ -44,6 +44,10 @@ public partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<CheckItemViewModel> Checks { get; } = [];
 
+    public ObservableCollection<CategorySummaryViewModel> CategorySummaries { get; } = [];
+
+    public ObservableCollection<string> ActivityLog { get; } = [];
+
     public ICollectionView FilteredChecks { get; }
 
     [ObservableProperty]
@@ -54,6 +58,9 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _statusFilter = "All";
+
+    [ObservableProperty]
+    private CheckItemViewModel? _selectedCheck;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartScanCommand))]
@@ -90,6 +97,12 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     private int _naCount;
+
+    [ObservableProperty]
+    private int _notApplicableCount;
+
+    [ObservableProperty]
+    private int _notAssessedCount;
 
     [ObservableProperty]
     private int _ransomwareScore;
@@ -171,11 +184,23 @@ public partial class MainViewModel : ViewModelBase
         };
     }
 
-    partial void OnSelectedCategoryChanged(string value) => FilteredChecks.Refresh();
+    partial void OnSelectedCategoryChanged(string value)
+    {
+        FilteredChecks.Refresh();
+        SelectedCheck = FilteredChecks.Cast<CheckItemViewModel>().FirstOrDefault();
+    }
 
-    partial void OnSearchTextChanged(string value) => FilteredChecks.Refresh();
+    partial void OnSearchTextChanged(string value)
+    {
+        FilteredChecks.Refresh();
+        SelectedCheck = FilteredChecks.Cast<CheckItemViewModel>().FirstOrDefault();
+    }
 
-    partial void OnStatusFilterChanged(string value) => FilteredChecks.Refresh();
+    partial void OnStatusFilterChanged(string value)
+    {
+        FilteredChecks.Refresh();
+        SelectedCheck = FilteredChecks.Cast<CheckItemViewModel>().FirstOrDefault();
+    }
 
     public bool HasAssessedChecks => Checks.Any(c => c.Status is CheckStatus.Pass or CheckStatus.Partial or CheckStatus.Fail);
 
@@ -193,7 +218,28 @@ public partial class MainViewModel : ViewModelBase
         _ => "StatusNeutral"
     } : "StatusNeutral";
 
-    public EnvironmentInfo Environment { get; set; } = new();
+    private EnvironmentInfo _environment = new();
+
+    public EnvironmentInfo Environment
+    {
+        get => _environment;
+        set
+        {
+            if (SetProperty(ref _environment, value))
+            {
+                OnPropertyChanged(nameof(TargetDisplay));
+                OnPropertyChanged(nameof(EnvironmentBadge));
+            }
+        }
+    }
+
+    public string TargetDisplay => Environment.IsDomainJoined && !string.IsNullOrWhiteSpace(Environment.DomainName)
+        ? $"{Environment.DomainName} / {Environment.ComputerName}"
+        : Environment.ComputerName;
+
+    public string EnvironmentBadge => Environment.IsDomainJoined
+        ? "Domain joined"
+        : Environment.JoinType;
 
     [ObservableProperty]
     private string _preflightSummary = "";
@@ -205,12 +251,14 @@ public partial class MainViewModel : ViewModelBase
         var lines = results.Select(r => $"{(r.Passed ? "PASS" : "WARN")}  {r.Name}: {r.Detail}");
         PreflightSummary = $"Pre-flight: {passed}/{results.Count} passed\n{string.Join("\n", lines)}";
         ScanStatus = $"Pre-flight complete: {passed}/{results.Count} checks passed";
+        AppendActivity($"Pre-flight complete: {passed}/{results.Count} checks passed");
     }
 
     public void LoadCheckCatalog()
     {
         DetachCheckStatusHandlers();
         Checks.Clear();
+        CategorySummaries.Clear();
         foreach (var meta in CheckCatalog.All.Values.OrderBy(m => m.Id))
         {
             var check = CheckItemViewModel.FromMetadata(meta);
@@ -220,8 +268,15 @@ public partial class MainViewModel : ViewModelBase
 
         Categories = ["All", .. CheckCatalog.Categories];
         OnPropertyChanged(nameof(Categories));
+        foreach (var category in CheckCatalog.Categories)
+        {
+            CategorySummaries.Add(new CategorySummaryViewModel { Name = category });
+        }
+
+        SelectedCheck = Checks.FirstOrDefault();
         FilteredChecks.Refresh();
         UpdateScoreCounts();
+        AppendActivity($"Catalog loaded: {Checks.Count} checks across {CategorySummaries.Count} categories");
     }
 
     private void DetachCheckStatusHandlers()
@@ -238,6 +293,8 @@ public partial class MainViewModel : ViewModelBase
 
         UpdateScoreCounts();
         FilteredChecks.Refresh();
+        if (SelectedCheck is null || !FilteredChecks.Cast<CheckItemViewModel>().Contains(SelectedCheck))
+            SelectedCheck = FilteredChecks.Cast<CheckItemViewModel>().FirstOrDefault();
     }
 
     [RelayCommand(CanExecute = nameof(CanStartScan))]
@@ -249,6 +306,7 @@ public partial class MainViewModel : ViewModelBase
         IsScanning = true;
         ScanStatus = "Scanning...";
         ScanProgressPercent = 0;
+        AppendActivity($"Scan started: {SelectedProfile} profile");
 
         var options = new AuditOptions
         {
@@ -271,11 +329,14 @@ public partial class MainViewModel : ViewModelBase
             if (checkLookup.TryGetValue(update.checkId, out var vm))
             {
                 vm.IsRunning = true;
+                SelectedCheck = vm;
                 ScanStatus = $"Running {update.checkId}: {vm.Label} ({update.index}/{update.total})";
+                AppendActivity($"Running {update.checkId}: {vm.Label}");
             }
             else
             {
                 ScanStatus = $"Running {update.checkId} ({update.index}/{update.total})";
+                AppendActivity($"Running {update.checkId}");
             }
         });
 
@@ -290,10 +351,12 @@ public partial class MainViewModel : ViewModelBase
                 vm.DurationMs = update.result.Duration.TotalMilliseconds;
                 vm.IsRunning = false;
                 ScanStatus = $"Completed {update.checkId}: {vm.Label} ({nextCompleted}/{runningTotal})";
+                AppendActivity($"Completed {update.checkId}: {update.result.Status}");
             }
             else
             {
                 ScanStatus = $"Completed {update.checkId} ({nextCompleted}/{runningTotal})";
+                AppendActivity($"Completed {update.checkId}: {update.result.Status}");
             }
 
             completed = nextCompleted;
@@ -312,7 +375,8 @@ public partial class MainViewModel : ViewModelBase
             if (profileIds.Length == 0)
             {
                 unsupportedProfile = true;
-                ScanStatus = $"{options.ScanProfile} profile is not implemented in the C# rewrite yet. No local or AD checks were run.";
+                ScanStatus = $"{options.ScanProfile} profile is not available in this preview. No local or Active Directory checks were run.";
+                AppendActivity(ScanStatus);
                 ScanProgressPercent = 0;
                 return;
             }
@@ -334,6 +398,7 @@ public partial class MainViewModel : ViewModelBase
                 ScanStatus = _scanCts.Token.IsCancellationRequested
                     ? $"Scan cancelled ({completed}/{total} completed)"
                     : $"Scan complete ({completed}/{total} checks)";
+                AppendActivity(ScanStatus);
                 if (!_scanCts.Token.IsCancellationRequested && total > 0)
                     ScanProgressPercent = 100;
             }
@@ -352,6 +417,7 @@ public partial class MainViewModel : ViewModelBase
     {
         _scanCts?.Cancel();
         ScanStatus = "Cancelling...";
+        AppendActivity("Scan cancellation requested");
     }
 
     private bool CanStopScan() => IsScanning;
@@ -440,12 +506,14 @@ public partial class MainViewModel : ViewModelBase
             var files = Export.SiemContentPackExporter.ExportAll(folder)
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             ScanStatus = $"SIEM content pack exported: {folder} ({files.Length} files)";
+            AppendActivity(ScanStatus);
             return;
         }
 
         var path = Path.Combine(ExportOutputFolder, $"{baseName}{option.FileSuffix}.{option.Extension}");
         await WriteExportAsync(option.Kind, path);
         ScanStatus = $"{option.DisplayName} exported{(PrivacyMode ? " (privacy mode)" : "")}: {path}";
+        AppendActivity($"{option.DisplayName} exported");
     }
 
     private async Task WriteExportAsync(ExportFormatKind kind, string path)
@@ -836,7 +904,14 @@ public partial class MainViewModel : ViewModelBase
         PassCount = Checks.Count(c => c.Status == CheckStatus.Pass);
         FailCount = Checks.Count(c => c.Status == CheckStatus.Fail);
         PartialCount = Checks.Count(c => c.Status == CheckStatus.Partial);
-        NaCount = Checks.Count(c => c.Status is CheckStatus.NA or CheckStatus.NotAssessed);
+        NotApplicableCount = Checks.Count(c => c.Status == CheckStatus.NA);
+        NotAssessedCount = Checks.Count(c => c.Status == CheckStatus.NotAssessed);
+        NaCount = NotApplicableCount + NotAssessedCount;
+
+        foreach (var summary in CategorySummaries)
+        {
+            summary.Update(Checks);
+        }
 
         var (score, _) = RiskScoreEngine.Calculate(Checks);
         OverallScore = score;
@@ -854,5 +929,14 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(GradeBrushKey));
         OnPropertyChanged(nameof(OverallScoreDisplay));
         NotifyExportCommandCanExecuteChanged();
+    }
+
+    private void AppendActivity(string message)
+    {
+        ActivityLog.Add($"{DateTime.Now:HH:mm:ss}  {message}");
+        while (ActivityLog.Count > 80)
+        {
+            ActivityLog.RemoveAt(0);
+        }
     }
 }

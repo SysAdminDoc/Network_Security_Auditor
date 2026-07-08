@@ -17,6 +17,7 @@ public partial class CheckItemViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusBrushKey))]
+    [NotifyPropertyChangedFor(nameof(StatusLabel))]
     private CheckStatus _status = CheckStatus.NotAssessed;
 
     [ObservableProperty]
@@ -38,7 +39,19 @@ public partial class CheckItemViewModel : ViewModelBase
     private bool _isRunning;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DurationDisplay))]
     private double _durationMs;
+
+    public string StatusLabel => Status switch
+    {
+        CheckStatus.NotAssessed => "Not assessed",
+        CheckStatus.NA => "N/A",
+        _ => Status.ToString()
+    };
+
+    public string DurationDisplay => DurationMs > 0
+        ? $"{DurationMs:0} ms"
+        : "--";
 
     public string StatusBrushKey => Status switch
     {

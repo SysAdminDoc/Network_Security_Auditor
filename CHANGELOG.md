@@ -2,6 +2,12 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.2.5] - 2026-07-08
+
+### UX
+- Changed: C# GUI now uses a premium workstation layout with a command bar, KPI strip, category health cards, compact virtualized check review list, selected-check evidence/remediation inspector, and scan console.
+- Fixed: C# GUI status labels now use friendly user-facing text, separates N/A from Not assessed counts, adds keyboard focus states to custom controls, and removes rewrite-history wording from unavailable-profile messages.
+
 ## [v5.2.4] - 2026-06-28
 
 ### Security

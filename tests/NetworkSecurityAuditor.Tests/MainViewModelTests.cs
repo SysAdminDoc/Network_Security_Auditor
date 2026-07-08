@@ -35,6 +35,8 @@ public class MainViewModelTests
         Assert.Equal(0, vm.PassCount);
         Assert.Equal(0, vm.FailCount);
         Assert.Equal(0, vm.OverallScore);
+        Assert.Equal(0, vm.NotApplicableCount);
+        Assert.Equal(vm.Checks.Count, vm.NotAssessedCount);
         Assert.False(vm.HasAssessedChecks);
         Assert.Equal("\u2014", vm.Grade);
         Assert.Equal("Not scanned", vm.OverallScoreDisplay);
@@ -43,6 +45,7 @@ public class MainViewModelTests
 
         Assert.Equal(1, vm.PassCount);
         Assert.Equal(0, vm.FailCount);
+        Assert.Equal(vm.Checks.Count - 1, vm.NotAssessedCount);
         Assert.True(vm.HasAssessedChecks);
         Assert.Equal(100, vm.OverallScore);
         Assert.Equal("100/100", vm.OverallScoreDisplay);
@@ -59,6 +62,46 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public void Load_Catalog_Selects_First_Check_And_Builds_Category_Summaries()
+    {
+        var vm = new MainViewModel();
+
+        vm.LoadCheckCatalog();
+
+        Assert.NotNull(vm.SelectedCheck);
+        Assert.Equal(vm.Checks[0], vm.SelectedCheck);
+        Assert.NotEmpty(vm.CategorySummaries);
+        Assert.Equal(vm.Categories.Length - 1, vm.CategorySummaries.Count);
+        Assert.Contains(vm.ActivityLog, line => line.Contains("Catalog loaded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Category_Summaries_Update_When_Status_Changes()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+        var category = vm.Checks[0].Category;
+        var summary = vm.CategorySummaries.Single(s => s.Name == category);
+
+        Assert.Equal("--", summary.ScoreDisplay);
+        Assert.Equal(0, summary.AssessedCount);
+
+        vm.Checks[0].Status = CheckStatus.Fail;
+
+        Assert.Equal(1, summary.FailCount);
+        Assert.Equal(1, summary.AssessedCount);
+        Assert.Equal("0%", summary.ScoreDisplay);
+        Assert.Equal("ProgressBad", summary.HealthBrushKey);
+
+        vm.Checks[0].Status = CheckStatus.Pass;
+
+        Assert.Equal(1, summary.PassCount);
+        Assert.Equal(0, summary.FailCount);
+        Assert.Equal("100%", summary.ScoreDisplay);
+        Assert.Equal("ProgressGood", summary.HealthBrushKey);
+    }
+
+    [Fact]
     public void Filtered_Checks_Uses_Stable_View_And_Refreshes_Filters()
     {
         var vm = new MainViewModel();
@@ -72,14 +115,17 @@ public class MainViewModelTests
         vm.SearchText = check.Id;
         Assert.Same(view, vm.FilteredChecks);
         Assert.Single(view.Cast<CheckItemViewModel>());
+        Assert.Equal(check, vm.SelectedCheck);
 
         vm.StatusFilter = "Pass";
         Assert.Empty(view.Cast<CheckItemViewModel>());
+        Assert.Null(vm.SelectedCheck);
 
         check.Status = CheckStatus.Pass;
 
         Assert.Same(view, vm.FilteredChecks);
         Assert.Contains(check, view.Cast<CheckItemViewModel>());
+        Assert.Equal(check, vm.SelectedCheck);
     }
 
     [Fact]

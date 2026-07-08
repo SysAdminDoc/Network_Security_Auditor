@@ -3,6 +3,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using NetworkSecurityAuditor.Checks;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Export;
@@ -78,10 +81,61 @@ public partial class App : Application
             return;
         }
 
+        if (args.RenderScreenshotPath.Length > 0)
+        {
+            base.OnStartup(e);
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+            var screenshotWindow = CreateMainWindow(args);
+            MainWindow = screenshotWindow;
+            screenshotWindow.ContentRendered += async (_, _) =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5));
+                SaveWindowScreenshot(screenshotWindow, args.RenderScreenshotPath);
+                Shutdown(0);
+            };
+            screenshotWindow.Show();
+            return;
+        }
+
         base.OnStartup(e);
-        var window = new MainWindow();
+        var window = CreateMainWindow(args);
         MainWindow = window;
         window.Show();
+    }
+
+    private static MainWindow CreateMainWindow(CliArgs args)
+    {
+        var window = new MainWindow();
+        if (args.UiaBackground)
+        {
+            RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+            window.WindowStartupLocation = WindowStartupLocation.Manual;
+            window.Left = -32000;
+            window.Top = -32000;
+            window.ShowActivated = false;
+            window.ShowInTaskbar = false;
+        }
+
+        return window;
+    }
+
+    private static void SaveWindowScreenshot(Window window, string path)
+    {
+        var targetPath = Path.GetFullPath(System.Environment.ExpandEnvironmentVariables(path));
+        var directory = Path.GetDirectoryName(targetPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+
+        var width = Math.Max(1, (int)Math.Ceiling(window.ActualWidth));
+        var height = Math.Max(1, (int)Math.Ceiling(window.ActualHeight));
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(window);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(targetPath);
+        encoder.Save(stream);
     }
 
     private void RegisterGlobalExceptionHandlers()
@@ -223,8 +277,8 @@ public partial class App : Application
 
         if (profileIds.Length == 0)
         {
-            Console.WriteLine($"Profile {args.ScanProfile} is not implemented in the C# rewrite yet.");
-            Console.WriteLine("No local or Active Directory checks were run. Use the PowerShell artifact for the current cloud assessment path.");
+            Console.WriteLine($"Profile {args.ScanProfile} is not available in this preview.");
+            Console.WriteLine("No local or Active Directory checks were run. Use the production PowerShell artifact for the current cloud assessment path.");
             return (int)ExitCode.ReviewNeeded;
         }
 
@@ -533,6 +587,13 @@ public partial class App : Application
                 result.Silent = true;
             else if (arg.Equals("--no-elevate", StringComparison.OrdinalIgnoreCase))
                 result.NoElevate = true;
+            else if (arg.Equals("--uia-background", StringComparison.OrdinalIgnoreCase))
+                result.UiaBackground = true;
+            else if (arg.Equals("--render-screenshot", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                result.UiaBackground = true;
+                result.RenderScreenshotPath = args[++i];
+            }
             else if (arg.Equals("--no-internet", StringComparison.OrdinalIgnoreCase) || arg.Equals("-NoInternet", StringComparison.OrdinalIgnoreCase))
                 result.NoInternet = true;
             else if (arg.Equals("--privacy", StringComparison.OrdinalIgnoreCase) || arg.Equals("-PrivacyMode", StringComparison.OrdinalIgnoreCase))
@@ -608,6 +669,8 @@ public partial class App : Application
         public int StaleDays = 30;
         public bool Silent;
         public bool NoElevate;
+        public bool UiaBackground;
+        public string RenderScreenshotPath = "";
         public bool NoInternet;
         public bool PrivacyMode;
         public bool ExportCsv;

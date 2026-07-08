@@ -20,12 +20,15 @@ public class MainWindowXamlTests
         Assert.Contains("Text=\"{Binding SearchText, UpdateSourceTrigger=PropertyChanged}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding StatusFilters}\"", xaml);
         Assert.Contains("IsChecked=\"{Binding PrivacyMode}\"", xaml);
-        Assert.Contains("ItemsSource=\"{Binding AvailableThemes}\"", xaml);
         Assert.Contains("Text=\"{Binding DomainMaturityGrade}\"", xaml);
-        Assert.Contains("Path=\"DomainMaturityScore\"", xaml);
+        Assert.Contains("Text=\"{Binding DomainMaturityScore, StringFormat={}{0}/100}\"", xaml);
         Assert.Contains("Command=\"{Binding SaveStateCommand}\"", xaml);
         Assert.Contains("Command=\"{Binding LoadStateCommand}\"", xaml);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml);
+        Assert.Contains("Content=\"{Binding SelectedCheck}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding CategorySummaries}\"", xaml);
+        Assert.Contains("Text=\"{Binding NotApplicableCount, StringFormat=N/A: {0}}\"", xaml);
+        Assert.Contains("Text=\"{Binding NotAssessedCount, StringFormat=Not assessed: {0}}\"", xaml);
     }
 
     [Fact]
@@ -56,11 +59,11 @@ public class MainWindowXamlTests
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
         var theme = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
 
-        Assert.Contains("x:Key=\"TextMuted\" Color=\"#a6adc8\"", theme);
+        Assert.Contains("x:Key=\"TextMuted\" Color=\"#9aa7bd\"", theme);
         Assert.DoesNotContain("Foreground=\"{StaticResource BorderDim}\"", xaml);
         Assert.Contains("Foreground=\"{StaticResource TextMuted}\"", xaml);
-        Assert.Contains("Height=\"3\" CornerRadius=\"0\"", xaml);
-        Assert.DoesNotContain("Height=\"3\" CornerRadius=\"2\"", xaml);
+        Assert.Contains("Height=\"5\"", xaml);
+        Assert.Contains("Style x:Key=\"PremiumCard\"", theme);
     }
 
     [Fact]
@@ -73,9 +76,9 @@ public class MainWindowXamlTests
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
 
         Assert.Contains("ResourceBrushConverter x:Key=\"ResourceBrush\"", app);
-        Assert.Contains("x:Key=\"OverlayScrim\" Color=\"#881e1e2e\"", theme);
-        Assert.Contains("x:Key=\"BadgeBg\" Color=\"#585b70\"", theme);
-        Assert.Contains("x:Key=\"OnAccent\" Color=\"#1e1e2e\"", theme);
+        Assert.Contains("x:Key=\"OverlayScrim\" Color=\"#aa0f141d\"", theme);
+        Assert.Contains("x:Key=\"BadgeBg\" Color=\"#273244\"", theme);
+        Assert.Contains("x:Key=\"OnAccent\" Color=\"#f8fafc\"", theme);
         Assert.Contains("Background=\"{StaticResource OverlayScrim}\"", xaml);
         Assert.DoesNotContain("Background=\"#881e1e2e\"", xaml);
         Assert.DoesNotMatch("#[0-9a-fA-F]{6,8}", checkVm);
@@ -88,7 +91,7 @@ public class MainWindowXamlTests
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
 
-        Assert.Contains("<ListBox Grid.Column=\"1\" Grid.Row=\"0\"", xaml);
+        Assert.Contains("SelectedItem=\"{Binding SelectedCheck, Mode=TwoWay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding FilteredChecks}\"", xaml);
         Assert.Contains("VirtualizingPanel.IsVirtualizing=\"True\"", xaml);
         Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", xaml);
@@ -118,7 +121,7 @@ public class MainWindowXamlTests
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
         var exportOption = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "ExportFormatOption.cs");
 
-        Assert.Contains("Text=\"EXPORT\"", xaml);
+        Assert.Contains("Text=\"Export\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding ExportFormats}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedExportFormat}\"", xaml);
         Assert.Contains("Text=\"{Binding ExportOutputFolder, UpdateSourceTrigger=PropertyChanged}\"", xaml);
@@ -129,6 +132,47 @@ public class MainWindowXamlTests
         Assert.Contains("ExportFormatKind.CmmcHtml", mainVm);
         Assert.Contains("ExportFormatKind.CmmcJson", mainVm);
         Assert.Contains("public enum ExportFormatKind", exportOption);
+    }
+
+    [Fact]
+    public void Main_Window_Uses_Premium_Workstation_Layout()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+        var theme = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
+        var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
+
+        Assert.Contains("Category health summary cards", xaml);
+        Assert.Contains("Selected check evidence and remediation inspector", xaml);
+        Assert.Contains("Scan Console", xaml);
+        Assert.Contains("ActivityLog", xaml);
+        Assert.Contains("TargetDisplay", xaml);
+        Assert.Contains("x:Key=\"InspectorCard\"", theme);
+        Assert.Contains("public ObservableCollection<CategorySummaryViewModel> CategorySummaries { get; }", mainVm);
+        Assert.Contains("public ObservableCollection<string> ActivityLog { get; }", mainVm);
+    }
+
+    [Fact]
+    public void Main_Window_Uses_Friendly_Status_Labels()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+        var app = ReadSourceFile("src", "NetworkSecurityAuditor", "App.xaml");
+        var converter = ReadSourceFile("src", "NetworkSecurityAuditor", "Converters", "CheckStatusLabelConverter.cs");
+
+        Assert.Contains("CheckStatusLabelConverter x:Key=\"CheckStatusLabel\"", app);
+        Assert.Contains("Converter={StaticResource CheckStatusLabel}", xaml);
+        Assert.Contains("CheckStatus.NotAssessed => \"Not assessed\"", converter);
+        Assert.Contains("CheckStatus.NA => \"N/A\"", converter);
+    }
+
+    [Fact]
+    public void Theme_Provides_Keyboard_Focus_States()
+    {
+        var theme = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
+
+        Assert.Contains("Property=\"IsKeyboardFocused\" Value=\"True\"", theme);
+        Assert.Contains("Property=\"IsKeyboardFocusWithin\" Value=\"True\"", theme);
+        Assert.Contains("x:Key=\"AccentSoft\"", theme);
+        Assert.Contains("x:Key=\"RailBg\"", theme);
     }
 
     [Fact]
@@ -151,6 +195,32 @@ public class MainWindowXamlTests
         Assert.Contains("private async void OnLoaded", source);
         Assert.Contains("await Task.Run(EnvironmentDetector.Detect)", source);
         Assert.DoesNotContain("_viewModel.Environment = EnvironmentDetector.Detect();", source);
+    }
+
+    [Fact]
+    public void App_Provides_Background_Uia_Launch_Flag()
+    {
+        var source = ReadSourceFile("src", "NetworkSecurityAuditor", "App.xaml.cs");
+
+        Assert.Contains("--uia-background", source);
+        Assert.Contains("--render-screenshot", source);
+        Assert.Contains("RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;", source);
+        Assert.Contains("window.Left = -32000;", source);
+        Assert.Contains("window.ShowActivated = false;", source);
+        Assert.Contains("window.ShowInTaskbar = false;", source);
+        Assert.Contains("RenderTargetBitmap", source);
+    }
+
+    [Fact]
+    public void Unavailable_Profile_Copy_Does_Not_Leak_Rewrite_History()
+    {
+        var app = ReadSourceFile("src", "NetworkSecurityAuditor", "App.xaml.cs");
+        var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
+
+        Assert.Contains("is not available in this preview", app);
+        Assert.Contains("is not available in this preview", mainVm);
+        Assert.DoesNotContain("not implemented in the C# rewrite yet", app);
+        Assert.DoesNotContain("not implemented in the C# rewrite yet", mainVm);
     }
 
     [Fact]

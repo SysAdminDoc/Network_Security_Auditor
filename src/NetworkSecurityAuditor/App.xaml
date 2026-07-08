@@ -10,6 +10,7 @@
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BoolToVis" />
             <converters:ResourceBrushConverter x:Key="ResourceBrush" />
+            <converters:CheckStatusLabelConverter x:Key="CheckStatusLabel" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>
