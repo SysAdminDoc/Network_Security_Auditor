@@ -204,27 +204,83 @@ public sealed class EP03_SmbNtlmCheck : ISecurityCheck
         evidence.AppendLine($"  NodeType = {nodeType} (2=P-node disables broadcast, recommended)");
 
         // Check per-interface NetbiosOptions
-        bool anyEnabled = false;
+        var adapterOptions = new List<int>();
         var ifaces = RegistryHelper.GetSubKeyNames(interfacesKey);
         foreach (var iface in ifaces)
         {
             int nbOption = RegistryHelper.GetValue<int>($@"{interfacesKey}\{iface}", "NetbiosOptions", -1);
-            if (nbOption == 0 || nbOption == 1) // 0=DHCP default, 1=enabled
+            adapterOptions.Add(nbOption);
+
+            string description = nbOption switch
             {
-                anyEnabled = true;
-                evidence.AppendLine($"  Interface {iface}: NetbiosOptions={nbOption} (enabled/DHCP-default)");
-            }
+                1 => "enabled",
+                2 => "disabled",
+                0 => "DHCP default / not explicit",
+                _ => "not set / unknown"
+            };
+            evidence.AppendLine($"  Interface {iface}: NetbiosOptions={nbOption} ({description})");
         }
 
-        if (anyEnabled || nodeType != 2)
+        var assessment = AssessNetBios(nodeType, adapterOptions);
+        if (assessment.HasFailure)
         {
             failCount++;
-            sb.AppendLine("FAIL: NetBIOS over TCP/IP is not fully disabled. Vulnerable to NBNS poisoning.");
+            sb.AppendLine("FAIL: NetBIOS over TCP/IP is explicitly enabled on one or more interfaces. Vulnerable to NBNS poisoning.");
+        }
+        else if (assessment.HasStrongDisableSignal)
+        {
+            sb.AppendLine("PASS: NetBIOS over TCP/IP appears disabled or broadcast-hardened.");
         }
         else
         {
-            sb.AppendLine("PASS: NetBIOS over TCP/IP appears disabled (P-node).");
+            sb.AppendLine("INFO: NetBIOS over TCP/IP is not explicitly enabled, but adapter settings are DHCP-default or unknown. Verify DHCP policy disables NetBIOS where required.");
         }
+    }
+
+    internal static NetBiosAssessment AssessNetBios(int nodeType, IEnumerable<int> adapterOptions)
+    {
+        bool hasExplicitEnabled = false;
+        bool hasExplicitDisabled = false;
+        bool hasDhcpDefault = false;
+        bool hasUnknown = false;
+
+        foreach (int option in adapterOptions)
+        {
+            switch (option)
+            {
+                case 1:
+                    hasExplicitEnabled = true;
+                    break;
+                case 2:
+                    hasExplicitDisabled = true;
+                    break;
+                case 0:
+                    hasDhcpDefault = true;
+                    break;
+                default:
+                    hasUnknown = true;
+                    break;
+            }
+        }
+
+        return new NetBiosAssessment(
+            hasExplicitEnabled,
+            hasExplicitDisabled,
+            hasDhcpDefault,
+            hasUnknown,
+            BroadcastDisabled: nodeType == 2);
+    }
+
+    internal readonly record struct NetBiosAssessment(
+        bool HasExplicitEnabledInterface,
+        bool HasExplicitDisabledInterface,
+        bool HasDhcpDefaultInterface,
+        bool HasUnknownInterface,
+        bool BroadcastDisabled)
+    {
+        public bool HasFailure => HasExplicitEnabledInterface;
+
+        public bool HasStrongDisableSignal => HasExplicitDisabledInterface || BroadcastDisabled;
     }
 
     private static void CheckKerberosDelegation(StringBuilder sb, StringBuilder evidence, ref int failCount, ref int totalChecks)
