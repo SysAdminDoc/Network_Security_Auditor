@@ -16,6 +16,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# GUI scan progress now has deterministic sequential running-state coverage so only the active check is marked as running and cancellation clears the active row.
 - Added: Export contract schemas and golden fixtures now cover structured findings, JSONL events, OCSF, OSCAL, Intune, compliance summary, dashboard aggregate rows, and SIEM field mappings.
 - Fixed: C# dashboard generation now groups scans by client/host, shows only the latest row per client, emits score trends, and reports skipped or duplicate files in HTML and CSV outputs.
+- Added: C# GUI exports now use a compact format selector/output-folder flow and include SIEM content packs plus CMMC HTML/JSON exports.
 - Fixed: C# GUI check filtering now uses a stable `ICollectionView` and a recycling virtualized `ListBox` instead of recreating a heavy `ItemsControl` enumerable on each filter/status update.
 - Fixed: C# GUI grade, severity, status, overlay, selected-list, and accent foreground colors now resolve through WPF theme tokens instead of hardcoded hex values in XAML/view models.
 - Fixed: C# GUI muted labels now use a higher-contrast `TextMuted` token and the 3px status bar no longer uses a pill corner radius.

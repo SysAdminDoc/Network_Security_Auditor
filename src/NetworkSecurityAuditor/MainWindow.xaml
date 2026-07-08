@@ -161,45 +161,35 @@
                                 Padding="10,5" FontSize="10" />
                     </WrapPanel>
 
-                    <!-- Export Buttons -->
-                    <WrapPanel HorizontalAlignment="Center">
-                        <Button Content="HTML" Command="{Binding ExportHtmlCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="PDF" Command="{Binding ExportPdfCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="JSON" Command="{Binding ExportJsonCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="CSV" Command="{Binding ExportCsvCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="JSONL" Command="{Binding ExportJsonlCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="SARIF" Command="{Binding ExportSarifCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="Navigator" Command="{Binding ExportNavigatorCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="DefectDojo" Command="{Binding ExportDefectDojoCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="OCSF" Command="{Binding ExportOcsfCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="OSCAL" Command="{Binding ExportOscalCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="Intune" Command="{Binding ExportIntuneCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                        <Button Content="Summary" Command="{Binding ExportComplianceSummaryCommand}"
-                                Style="{StaticResource SecondaryButton}" Margin="2"
-                                Padding="10,5" FontSize="10" />
-                    </WrapPanel>
+                    <TextBlock Text="EXPORT" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextMuted}" Margin="0,0,0,4" />
+                    <ComboBox ItemsSource="{Binding ExportFormats}"
+                              SelectedItem="{Binding SelectedExportFormat}"
+                              DisplayMemberPath="DisplayName"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,0,6"
+                              AutomationProperties.Name="Export format selector" />
+                    <TextBox Text="{Binding ExportOutputFolder, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource DarkTextBox}"
+                             Margin="0,0,0,6"
+                             AutomationProperties.Name="Export output folder" />
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="Browse"
+                                Command="{Binding BrowseExportFolderCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="10,5" FontSize="10"
+                                AutomationProperties.Name="Browse export folder" />
+                        <Button Grid.Column="2" Content="Export"
+                                Command="{Binding ExportSelectedCommand}"
+                                Style="{StaticResource AccentButton}"
+                                Padding="10,5" FontSize="10"
+                                AutomationProperties.Name="Export selected format" />
+                    </Grid>
                 </StackPanel>
             </ScrollViewer>
         </Border>

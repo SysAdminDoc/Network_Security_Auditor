@@ -89,6 +89,7 @@ public class MainViewModelTests
         vm.LoadCheckCatalog();
         var exportCanExecute = new Func<bool>[]
         {
+            () => vm.ExportSelectedCommand.CanExecute(null),
             () => vm.ExportHtmlCommand.CanExecute(null),
             () => vm.ExportPdfCommand.CanExecute(null),
             () => vm.ExportJsonCommand.CanExecute(null),
@@ -119,6 +120,45 @@ public class MainViewModelTests
         vm.IsScanning = false;
 
         Assert.All(exportCanExecute, canExecute => Assert.True(canExecute()));
+    }
+
+    [Fact]
+    public async Task Export_Selected_Command_Writes_Cmmc_And_Siem_Outputs_To_Selected_Folder()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-gui-export-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var vm = new MainViewModel();
+            vm.LoadCheckCatalog();
+            vm.ExportOutputFolder = dir;
+            foreach (var check in vm.Checks.Take(5))
+            {
+                check.Status = CheckStatus.Pass;
+                check.Findings = $"Finding for {check.Id}";
+                check.Evidence = $"Evidence for {check.Id}";
+            }
+
+            vm.SelectedExportFormat = vm.ExportFormats.Single(f => f.Kind == ExportFormatKind.CmmcJson);
+            await vm.ExportSelectedCommand.ExecuteAsync(null);
+            var cmmcJson = Assert.Single(Directory.GetFiles(dir, "*_cmmc.json"));
+            Assert.Contains("\"report_type\": \"cmmc_self_assessment\"", await File.ReadAllTextAsync(cmmcJson));
+
+            vm.SelectedExportFormat = vm.ExportFormats.Single(f => f.Kind == ExportFormatKind.CmmcHtml);
+            await vm.ExportSelectedCommand.ExecuteAsync(null);
+            var cmmcHtml = Assert.Single(Directory.GetFiles(dir, "*_cmmc.html"));
+            Assert.Contains("CMMC Level 2 Self-Assessment Report", await File.ReadAllTextAsync(cmmcHtml));
+
+            vm.SelectedExportFormat = vm.ExportFormats.Single(f => f.Kind == ExportFormatKind.SiemContentPack);
+            await vm.ExportSelectedCommand.ExecuteAsync(null);
+            var siemDir = Assert.Single(Directory.GetDirectories(dir, "*_siem_pack"));
+            Assert.True(File.Exists(Path.Combine(siemDir, "field_mapping.json")));
+            Assert.True(File.Exists(Path.Combine(siemDir, "sentinel_table.json")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]

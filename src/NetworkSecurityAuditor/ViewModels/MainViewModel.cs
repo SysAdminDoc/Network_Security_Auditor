@@ -13,6 +13,25 @@ namespace NetworkSecurityAuditor.ViewModels;
 
 public partial class MainViewModel : ViewModelBase
 {
+    private static readonly ExportFormatOption[] DefaultExportFormats =
+    [
+        new(ExportFormatKind.Html, "HTML report", "", "html"),
+        new(ExportFormatKind.Pdf, "PDF report", "", "pdf"),
+        new(ExportFormatKind.Json, "Findings JSON", "", "json"),
+        new(ExportFormatKind.Csv, "Findings CSV", "", "csv"),
+        new(ExportFormatKind.Jsonl, "SIEM JSONL", "_siem", "jsonl"),
+        new(ExportFormatKind.Sarif, "SARIF", "", "sarif"),
+        new(ExportFormatKind.Navigator, "ATT&CK Navigator", "_navigator", "json"),
+        new(ExportFormatKind.DefectDojo, "DefectDojo JSON", "_defectdojo", "json"),
+        new(ExportFormatKind.Ocsf, "OCSF JSONL", "_ocsf", "jsonl"),
+        new(ExportFormatKind.Oscal, "OSCAL JSON", "_oscal", "json"),
+        new(ExportFormatKind.Intune, "Intune JSON", "_intune", "json"),
+        new(ExportFormatKind.ComplianceSummary, "Compliance summary JSON", "_summary", "json"),
+        new(ExportFormatKind.SiemContentPack, "SIEM content pack", "_siem_pack", "", IsFolderExport: true),
+        new(ExportFormatKind.CmmcHtml, "CMMC HTML", "_cmmc", "html"),
+        new(ExportFormatKind.CmmcJson, "CMMC JSON", "_cmmc", "json")
+    ];
+
     private CancellationTokenSource? _scanCts;
     private readonly RunChecksAsync _runChecksAsync;
 
@@ -91,6 +110,16 @@ public partial class MainViewModel : ViewModelBase
     public string[] AvailableThemes { get; } = ["Catppuccin Mocha"];
 
     public ScanProfileType[] AvailableProfiles { get; } = Enum.GetValues<ScanProfileType>();
+
+    public IReadOnlyList<ExportFormatOption> ExportFormats { get; } = DefaultExportFormats;
+
+    [ObservableProperty]
+    private ExportFormatOption _selectedExportFormat = DefaultExportFormats[0];
+
+    [ObservableProperty]
+    private string _exportOutputFolder = Path.Combine(
+        System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments),
+        "NetworkSecurityAuditor");
 
     public MainViewModel() : this(DefaultRunChecksAsync)
     {
@@ -345,10 +374,15 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnIsScanningChanged(bool value) => NotifyExportCommandCanExecuteChanged();
 
-    private bool CanExport() => !IsScanning && HasAssessedChecks;
+    partial void OnSelectedExportFormatChanged(ExportFormatOption value) => NotifyExportCommandCanExecuteChanged();
+
+    partial void OnExportOutputFolderChanged(string value) => NotifyExportCommandCanExecuteChanged();
+
+    private bool CanExport() => !IsScanning && HasAssessedChecks && !string.IsNullOrWhiteSpace(ExportOutputFolder);
 
     private void NotifyExportCommandCanExecuteChanged()
     {
+        ExportSelectedCommand.NotifyCanExecuteChanged();
         ExportHtmlCommand.NotifyCanExecuteChanged();
         ExportJsonCommand.NotifyCanExecuteChanged();
         ExportCsvCommand.NotifyCanExecuteChanged();
@@ -378,6 +412,110 @@ public partial class MainViewModel : ViewModelBase
         return (
             Export.PrivacyExportSanitizer.RedactChecks(Checks, redactor),
             Export.PrivacyExportSanitizer.RedactEnvironment(Environment, redactor));
+    }
+
+    [RelayCommand]
+    private void BrowseExportFolder()
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Select export folder",
+            InitialDirectory = Directory.Exists(ExportOutputFolder) ? ExportOutputFolder : ""
+        };
+
+        if (dialog.ShowDialog() == true)
+            ExportOutputFolder = dialog.FolderName;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportSelectedAsync()
+    {
+        Directory.CreateDirectory(ExportOutputFolder);
+        var baseName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}";
+        var option = SelectedExportFormat;
+
+        if (option.IsFolderExport)
+        {
+            var folder = Path.Combine(ExportOutputFolder, $"{baseName}{option.FileSuffix}");
+            var files = Export.SiemContentPackExporter.ExportAll(folder)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            ScanStatus = $"SIEM content pack exported: {folder} ({files.Length} files)";
+            return;
+        }
+
+        var path = Path.Combine(ExportOutputFolder, $"{baseName}{option.FileSuffix}.{option.Extension}");
+        await WriteExportAsync(option.Kind, path);
+        ScanStatus = $"{option.DisplayName} exported{(PrivacyMode ? " (privacy mode)" : "")}: {path}";
+    }
+
+    private async Task WriteExportAsync(ExportFormatKind kind, string path)
+    {
+        var (exportChecks, exportEnv) = GetExportData();
+
+        switch (kind)
+        {
+            case ExportFormatKind.Html:
+                await File.WriteAllTextAsync(path, Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
+                break;
+            case ExportFormatKind.Pdf:
+                await WritePdfExportAsync(path, exportChecks, exportEnv);
+                break;
+            case ExportFormatKind.Json:
+                await File.WriteAllTextAsync(path, Export.JsonExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade));
+                break;
+            case ExportFormatKind.Csv:
+                await File.WriteAllTextAsync(path, Export.CsvExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                break;
+            case ExportFormatKind.Jsonl:
+                await File.WriteAllTextAsync(path, Export.JsonlExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile));
+                break;
+            case ExportFormatKind.Sarif:
+                await File.WriteAllTextAsync(path, Export.SarifExporter.Export(exportChecks, exportEnv));
+                break;
+            case ExportFormatKind.Navigator:
+                await File.WriteAllTextAsync(path, Export.NavigatorExporter.Export(exportChecks));
+                break;
+            case ExportFormatKind.DefectDojo:
+                await File.WriteAllTextAsync(path, Export.DefectDojoExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                break;
+            case ExportFormatKind.Ocsf:
+                await File.WriteAllTextAsync(path, Export.OcsfExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile.ToString()));
+                break;
+            case ExportFormatKind.Oscal:
+                await File.WriteAllTextAsync(path, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                break;
+            case ExportFormatKind.Intune:
+                await File.WriteAllTextAsync(path, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));
+                break;
+            case ExportFormatKind.ComplianceSummary:
+                await File.WriteAllTextAsync(path, Export.ComplianceSummaryExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
+                break;
+            case ExportFormatKind.CmmcHtml:
+                await File.WriteAllTextAsync(path, Export.CmmcReportGenerator.ExportHtml(exportChecks, exportEnv, OverallScore, Grade));
+                break;
+            case ExportFormatKind.CmmcJson:
+                await File.WriteAllTextAsync(path, Export.CmmcReportGenerator.ExportJson(exportChecks, exportEnv));
+                break;
+            default:
+                throw new NotSupportedException($"Export format '{kind}' is not supported.");
+        }
+    }
+
+    private async Task WritePdfExportAsync(string path, IEnumerable<CheckItemViewModel> exportChecks, EnvironmentInfo exportEnv)
+    {
+        var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade, tier: Models.ReportTier.All);
+        var tempHtml = Path.Combine(Path.GetTempPath(), $"nsa_report_{Guid.NewGuid():N}.html");
+        try
+        {
+            await File.WriteAllTextAsync(tempHtml, html);
+            var (success, message) = await Export.PdfExporter.ExportAsync(tempHtml, path);
+            if (!success)
+                throw new InvalidOperationException(message);
+        }
+        finally
+        {
+            try { File.Delete(tempHtml); } catch { }
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]

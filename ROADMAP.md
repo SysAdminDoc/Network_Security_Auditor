@@ -1388,13 +1388,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 ## Research-Driven Additions
 
-- [ ] P1 - Add GUI export parity and a compact export settings flow
-  Why: WPF exposes most exports as crowded sidebar buttons but omits SIEM content packs and CMMC reports that the CLI already supports.
-  Evidence: `src/NetworkSecurityAuditor/MainWindow.xaml`; `src/NetworkSecurityAuditor/App.xaml.cs`; Prowler OCSF/SARIF/export examples.
-  Touches: `src/NetworkSecurityAuditor/MainWindow.xaml`, `ViewModels/MainViewModel.cs`, `Export/SiemContentPackExporter.cs`, `Export/CmmcReportGenerator.cs`, UI tests or view-model command tests.
-  Acceptance: GUI can export SIEM content packs and CMMC HTML/JSON; export buttons are replaced or grouped by a compact settings/menu flow; privacy mode and selected output folder apply consistently.
-  Complexity: L
-
 - [ ] P2 - Restore multi-theme WPF parity or remove theme claims
   Why: C# view-model exposes only Catppuccin Mocha while repo notes and README still describe seven dark themes.
   Evidence: `src/NetworkSecurityAuditor/ViewModels/MainViewModel.cs`; `src/NetworkSecurityAuditor/Theme/Themes.xaml`; README GUI section.
@@ -1524,6 +1517,5 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 - [ ] P3 — Status dropdown shows raw enum names "NotAssessed"/"NA" (friendly labels exist in `StatusFilters`). `MainWindow.xaml:15-19,226-231`.
 - [ ] P3 — "…not implemented in the C# rewrite yet… Use the PowerShell artifact" leaks porting history to users. `MainViewModel.cs:200`, `App.xaml.cs:146-147`.
 - [ ] P3 — Status bar "N/A: {n}" lumps `NA` and `NotAssessed` (reads "N/A: 69" at launch). `MainViewModel.cs:587`, `MainWindow.xaml:371`.
-- [ ] P3 — 12 export buttons (OCSF/OSCAL/Navigator/Summary/DefectDojo/Intune) have no tooltips and no "EXPORT" section header; "Summary" is ambiguous. `MainWindow.xaml:128-165`.
 - [ ] P3 — No keyboard-focus visuals in custom templates (`AccentButton`/`SecondaryButton`/`DarkListBoxItem` lack `IsKeyboardFocused`). `Themes.xaml:51-139`.
 - [ ] P3 — Card input fields (Findings/Evidence/Notes/Assignee/DatePicker x69) have no `AutomationProperties.Name` for screen readers. `MainWindow.xaml:257-315`.

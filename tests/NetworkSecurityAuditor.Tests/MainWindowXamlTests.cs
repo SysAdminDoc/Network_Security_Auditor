@@ -105,9 +105,30 @@ public class MainWindowXamlTests
     {
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
 
-        Assert.Contains("private bool CanExport() => !IsScanning && HasAssessedChecks;", mainVm);
-        Assert.Equal(12, mainVm.Split("[RelayCommand(CanExecute = nameof(CanExport))]").Length - 1);
+        Assert.Contains("private bool CanExport() => !IsScanning && HasAssessedChecks && !string.IsNullOrWhiteSpace(ExportOutputFolder);", mainVm);
+        Assert.Equal(13, mainVm.Split("[RelayCommand(CanExecute = nameof(CanExport))]").Length - 1);
+        Assert.Contains("ExportSelectedCommand.NotifyCanExecuteChanged();", mainVm);
         Assert.Contains("NotifyExportCommandCanExecuteChanged();", mainVm);
+    }
+
+    [Fact]
+    public void Main_Window_Uses_Compact_Export_Settings_Flow()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+        var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
+        var exportOption = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "ExportFormatOption.cs");
+
+        Assert.Contains("Text=\"EXPORT\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding ExportFormats}\"", xaml);
+        Assert.Contains("SelectedItem=\"{Binding SelectedExportFormat}\"", xaml);
+        Assert.Contains("Text=\"{Binding ExportOutputFolder, UpdateSourceTrigger=PropertyChanged}\"", xaml);
+        Assert.Contains("Command=\"{Binding BrowseExportFolderCommand}\"", xaml);
+        Assert.Contains("Command=\"{Binding ExportSelectedCommand}\"", xaml);
+        Assert.DoesNotContain("Command=\"{Binding ExportHtmlCommand}\"", xaml);
+        Assert.Contains("ExportFormatKind.SiemContentPack", mainVm);
+        Assert.Contains("ExportFormatKind.CmmcHtml", mainVm);
+        Assert.Contains("ExportFormatKind.CmmcJson", mainVm);
+        Assert.Contains("public enum ExportFormatKind", exportOption);
     }
 
     [Fact]

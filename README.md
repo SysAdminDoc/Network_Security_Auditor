@@ -86,6 +86,9 @@ Run the C# GUI:
 dotnet run --project .\src\NetworkSecurityAuditor
 ```
 
+The C# GUI export panel writes the selected format to one output folder and
+includes SIEM content packs plus CMMC HTML/JSON self-assessment exports.
+
 Run the C# silent mode:
 
 ```powershell
