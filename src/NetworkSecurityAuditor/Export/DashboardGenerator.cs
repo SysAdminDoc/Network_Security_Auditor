@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -8,113 +9,137 @@ public static class DashboardGenerator
 {
     public static async Task<string> GenerateAsync(string inputDir, int staleDays = 30)
     {
-        var jsonFiles = Directory.GetFiles(inputDir, "*_findings.json", SearchOption.TopDirectoryOnly);
-        var clients = new List<ClientSummary>();
-        var skippedFiles = new List<(string file, string reason)>();
-
-        foreach (var file in jsonFiles.OrderBy(f => f))
-        {
-            try
-            {
-                var json = await File.ReadAllTextAsync(file);
-                var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                var client = new ClientSummary
-                {
-                    FileName = Path.GetFileName(file),
-                    FilePath = file,
-                    Timestamp = root.TryGetProperty("timestamp", out var ts) ? ts.GetString() ?? "" : "",
-                    Client = root.TryGetProperty("client", out var cl) ? cl.GetString() ?? "" : Path.GetFileNameWithoutExtension(file),
-                    Host = root.TryGetProperty("environment", out var env) && env.TryGetProperty("computer_name", out var cn) ? cn.GetString() ?? "" : "",
-                    OS = root.TryGetProperty("environment", out var env2) && env2.TryGetProperty("os_caption", out var os) ? os.GetString() ?? "" : ""
-                };
-
-                if (root.TryGetProperty("score", out var score))
-                {
-                    client.OverallScore = score.TryGetProperty("overall", out var ov) ? ov.GetInt32() : 0;
-                    client.Grade = score.TryGetProperty("grade", out var gr) ? gr.GetString() ?? "" : "";
-                    client.RansomwareScore = score.TryGetProperty("ransomware_readiness", out var rw) ? rw.GetInt32() : 0;
-                    client.RansomwareGrade = score.TryGetProperty("ransomware_grade", out var rwg) ? rwg.GetString() ?? "" : "";
-                    client.DomainMaturityScore = score.TryGetProperty("domain_maturity", out var dm) ? dm.GetInt32() : 0;
-                }
-
-                if (root.TryGetProperty("findings", out var findings))
-                {
-                    foreach (var f in findings.EnumerateArray())
-                    {
-                        var status = f.TryGetProperty("status", out var st) ? st.GetString() : "";
-                        var severity = f.TryGetProperty("severity", out var sv) ? sv.GetString() : "";
-                        if (status == "fail" || status == "Fail") client.FailCount++;
-                        if ((status == "fail" || status == "Fail") && (severity == "critical" || severity == "Critical"))
-                            client.CriticalCount++;
-                    }
-                }
-
-                if (DateTime.TryParse(client.Timestamp, out var scanDate))
-                    client.IsStale = (DateTime.UtcNow - scanDate).TotalDays > staleDays;
-
-                var htmlSibling = Path.ChangeExtension(file, ".html")
-                    .Replace("_findings.html", ".html");
-                if (File.Exists(htmlSibling))
-                    client.ReportPath = Path.GetFileName(htmlSibling);
-
-                clients.Add(client);
-            }
-            catch (Exception ex)
-            {
-                skippedFiles.Add((Path.GetFileName(file), ex.Message));
-            }
-        }
-
-        return BuildHtml(clients, staleDays, skippedFiles);
+        var data = await LoadDashboardDataAsync(inputDir, staleDays);
+        return BuildHtml(data.Clients, staleDays, data.SkippedFiles, data.DuplicateFiles);
     }
 
     public static async Task<string> GenerateCsvAsync(string inputDir, int staleDays = 30)
     {
-        var jsonFiles = Directory.GetFiles(inputDir, "*_findings.json", SearchOption.TopDirectoryOnly);
+        var data = await LoadDashboardDataAsync(inputDir, staleDays);
         var sb = new StringBuilder();
-        sb.AppendLine("Client,Host,OS,Score,Grade,Ransomware,CriticalFails,TotalFails,Stale,ScanDate,File");
+        sb.AppendLine("Client,Host,OS,Score,Grade,Ransomware,CriticalFails,TotalFails,Stale,ScanDate,File,Trend,DuplicateFiles");
 
-        foreach (var file in jsonFiles.OrderBy(f => f))
+        foreach (var client in SortDashboardRows(data.Clients))
+        {
+            sb.AppendLine(
+                $"{CsvEsc(client.Client)},{CsvEsc(client.Host)},{CsvEsc(client.OS)},{client.OverallScore},{CsvEsc(client.Grade)},{client.RansomwareScore},{client.CriticalCount},{client.FailCount},{client.IsStale},{CsvEsc(client.Timestamp)},{CsvEsc(client.FileName)},{CsvEsc(FormatTrend(client.Trend))},{CsvEsc(string.Join("|", client.DuplicateFiles))}");
+        }
+
+        foreach (var skipped in data.SkippedFiles.OrderBy(s => s.FileName, StringComparer.OrdinalIgnoreCase))
+        {
+            sb.AppendLine($"# SKIPPED: {CsvEsc(skipped.FileName)} - {CsvEsc(skipped.Reason)}");
+        }
+
+        foreach (var duplicate in data.DuplicateFiles.OrderBy(d => d.FileName, StringComparer.OrdinalIgnoreCase))
+        {
+            sb.AppendLine($"# DUPLICATE: {CsvEsc(duplicate.FileName)} - latest for {CsvEsc(duplicate.StableKey)} is {CsvEsc(duplicate.LatestFileName)}");
+        }
+
+        return sb.ToString();
+    }
+
+    private static async Task<DashboardData> LoadDashboardDataAsync(string inputDir, int staleDays)
+    {
+        var jsonFiles = Directory.GetFiles(inputDir, "*_findings.json", SearchOption.TopDirectoryOnly);
+        var parsed = new List<ClientSummary>();
+        var data = new DashboardData();
+
+        foreach (var file in jsonFiles.OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
         {
             try
             {
                 var json = await File.ReadAllTextAsync(file);
-                var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                var client = root.TryGetProperty("client", out var cl) ? cl.GetString() ?? "" : "";
-                var host = root.TryGetProperty("environment", out var env) && env.TryGetProperty("computer_name", out var cn) ? cn.GetString() ?? "" : "";
-                var os = root.TryGetProperty("environment", out var env2) && env2.TryGetProperty("os_caption", out var osc) ? osc.GetString() ?? "" : "";
-                var score = root.TryGetProperty("score", out var sc) && sc.TryGetProperty("overall", out var ov) ? ov.GetInt32() : 0;
-                var grade = root.TryGetProperty("score", out var sc2) && sc2.TryGetProperty("grade", out var gr) ? gr.GetString() ?? "" : "";
-                var rw = root.TryGetProperty("score", out var sc3) && sc3.TryGetProperty("ransomware_readiness", out var rwv) ? rwv.GetInt32() : 0;
-                var timestamp = root.TryGetProperty("timestamp", out var ts) ? ts.GetString() ?? "" : "";
-                int failCount = 0, critCount = 0;
-                if (root.TryGetProperty("findings", out var findings))
-                {
-                    foreach (var f in findings.EnumerateArray())
-                    {
-                        var status = f.TryGetProperty("status", out var st) ? st.GetString() : "";
-                        var sev = f.TryGetProperty("severity", out var sv) ? sv.GetString() : "";
-                        if (status == "fail" || status == "Fail") failCount++;
-                        if ((status == "fail" || status == "Fail") && (sev == "critical" || sev == "Critical")) critCount++;
-                    }
-                }
-                var stale = DateTime.TryParse(timestamp, out var d) && (DateTime.UtcNow - d).TotalDays > staleDays;
-
-                sb.AppendLine($"{CsvEsc(client)},{CsvEsc(host)},{CsvEsc(os)},{score},{CsvEsc(grade)},{rw},{critCount},{failCount},{stale},{CsvEsc(timestamp)},{CsvEsc(Path.GetFileName(file))}");
+                parsed.Add(ParseClientSummary(file, json, staleDays));
             }
             catch (Exception ex)
             {
-                sb.AppendLine($"# SKIPPED: {CsvEsc(Path.GetFileName(file))} — {CsvEsc(ex.Message)}");
+                data.SkippedFiles.Add(new SkippedFile(Path.GetFileName(file), ex.Message));
             }
         }
-        return sb.ToString();
+
+        foreach (var group in parsed.GroupBy(c => c.StableKey, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            var ordered = group
+                .OrderBy(c => c.ScanTime ?? DateTimeOffset.MinValue)
+                .ThenBy(c => c.FileName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var latest = ordered
+                .OrderByDescending(c => c.ScanTime ?? DateTimeOffset.MinValue)
+                .ThenBy(c => c.FileName, StringComparer.OrdinalIgnoreCase)
+                .First();
+
+            latest.Trend = ordered
+                .Select(c => new TrendPoint(TrendTimestamp(c), c.OverallScore))
+                .ToList();
+            latest.DuplicateFiles = ordered
+                .Where(c => !ReferenceEquals(c, latest))
+                .Select(c => c.FileName)
+                .ToList();
+
+            foreach (var duplicate in latest.DuplicateFiles)
+            {
+                data.DuplicateFiles.Add(new DuplicateScan(duplicate, latest.StableKey, latest.FileName));
+            }
+
+            data.Clients.Add(latest);
+        }
+
+        return data;
     }
 
-    private static string BuildHtml(List<ClientSummary> clients, int staleDays, List<(string file, string reason)>? skippedFiles = null)
+    private static ClientSummary ParseClientSummary(string file, string json, int staleDays)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var client = new ClientSummary
+        {
+            FileName = Path.GetFileName(file),
+            FilePath = file,
+            Timestamp = root.TryGetProperty("timestamp", out var ts) ? ts.GetString() ?? "" : "",
+            Client = root.TryGetProperty("client", out var cl) ? cl.GetString() ?? "" : Path.GetFileNameWithoutExtension(file),
+            Host = root.TryGetProperty("environment", out var env) && env.TryGetProperty("computer_name", out var cn) ? cn.GetString() ?? "" : "",
+            OS = root.TryGetProperty("environment", out var env2) && env2.TryGetProperty("os_caption", out var os) ? os.GetString() ?? "" : ""
+        };
+
+        if (root.TryGetProperty("score", out var score))
+        {
+            client.OverallScore = score.TryGetProperty("overall", out var ov) ? ov.GetInt32() : 0;
+            client.Grade = score.TryGetProperty("grade", out var gr) ? gr.GetString() ?? "" : "";
+            client.RansomwareScore = score.TryGetProperty("ransomware_readiness", out var rw) ? rw.GetInt32() : 0;
+            client.RansomwareGrade = score.TryGetProperty("ransomware_grade", out var rwg) ? rwg.GetString() ?? "" : "";
+            client.DomainMaturityScore = score.TryGetProperty("domain_maturity", out var dm) ? dm.GetInt32() : 0;
+        }
+
+        if (root.TryGetProperty("findings", out var findings))
+        {
+            foreach (var finding in findings.EnumerateArray())
+            {
+                var status = finding.TryGetProperty("status", out var st) ? st.GetString() : "";
+                var severity = finding.TryGetProperty("severity", out var sv) ? sv.GetString() : "";
+                if (string.Equals(status, "fail", StringComparison.OrdinalIgnoreCase)) client.FailCount++;
+                if (string.Equals(status, "fail", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(severity, "critical", StringComparison.OrdinalIgnoreCase))
+                    client.CriticalCount++;
+            }
+        }
+
+        client.ScanTime = ParseTimestamp(client.Timestamp);
+        client.IsStale = client.ScanTime is not null && (DateTimeOffset.UtcNow - client.ScanTime.Value).TotalDays > staleDays;
+        client.StableKey = BuildStableKey(client);
+
+        var htmlSibling = Path.ChangeExtension(file, ".html")
+            .Replace("_findings.html", ".html", StringComparison.OrdinalIgnoreCase);
+        if (File.Exists(htmlSibling))
+            client.ReportPath = Path.GetFileName(htmlSibling);
+
+        return client;
+    }
+
+    private static string BuildHtml(
+        List<ClientSummary> clients,
+        int staleDays,
+        List<SkippedFile> skippedFiles,
+        List<DuplicateScan> duplicateFiles)
     {
         var sb = new StringBuilder();
         sb.AppendLine("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">");
@@ -125,26 +150,29 @@ public static class DashboardGenerator
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; padding: 32px; }
             h1 { color: #cba6f7; margin-bottom: 8px; }
-            .subtitle { color: #7f839b; font-size: 14px; margin-bottom: 24px; }
+            .subtitle { color: #a6adc8; font-size: 14px; margin-bottom: 24px; }
             .summary-bar { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
             .summary-stat { background: #313244; border-radius: 8px; padding: 16px 24px; text-align: center; min-width: 140px; }
             .summary-stat .value { font-size: 32px; font-weight: 700; }
-            .summary-stat .label { font-size: 11px; color: #7f839b; text-transform: uppercase; letter-spacing: 1px; }
+            .summary-stat .label { font-size: 11px; color: #a6adc8; text-transform: uppercase; letter-spacing: 1px; }
             table { width: 100%; border-collapse: collapse; background: #313244; border-radius: 8px; overflow: hidden; }
             th { background: #45475a; color: #cba6f7; text-align: left; padding: 10px 14px; font-size: 13px; text-transform: uppercase; }
-            td { padding: 10px 14px; border-top: 1px solid #45475a; font-size: 14px; }
+            td { padding: 10px 14px; border-top: 1px solid #45475a; font-size: 14px; vertical-align: middle; }
             tr:hover { background: #3b3d50; }
             .grade-a { color: #a6e3a1; } .grade-b { color: #94e2d5; } .grade-c { color: #f9e2af; }
             .grade-d { color: #fab387; } .grade-f { color: #f38ba8; }
             .stale { color: #f38ba8; font-weight: 600; }
-            .footer { text-align: center; padding: 24px; color: #585b70; font-size: 12px; margin-top: 32px; }
+            .trend { width: 96px; height: 24px; overflow: visible; margin-right: 6px; vertical-align: middle; }
+            .trend-line { fill: none; stroke: #89b4fa; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+            .trend-data { color: #a6adc8; font-size: 12px; white-space: nowrap; }
+            .footer { text-align: center; padding: 24px; color: #7f849c; font-size: 12px; margin-top: 32px; }
             a { color: #89b4fa; text-decoration: none; } a:hover { text-decoration: underline; }
-            @media (max-width: 768px) { body { padding: 12px; } .summary-bar { flex-direction: column; } }
+            @media (max-width: 768px) { body { padding: 12px; } .summary-bar { flex-direction: column; } table { display: block; overflow-x: auto; } }
             """);
         sb.AppendLine("</style></head><body>");
 
         sb.AppendLine("<h1>Multi-Client Security Dashboard</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">Generated {Esc(DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm"))} UTC | {clients.Count} clients | Stale threshold: {staleDays} days</p>");
+        sb.AppendLine($"<p class=\"subtitle\">Generated {Esc(DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))} UTC | {clients.Count} clients | Stale threshold: {staleDays} days | {duplicateFiles.Count} older scan(s) hidden</p>");
 
         var avgScore = clients.Count > 0 ? clients.Average(c => c.OverallScore) : 0;
         var totalCritical = clients.Sum(c => c.CriticalCount);
@@ -158,20 +186,21 @@ public static class DashboardGenerator
         sb.AppendLine("</div>");
 
         sb.AppendLine("<table>");
-        sb.AppendLine("<tr><th>Client</th><th>Host</th><th>Score</th><th>Grade</th><th>Ransomware</th><th>Critical</th><th>Fails</th><th>Scan Date</th><th>Report</th></tr>");
+        sb.AppendLine("<tr><th>Client</th><th>Host</th><th>Score</th><th>Grade</th><th>Trend</th><th>Ransomware</th><th>Critical</th><th>Fails</th><th>Scan Date</th><th>Report</th></tr>");
 
-        foreach (var c in clients.OrderByDescending(c => c.CriticalCount).ThenBy(c => c.OverallScore))
+        foreach (var c in SortDashboardRows(clients))
         {
             var gradeClass = GradeCssClass(c.Grade);
-            var dateDisplay = DateTime.TryParse(c.Timestamp, out var d) ? d.ToString("yyyy-MM-dd") : "N/A";
+            var dateDisplay = DisplayDate(c);
             var staleFlag = c.IsStale ? " <span class=\"stale\">[STALE]</span>" : "";
             var reportLink = c.ReportPath is not null ? $"<a href=\"{Esc(c.ReportPath)}\">View</a>" : "";
 
-            sb.AppendLine($"<tr>");
+            sb.AppendLine("<tr>");
             sb.AppendLine($"<td>{Esc(c.Client)}</td>");
-            sb.AppendLine($"<td>{Esc(c.Host)} <span style=\"font-size:11px;color:#7f839b\">{Esc(c.OS)}</span></td>");
+            sb.AppendLine($"<td>{Esc(c.Host)} <span style=\"font-size:11px;color:#a6adc8\">{Esc(c.OS)}</span></td>");
             sb.AppendLine($"<td>{c.OverallScore}%</td>");
             sb.AppendLine($"<td class=\"{gradeClass}\" style=\"font-size:20px;font-weight:700\">{Esc(c.Grade)}</td>");
+            sb.AppendLine($"<td>{BuildTrendSparkline(c.Trend)}</td>");
             sb.AppendLine($"<td>{c.RansomwareScore}%</td>");
             sb.AppendLine($"<td style=\"color:{(c.CriticalCount > 0 ? "#f38ba8" : "#a6e3a1")}\">{c.CriticalCount}</td>");
             sb.AppendLine($"<td>{c.FailCount}</td>");
@@ -181,12 +210,21 @@ public static class DashboardGenerator
         }
         sb.AppendLine("</table>");
 
-        if (skippedFiles is { Count: > 0 })
+        if (duplicateFiles.Count > 0)
+        {
+            sb.AppendLine($"<p style=\"color:#f9e2af;margin-top:16px;font-size:13px\">{duplicateFiles.Count} older duplicate scan(s) hidden from the latest-client table:</p>");
+            sb.AppendLine("<ul style=\"color:#a6adc8;font-size:12px;margin-top:4px\">");
+            foreach (var duplicate in duplicateFiles.OrderBy(d => d.FileName, StringComparer.OrdinalIgnoreCase))
+                sb.AppendLine($"<li>{Esc(duplicate.FileName)}: latest for {Esc(duplicate.StableKey)} is {Esc(duplicate.LatestFileName)}</li>");
+            sb.AppendLine("</ul>");
+        }
+
+        if (skippedFiles.Count > 0)
         {
             sb.AppendLine($"<p style=\"color:#f38ba8;margin-top:16px;font-size:13px\">{skippedFiles.Count} file(s) could not be parsed:</p>");
-            sb.AppendLine("<ul style=\"color:#9399b2;font-size:12px;margin-top:4px\">");
-            foreach (var (file, reason) in skippedFiles)
-                sb.AppendLine($"<li>{Esc(file)}: {Esc(reason)}</li>");
+            sb.AppendLine("<ul style=\"color:#a6adc8;font-size:12px;margin-top:4px\">");
+            foreach (var skipped in skippedFiles.OrderBy(s => s.FileName, StringComparer.OrdinalIgnoreCase))
+                sb.AppendLine($"<li>{Esc(skipped.FileName)}: {Esc(skipped.Reason)}</li>");
             sb.AppendLine("</ul>");
         }
 
@@ -194,6 +232,69 @@ public static class DashboardGenerator
         sb.AppendLine("</body></html>");
 
         return sb.ToString();
+    }
+
+    private static IEnumerable<ClientSummary> SortDashboardRows(IEnumerable<ClientSummary> clients) =>
+        clients.OrderByDescending(c => c.CriticalCount)
+            .ThenBy(c => c.OverallScore)
+            .ThenBy(c => c.Client, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(c => c.Host, StringComparer.OrdinalIgnoreCase);
+
+    private static string BuildStableKey(ClientSummary client)
+    {
+        var clientKey = string.IsNullOrWhiteSpace(client.Client)
+            ? Path.GetFileNameWithoutExtension(client.FileName)
+            : client.Client;
+        var hostKey = string.IsNullOrWhiteSpace(client.Host) ? "(unknown-host)" : client.Host;
+        return $"{NormalizeKey(clientKey)}|{NormalizeKey(hostKey)}";
+    }
+
+    private static string NormalizeKey(string value) => value.Trim().ToUpperInvariant();
+
+    private static DateTimeOffset? ParseTimestamp(string timestamp)
+    {
+        if (DateTimeOffset.TryParse(
+            timestamp,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var offset))
+            return offset;
+
+        return null;
+    }
+
+    private static string DisplayDate(ClientSummary client) =>
+        client.ScanTime?.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+        ?? (string.IsNullOrWhiteSpace(client.Timestamp) ? "N/A" : client.Timestamp);
+
+    private static string TrendTimestamp(ClientSummary client) =>
+        string.IsNullOrWhiteSpace(client.Timestamp) ? client.FileName : client.Timestamp;
+
+    private static string FormatTrend(IReadOnlyList<TrendPoint> trend) =>
+        string.Join("|", trend.Select(p => $"{p.Timestamp}:{p.Score}"));
+
+    private static string BuildTrendSparkline(IReadOnlyList<TrendPoint> trend)
+    {
+        if (trend.Count == 0)
+            return "";
+
+        var title = Esc(FormatTrend(trend));
+        if (trend.Count == 1)
+            return $"<span class=\"trend-data\" title=\"{title}\">{trend[0].Score}%</span>";
+
+        const double width = 96;
+        const double height = 24;
+        var maxIndex = Math.Max(1, trend.Count - 1);
+        var points = trend
+            .Select((point, index) =>
+            {
+                var x = index * width / maxIndex;
+                var y = height - Math.Clamp(point.Score, 0, 100) * height / 100;
+                return FormattableString.Invariant($"{x:F1},{y:F1}");
+            });
+        var label = $"{trend.First().Score}% -> {trend.Last().Score}%";
+
+        return $"<svg class=\"trend\" viewBox=\"0 0 {width:0} {height:0}\" role=\"img\" aria-label=\"{title}\"><polyline class=\"trend-line\" points=\"{string.Join(' ', points)}\" /></svg><span class=\"trend-data\">{Esc(label)}</span>";
     }
 
     private static string Esc(string? text)
@@ -219,11 +320,26 @@ public static class DashboardGenerator
         return "grade-unknown";
     }
 
+    private sealed class DashboardData
+    {
+        public List<ClientSummary> Clients { get; } = [];
+        public List<SkippedFile> SkippedFiles { get; } = [];
+        public List<DuplicateScan> DuplicateFiles { get; } = [];
+    }
+
+    private sealed record SkippedFile(string FileName, string Reason);
+
+    private sealed record DuplicateScan(string FileName, string StableKey, string LatestFileName);
+
+    private sealed record TrendPoint(string Timestamp, int Score);
+
     private sealed class ClientSummary
     {
         public string FileName { get; set; } = "";
         public string FilePath { get; set; } = "";
+        public string StableKey { get; set; } = "";
         public string Timestamp { get; set; } = "";
+        public DateTimeOffset? ScanTime { get; set; }
         public string Client { get; set; } = "";
         public string Host { get; set; } = "";
         public string OS { get; set; } = "";
@@ -236,5 +352,7 @@ public static class DashboardGenerator
         public int CriticalCount { get; set; }
         public bool IsStale { get; set; }
         public string? ReportPath { get; set; }
+        public List<TrendPoint> Trend { get; set; } = [];
+        public List<string> DuplicateFiles { get; set; } = [];
     }
 }

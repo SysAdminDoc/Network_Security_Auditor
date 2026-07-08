@@ -1409,13 +1409,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
   Acceptance: GUI can export SIEM content packs and CMMC HTML/JSON; export buttons are replaced or grouped by a compact settings/menu flow; privacy mode and selected output folder apply consistently.
   Complexity: L
 
-- [ ] P1 - Add dashboard latest-per-client and trend semantics
-  Why: Current dashboard rows every findings file and does not compute latest-per-client or score trends despite README claims and MSP dashboard expectations.
-  Evidence: `src/NetworkSecurityAuditor/Export/DashboardGenerator.cs`; README dashboard section; Prowler scheduled scan UI release notes.
-  Touches: `src/NetworkSecurityAuditor/Export/DashboardGenerator.cs`, `tests/NetworkSecurityAuditor.Tests/ExportTests.cs`, README after implementation.
-  Acceptance: Dashboard groups scans by stable client/host key, shows latest row per client, adds trend sparkline/data over the selected history window, and lists skipped/duplicate files deterministically in HTML and CSV.
-  Complexity: L
-
 - [ ] P2 - Restore multi-theme WPF parity or remove theme claims
   Why: C# view-model exposes only Catppuccin Mocha while repo notes and README still describe seven dark themes.
   Evidence: `src/NetworkSecurityAuditor/ViewModels/MainViewModel.cs`; `src/NetworkSecurityAuditor/Theme/Themes.xaml`; README GUI section.
@@ -1518,13 +1511,11 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 **Export**
 - [ ] P3 — Culture-sensitive calendar date formatting across exporters (no `CultureInfo.InvariantCulture` on `ToString("yyyy-MM-dd")`, RemediationDueDate, timestamps). DefectDojoExporter:68/95, JsonExporter:77, HtmlReportGenerator:52/63/197, DashboardGenerator:147/166, CmmcReportGenerator:43, MainViewModel:533.
-- [ ] P3 — Dashboard staleness compares `DateTime.UtcNow` against a local-kind parse (off by UTC offset). `DashboardGenerator.cs:54-55,105`. Use `DateTimeOffset` + `AssumeUniversal`.
 - [ ] P3 — Privacy-mode GUI export copy drops `DurationMs` (0 for every finding). `MainViewModel.cs:255-272`.
 - [ ] P3 — CMMC control `EvidenceSummary` is whatever check iterated last, regardless of status. `CmmcReportGenerator.cs:147-148`.
 - [ ] P3 — PdfExporter redirects stdout without draining (pipe-deadlock risk) and `File.Exists` passes on a stale PDF from a prior run. `PdfExporter.cs:28,39-52`. Delete target before launch; don't redirect (or drain).
 - [ ] P3 — No atomic writes: every artifact uses `File.WriteAllTextAsync` (open-truncate) -> partial/corrupt files on mid-write failure. All export call sites. Fix: write `.tmp` then `File.Move(..., overwrite:true)`.
 - [ ] P3 — `--output` dir-vs-file ambiguity + raw `--client` in filename (`\`,`:`,`..\`). `App.xaml.cs:234-239`. Sanitize.
-- [ ] P3 — `Dashboard_Escapes_Client_Names` test is tautological (tests an inline `string.Replace`, never calls `DashboardGenerator`); dead `brandColor` at HtmlReportGenerator.cs:24. `ExportTests.cs:436-443`. Make dashboard HTML testable.
 
 **Data / scoring / models**
 - [ ] P3 — NP05 `Weight=8` with `Severity.High(=7)` — sole Weight!=Severity outlier (legacy carryover; double-counted by RiskScoreEngine). `CheckCatalog.cs:645-646`.

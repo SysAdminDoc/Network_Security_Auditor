@@ -21,7 +21,6 @@ public static class HtmlReportGenerator
     {
         var checkList = checks.ToList();
         var sb = new StringBuilder();
-        var brandColor = branding?.EffectivePrimary ?? "#cba6f7";
 
         sb.AppendLine("<!DOCTYPE html>");
         sb.AppendLine("<html lang=\"en\">");

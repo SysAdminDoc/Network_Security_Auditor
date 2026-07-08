@@ -618,6 +618,43 @@ public class ExportTests
         }
     }
 
+    [Fact]
+    public async Task Dashboard_Uses_Latest_Client_Row_With_Trend_And_Duplicate_List()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-export-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        await WriteDashboardFixtureAsync(dir, "acme_old_findings.json", DashboardJson("2026-07-01T00:00:00Z", "Acme", "HOST01", 60, "D", 40, "Fail", "Critical"));
+        await WriteDashboardFixtureAsync(dir, "acme_new_findings.json", DashboardJson("2026-07-08T00:00:00Z", "Acme", "HOST01", 90, "A", 80, "Pass", "Critical"));
+        await WriteDashboardFixtureAsync(dir, "beta_findings.json", DashboardJson("2026-07-08T01:00:00Z", "Beta", "HOST02", 72, "C", 55, "Fail", "High"));
+        await File.WriteAllTextAsync(Path.Combine(dir, "broken_findings.json"), "{ not valid json");
+
+        try
+        {
+            var html = await DashboardGenerator.GenerateAsync(dir, staleDays: 9999);
+            var csv = await DashboardGenerator.GenerateCsvAsync(dir, staleDays: 9999);
+            var dataRows = csv
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(line => !line.StartsWith('#'))
+                .ToArray();
+
+            Assert.Contains("2 clients", html);
+            Assert.Contains("60% -&gt; 90%", html);
+            Assert.Contains("older duplicate scan(s) hidden", html);
+            Assert.Contains("acme_old_findings.json", html);
+            Assert.Contains("broken_findings.json", html);
+            Assert.Equal(3, dataRows.Length);
+            Assert.Contains("acme_new_findings.json", csv);
+            Assert.DoesNotContain("Acme,HOST01,Windows 11 Enterprise,60,", csv);
+            Assert.Contains("2026-07-01T00:00:00Z:60|2026-07-08T00:00:00Z:90", csv);
+            Assert.Contains("# DUPLICATE:", csv);
+            Assert.Contains("# SKIPPED:", csv);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     private static async Task<string> WriteDashboardFixtureAsync(string json)
     {
         var dir = Path.Combine(Path.GetTempPath(), "nsa-export-tests-" + Guid.NewGuid().ToString("N"));
@@ -625,4 +662,36 @@ public class ExportTests
         await File.WriteAllTextAsync(Path.Combine(dir, "client_findings.json"), json);
         return dir;
     }
+
+    private static async Task WriteDashboardFixtureAsync(string dir, string fileName, string json)
+    {
+        await File.WriteAllTextAsync(Path.Combine(dir, fileName), json);
+    }
+
+    private static string DashboardJson(
+        string timestamp,
+        string client,
+        string host,
+        int score,
+        string grade,
+        int ransomwareScore,
+        string findingStatus,
+        string severity) => $$"""
+        {
+          "timestamp": "{{timestamp}}",
+          "client": "{{client}}",
+          "environment": {
+            "computer_name": "{{host}}",
+            "os_caption": "Windows 11 Enterprise"
+          },
+          "score": {
+            "overall": {{score}},
+            "grade": "{{grade}}",
+            "ransomware_readiness": {{ransomwareScore}}
+          },
+          "findings": [
+            { "status": "{{findingStatus}}", "severity": "{{severity}}" }
+          ]
+        }
+        """;
 }
