@@ -250,38 +250,38 @@ public static class D3FendMappings
             },
             ["NA03"] = new DefendMapping
             {
-                Stages = ["Isolate"],
-                Techniques = ["D3-NI", "D3-NTF", "D3-IOPR"],
-                Labels = ["Network Isolation", "Network Traffic Filtering", "Inbound/Outbound Port Restriction"],
-                Description = "Establishes DMZ for public-facing services"
+                Stages = ["Harden", "Isolate"],
+                Techniques = ["D3-WF", "D3-NI", "D3-MFA"],
+                Labels = ["Wireless Filtering", "Network Isolation", "Multi-factor Authentication"],
+                Description = "Enforces enterprise wireless authentication and separates guest wireless from internal networks"
             },
             ["NA04"] = new DefendMapping
             {
-                Stages = ["Isolate"],
-                Techniques = ["D3-NI", "D3-WF"],
-                Labels = ["Network Isolation", "Wireless Filtering"],
-                Description = "Separates wireless traffic from internal networks"
+                Stages = ["Model", "Detect"],
+                Techniques = ["D3-AM", "D3-NM"],
+                Labels = ["Access Modeling", "Network Monitoring"],
+                Description = "Keeps current network diagrams and asset relationships for defensive review"
             },
             ["NA05"] = new DefendMapping
             {
                 Stages = ["Isolate", "Harden"],
-                Techniques = ["D3-NI", "D3-NTF", "D3-MFA"],
-                Labels = ["Network Isolation", "Network Traffic Filtering", "Multi-factor Authentication"],
-                Description = "Segments VPN access to authorized resources only"
+                Techniques = ["D3-CTS", "D3-UAP", "D3-NTF"],
+                Labels = ["Credential Transmission Scoping", "User Account Permissions", "Network Traffic Filtering"],
+                Description = "Uses 802.1X or NAC to authorize devices before network access"
             },
             ["NA06"] = new DefendMapping
             {
-                Stages = ["Detect"],
-                Techniques = ["D3-NM", "D3-NTAD"],
-                Labels = ["Network Monitoring", "Network Traffic Anomaly Detection"],
-                Description = "Deploys IDS to detect lateral movement"
+                Stages = ["Isolate", "Harden"],
+                Techniques = ["D3-NI", "D3-NTF", "D3-IOPR"],
+                Labels = ["Network Isolation", "Network Traffic Filtering", "Inbound/Outbound Port Restriction"],
+                Description = "Isolates management interfaces from user and guest networks"
             },
             ["NA07"] = new DefendMapping
             {
-                Stages = ["Isolate", "Detect"],
-                Techniques = ["D3-DNSDL", "D3-NTF"],
-                Labels = ["DNS Denylisting", "Network Traffic Filtering"],
-                Description = "Filters DNS to block C2 and exfiltration channels"
+                Stages = ["Isolate"],
+                Techniques = ["D3-NI", "D3-NTF", "D3-WF"],
+                Labels = ["Network Isolation", "Network Traffic Filtering", "Wireless Filtering"],
+                Description = "Separates guest networks and public ports from internal resources"
             },
 
             // ── Network Perimeter ──────────────────────────────────────────

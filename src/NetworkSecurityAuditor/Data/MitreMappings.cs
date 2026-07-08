@@ -219,33 +219,33 @@ public static class MitreMappings
             },
             ["NA03"] = new AttackMapping
             {
-                Tactics = ["TA0008", "TA0011"],
-                Techniques = ["T1021", "T1071", "T1048"],
-                Description = "No DMZ exposes internal services directly"
+                Tactics = ["TA0001", "TA0008"],
+                Techniques = ["T1078", "T1557", "T1021"],
+                Description = "Weak wireless controls allow unauthorized network access and lateral movement from WiFi"
             },
             ["NA04"] = new AttackMapping
             {
-                Tactics = ["TA0008", "TA0011"],
-                Techniques = ["T1021", "T1071"],
-                Description = "Missing wireless segmentation enables network pivot"
+                Tactics = ["TA0007", "TA0043"],
+                Techniques = ["T1016", "T1046"],
+                Description = "Stale network diagrams and inventories hide exposed attack paths from defenders"
             },
             ["NA05"] = new AttackMapping
             {
-                Tactics = ["TA0001", "TA0011"],
-                Techniques = ["T1133", "T1071"],
-                Description = "VPN without segmentation grants full network access"
+                Tactics = ["TA0001", "TA0008"],
+                Techniques = ["T1200", "T1078", "T1021"],
+                Description = "Missing 802.1X or NAC allows rogue devices to join internal networks"
             },
             ["NA06"] = new AttackMapping
             {
-                Tactics = ["TA0008", "TA0040"],
-                Techniques = ["T1021", "T1570", "T1210"],
-                Description = "Missing IDS/monitoring means lateral movement undetected"
+                Tactics = ["TA0001", "TA0008"],
+                Techniques = ["T1133", "T1021", "T1210"],
+                Description = "Exposed management interfaces give attackers direct administrative paths"
             },
             ["NA07"] = new AttackMapping
             {
-                Tactics = ["TA0011", "TA0010"],
-                Techniques = ["T1071", "T1048", "T1568"],
-                Description = "Missing DNS filtering allows C2 and data exfil via DNS"
+                Tactics = ["TA0001", "TA0008"],
+                Techniques = ["T1200", "T1021", "T1210"],
+                Description = "Poor guest network isolation lets untrusted devices reach internal systems"
             },
 
             // ── Network Perimeter ──────────────────────────────────────────

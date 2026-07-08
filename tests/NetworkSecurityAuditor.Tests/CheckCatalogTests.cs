@@ -64,6 +64,44 @@ public class CheckCatalogTests
         }
     }
 
+    [Theory]
+    [InlineData("NA03", "Wireless security", "wireless", "Wireless Filtering", "3.1.16, 3.1.17", "AC.L2-3.1.16, AC.L2-3.1.17")]
+    [InlineData("NA04", "Network documentation", "diagram", "Access Modeling", "3.4.1, 3.4.2", "CM.L2-3.4.1, CM.L2-3.4.2")]
+    [InlineData("NA05", "802.1X/NAC", "802.1X", "Credential Transmission Scoping", "3.1.1, 3.1.2, 3.1.20", "AC.L2-3.1.1, AC.L2-3.1.2, AC.L2-3.1.20")]
+    [InlineData("NA06", "Management interface isolation", "management", "Inbound/Outbound Port Restriction", "3.13.1, 3.13.5, 3.13.6", "SC.L2-3.13.1, SC.L2-3.13.5, SC.L2-3.13.6")]
+    [InlineData("NA07", "Guest network isolation", "guest", "Wireless Filtering", "3.13.1, 3.13.2", "SC.L2-3.13.1, SC.L2-3.13.2")]
+    public void Network_Architecture_Mappings_Match_Current_Catalog(
+        string id,
+        string expectedLabel,
+        string expectedDescriptionTerm,
+        string expectedDefendLabel,
+        string expectedNist,
+        string expectedCmmc)
+    {
+        var catalog = CheckCatalog.All[id];
+        var attack = MitreMappings.All[id];
+        var defend = D3FendMappings.All[id];
+        var framework = FrameworkMappings.All[id];
+        var staleTerms = new[] { "DMZ", "VPN", "IDS", "DNS filtering" };
+
+        Assert.Equal(expectedLabel, catalog.Label);
+        Assert.True(attack.Description.Contains(expectedDescriptionTerm, StringComparison.OrdinalIgnoreCase),
+            $"{id} ATT&CK description should describe {expectedLabel}.");
+        Assert.True(defend.Description.Contains(expectedDescriptionTerm, StringComparison.OrdinalIgnoreCase),
+            $"{id} D3FEND description should describe {expectedLabel}.");
+        Assert.Contains(expectedDefendLabel, defend.Labels);
+        Assert.Equal(expectedNist, framework.NIST);
+        Assert.Equal(expectedCmmc, framework.CMMC);
+
+        foreach (var staleTerm in staleTerms)
+        {
+            Assert.False(attack.Description.Contains(staleTerm, StringComparison.OrdinalIgnoreCase),
+                $"{id} ATT&CK description still contains stale term {staleTerm}.");
+            Assert.False(defend.Description.Contains(staleTerm, StringComparison.OrdinalIgnoreCase),
+                $"{id} D3FEND description still contains stale term {staleTerm}.");
+        }
+    }
+
     [Fact]
     public void Severity_Weights_Match_Enum_Values()
     {
