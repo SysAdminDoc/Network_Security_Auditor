@@ -1481,7 +1481,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 **Group D — Check correctness (confident-but-wrong findings; highest reputational risk)**
 
-- [ ] **P1 — NP01/NP05/NP06 firewall checks query WMI properties that `MSFT_NetFirewallRule` does not expose** (`LocalPort`/`RemoteAddress`/`Protocol` live on associated filter classes). Every property returns null -> every enabled inbound Allow rule reported "ANY/ANY CRITICAL" -> check `Fail`s on essentially any Windows machine. Where: `Checks/NetworkPerimeter/NP01_FirewallRulesCheck.cs:34-74`, `NP05_EgressFilteringCheck.cs:38-75`, `NP06`. Fix: query the filter classes and associate via `InstanceID`, or use the netsh parser that reads `LocalPort:`/`RemoteIP:` correctly.
 
 **Group E — Legacy PS1 v4.11 fleet scan (newest, least-audited code)**
 

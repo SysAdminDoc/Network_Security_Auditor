@@ -31,46 +31,25 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
 
             try
             {
-                using var searcher = new ManagementObjectSearcher(
-                    @"root\StandardCimv2",
-                    "SELECT InstanceID, ElementName, Direction, Action, " +
-                    "LocalPort, RemoteAddress, Protocol, Enabled " +
-                    "FROM MSFT_NetFirewallRule WHERE Enabled = 1");
-
-                foreach (ManagementObject obj in searcher.Get())
+                foreach (var rule in FirewallRuleReader.GetEnabledRules(ct))
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    int direction = Convert.ToInt32(obj["Direction"] ?? 0);
-                    int action = Convert.ToInt32(obj["Action"] ?? 0);
-
-                    // Direction: 1=Inbound, 2=Outbound
-                    if (direction != 1) continue;
+                    if (!rule.IsInbound) continue;
 
                     totalInbound++;
 
-                    // Action: 2=Allow, 4=Block
-                    if (action != 2) continue;
+                    if (!rule.IsAllow) continue;
 
                     inboundAllow++;
 
-                    // Check for overly permissive rules
-                    string name = obj["ElementName"]?.ToString() ?? obj["InstanceID"]?.ToString() ?? "Unknown";
-                    string? localPort = obj["LocalPort"]?.ToString();
-                    string? remoteAddr = obj["RemoteAddress"]?.ToString();
-                    string? protocol = obj["Protocol"]?.ToString();
-
-                    bool isAnyPort = string.IsNullOrEmpty(localPort) || localPort == "Any" || localPort == "*";
-                    bool isAnyRemote = string.IsNullOrEmpty(remoteAddr) || remoteAddr == "Any" || remoteAddr == "*"
-                                    || remoteAddr == "LocalSubnet" == false; // Not restricted to local
-
-                    // Check if truly any/any (no port restriction AND no remote restriction)
-                    if (isAnyPort && (string.IsNullOrEmpty(remoteAddr) || remoteAddr == "Any" || remoteAddr == "*"))
+                    if (rule.HasAnyLocalPort && rule.HasAnyRemoteAddress)
                     {
                         anyAnyRules++;
-                        anyAnyNames.Add(name);
-                        evidence.AppendLine($"  ANY/ANY ALLOW: {name} (Protocol={protocol ?? "Any"}, " +
-                            $"LocalPort={localPort ?? "Any"}, RemoteAddr={remoteAddr ?? "Any"})");
+                        anyAnyNames.Add(rule.Name);
+                        evidence.AppendLine($"  ANY/ANY ALLOW: {rule.Name} (Protocol={rule.Protocol ?? "Any"}, " +
+                            $"LocalPort={FirewallRuleReader.FormatValues(rule.LocalPorts)}, " +
+                            $"RemoteAddr={FirewallRuleReader.FormatValues(rule.RemoteAddresses)})");
                     }
                 }
             }

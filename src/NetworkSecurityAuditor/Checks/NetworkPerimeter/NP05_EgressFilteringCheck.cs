@@ -35,40 +35,27 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
 
             try
             {
-                using var searcher = new ManagementObjectSearcher(
-                    @"root\StandardCimv2",
-                    "SELECT InstanceID, ElementName, Direction, Action, " +
-                    "LocalPort, RemotePort, RemoteAddress, Protocol, Enabled " +
-                    "FROM MSFT_NetFirewallRule WHERE Enabled = 1");
-
-                foreach (ManagementObject obj in searcher.Get())
+                foreach (var rule in FirewallRuleReader.GetEnabledRules(ct))
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    int direction = Convert.ToInt32(obj["Direction"] ?? 0);
-                    if (direction != 2) continue; // 2 = Outbound
+                    if (!rule.IsOutbound) continue;
 
                     totalOutbound++;
-                    int action = Convert.ToInt32(obj["Action"] ?? 0);
 
-                    if (action == 2) // Allow
+                    if (rule.IsAllow)
                     {
                         outboundAllow++;
 
-                        string? remotePort = obj["RemotePort"]?.ToString();
-                        string? remoteAddr = obj["RemoteAddress"]?.ToString();
-
-                        bool isAnyPort = string.IsNullOrEmpty(remotePort) || remotePort == "Any" || remotePort == "*";
-                        bool isAnyAddr = string.IsNullOrEmpty(remoteAddr) || remoteAddr == "Any" || remoteAddr == "*";
-
-                        if (isAnyPort && isAnyAddr)
+                        if (rule.HasAnyRemotePort && rule.HasAnyRemoteAddress)
                         {
                             anyAnyAllow++;
-                            string name = obj["ElementName"]?.ToString() ?? obj["InstanceID"]?.ToString() ?? "Unknown";
-                            evidence.AppendLine($"  ANY/ANY ALLOW OUT: {name}");
+                            evidence.AppendLine($"  ANY/ANY ALLOW OUT: {rule.Name} " +
+                                $"(RemotePort={FirewallRuleReader.FormatValues(rule.RemotePorts)}, " +
+                                $"RemoteAddr={FirewallRuleReader.FormatValues(rule.RemoteAddresses)})");
                         }
                     }
-                    else if (action == 4) // Block
+                    else if (rule.IsBlock)
                     {
                         outboundBlock++;
                     }
@@ -77,7 +64,7 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
             catch (ManagementException ex)
             {
                 evidence.AppendLine($"  WMI error: {ex.Message}");
-                // Fallback handled by default outbound check
+                QueryOutboundViaNetsh(evidence, ref totalOutbound, ref outboundAllow, ref outboundBlock, ref anyAnyAllow, ct);
             }
 
             evidence.AppendLine($"\n  Summary: {totalOutbound} outbound rules, " +
@@ -149,5 +136,116 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
                 sb.AppendLine($"{profile}: Default outbound is BLOCK (good).");
             }
         }
+    }
+
+    private static void QueryOutboundViaNetsh(
+        StringBuilder evidence,
+        ref int totalOutbound,
+        ref int outboundAllow,
+        ref int outboundBlock,
+        ref int anyAnyAllow,
+        CancellationToken ct)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("netsh", "advfirewall firewall show rule name=all dir=out")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc is null) return;
+
+            using var registration = ct.Register(() => { try { proc.Kill(); } catch { } });
+            string output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(30_000);
+
+            evidence.AppendLine("  [Parsed from netsh output]");
+
+            string currentName = "";
+            bool currentEnabled = false;
+            string currentAction = "";
+            string currentRemotePort = "";
+            string currentRemoteAddr = "";
+
+            foreach (var rawLine in output.Split('\n'))
+            {
+                string line = rawLine.Trim();
+
+                if (line.StartsWith("Rule Name:", StringComparison.OrdinalIgnoreCase))
+                {
+                    ProcessNetshOutboundRule(evidence, ref totalOutbound, ref outboundAllow, ref outboundBlock,
+                        ref anyAnyAllow, currentName, currentEnabled, currentAction, currentRemotePort, currentRemoteAddr);
+
+                    currentName = line[10..].Trim();
+                    currentEnabled = false;
+                    currentAction = "";
+                    currentRemotePort = "";
+                    currentRemoteAddr = "";
+                }
+                else if (line.StartsWith("Enabled:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentEnabled = line.Contains("Yes", StringComparison.OrdinalIgnoreCase);
+                }
+                else if (line.StartsWith("Action:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentAction = line[7..].Trim();
+                }
+                else if (line.StartsWith("RemotePort:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentRemotePort = line[11..].Trim();
+                }
+                else if (line.StartsWith("RemoteIP:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentRemoteAddr = line[9..].Trim();
+                }
+            }
+
+            ProcessNetshOutboundRule(evidence, ref totalOutbound, ref outboundAllow, ref outboundBlock,
+                ref anyAnyAllow, currentName, currentEnabled, currentAction, currentRemotePort, currentRemoteAddr);
+        }
+        catch (Exception ex)
+        {
+            evidence.AppendLine($"  netsh fallback error: {ex.Message}");
+        }
+    }
+
+    private static void ProcessNetshOutboundRule(
+        StringBuilder evidence,
+        ref int totalOutbound,
+        ref int outboundAllow,
+        ref int outboundBlock,
+        ref int anyAnyAllow,
+        string name,
+        bool enabled,
+        string action,
+        string remotePort,
+        string remoteAddr)
+    {
+        if (string.IsNullOrEmpty(name) || !enabled) return;
+
+        totalOutbound++;
+
+        if (action.Contains("Allow", StringComparison.OrdinalIgnoreCase))
+        {
+            outboundAllow++;
+
+            if (FirewallRuleReader.IsAnyValue([remotePort]) && FirewallRuleReader.IsAnyValue([remoteAddr]))
+            {
+                anyAnyAllow++;
+                evidence.AppendLine($"  ANY/ANY ALLOW OUT: {name} (RemotePort={ValueOrAny(remotePort)}, RemoteAddr={ValueOrAny(remoteAddr)})");
+            }
+        }
+        else if (action.Contains("Block", StringComparison.OrdinalIgnoreCase))
+        {
+            outboundBlock++;
+        }
+    }
+
+    private static string ValueOrAny(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "Any" : value;
     }
 }

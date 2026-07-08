@@ -33,48 +33,21 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
 
             try
             {
-                using var searcher = new ManagementObjectSearcher(
-                    @"root\StandardCimv2",
-                    "SELECT InstanceID, ElementName, Description, Enabled " +
-                    "FROM MSFT_NetFirewallRule WHERE Enabled = 1");
-
-                foreach (ManagementObject obj in searcher.Get())
+                foreach (var rule in FirewallRuleReader.GetEnabledRules(ct))
                 {
                     ct.ThrowIfCancellationRequested();
                     totalRules++;
 
-                    string name = obj["ElementName"]?.ToString() ?? "";
-                    string desc = obj["Description"]?.ToString() ?? "";
-                    string instanceId = obj["InstanceID"]?.ToString() ?? "";
+                    string name = rule.Name;
+                    string desc = rule.Description;
 
-                    // Check for stale indicators in name or description
-                    foreach (string indicator in StaleIndicators)
-                    {
-                        if (name.Contains(indicator, StringComparison.OrdinalIgnoreCase) ||
-                            desc.Contains(indicator, StringComparison.OrdinalIgnoreCase))
-                        {
-                            staleRules.Add(name);
-                            evidence.AppendLine($"  STALE INDICATOR: \"{name}\" (matched: \"{indicator}\")");
-                            if (!string.IsNullOrEmpty(desc))
-                                evidence.AppendLine($"    Description: {desc}");
-                            break;
-                        }
-                    }
-
-                    // Check for date patterns in rule names suggesting temporary rules
-                    if (HasDatePattern(name))
-                    {
-                        if (!staleRules.Contains(name))
-                        {
-                            staleRules.Add(name);
-                            evidence.AppendLine($"  DATE IN NAME: \"{name}\" (may be a temporary rule)");
-                        }
-                    }
+                    ProcessRuleForStaleness(evidence, staleRules, name, desc);
                 }
             }
             catch (ManagementException ex)
             {
                 evidence.AppendLine($"  WMI error: {ex.Message}");
+                QueryViaNetsh(evidence, staleRules, ref totalRules, ct);
             }
 
             evidence.AppendLine($"\n  Total enabled rules: {totalRules}");
@@ -136,5 +109,103 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
         }
 
         return false;
+    }
+
+    private static void QueryViaNetsh(
+        StringBuilder evidence,
+        List<string> staleRules,
+        ref int totalRules,
+        CancellationToken ct)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("netsh", "advfirewall firewall show rule name=all")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc is null) return;
+
+            using var registration = ct.Register(() => { try { proc.Kill(); } catch { } });
+            string output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(30_000);
+
+            evidence.AppendLine("  [Parsed from netsh output]");
+
+            string currentName = "";
+            string currentDescription = "";
+            bool currentEnabled = false;
+
+            foreach (var rawLine in output.Split('\n'))
+            {
+                string line = rawLine.Trim();
+
+                if (line.StartsWith("Rule Name:", StringComparison.OrdinalIgnoreCase))
+                {
+                    ProcessNetshRule(evidence, staleRules, ref totalRules, currentName, currentDescription, currentEnabled);
+
+                    currentName = line[10..].Trim();
+                    currentDescription = "";
+                    currentEnabled = false;
+                }
+                else if (line.StartsWith("Enabled:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentEnabled = line.Contains("Yes", StringComparison.OrdinalIgnoreCase);
+                }
+                else if (line.StartsWith("Description:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentDescription = line[12..].Trim();
+                }
+            }
+
+            ProcessNetshRule(evidence, staleRules, ref totalRules, currentName, currentDescription, currentEnabled);
+        }
+        catch (Exception ex)
+        {
+            evidence.AppendLine($"  netsh fallback error: {ex.Message}");
+        }
+    }
+
+    private static void ProcessNetshRule(
+        StringBuilder evidence,
+        List<string> staleRules,
+        ref int totalRules,
+        string name,
+        string description,
+        bool enabled)
+    {
+        if (string.IsNullOrEmpty(name) || !enabled) return;
+
+        totalRules++;
+        ProcessRuleForStaleness(evidence, staleRules, name, description);
+    }
+
+    private static void ProcessRuleForStaleness(
+        StringBuilder evidence,
+        List<string> staleRules,
+        string name,
+        string desc)
+    {
+        foreach (string indicator in StaleIndicators)
+        {
+            if (name.Contains(indicator, StringComparison.OrdinalIgnoreCase) ||
+                desc.Contains(indicator, StringComparison.OrdinalIgnoreCase))
+            {
+                staleRules.Add(name);
+                evidence.AppendLine($"  STALE INDICATOR: \"{name}\" (matched: \"{indicator}\")");
+                if (!string.IsNullOrEmpty(desc))
+                    evidence.AppendLine($"    Description: {desc}");
+                break;
+            }
+        }
+
+        if (HasDatePattern(name) && !staleRules.Contains(name))
+        {
+            staleRules.Add(name);
+            evidence.AppendLine($"  DATE IN NAME: \"{name}\" (may be a temporary rule)");
+        }
     }
 }
