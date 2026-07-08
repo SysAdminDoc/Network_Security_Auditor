@@ -44,11 +44,11 @@ public sealed class EP08_CredentialGuardCheck : ISecurityCheck
                 evidence.AppendLine("  VBS: enabled by default with UEFI lock");
             }
 
-            var status = failCount == 0
-                ? CheckStatus.Pass
-                : failCount < totalChecks ? CheckStatus.Partial : CheckStatus.Fail;
-
-            sb.Insert(0, $"Credential protection: {totalChecks - failCount}/{totalChecks} controls active.\n");
+            var status = DetermineStatus(failCount, totalChecks);
+            if (totalChecks == 0)
+                sb.Insert(0, "Credential protection: no applicable controls could be assessed.\n");
+            else
+                sb.Insert(0, $"Credential protection: {totalChecks - failCount}/{totalChecks} controls active.\n");
 
             return Task.FromResult(new CheckResult
             {
@@ -63,10 +63,19 @@ public sealed class EP08_CredentialGuardCheck : ISecurityCheck
         }
     }
 
+    internal static CheckStatus DetermineStatus(int failCount, int totalChecks)
+    {
+        if (totalChecks == 0)
+            return CheckStatus.NA;
+
+        return failCount == 0
+            ? CheckStatus.Pass
+            : failCount < totalChecks ? CheckStatus.Partial : CheckStatus.Fail;
+    }
+
     private static void CheckCredentialGuard(StringBuilder sb, StringBuilder evidence,
         ref int failCount, ref int totalChecks)
     {
-        totalChecks++;
         evidence.AppendLine("[Credential Guard via Win32_DeviceGuard]");
 
         try
@@ -79,6 +88,7 @@ public sealed class EP08_CredentialGuardCheck : ISecurityCheck
             foreach (ManagementObject obj in searcher.Get())
             {
                 found = true;
+                totalChecks++;
 
                 int vbsStatus = Convert.ToInt32(obj["VirtualizationBasedSecurityStatus"] ?? 0);
                 string vbsLabel = vbsStatus switch
@@ -120,16 +130,14 @@ public sealed class EP08_CredentialGuardCheck : ISecurityCheck
 
             if (!found)
             {
-                failCount++;
                 evidence.AppendLine("  Win32_DeviceGuard class not available.");
-                sb.AppendLine("FAIL: Device Guard WMI not available. Credential Guard status unknown (likely not supported/enabled).");
+                sb.AppendLine("INFO: Device Guard WMI not available. Credential Guard status is not applicable or could not be assessed on this OS.");
             }
         }
         catch (ManagementException ex)
         {
-            failCount++;
             evidence.AppendLine($"  WMI error: {ex.Message}");
-            sb.AppendLine("INFO: Could not query Device Guard WMI. Credential Guard status unknown.");
+            sb.AppendLine("INFO: Could not query Device Guard WMI. Credential Guard status is not applicable or could not be assessed on this OS.");
         }
     }
 
@@ -166,29 +174,43 @@ public sealed class EP08_CredentialGuardCheck : ISecurityCheck
     private static void CheckSecureBoot(StringBuilder sb, StringBuilder evidence,
         ref int failCount, ref int totalChecks)
     {
-        totalChecks++;
         evidence.AppendLine("\n[Secure Boot]");
 
         int secureBoot = RegistryHelper.GetValue<int>(
             @"HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\State", "UEFISecureBootEnabled", -1);
 
         evidence.AppendLine($"  UEFISecureBootEnabled = {secureBoot}");
+        var assessment = AssessSecureBoot(secureBoot);
 
-        if (secureBoot == 1)
+        if (!assessment.IsApplicable)
+        {
+            sb.AppendLine("INFO: Secure Boot status could not be determined (Legacy BIOS, unsupported OS, or registry inaccessible).");
+            return;
+        }
+
+        totalChecks++;
+        if (!assessment.HasFailure)
         {
             sb.AppendLine("Secure Boot: Enabled.");
-        }
-        else if (secureBoot == 0)
-        {
-            failCount++;
-            sb.AppendLine("FAIL: Secure Boot is DISABLED. Boot-level rootkit protection is reduced.");
         }
         else
         {
             failCount++;
-            sb.AppendLine("WARNING: Secure Boot status could not be determined (Legacy BIOS or registry inaccessible).");
+            sb.AppendLine("FAIL: Secure Boot is DISABLED. Boot-level rootkit protection is reduced.");
         }
     }
+
+    internal static SecureBootAssessment AssessSecureBoot(int secureBoot)
+    {
+        return secureBoot switch
+        {
+            1 => new SecureBootAssessment(IsApplicable: true, HasFailure: false),
+            0 => new SecureBootAssessment(IsApplicable: true, HasFailure: true),
+            _ => new SecureBootAssessment(IsApplicable: false, HasFailure: false)
+        };
+    }
+
+    internal readonly record struct SecureBootAssessment(bool IsApplicable, bool HasFailure);
 
     private static void CheckUefiLock(StringBuilder sb, StringBuilder evidence,
         ref int failCount, ref int totalChecks)

@@ -20,6 +20,7 @@ public sealed class EP02_BitLockerCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasIssue = false;
             bool anyDriveEncrypted = false;
+            bool bitLockerUnavailable = false;
 
             // -- BitLocker via WMI --
             ct.ThrowIfCancellationRequested();
@@ -31,9 +32,11 @@ public sealed class EP02_BitLockerCheck : ISecurityCheck
 
                 evidence.AppendLine("[BitLocker Volume Status]");
 
+                int volumeCount = 0;
                 foreach (ManagementObject obj in searcher.Get())
                 {
                     ct.ThrowIfCancellationRequested();
+                    volumeCount++;
 
                     string drive = obj["DriveLetter"]?.ToString() ?? "?:";
                     int protectionStatus = Convert.ToInt32(obj["ProtectionStatus"] ?? 0);
@@ -83,14 +86,21 @@ public sealed class EP02_BitLockerCheck : ISecurityCheck
                         sb.AppendLine($"WARNING: Drive {drive} is not fully encrypted (Protection={protLabel}, Status={convLabel}).");
                     }
                 }
+
+                if (volumeCount == 0)
+                {
+                    bitLockerUnavailable = true;
+                    sb.AppendLine("INFO: BitLocker volume status could not be assessed because WMI returned no encryptable volumes.");
+                    evidence.AppendLine("  No Win32_EncryptableVolume rows returned.");
+                }
             }
             catch (ManagementException ex)
             {
-                hasIssue = true;
-                sb.AppendLine($"BitLocker WMI query failed: {ex.Message}");
+                bitLockerUnavailable = true;
+                sb.AppendLine($"INFO: BitLocker WMI query unavailable: {ex.Message}");
                 evidence.AppendLine($"[BitLocker WMI Error] {ex.Message}");
                 if (!env.IsAdmin)
-                    sb.AppendLine("  (BitLocker WMI requires administrator privileges.)");
+                    sb.AppendLine("  BitLocker WMI may require administrator privileges.");
             }
 
             // -- TPM Status --
@@ -104,9 +114,7 @@ public sealed class EP02_BitLockerCheck : ISecurityCheck
             if (!hasIssue && anyDriveEncrypted)
                 sb.Insert(0, "All volumes are BitLocker-encrypted, TPM and Secure Boot verified.\n");
 
-            var status = hasIssue
-                ? (anyDriveEncrypted ? CheckStatus.Partial : CheckStatus.Fail)
-                : CheckStatus.Pass;
+            var status = DetermineStatus(hasIssue, anyDriveEncrypted, bitLockerUnavailable);
 
             return Task.FromResult(new CheckResult
             {
@@ -119,6 +127,14 @@ public sealed class EP02_BitLockerCheck : ISecurityCheck
         {
             return Task.FromResult(CheckResult.FromError(Id, ex));
         }
+    }
+
+    internal static CheckStatus DetermineStatus(bool hasIssue, bool anyDriveEncrypted, bool bitLockerUnavailable)
+    {
+        if (hasIssue)
+            return anyDriveEncrypted ? CheckStatus.Partial : CheckStatus.Fail;
+
+        return bitLockerUnavailable ? CheckStatus.NA : CheckStatus.Pass;
     }
 
     private static void CheckTPM(StringBuilder sb, StringBuilder evidence, ref bool hasIssue)
