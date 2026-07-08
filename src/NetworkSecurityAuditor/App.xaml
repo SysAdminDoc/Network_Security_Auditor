@@ -1,6 +1,7 @@
 <Application x:Class="NetworkSecurityAuditor.App"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:converters="clr-namespace:NetworkSecurityAuditor.Converters"
 >
     <Application.Resources>
         <ResourceDictionary>
@@ -8,6 +9,7 @@
                 <ResourceDictionary Source="Theme/Themes.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <converters:ResourceBrushConverter x:Key="ResourceBrush" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

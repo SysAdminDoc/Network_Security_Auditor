@@ -11,8 +11,14 @@
     <SolidColorBrush x:Key="TextMuted" Color="#a6adc8" />
     <SolidColorBrush x:Key="TextPrimary" Color="#cdd6f4" />
     <SolidColorBrush x:Key="TextSecondary" Color="#b5bcd6" />
+    <SolidColorBrush x:Key="StatusNeutral" Color="#9399b2" />
+    <SolidColorBrush x:Key="BadgeBg" Color="#585b70" />
+    <SolidColorBrush x:Key="OnAccent" Color="#1e1e2e" />
+    <SolidColorBrush x:Key="OverlayScrim" Color="#881e1e2e" />
     <SolidColorBrush x:Key="Accent" Color="#cba6f7" />
     <SolidColorBrush x:Key="AccentHover" Color="#d4b8fa" />
+    <SolidColorBrush x:Key="GradeB" Color="#94e2d5" />
+    <SolidColorBrush x:Key="SeverityHigh" Color="#fab387" />
     <SolidColorBrush x:Key="ProgressGood" Color="#a6e3a1" />
     <SolidColorBrush x:Key="ProgressMid" Color="#f9e2af" />
     <SolidColorBrush x:Key="ProgressBad" Color="#f38ba8" />
@@ -373,7 +379,7 @@
     <!-- Button Style -->
     <Style x:Key="AccentButton" TargetType="Button">
         <Setter Property="Background" Value="{StaticResource Accent}" />
-        <Setter Property="Foreground" Value="#1e1e2e" />
+        <Setter Property="Foreground" Value="{StaticResource OnAccent}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Padding" Value="16,8" />
         <Setter Property="BorderThickness" Value="0" />
@@ -453,7 +459,7 @@
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}" />
-                            <Setter Property="Foreground" Value="#1e1e2e" />
+                            <Setter Property="Foreground" Value="{StaticResource OnAccent}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

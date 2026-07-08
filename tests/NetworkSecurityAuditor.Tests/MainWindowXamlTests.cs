@@ -7,9 +7,9 @@ public class MainWindowXamlTests
     {
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
 
-        Assert.Contains("Foreground=\"{Binding GradeColor}\"", xaml);
-        Assert.Contains("Background=\"{Binding SeverityColor}\"", xaml);
-        Assert.Contains("Background=\"{Binding StatusColor}\"", xaml);
+        Assert.Contains("Foreground=\"{Binding GradeBrushKey, Converter={StaticResource ResourceBrush}}\"", xaml);
+        Assert.Contains("Background=\"{Binding SeverityBrushKey, Converter={StaticResource ResourceBrush}}\"", xaml);
+        Assert.Contains("Background=\"{Binding StatusBrushKey, Converter={StaticResource ResourceBrush}}\"", xaml);
     }
 
     [Fact]
@@ -61,6 +61,25 @@ public class MainWindowXamlTests
         Assert.Contains("Foreground=\"{StaticResource TextMuted}\"", xaml);
         Assert.Contains("Height=\"3\" CornerRadius=\"0\"", xaml);
         Assert.DoesNotContain("Height=\"3\" CornerRadius=\"2\"", xaml);
+    }
+
+    [Fact]
+    public void Main_Window_Uses_Theme_Tokens_For_Dynamic_Color_Surfaces()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+        var app = ReadSourceFile("src", "NetworkSecurityAuditor", "App.xaml");
+        var theme = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
+        var checkVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "CheckItemViewModel.cs");
+        var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
+
+        Assert.Contains("ResourceBrushConverter x:Key=\"ResourceBrush\"", app);
+        Assert.Contains("x:Key=\"OverlayScrim\" Color=\"#881e1e2e\"", theme);
+        Assert.Contains("x:Key=\"BadgeBg\" Color=\"#585b70\"", theme);
+        Assert.Contains("x:Key=\"OnAccent\" Color=\"#1e1e2e\"", theme);
+        Assert.Contains("Background=\"{StaticResource OverlayScrim}\"", xaml);
+        Assert.DoesNotContain("Background=\"#881e1e2e\"", xaml);
+        Assert.DoesNotMatch("#[0-9a-fA-F]{6,8}", checkVm);
+        Assert.DoesNotMatch("#[0-9a-fA-F]{6,8}", mainVm);
     }
 
     [Fact]

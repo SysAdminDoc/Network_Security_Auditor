@@ -41,7 +41,7 @@
                         <StackPanel HorizontalAlignment="Center">
                             <TextBlock Text="{Binding Grade}" FontSize="56" FontWeight="Bold"
                                        HorizontalAlignment="Center"
-                                       Foreground="{Binding GradeColor}"
+                                       Foreground="{Binding GradeBrushKey, Converter={StaticResource ResourceBrush}}"
                                        AutomationProperties.Name="Overall security grade" />
                             <TextBlock Text="{Binding OverallScoreDisplay}"
                                        HorizontalAlignment="Center" FontSize="22" Foreground="{StaticResource TextSecondary}" />
@@ -243,12 +243,12 @@
 
                                 <!-- Severity Badge -->
                                 <Border Grid.Row="0" Grid.Column="2"
-                                        Background="{Binding SeverityColor}"
+                                        Background="{Binding SeverityBrushKey, Converter={StaticResource ResourceBrush}}"
                                         CornerRadius="4" Padding="8,2" Margin="8,0"
                                         VerticalAlignment="Center">
                                     <TextBlock Text="{Binding SeverityLabel}" FontSize="10"
-                                               FontWeight="Bold" VerticalAlignment="Center"
-                                               Foreground="{StaticResource WindowBg}" />
+                                                FontWeight="Bold" VerticalAlignment="Center"
+                                               Foreground="{StaticResource OnAccent}" />
                                 </Border>
 
                                 <!-- Status Dropdown -->
@@ -261,7 +261,7 @@
 
                                 <!-- Status Indicator Bar -->
                                 <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4"
-                                        Background="{Binding StatusColor}"
+                                        Background="{Binding StatusBrushKey, Converter={StaticResource ResourceBrush}}"
                                         Height="3" CornerRadius="0" Margin="0,8,0,8" />
 
                                 <!-- Row 2: Findings + Evidence -->
@@ -340,7 +340,7 @@
 
                                 <!-- Running Indicator -->
                                 <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0" Grid.ColumnSpan="4"
-                                        Background="#881e1e2e" CornerRadius="8"
+                                        Background="{StaticResource OverlayScrim}" CornerRadius="8"
                                         Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}">
                                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                         <TextBlock Text="Scanning..." FontSize="16" FontWeight="SemiBold"

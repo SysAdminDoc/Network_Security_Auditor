@@ -16,7 +16,7 @@ public partial class CheckItemViewModel : ViewModelBase
     public RiskTier RiskTier { get; init; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusColor))]
+    [NotifyPropertyChangedFor(nameof(StatusBrushKey))]
     private CheckStatus _status = CheckStatus.NotAssessed;
 
     [ObservableProperty]
@@ -40,14 +40,14 @@ public partial class CheckItemViewModel : ViewModelBase
     [ObservableProperty]
     private double _durationMs;
 
-    public string StatusColor => Status switch
+    public string StatusBrushKey => Status switch
     {
-        CheckStatus.Pass => "#a6e3a1",
-        CheckStatus.Partial => "#f9e2af",
-        CheckStatus.Fail => "#f38ba8",
-        CheckStatus.NA => "#9399b2",
-        CheckStatus.NotAssessed => "#585b70",
-        _ => "#585b70"
+        CheckStatus.Pass => "ProgressGood",
+        CheckStatus.Partial => "ProgressMid",
+        CheckStatus.Fail => "ProgressBad",
+        CheckStatus.NA => "StatusNeutral",
+        CheckStatus.NotAssessed => "BadgeBg",
+        _ => "BadgeBg"
     };
 
     public string SeverityLabel => Severity switch
@@ -59,13 +59,13 @@ public partial class CheckItemViewModel : ViewModelBase
         _ => "UNKNOWN"
     };
 
-    public string SeverityColor => Severity switch
+    public string SeverityBrushKey => Severity switch
     {
-        Severity.Critical => "#f38ba8",
-        Severity.High => "#fab387",
-        Severity.Medium => "#f9e2af",
-        Severity.Low => "#a6e3a1",
-        _ => "#9399b2"
+        Severity.Critical => "ProgressBad",
+        Severity.High => "SeverityHigh",
+        Severity.Medium => "ProgressMid",
+        Severity.Low => "ProgressGood",
+        _ => "StatusNeutral"
     };
 
     public static CheckItemViewModel FromMetadata(CheckMetadata meta) => new()

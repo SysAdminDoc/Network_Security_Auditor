@@ -50,7 +50,7 @@ public partial class MainViewModel : ViewModelBase
     private string _selectedTheme = "Catppuccin Mocha";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Grade), nameof(GradeColor), nameof(OverallScoreDisplay))]
+    [NotifyPropertyChangedFor(nameof(Grade), nameof(GradeBrushKey), nameof(OverallScoreDisplay))]
     private int _overallScore;
 
     [ObservableProperty]
@@ -126,15 +126,15 @@ public partial class MainViewModel : ViewModelBase
 
     public string OverallScoreDisplay => HasAssessedChecks ? $"{OverallScore}/100" : "Not scanned";
 
-    public string GradeColor => HasAssessedChecks ? Grade switch
+    public string GradeBrushKey => HasAssessedChecks ? Grade switch
     {
-        "A" => "#a6e3a1",
-        "B" => "#94e2d5",
-        "C" => "#f9e2af",
-        "D" => "#fab387",
-        "F" => "#f38ba8",
-        _ => "#9399b2"
-    } : "#9399b2";
+        "A" => "ProgressGood",
+        "B" => "GradeB",
+        "C" => "ProgressMid",
+        "D" => "SeverityHigh",
+        "F" => "ProgressBad",
+        _ => "StatusNeutral"
+    } : "StatusNeutral";
 
     public EnvironmentInfo Environment { get; set; } = new();
 
@@ -651,7 +651,7 @@ public partial class MainViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(HasAssessedChecks));
         OnPropertyChanged(nameof(Grade));
-        OnPropertyChanged(nameof(GradeColor));
+        OnPropertyChanged(nameof(GradeBrushKey));
         OnPropertyChanged(nameof(OverallScoreDisplay));
         OnPropertyChanged(nameof(FilteredChecks));
     }
