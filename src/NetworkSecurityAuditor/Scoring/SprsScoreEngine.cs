@@ -49,7 +49,7 @@ public static class SprsScoreEngine
             foreach (var control in controls)
             {
                 controlsCovered.Add(control);
-                if (status is CheckStatus.Fail)
+                if (status is CheckStatus.Fail or CheckStatus.Partial)
                     controlsFailing.Add(control);
             }
         }

@@ -138,6 +138,19 @@ public class ScoringTests
     }
 
     [Fact]
+    public void Sprs_Treats_Partial_As_Unmet()
+    {
+        var partialChecks = CreateChecks(("IA01", CheckStatus.Partial));
+        var failChecks = CreateChecks(("IA01", CheckStatus.Fail));
+
+        var (partialScore, _) = SprsScoreEngine.Calculate(partialChecks);
+        var (failScore, _) = SprsScoreEngine.Calculate(failChecks);
+
+        Assert.Equal(failScore, partialScore);
+        Assert.Equal(95, partialScore);
+    }
+
+    [Fact]
     public void Empty_Checks_Returns_Zero()
     {
         var checks = new ObservableCollection<CheckItemViewModel>();

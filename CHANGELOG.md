@@ -9,6 +9,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# dashboard exports now reuse the shared CSV escaping routine and constrain grade CSS classes to an allowlist before rendering HTML attributes.
 
 ### Correctness
+- Fixed: C# SPRS scoring now treats Partial checks as unmet controls instead of awarding full SPRS credit.
 - Fixed: C# overall risk scoring now matches the documented per-category weighted-average formula and no longer squares severity by multiplying severity and check weight.
 - Fixed: C# Domain Maturity scoring now normalizes by domains that have assessed checks so all-N/A identity domains no longer cap endpoint-only results.
 - Fixed: C# SARIF export now emits the strict root `$schema` property instead of `schema`.

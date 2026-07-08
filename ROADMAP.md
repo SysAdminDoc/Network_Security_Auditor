@@ -1494,7 +1494,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 **Checks (fail-open / masking)**
 
 **Export / scoring**
-- [ ] **P2 — SprsScoreEngine gives `Partial` full SPRS credit** (only `Fail` deducts); DoD SPRS is binary. Where: `Scoring/SprsScoreEngine.cs:46-53`. Fix: treat Partial as unmet (or apply the two documented partial-credit controls).
 - [ ] **P2 — Add missing structural tests:** mapping-key parity (catalog == MITRE == D3FEND == Framework keys), technique-ID format (`^T\d{4}(\.\d{3})?$`, `^TA\d{4}$`, `^D3-[A-Z]+$`), and `dict.Add` duplicate-ID fail-fast. Where: `tests/NetworkSecurityAuditor.Tests/`. (Do this early per instructions.)
 
 **App / silent mode**
