@@ -4,6 +4,7 @@ using System.Diagnostics.Eventing.Reader;
 using System.ServiceProcess;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// LM07 - Log retention and sizes: check Security, System, Application, PowerShell/Operational
@@ -132,16 +133,23 @@ public sealed class LM07_LogRetentionCheck : ISecurityCheck
         try
         {
             var services = ServiceController.GetServices();
-            foreach (var svc in services)
+            try
             {
-                if (svc.ServiceName.Equals("Sysmon", StringComparison.OrdinalIgnoreCase) ||
-                    svc.ServiceName.Equals("Sysmon64", StringComparison.OrdinalIgnoreCase))
+                foreach (var svc in services)
                 {
-                    sysmonFound = true;
-                    evidence.AppendLine($"    Service: {svc.ServiceName} ({svc.Status})");
-                    sb.AppendLine($"Sysmon: Installed ({svc.ServiceName}, status={svc.Status}).");
-                    break;
+                    if (svc.ServiceName.Equals("Sysmon", StringComparison.OrdinalIgnoreCase) ||
+                        svc.ServiceName.Equals("Sysmon64", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sysmonFound = true;
+                        evidence.AppendLine($"    Service: {svc.ServiceName} ({svc.Status})");
+                        sb.AppendLine($"Sysmon: Installed ({svc.ServiceName}, status={svc.Status}).");
+                        break;
+                    }
                 }
+            }
+            finally
+            {
+                ServiceControllerDisposal.DisposeAll(services);
             }
         }
         catch (Exception ex)

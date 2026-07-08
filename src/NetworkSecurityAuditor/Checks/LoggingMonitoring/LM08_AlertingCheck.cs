@@ -100,32 +100,39 @@ public sealed class LM08_AlertingCheck : ISecurityCheck
         try
         {
             var services = ServiceController.GetServices();
-            var serviceNames = new HashSet<string>(
-                services.Select(s => s.ServiceName),
-                StringComparer.OrdinalIgnoreCase);
-
-            foreach (var (serviceName, label) in AlertCapableServices)
+            try
             {
-                ct.ThrowIfCancellationRequested();
+                var serviceNames = new HashSet<string>(
+                    services.Select(s => s.ServiceName),
+                    StringComparer.OrdinalIgnoreCase);
 
-                if (!serviceNames.Contains(serviceName)) continue;
-
-                try
+                foreach (var (serviceName, label) in AlertCapableServices)
                 {
-                    using var sc = new ServiceController(serviceName);
-                    evidence.AppendLine($"  FOUND: {label} ({serviceName}) - {sc.Status}");
-                    if (sc.Status == ServiceControllerStatus.Running)
+                    ct.ThrowIfCancellationRequested();
+
+                    if (!serviceNames.Contains(serviceName)) continue;
+
+                    try
+                    {
+                        using var sc = new ServiceController(serviceName);
+                        evidence.AppendLine($"  FOUND: {label} ({serviceName}) - {sc.Status}");
+                        if (sc.Status == ServiceControllerStatus.Running)
+                            indicators.Add(label);
+                    }
+                    catch
+                    {
+                        evidence.AppendLine($"  FOUND: {label} ({serviceName}) - status unknown");
                         indicators.Add(label);
+                    }
                 }
-                catch
-                {
-                    evidence.AppendLine($"  FOUND: {label} ({serviceName}) - status unknown");
-                    indicators.Add(label);
-                }
-            }
 
-            if (indicators.Count == 0)
-                evidence.AppendLine("  No alerting-capable services detected.");
+                if (indicators.Count == 0)
+                    evidence.AppendLine("  No alerting-capable services detected.");
+            }
+            finally
+            {
+                ServiceControllerDisposal.DisposeAll(services);
+            }
         }
         catch (Exception ex)
         {
@@ -215,15 +222,22 @@ public sealed class LM08_AlertingCheck : ISecurityCheck
         try
         {
             var services = ServiceController.GetServices();
-            foreach (var svc in services)
+            try
             {
-                if (svc.ServiceName.Equals("SMTPSVC", StringComparison.OrdinalIgnoreCase) ||
-                    svc.ServiceName.Equals("hMailServer", StringComparison.OrdinalIgnoreCase))
+                foreach (var svc in services)
                 {
-                    smtpService = true;
-                    evidence.AppendLine($"  SMTP service found: {svc.ServiceName} ({svc.Status})");
-                    break;
+                    if (svc.ServiceName.Equals("SMTPSVC", StringComparison.OrdinalIgnoreCase) ||
+                        svc.ServiceName.Equals("hMailServer", StringComparison.OrdinalIgnoreCase))
+                    {
+                        smtpService = true;
+                        evidence.AppendLine($"  SMTP service found: {svc.ServiceName} ({svc.Status})");
+                        break;
+                    }
                 }
+            }
+            finally
+            {
+                ServiceControllerDisposal.DisposeAll(services);
             }
         }
         catch

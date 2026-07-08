@@ -1,6 +1,5 @@
 namespace NetworkSecurityAuditor.Checks.EndpointSecurity;
 
-using System.Management;
 using System.Text;
 using NetworkSecurityAuditor.Models;
 
@@ -123,13 +122,7 @@ public sealed class EP10_EolOsCheck : ISecurityCheck
 
         try
         {
-            // Query AD computers via WMI/LDAP is complex; use a simpler WMI approach
-            // to detect computers in the domain with OS info
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT Name, Caption FROM Win32_OperatingSystem");
-
-            // This only gets the local OS; for full AD sweep we'd need DirectoryServices.
-            // Attempt LDAP query if available.
+            // Attempt LDAP query when Active Directory access is available.
             QueryAdViaLdap(sb, evidence, ref hasIssue, ct);
         }
         catch (Exception ex)
@@ -167,7 +160,8 @@ public sealed class EP10_EolOsCheck : ISecurityCheck
             int win10Count = 0;
             int win11Count = 0;
 
-            foreach (System.DirectoryServices.SearchResult result in adSearcher.FindAll())
+            using var results = adSearcher.FindAll();
+            foreach (System.DirectoryServices.SearchResult result in results)
             {
                 ct.ThrowIfCancellationRequested();
                 totalComputers++;

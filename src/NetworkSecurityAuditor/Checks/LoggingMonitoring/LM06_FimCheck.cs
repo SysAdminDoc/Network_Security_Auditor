@@ -98,31 +98,38 @@ public sealed class LM06_FimCheck : ISecurityCheck
         try
         {
             var services = ServiceController.GetServices();
-            var serviceNames = new HashSet<string>(
-                services.Select(s => s.ServiceName),
-                StringComparer.OrdinalIgnoreCase);
-
-            foreach (var (serviceName, label) in FimServices)
+            try
             {
-                ct.ThrowIfCancellationRequested();
+                var serviceNames = new HashSet<string>(
+                    services.Select(s => s.ServiceName),
+                    StringComparer.OrdinalIgnoreCase);
 
-                if (!serviceNames.Contains(serviceName)) continue;
+                foreach (var (serviceName, label) in FimServices)
+                {
+                    ct.ThrowIfCancellationRequested();
 
-                try
-                {
-                    using var sc = new ServiceController(serviceName);
-                    evidence.AppendLine($"  FOUND: {label} ({serviceName}) - Status: {sc.Status}");
-                    detected.Add(label);
+                    if (!serviceNames.Contains(serviceName)) continue;
+
+                    try
+                    {
+                        using var sc = new ServiceController(serviceName);
+                        evidence.AppendLine($"  FOUND: {label} ({serviceName}) - Status: {sc.Status}");
+                        detected.Add(label);
+                    }
+                    catch
+                    {
+                        evidence.AppendLine($"  FOUND: {label} ({serviceName}) - Status: unknown");
+                        detected.Add(label);
+                    }
                 }
-                catch
-                {
-                    evidence.AppendLine($"  FOUND: {label} ({serviceName}) - Status: unknown");
-                    detected.Add(label);
-                }
+
+                if (detected.Count == 0)
+                    evidence.AppendLine("  No FIM services detected.");
             }
-
-            if (detected.Count == 0)
-                evidence.AppendLine("  No FIM services detected.");
+            finally
+            {
+                ServiceControllerDisposal.DisposeAll(services);
+            }
         }
         catch (Exception ex)
         {
