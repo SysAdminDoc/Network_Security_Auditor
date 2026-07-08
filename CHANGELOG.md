@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# CF08 DNS filtering now uses known-valid vendor test domains with a control lookup instead of counting arbitrary NXDOMAIN responses as proof of filtering.
 - Fixed: C# CF02 egress filtering now uses a known outbound port test listener with a control-port guard instead of treating closed public IP ports as confirmed filtering.
 - Fixed: C# IA01 privileged-group review now converts Active Directory `IADsLargeInteger` logon timestamps correctly instead of marking every privileged user stale.
 - Fixed: C# GUI now surfaces search, status filtering, privacy mode, theme selection, save/load state, and Domain Maturity controls in the sidebar, with sidebar scrolling for smaller displays.

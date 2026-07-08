@@ -10,15 +10,17 @@ using NetworkSecurityAuditor.Models;
 /// </summary>
 public sealed class CF08_DnsFilterTestCheck : ISecurityCheck
 {
+    private const string ControlDomain = "example.com";
+    private readonly Func<string, IPAddress[]> _resolve;
+
     public string Id => "CF08";
 
-    // Known test domains used by DNS filtering services
+    // Known-valid test domains used by DNS filtering services. Unfiltered DNS should resolve them.
     private static readonly (string Domain, string Category)[] TestDomains =
     [
-        ("malware.testcategory.com", "Malware"),
-        ("examplemalwaredomain.com", "Malware"),
-        ("internetbadguys.com", "Cisco Umbrella Test"),
-        ("phishing.testcategory.com", "Phishing"),
+        ("internetbadguys.com", "Cisco Umbrella phishing test"),
+        ("malware.testcategory.com", "Cloudflare Gateway malware test"),
+        ("phishing.testcategory.com", "Cloudflare Gateway phishing test"),
     ];
 
     // Known sinkhole/block IPs
@@ -32,6 +34,11 @@ public sealed class CF08_DnsFilterTestCheck : ISecurityCheck
         "146.112.", // Cisco Umbrella
         "0.0.0.",
     ];
+
+    public CF08_DnsFilterTestCheck(Func<string, IPAddress[]>? resolve = null)
+    {
+        _resolve = resolve ?? Dns.GetHostAddresses;
+    }
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -54,6 +61,32 @@ public sealed class CF08_DnsFilterTestCheck : ISecurityCheck
             int resolved = 0;
 
             evidence.AppendLine("[DNS Filtering Test]");
+            evidence.AppendLine($"  Control lookup: {ControlDomain}");
+
+            try
+            {
+                var controlAddresses = _resolve(ControlDomain);
+                if (controlAddresses.Length == 0)
+                {
+                    return Task.FromResult(new CheckResult
+                    {
+                        Status = CheckStatus.NA,
+                        Findings = "DNS filtering test could not resolve the control domain. Filtering cannot be confirmed.",
+                        Evidence = evidence.AppendLine("  Control lookup returned no addresses.").ToString().TrimEnd()
+                    });
+                }
+
+                evidence.AppendLine($"  Control resolved to {string.Join(", ", controlAddresses.Select(a => a.ToString()))}");
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(new CheckResult
+                {
+                    Status = CheckStatus.NA,
+                    Findings = "DNS filtering test could not resolve the control domain. Filtering cannot be confirmed.",
+                    Evidence = evidence.AppendLine($"  Control lookup failed: {ex.GetType().Name}").ToString().TrimEnd()
+                });
+            }
 
             foreach (var (domain, category) in TestDomains)
             {
@@ -62,12 +95,12 @@ public sealed class CF08_DnsFilterTestCheck : ISecurityCheck
 
                 try
                 {
-                    var addresses = Dns.GetHostAddresses(domain);
+                    var addresses = _resolve(domain);
 
                     if (addresses.Length == 0)
                     {
                         blocked++;
-                        evidence.AppendLine($"  {domain} ({category}): No addresses returned (blocked)");
+                        evidence.AppendLine($"  {domain} ({category}): No addresses returned (blocked/refused)");
                         continue;
                     }
 
@@ -99,9 +132,8 @@ public sealed class CF08_DnsFilterTestCheck : ISecurityCheck
                 }
                 catch (Exception)
                 {
-                    // NXDOMAIN = domain blocked or doesn't exist
                     blocked++;
-                    evidence.AppendLine($"  {domain} ({category}): NXDOMAIN/Error (likely blocked)");
+                    evidence.AppendLine($"  {domain} ({category}): NXDOMAIN/Error for known-valid test domain (likely blocked)");
                 }
             }
 
