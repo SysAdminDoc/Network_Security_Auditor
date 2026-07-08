@@ -1388,13 +1388,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 ## Research-Driven Additions
 
-- [ ] P2 - Add signed local C# release artifact flow
-  Why: The repo now has a .NET/WPF executable path but no documented local publish artifact contract comparable to the downloadable PowerShell script.
-  Evidence: `src/NetworkSecurityAuditor/NetworkSecurityAuditor.csproj`; README download section; local-build-only repo policy.
-  Touches: release script/tooling, README release section, CHANGELOG version checklist, GitHub Release attachment process.
-  Acceptance: Local release command cleans previous artifacts, runs tests, publishes the C# app in the chosen artifact format, signs when a certificate is available, emits checksums, and documents exactly what users install.
-  Complexity: M
-
 ---
 
 ## Audit Backlog — Deep Audit 2026-07-07 (C# rewrite v5.2.4 + legacy PS1 v4.11.0)

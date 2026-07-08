@@ -95,6 +95,20 @@ Run the C# silent mode:
 .\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --profile Full --output C:\Reports
 ```
 
+Build the local C# installable artifact:
+
+```powershell
+.\tools\Publish-CSharpRelease.ps1
+```
+
+The release tool cleans `artifacts/csharp-release`, runs the xUnit suite,
+publishes the C# rewrite, signs `.exe`/`.dll` files when a local code-signing
+certificate is available, then writes
+`artifacts/csharp-release/release/NetworkSecurityAuditor-csharp-v<version>-windows-net9.zip`,
+`SHA256SUMS.txt`, and `release-manifest.json`. Users install the C# preview by
+unzipping that package on Windows with the .NET 9 Desktop Runtime installed and
+running `NetworkSecurityAuditor.exe`.
+
 ### Multi-Client Dashboard
 
 Roll up many scans into one static HTML dashboard (no server, no scan, no host
@@ -697,10 +711,12 @@ PSScriptAnalyzerSettings.psd1               # Lint rule set (correctness/securit
 tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
 tools/NetworkSecurityAudit.Tests.ps1        # Pester v5 quality-gate suite
 tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
+tools/Publish-CSharpRelease.ps1             # Local C# zip/checksum/signing artifact flow
 src/NetworkSecurityAuditor/                 # .NET 9 WPF rewrite
 src/NetworkSecurityAuditor/Data/BenchmarkMetadata.json # C# benchmark/lifecycle source manifest
 tests/NetworkSecurityAuditor.Tests/         # xUnit tests for the C# rewrite
 publish/NetworkSecurityAuditor/             # Local publish output, generated and not committed
+artifacts/csharp-release/                   # Local C# release artifacts, generated and not committed
 ```
 
 ---

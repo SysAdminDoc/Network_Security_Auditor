@@ -26,6 +26,7 @@ packages/
 TestResults/
 testResults.xml
 publish/
+artifacts/
 
 # AI config
 .codex/
