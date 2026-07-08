@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# GUI now surfaces search, status filtering, privacy mode, theme selection, save/load state, and Domain Maturity controls in the sidebar, with sidebar scrolling for smaller displays.
 - Fixed: C# GUI ComboBox popups/items, scrollbars, tooltips, and context menus now use dark WPF templates instead of default light system chrome.
 - Fixed: C# GUI grade, severity, and per-check status indicators now bind to live color properties instead of hardcoded gray/text-primary brushes.
 - Fixed: C# GUI manual status changes now refresh pass/fail/partial/N/A counters, overall grade, ransomware readiness, domain maturity, and status-filtered views immediately.

@@ -33,132 +33,178 @@
         <Border Grid.Column="0" Grid.Row="0"
                 Background="{StaticResource PanelBg}"
                 Padding="12">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <!-- Score Display -->
-                <Border Grid.Row="0" Background="{StaticResource SurfaceBg}" CornerRadius="8" Padding="16" Margin="0,0,0,12">
-                    <StackPanel HorizontalAlignment="Center">
-                        <TextBlock Text="{Binding Grade}" FontSize="56" FontWeight="Bold"
-                                   HorizontalAlignment="Center"
-                                   Foreground="{Binding GradeColor}"
-                                   AutomationProperties.Name="Overall security grade" />
-                        <TextBlock HorizontalAlignment="Center" FontSize="22" Foreground="{StaticResource TextSecondary}">
-                            <TextBlock.Text>
-                                <Binding Path="OverallScore" StringFormat="{}{0}/100" />
-                            </TextBlock.Text>
-                        </TextBlock>
-                        <TextBlock Text="Overall Score" HorizontalAlignment="Center"
-                                   FontSize="11" Foreground="{StaticResource BorderDim}" Margin="0,4,0,0" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Ransomware Readiness -->
-                <Border Grid.Row="1" Background="{StaticResource SurfaceBg}" CornerRadius="8" Padding="12" Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="Ransomware Readiness" FontSize="11" Foreground="{StaticResource BorderDim}"
-                                   HorizontalAlignment="Center" Margin="0,0,0,4" />
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBlock Text="{Binding RansomwareGrade}" FontSize="24" FontWeight="Bold"
-                                       Foreground="{StaticResource TextPrimary}" Margin="0,0,8,0" />
-                            <TextBlock FontSize="18" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,0,2">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <!-- Score Display -->
+                    <Border Background="{StaticResource SurfaceBg}" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding Grade}" FontSize="56" FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{Binding GradeColor}"
+                                       AutomationProperties.Name="Overall security grade" />
+                            <TextBlock HorizontalAlignment="Center" FontSize="22" Foreground="{StaticResource TextSecondary}">
                                 <TextBlock.Text>
-                                    <Binding Path="RansomwareScore" StringFormat="{}{0}/100" />
+                                    <Binding Path="OverallScore" StringFormat="{}{0}/100" />
                                 </TextBlock.Text>
                             </TextBlock>
+                            <TextBlock Text="Overall Score" HorizontalAlignment="Center"
+                                       FontSize="11" Foreground="{StaticResource BorderDim}" Margin="0,4,0,0" />
                         </StackPanel>
-                    </StackPanel>
-                </Border>
+                    </Border>
 
-                <!-- Pre-flight Summary -->
-                <TextBlock Grid.Row="2" Text="{Binding PreflightSummary}"
-                           Foreground="{StaticResource TextSecondary}" FontSize="10"
-                           FontFamily="Cascadia Code, Consolas" TextWrapping="Wrap"
-                           Margin="0,0,0,8"
-                           AutomationProperties.Name="Pre-flight connectivity check results" />
+                    <!-- Ransomware Readiness -->
+                    <Border Background="{StaticResource SurfaceBg}" CornerRadius="8" Padding="12" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Ransomware Readiness" FontSize="11" Foreground="{StaticResource BorderDim}"
+                                       HorizontalAlignment="Center" Margin="0,0,0,4" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding RansomwareGrade}" FontSize="24" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimary}" Margin="0,0,8,0" />
+                                <TextBlock FontSize="18" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,0,2">
+                                    <TextBlock.Text>
+                                        <Binding Path="RansomwareScore" StringFormat="{}{0}/100" />
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
 
-                <!-- Category List -->
-                <DockPanel Grid.Row="3" Margin="0,0,0,12">
-                    <TextBlock DockPanel.Dock="Top" Text="CATEGORIES" FontSize="11" FontWeight="SemiBold"
+                    <!-- Domain Maturity -->
+                    <Border Background="{StaticResource SurfaceBg}" CornerRadius="8" Padding="12" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Domain Maturity" FontSize="11" Foreground="{StaticResource BorderDim}"
+                                       HorizontalAlignment="Center" Margin="0,0,0,4" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding DomainMaturityGrade}" FontSize="24" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimary}" Margin="0,0,8,0" />
+                                <TextBlock FontSize="18" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,0,2">
+                                    <TextBlock.Text>
+                                        <Binding Path="DomainMaturityScore" StringFormat="{}{0}/100" />
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Pre-flight Summary -->
+                    <TextBlock Text="{Binding PreflightSummary}"
+                               Foreground="{StaticResource TextSecondary}" FontSize="10"
+                               FontFamily="Cascadia Code, Consolas" TextWrapping="Wrap"
+                               Margin="0,0,0,8"
+                               AutomationProperties.Name="Pre-flight connectivity check results" />
+
+                    <!-- Filters -->
+                    <TextBlock Text="FILTERS" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource BorderDim}" Margin="0,0,0,6" />
+                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource DarkTextBox}"
+                             Margin="0,0,0,6"
+                             AutomationProperties.Name="Search checks" />
+                    <ComboBox ItemsSource="{Binding StatusFilters}"
+                              SelectedItem="{Binding StatusFilter}"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,0,12"
+                              AutomationProperties.Name="Status filter" />
+
+                    <!-- Category List -->
+                    <TextBlock Text="CATEGORIES" FontSize="11" FontWeight="SemiBold"
                                Foreground="{StaticResource BorderDim}" Margin="0,0,0,6" />
                     <ListBox ItemsSource="{Binding Categories}"
                              SelectedItem="{Binding SelectedCategory}"
                              Style="{StaticResource DarkListBox}"
                              ItemContainerStyle="{StaticResource DarkListBoxItem}"
+                             MaxHeight="190"
+                             Margin="0,0,0,12"
                              AutomationProperties.Name="Check categories" />
-                </DockPanel>
 
-                <!-- Scan Profile -->
-                <TextBlock Grid.Row="4" Text="SCAN PROFILE" FontSize="11" FontWeight="SemiBold"
-                           Foreground="{StaticResource BorderDim}" Margin="0,0,0,4" />
-                <ComboBox Grid.Row="5" ItemsSource="{Binding AvailableProfiles}"
-                          SelectedItem="{Binding SelectedProfile}"
-                          Style="{StaticResource DarkComboBox}"
-                          Margin="0,0,0,12"
-                          AutomationProperties.Name="Scan profile selector" />
+                    <!-- Scan Profile -->
+                    <TextBlock Text="SCAN PROFILE" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource BorderDim}" Margin="0,0,0,4" />
+                    <ComboBox ItemsSource="{Binding AvailableProfiles}"
+                              SelectedItem="{Binding SelectedProfile}"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,0,12"
+                              AutomationProperties.Name="Scan profile selector" />
 
-                <!-- Scan Buttons -->
-                <Button Grid.Row="6" Content="Start Scan"
-                        Command="{Binding StartScanCommand}"
-                        Style="{StaticResource AccentButton}"
-                        Margin="0,0,0,6"
-                        AutomationProperties.Name="Start security scan" />
-                <Button Grid.Row="7" Content="Stop Scan"
-                        Command="{Binding StopScanCommand}"
-                        Style="{StaticResource SecondaryButton}"
-                        Margin="0,0,0,12"
-                        AutomationProperties.Name="Stop running scan" />
+                    <!-- Theme -->
+                    <TextBlock Text="THEME" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource BorderDim}" Margin="0,0,0,4" />
+                    <ComboBox ItemsSource="{Binding AvailableThemes}"
+                              SelectedItem="{Binding SelectedTheme}"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,0,12"
+                              AutomationProperties.Name="Theme selector" />
 
-                <!-- Export Buttons -->
-                <WrapPanel Grid.Row="8" HorizontalAlignment="Center">
-                    <Button Content="HTML" Command="{Binding ExportHtmlCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="PDF" Command="{Binding ExportPdfCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="JSON" Command="{Binding ExportJsonCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="CSV" Command="{Binding ExportCsvCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="JSONL" Command="{Binding ExportJsonlCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="SARIF" Command="{Binding ExportSarifCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="Navigator" Command="{Binding ExportNavigatorCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="DefectDojo" Command="{Binding ExportDefectDojoCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="OCSF" Command="{Binding ExportOcsfCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="OSCAL" Command="{Binding ExportOscalCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="Intune" Command="{Binding ExportIntuneCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                    <Button Content="Summary" Command="{Binding ExportComplianceSummaryCommand}"
-                            Style="{StaticResource SecondaryButton}" Margin="2"
-                            Padding="10,5" FontSize="10" />
-                </WrapPanel>
-            </Grid>
+                    <CheckBox Content="Privacy mode"
+                              IsChecked="{Binding PrivacyMode}"
+                              Style="{StaticResource DarkCheckBox}"
+                              Margin="0,0,0,12"
+                              AutomationProperties.Name="Privacy mode" />
+
+                    <!-- Scan Buttons -->
+                    <Button Content="Start Scan"
+                            Command="{Binding StartScanCommand}"
+                            Style="{StaticResource AccentButton}"
+                            Margin="0,0,0,6"
+                            AutomationProperties.Name="Start security scan" />
+                    <Button Content="Stop Scan"
+                            Command="{Binding StopScanCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            Margin="0,0,0,12"
+                            AutomationProperties.Name="Stop running scan" />
+
+                    <!-- State Buttons -->
+                    <WrapPanel HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Button Content="Save State" Command="{Binding SaveStateCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="Load State" Command="{Binding LoadStateCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                    </WrapPanel>
+
+                    <!-- Export Buttons -->
+                    <WrapPanel HorizontalAlignment="Center">
+                        <Button Content="HTML" Command="{Binding ExportHtmlCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="PDF" Command="{Binding ExportPdfCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="JSON" Command="{Binding ExportJsonCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="CSV" Command="{Binding ExportCsvCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="JSONL" Command="{Binding ExportJsonlCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="SARIF" Command="{Binding ExportSarifCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="Navigator" Command="{Binding ExportNavigatorCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="DefectDojo" Command="{Binding ExportDefectDojoCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="OCSF" Command="{Binding ExportOcsfCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="OSCAL" Command="{Binding ExportOscalCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="Intune" Command="{Binding ExportIntuneCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                        <Button Content="Summary" Command="{Binding ExportComplianceSummaryCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="2"
+                                Padding="10,5" FontSize="10" />
+                    </WrapPanel>
+                </StackPanel>
+            </ScrollViewer>
         </Border>
 
         <!-- Main Content Area -->

@@ -102,6 +102,51 @@
         <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}" />
     </Style>
 
+    <!-- CheckBox Style -->
+    <Style x:Key="DarkCheckBox" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Border x:Name="Box"
+                                Width="18" Height="18"
+                                Background="{StaticResource InputBg}"
+                                BorderBrush="{StaticResource BorderDim}"
+                                BorderThickness="1"
+                                CornerRadius="4">
+                            <Path x:Name="CheckMark"
+                                  Data="M 4 9 L 7 12 L 14 5"
+                                  Stroke="{StaticResource WindowBg}"
+                                  StrokeThickness="2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  Visibility="Collapsed" />
+                        </Border>
+                        <ContentPresenter Margin="8,0,0,0"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Box" Property="Background" Value="{StaticResource Accent}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Accent}" />
+                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ComboBox Style -->
     <Style x:Key="DarkComboBoxItem" TargetType="ComboBoxItem">
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />

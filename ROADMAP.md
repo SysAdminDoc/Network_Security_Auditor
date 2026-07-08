@@ -1487,8 +1487,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 **Group F — GUI correctness (results have no visual signal / core workflows broken)**
 
-- [ ] **P1 — Six VM features have no UI surface at all:** `SearchText`, `StatusFilter(s)`, `PrivacyMode`, `SelectedTheme/AvailableThemes`, `DomainMaturityScore/Grade`, and `SaveStateCommand`/`LoadStateCommand`. Consequences: GUI manual assessments can't be saved/loaded, GUI exports can never be privacy-redacted, search/filter is dead, Domain Maturity is computed but shown nowhere. Where: `MainViewModel.cs:22-28,41,44,68-72,497-580` vs `MainWindow.xaml`. Fix: add search box, status filter, privacy toggle, Save/Load buttons, Domain Maturity card.
-
 ---
 
 ### P2 — High
@@ -1530,7 +1528,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 - [ ] **P2 — Corner-radius rule violation: `CornerRadius="2"` on a 3px bar** (outside {0,4,6,8,10,12} and > half-height = pill). Where: `MainWindow.xaml:235`. Fix: `CornerRadius="0"`.
 - [ ] **P2 — Hardcoded hex bypassing theme tokens** (`#33585b70`, `#585b70`, `#881e1e2e` scrim, `#1e1e2e` literals; Catppuccin hex in C#). Where: `MainWindow.xaml:212,238,321`, `Themes.xaml:53,133`, `CheckItemViewModel.cs:43-69`, `MainViewModel.cs:119-127`. Fix: promote to tokens (`OverlayScrim`, `BadgeBg`, `OnAccent`).
 - [ ] **P2 — Non-virtualized ItemsControl of 69 heavy cards fully rebuilds on every check completion** (`FilteredChecks` returns a fresh enumerable; progress callback raises `PropertyChanged(FilteredChecks)`), destroying caret/focus mid-typing. Where: `MainWindow.xaml:174`, `MainViewModel.cs:82-115,600`. Fix: `ListBox`/virtualizing panel + `ICollectionView`.
-- [ ] **P2 — Sidebar has no ScrollViewer** (~600+ DIP fixed content; export buttons clip on short/125%-scaled displays). Where: `MainWindow.xaml:33-166`. Fix: wrap sidebar in a ScrollViewer / give categories a MinHeight.
 - [ ] **P2 — Export buttons enabled during a scan and before any scan** (writes partial or all-"F" reports silently). Where: `MainWindow.xaml:128-165`. Fix: gate on `!IsScanning`.
 
 ---

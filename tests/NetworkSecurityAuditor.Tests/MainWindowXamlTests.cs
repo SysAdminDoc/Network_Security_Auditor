@@ -13,10 +13,27 @@ public class MainWindowXamlTests
     }
 
     [Fact]
+    public void Main_Window_Surfaces_Manual_Assessment_Controls()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+
+        Assert.Contains("Text=\"{Binding SearchText, UpdateSourceTrigger=PropertyChanged}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding StatusFilters}\"", xaml);
+        Assert.Contains("IsChecked=\"{Binding PrivacyMode}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding AvailableThemes}\"", xaml);
+        Assert.Contains("Text=\"{Binding DomainMaturityGrade}\"", xaml);
+        Assert.Contains("Path=\"DomainMaturityScore\"", xaml);
+        Assert.Contains("Command=\"{Binding SaveStateCommand}\"", xaml);
+        Assert.Contains("Command=\"{Binding LoadStateCommand}\"", xaml);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml);
+    }
+
+    [Fact]
     public void Theme_Provides_Dark_Popup_Control_Templates()
     {
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
 
+        Assert.Contains("x:Key=\"DarkCheckBox\"", xaml);
         Assert.Contains("x:Key=\"DarkComboBoxItem\"", xaml);
         Assert.Contains("ControlTemplate TargetType=\"ComboBox\"", xaml);
         Assert.Contains("x:Name=\"PART_Popup\"", xaml);
