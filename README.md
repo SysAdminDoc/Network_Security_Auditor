@@ -371,7 +371,7 @@ Every HTML report can include up to three tiers, each targeting a different audi
 
 Full WPF interface with:
 
-- **7 dark themes** — Midnight (default), Slate, Nord, Dracula, Monokai, Solarized Dark, Catppuccin Mocha
+- **Catppuccin Mocha dark theme** in the C# rewrite; the legacy PowerShell WPF artifact retains the seven-theme selector
 - **Categorized tab navigation** with scan progress per category
 - **Per-check controls** — status dropdown, findings, evidence, notes, remediation assignment/due date/status
 - **Live risk score dashboard** updated as checks complete

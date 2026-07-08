@@ -66,6 +66,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ### Documentation
 - Changed: README now separates the production PowerShell artifact from the C# rewrite, removes stale hosted-workflow validation examples, documents local C# test/build/publish commands, and clarifies C# Cloud profile behavior.
+- Changed: README now documents the C# rewrite as Catppuccin Mocha-only while the legacy PowerShell WPF artifact retains the seven-theme selector.
 
 ## [v5.2.3] - 2026-06-20
 

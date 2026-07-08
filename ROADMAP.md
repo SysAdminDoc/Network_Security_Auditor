@@ -1388,13 +1388,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 ## Research-Driven Additions
 
-- [ ] P2 - Restore multi-theme WPF parity or remove theme claims
-  Why: C# view-model exposes only Catppuccin Mocha while repo notes and README still describe seven dark themes.
-  Evidence: `src/NetworkSecurityAuditor/ViewModels/MainViewModel.cs`; `src/NetworkSecurityAuditor/Theme/Themes.xaml`; README GUI section.
-  Touches: `Theme/Themes.xaml`, `ViewModels/MainViewModel.cs`, `MainWindow.xaml`, `tools/Test-ThemeContrast.ps1`, screenshot refresh.
-  Acceptance: Either all seven dark themes are selectable and contrast-tested, or product docs claim only Catppuccin Mocha for the C# rewrite.
-  Complexity: M
-
 - [ ] P2 - Add benchmark and lifecycle data refresh strategy
   Why: CIS/STIG/Windows lifecycle and Defender baselines change frequently, and current metadata is code-embedded rather than update-reviewed through a repeatable manifest.
   Evidence: `src/NetworkSecurityAuditor/Data/CheckCatalog.cs`; CIS Benchmarks; DoD STIG library; Microsoft Windows Server 2025 and SMB signing docs; HardeningKitty finding-list model.

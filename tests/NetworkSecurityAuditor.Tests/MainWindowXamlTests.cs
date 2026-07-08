@@ -132,6 +132,18 @@ public class MainWindowXamlTests
     }
 
     [Fact]
+    public void Main_Window_Documents_Csharp_Theme_Surface_As_Catppuccin_Only()
+    {
+        var readme = ReadSourceFile("README.md");
+        var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
+
+        Assert.Contains("public string[] AvailableThemes { get; } = [\"Catppuccin Mocha\"];", mainVm);
+        Assert.Contains("Catppuccin Mocha dark theme", readme);
+        Assert.Contains("legacy PowerShell WPF artifact retains the seven-theme selector", readme);
+        Assert.DoesNotContain("**7 dark themes**", readme);
+    }
+
+    [Fact]
     public void Main_Window_Detects_Environment_Off_Dispatcher()
     {
         var source = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml.cs");
