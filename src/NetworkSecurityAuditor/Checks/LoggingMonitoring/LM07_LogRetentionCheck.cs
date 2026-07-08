@@ -39,8 +39,7 @@ public sealed class LM07_LogRetentionCheck : ISecurityCheck
             foreach (var (logName, friendlyName, minSizeKb) in LogRequirements)
             {
                 ct.ThrowIfCancellationRequested();
-                totalChecks++;
-                CheckLogSize(logName, friendlyName, minSizeKb, sb, evidence, ref failCount);
+                CheckLogSize(logName, friendlyName, minSizeKb, sb, evidence, ref failCount, ref totalChecks);
             }
 
             // 2. Check Sysmon installed
@@ -68,7 +67,7 @@ public sealed class LM07_LogRetentionCheck : ISecurityCheck
     }
 
     private static void CheckLogSize(string logName, string friendlyName, long minSizeKb,
-        StringBuilder sb, StringBuilder evidence, ref int failCount)
+        StringBuilder sb, StringBuilder evidence, ref int failCount, ref int totalChecks)
     {
         evidence.AppendLine($"\n  [{friendlyName}]");
 
@@ -76,6 +75,7 @@ public sealed class LM07_LogRetentionCheck : ISecurityCheck
         {
             using var session = new EventLogSession();
             var config = new EventLogConfiguration(logName, session);
+            totalChecks++;
 
             long maxSizeKb = config.MaximumSizeInBytes / 1024;
             string logMode = config.LogMode.ToString();
@@ -112,7 +112,6 @@ public sealed class LM07_LogRetentionCheck : ISecurityCheck
         {
             evidence.AppendLine($"    Log channel not found.");
             sb.AppendLine($"INFO: {friendlyName} log channel not found.");
-            failCount--; // Don't penalize for missing optional channels
         }
         catch (UnauthorizedAccessException)
         {

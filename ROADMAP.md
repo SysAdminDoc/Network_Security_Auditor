@@ -1492,7 +1492,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 ### P2 — High
 
 **Checks (fail-open / masking)**
-- [ ] **P2 — EP07 `failCount--` masks real failures** (decrements the shared counter when Office/Smart App Control is absent, subtracting AppLocker/WDAC failures; can flip to `Pass`). Same idiom in LM07 (`:114-116`) and a milder LM01 (`:99`). Where: `Checks/EndpointSecurity/EP07_AppControlCheck.cs:218-219,267-268`. Fix: track per-sub-check applicability.
 - [ ] **P2 — EP06 host-firewall parse is English-locale-dependent and fails open** (`Contains("State ... OFF")` with hardcoded spacing; WMI fallback only runs on throw; dead vars). Where: `EP06_HostFirewallCheck.cs:66-72,76,209-222`. Fix: parse robustly / use WMI `MSFT_NetFirewallProfile`.
 
 **Export / scoring**

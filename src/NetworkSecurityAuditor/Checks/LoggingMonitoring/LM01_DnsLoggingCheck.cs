@@ -61,13 +61,13 @@ public sealed class LM01_DnsLoggingCheck : ISecurityCheck
     private static void CheckDnsClientLog(StringBuilder sb, StringBuilder evidence,
         ref int failCount, ref int totalChecks)
     {
-        totalChecks++;
         evidence.AppendLine("[DNS Client Operational Log]");
 
         try
         {
             using var session = new EventLogSession();
             var config = new EventLogConfiguration(DnsClientLogName, session);
+            totalChecks++;
 
             bool isEnabled = config.IsEnabled;
             long maxSizeBytes = config.MaximumSizeInBytes;
@@ -96,7 +96,6 @@ public sealed class LM01_DnsLoggingCheck : ISecurityCheck
         {
             evidence.AppendLine("  Log channel not found.");
             sb.AppendLine("INFO: DNS Client operational log channel not found on this system.");
-            totalChecks--;
         }
         catch (UnauthorizedAccessException)
         {

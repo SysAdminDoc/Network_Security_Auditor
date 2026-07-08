@@ -104,7 +104,6 @@ public sealed class EP07_AppControlCheck : ISecurityCheck
     private static void CheckCodeIntegrity(StringBuilder sb, StringBuilder evidence,
         ref int failCount, ref int totalChecks)
     {
-        totalChecks++;
         evidence.AppendLine("\n[WDAC / Code Integrity]");
 
         try
@@ -117,6 +116,7 @@ public sealed class EP07_AppControlCheck : ISecurityCheck
             foreach (ManagementObject obj in searcher.Get())
             {
                 found = true;
+                totalChecks++;
                 int kernelCi = Convert.ToInt32(obj["CodeIntegrityPolicyEnforcementStatus"] ?? 0);
                 int userCi = Convert.ToInt32(obj["UsermodeCodeIntegrityPolicyEnforcementStatus"] ?? 0);
 
@@ -165,7 +165,6 @@ public sealed class EP07_AppControlCheck : ISecurityCheck
     private static void CheckOfficeMacros(StringBuilder sb, StringBuilder evidence,
         ref int failCount, ref int totalChecks)
     {
-        totalChecks++;
         evidence.AppendLine("\n[Office Macro Restrictions]");
 
         // Check VBAWarnings for each major Office app
@@ -215,24 +214,25 @@ public sealed class EP07_AppControlCheck : ISecurityCheck
         if (!anyOfficeFound)
         {
             sb.AppendLine("INFO: No Office macro settings detected (Office may not be installed).");
-            failCount--; // Don't count as fail if Office isn't present
-            totalChecks--;
-        }
-        else if (!allRestricted)
-        {
-            failCount++;
-            sb.AppendLine("FAIL: Office macros are not fully restricted. At least one application allows all macros.");
         }
         else
         {
-            sb.AppendLine("Office macros: Restricted (notifications or digital signature required).");
+            totalChecks++;
+            if (!allRestricted)
+            {
+                failCount++;
+                sb.AppendLine("FAIL: Office macros are not fully restricted. At least one application allows all macros.");
+            }
+            else
+            {
+                sb.AppendLine("Office macros: Restricted (notifications or digital signature required).");
+            }
         }
     }
 
     private static void CheckSmartAppControl(StringBuilder sb, StringBuilder evidence,
         ref int failCount, ref int totalChecks)
     {
-        totalChecks++;
         evidence.AppendLine("\n[Smart App Control]");
 
         // Smart App Control state stored in CI policy registry
@@ -251,28 +251,28 @@ public sealed class EP07_AppControlCheck : ISecurityCheck
 
         if (sacState == 2)
         {
+            totalChecks++;
             sb.AppendLine("Smart App Control: Enforced.");
         }
         else if (sacState == 1)
         {
+            totalChecks++;
             sb.AppendLine("Smart App Control: Evaluation mode (learning).");
         }
         else if (sacState == 0)
         {
+            totalChecks++;
             sb.AppendLine("INFO: Smart App Control is off. Once turned off it cannot be re-enabled without OS reinstall.");
         }
         else
         {
             sb.AppendLine("INFO: Smart App Control state not available (requires Windows 11 22H2+).");
-            totalChecks--;
-            failCount--;
         }
     }
 
     private static void CheckWindowsRecall(StringBuilder sb, StringBuilder evidence,
         ref int failCount, ref int totalChecks)
     {
-        totalChecks++;
         evidence.AppendLine("\n[Windows Recall]");
 
         // DisableAIDataAnalysis = 1 means Recall is disabled via policy
@@ -288,16 +288,17 @@ public sealed class EP07_AppControlCheck : ISecurityCheck
 
         if (disabledPolicy == 1 || disabledUser == 1)
         {
+            totalChecks++;
             sb.AppendLine("Windows Recall: Disabled.");
         }
         else if (disabledPolicy == -1 && disabledUser == -1)
         {
             // Recall may not be available on this system (pre-24H2 or non-Copilot+ hardware)
             sb.AppendLine("INFO: Windows Recall policy not configured (feature may not be available on this hardware).");
-            totalChecks--;
         }
         else
         {
+            totalChecks++;
             failCount++;
             sb.AppendLine("FAIL: Windows Recall is enabled. Sensitive data may be continuously captured.");
         }
