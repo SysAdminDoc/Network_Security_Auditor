@@ -51,6 +51,19 @@ public class MainWindowXamlTests
     }
 
     [Fact]
+    public void Main_Window_Uses_Accessible_Muted_Text_And_Square_Thin_Bar()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+        var theme = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
+
+        Assert.Contains("x:Key=\"TextMuted\" Color=\"#a6adc8\"", theme);
+        Assert.DoesNotContain("Foreground=\"{StaticResource BorderDim}\"", xaml);
+        Assert.Contains("Foreground=\"{StaticResource TextMuted}\"", xaml);
+        Assert.Contains("Height=\"3\" CornerRadius=\"0\"", xaml);
+        Assert.DoesNotContain("Height=\"3\" CornerRadius=\"2\"", xaml);
+    }
+
+    [Fact]
     public void Main_Window_Detects_Environment_Off_Dispatcher()
     {
         var source = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml.cs");

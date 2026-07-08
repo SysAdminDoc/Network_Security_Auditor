@@ -8,6 +8,7 @@
     <SolidColorBrush x:Key="SurfaceBg" Color="#45475a" />
     <SolidColorBrush x:Key="InputBg" Color="#1e1e2e" />
     <SolidColorBrush x:Key="BorderDim" Color="#7f839b" />
+    <SolidColorBrush x:Key="TextMuted" Color="#a6adc8" />
     <SolidColorBrush x:Key="TextPrimary" Color="#cdd6f4" />
     <SolidColorBrush x:Key="TextSecondary" Color="#b5bcd6" />
     <SolidColorBrush x:Key="Accent" Color="#cba6f7" />

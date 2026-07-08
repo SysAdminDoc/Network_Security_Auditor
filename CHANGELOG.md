@@ -12,6 +12,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# dashboard exports now reuse the shared CSV escaping routine and constrain grade CSS classes to an allowlist before rendering HTML attributes.
 
 ### Correctness
+- Fixed: C# GUI muted labels now use a higher-contrast `TextMuted` token and the 3px status bar no longer uses a pill corner radius.
 - Fixed: C# GUI startup now shows an unassessed overall-grade empty state (dash / `Not scanned`) until at least one check has a Pass, Partial, or Fail result.
 - Fixed: C# GUI due-date entry now uses a dark styled validated `yyyy-MM-dd` text field instead of a light system DatePicker popup.
 - Fixed: C# GUI startup now detects WMI, domain, Azure AD, and Intune environment signals on a worker thread instead of blocking the WPF dispatcher during window load.

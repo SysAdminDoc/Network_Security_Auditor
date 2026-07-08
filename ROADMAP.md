@@ -1500,8 +1500,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 **Legacy PS1 branding / fleet security**
 
 **GUI theme / a11y / layout**
-- [ ] **P2 — `BorderDim` (#7f839b) used as text foreground for 10-11px labels fails WCAG AA** (3.35:1 on cards, 2.44:1 on the status bar). Where: `MainWindow.xaml:67,74,97,107,254,265,288,301,309,368`, `Themes.xaml:10`. Fix: add a `TextMuted` token >= #a6adc8.
-- [ ] **P2 — Corner-radius rule violation: `CornerRadius="2"` on a 3px bar** (outside {0,4,6,8,10,12} and > half-height = pill). Where: `MainWindow.xaml:235`. Fix: `CornerRadius="0"`.
 - [ ] **P2 — Hardcoded hex bypassing theme tokens** (`#33585b70`, `#585b70`, `#881e1e2e` scrim, `#1e1e2e` literals; Catppuccin hex in C#). Where: `MainWindow.xaml:212,238,321`, `Themes.xaml:53,133`, `CheckItemViewModel.cs:43-69`, `MainViewModel.cs:119-127`. Fix: promote to tokens (`OverlayScrim`, `BadgeBg`, `OnAccent`).
 - [ ] **P2 — Non-virtualized ItemsControl of 69 heavy cards fully rebuilds on every check completion** (`FilteredChecks` returns a fresh enumerable; progress callback raises `PropertyChanged(FilteredChecks)`), destroying caret/focus mid-typing. Where: `MainWindow.xaml:174`, `MainViewModel.cs:82-115,600`. Fix: `ListBox`/virtualizing panel + `ICollectionView`.
 - [ ] **P2 — Export buttons enabled during a scan and before any scan** (writes partial or all-"F" reports silently). Where: `MainWindow.xaml:128-165`. Fix: gate on `!IsScanning`.
