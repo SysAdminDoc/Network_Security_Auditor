@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# EP10 mappings now represent end-of-life operating system exposure with T1190/T1210, Software Update hardening, and SI-2/CM-8 controls instead of removable-media controls.
 - Changed: C# STIG scoring no longer emits fabricated sequential V-IDs; only prose-backed IA11/IA12 STIG readiness notes remain, and the STIG profile is narrowed to those checks.
 - Fixed: C# PS01-PS06 catalog and framework mappings now use policy, incident response, compliance monitoring, risk, and training HIPAA/FedRAMP/CSF citations instead of stale physical-security controls.
 - Fixed: C# BR03-BR07 ATT&CK, D3FEND, and compliance mappings now match restore testing, RTO/RPO documentation, backup encryption, backup monitoring, and DR plan catalog entries.

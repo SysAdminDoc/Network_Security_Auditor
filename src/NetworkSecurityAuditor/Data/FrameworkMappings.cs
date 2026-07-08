@@ -278,16 +278,16 @@ public static class FrameworkMappings
             },
             ["EP10"] = new()
             {
-                CIS = "2.1, 2.2",
-                NIST = "3.8.9",
-                CMMC = "MP.L2-3.8.9",
+                CIS = "2.1, 2.2, 7.1",
+                NIST = "3.4.1, 3.14.1, 3.14.2",
+                CMMC = "CM.L2-3.4.1, SI.L2-3.14.1, SI.L2-3.14.2",
                 HIPAA = "164.308(a)(5)(ii)(B)",
-                PCI = "9.4.1, 9.4.5",
-                SOC2 = "CC6.7",
-                ISO27001 = "A.7.9, A.8.1",
+                PCI = "6.3.1, 6.3.3",
+                SOC2 = "CC7.1, CC8.1",
+                ISO27001 = "A.8.8, A.8.19",
                 E8 = "E8 Patch Operating Systems ML1-ML3",
                 CyberEssentials = "Cyber Essentials v3.3: Security update management",
-                FedRAMP = "MA-3, MA-5, PE-16",
+                FedRAMP = "SI-2, CM-8",
             },
 
             // ──────────────────────────────────────────────

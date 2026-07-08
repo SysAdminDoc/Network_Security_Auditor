@@ -149,9 +149,9 @@ public static class MitreMappings
             },
             ["EP10"] = new AttackMapping
             {
-                Tactics = ["TA0005", "TA0010"],
-                Techniques = ["T1091", "T1052"],
-                Description = "Uncontrolled removable media enables malware delivery"
+                Tactics = ["TA0001", "TA0008"],
+                Techniques = ["T1190", "T1210"],
+                Description = "End-of-life operating systems expose public and internal services to known exploitation"
             },
 
             // ── Logging & Monitoring ───────────────────────────────────────

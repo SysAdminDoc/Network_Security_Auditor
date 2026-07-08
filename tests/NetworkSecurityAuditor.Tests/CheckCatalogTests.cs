@@ -174,6 +174,24 @@ public class CheckCatalogTests
     }
 
     [Fact]
+    public void Ep10_Mapping_Matches_Eol_Operating_Systems()
+    {
+        var catalog = CheckCatalog.All["EP10"];
+        var attack = MitreMappings.All["EP10"];
+        var defend = D3FendMappings.All["EP10"];
+        var framework = FrameworkMappings.All["EP10"];
+
+        Assert.Equal("EOL operating systems", catalog.Label);
+        Assert.Contains("T1190", attack.Techniques);
+        Assert.Contains("T1210", attack.Techniques);
+        Assert.DoesNotContain("T1091", attack.Techniques);
+        Assert.DoesNotContain("T1052", attack.Techniques);
+        Assert.Contains("Software Update", defend.Labels);
+        Assert.Contains("end-of-life", defend.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("SI-2, CM-8", framework.FedRAMP);
+    }
+
+    [Fact]
     public void Severity_Weights_Match_Enum_Values()
     {
         foreach (var meta in CheckCatalog.All.Values)

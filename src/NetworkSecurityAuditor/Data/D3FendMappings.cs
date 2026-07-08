@@ -169,10 +169,10 @@ public static class D3FendMappings
             },
             ["EP10"] = new DefendMapping
             {
-                Stages = ["Harden", "Isolate"],
-                Techniques = ["D3-PH", "D3-IOPR"],
-                Labels = ["Platform Hardening", "Inbound/Outbound Port Restriction"],
-                Description = "Controls removable media access"
+                Stages = ["Model", "Harden"],
+                Techniques = ["D3-AM", "D3-SU", "D3-PH"],
+                Labels = ["Access Modeling", "Software Update", "Platform Hardening"],
+                Description = "Tracks and retires end-of-life operating systems before known exploitation"
             },
 
             // ── Logging & Monitoring ───────────────────────────────────────
