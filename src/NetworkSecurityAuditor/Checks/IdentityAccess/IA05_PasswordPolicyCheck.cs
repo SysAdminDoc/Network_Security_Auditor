@@ -203,15 +203,7 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
         {
             var val = entry.Properties[name]?.Value;
             if (val == null) return 0;
-            // AD stores large integers as COM IADsLargeInteger
-            if (val is long l) return l;
-            // Try via reflection for IADsLargeInteger
-            var type = val.GetType();
-            int highPart = (int)(type.InvokeMember("HighPart",
-                System.Reflection.BindingFlags.GetProperty, null, val, null) ?? 0);
-            int lowPart = (int)(type.InvokeMember("LowPart",
-                System.Reflection.BindingFlags.GetProperty, null, val, null) ?? 0);
-            return ((long)highPart << 32) | (uint)lowPart;
+            return ActiveDirectoryValueConverter.GetLargeIntegerValue(val);
         }
         catch { return 0; }
     }

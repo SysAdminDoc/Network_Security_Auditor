@@ -1492,7 +1492,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 ### P2 — High
 
 **Checks (fail-open / masking)**
-- [ ] **P2 — IA01 flags every privileged-group member `[STALE]` -> `Fail` on any domain.** `lastLogonTimestamp` via `DirectoryEntry.Properties` returns an `IADsLargeInteger` COM object, so `is long` is always false and `lastLogon` stays `DateTime.MinValue`. Where: `Checks/IdentityAccess/IA01_PrivilegedGroupsCheck.cs:114-121`. Fix: convert via the IADsLargeInteger reflection helper IA05 already has (extract to a shared util).
 - [ ] **P2 — CF02 egress test fails open:** connecting high-risk ports to `1.1.1.1` (which doesn't listen) counts a failed connect as "BLOCKED" -> `Pass` on a wide-open network. Where: `Checks/CommonFindings/CF02_EgressTestCheck.cs:17-28,54-72`. Fix: require positive confirmation of filtering.
 - [ ] **P2 — CF08 DNS filter test fails open:** NXDOMAIN on test domains that never resolve anyway counts as "blocked" -> `Pass` with no filtering. Where: `CF08_DnsFilterTestCheck.cs:63-105,128-130`. Fix: use a domain that *should* resolve to a known-good IP when unfiltered.
 - [ ] **P2 — EP07 `failCount--` masks real failures** (decrements the shared counter when Office/Smart App Control is absent, subtracting AppLocker/WDAC failures; can flip to `Pass`). Same idiom in LM07 (`:114-116`) and a milder LM01 (`:99`). Where: `Checks/EndpointSecurity/EP07_AppControlCheck.cs:218-219,267-268`. Fix: track per-sub-check applicability.

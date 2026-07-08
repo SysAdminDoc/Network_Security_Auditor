@@ -110,17 +110,9 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
                             continue;
                         }
 
-                        // Check last logon
-                        long lastLogonTs = 0;
                         var lastLogonVal = memberEntry.Properties["lastLogonTimestamp"]?.Value;
-                        if (lastLogonVal is long llv)
-                            lastLogonTs = llv;
-
-                        DateTime lastLogon = lastLogonTs > 0
-                            ? DateTime.FromFileTimeUtc(lastLogonTs)
-                            : DateTime.MinValue;
-
-                        bool isStale = lastLogon < staleThreshold;
+                        var lastLogon = ActiveDirectoryValueConverter.GetFileTimeUtc(lastLogonVal);
+                        bool isStale = !lastLogon.HasValue || lastLogon.Value < staleThreshold;
                         if (isStale) staleCount++;
 
                         // Check PasswordNeverExpires (bit 0x10000 of userAccountControl)
@@ -135,7 +127,8 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
                         if (isStale) flags += " [STALE]";
                         if (pwdNeverExpires) flags += " [PwdNeverExpires]";
 
-                        evidence.AppendLine($"  {sam} | LastLogon={lastLogon:yyyy-MM-dd}{flags}");
+                        var lastLogonLabel = lastLogon.HasValue ? lastLogon.Value.ToString("yyyy-MM-dd") : "Never";
+                        evidence.AppendLine($"  {sam} | LastLogon={lastLogonLabel}{flags}");
                     }
                     catch
                     {
