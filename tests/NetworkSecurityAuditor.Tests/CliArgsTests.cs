@@ -1,4 +1,5 @@
 using NetworkSecurityAuditor.Models;
+using System.IO;
 
 namespace NetworkSecurityAuditor.Tests;
 
@@ -183,5 +184,21 @@ public class CliArgsTests
         Assert.True(args.Silent);
         Assert.Equal(ScanProfileType.CMMC, args.ScanProfile);
         Assert.True(args.ExportCsv);
+    }
+
+    [Fact]
+    public async Task Headless_Exception_Returns_Alert_ExitCode_And_Writes_Error()
+    {
+        using var errorWriter = new StringWriter();
+
+        var exitCode = await App.RunHeadlessWithExitHandlingAsync(
+            "Silent",
+            () => throw new InvalidOperationException("locked export path"),
+            errorWriter);
+
+        var error = errorWriter.ToString();
+        Assert.Equal((int)ExitCode.ImmediateAlert, exitCode);
+        Assert.Contains("Silent mode failed", error);
+        Assert.Contains("locked export path", error);
     }
 }

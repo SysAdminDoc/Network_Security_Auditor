@@ -56,7 +56,7 @@ public partial class App : Application
         {
             base.OnStartup(e);
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            _ = RunDashboardAsync(args);
+            _ = RunHeadlessAndShutdownAsync("Dashboard", () => RunDashboardAsync(args));
             return;
         }
 
@@ -64,7 +64,7 @@ public partial class App : Application
         {
             base.OnStartup(e);
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            _ = RunSilentAsync(args);
+            _ = RunHeadlessAndShutdownAsync("Silent", () => RunSilentAsync(args));
             return;
         }
 
@@ -74,9 +74,32 @@ public partial class App : Application
         window.Show();
     }
 
-    private async Task RunDashboardAsync(CliArgs args)
+    private async Task RunHeadlessAndShutdownAsync(string modeName, Func<Task<int>> runModeAsync)
     {
         AttachConsole(-1);
+        var exitCode = await RunHeadlessWithExitHandlingAsync(modeName, runModeAsync, Console.Error);
+        Shutdown(exitCode);
+    }
+
+    internal static async Task<int> RunHeadlessWithExitHandlingAsync(
+        string modeName,
+        Func<Task<int>> runModeAsync,
+        TextWriter errorWriter)
+    {
+        try
+        {
+            return await runModeAsync();
+        }
+        catch (Exception ex)
+        {
+            await errorWriter.WriteLineAsync($"ERROR: {modeName} mode failed: {ex.Message}");
+            await errorWriter.WriteLineAsync(ex.ToString());
+            return (int)ExitCode.ImmediateAlert;
+        }
+    }
+
+    private async Task<int> RunDashboardAsync(CliArgs args)
+    {
         Console.WriteLine();
         Console.WriteLine($"Network Security Auditor v{VersionInfo.Version} - Dashboard Mode");
 
@@ -87,8 +110,7 @@ public partial class App : Application
         if (!Directory.Exists(inputDir))
         {
             Console.WriteLine($"  ERROR: Input directory not found: {inputDir}");
-            Shutdown(1);
-            return;
+            return 1;
         }
 
         Console.WriteLine($"  Input: {inputDir}");
@@ -111,13 +133,11 @@ public partial class App : Application
         Console.WriteLine($"  CSV: {csvPath}");
 
         Console.WriteLine();
-        Shutdown(0);
+        return 0;
     }
 
-    private async Task RunSilentAsync(CliArgs args)
+    private async Task<int> RunSilentAsync(CliArgs args)
     {
-        AttachConsole(-1);
-
         Console.WriteLine();
         Console.WriteLine($"Network Security Auditor v{VersionInfo.Version} - Silent Mode");
         Console.WriteLine($"Profile: {args.ScanProfile} | ReadOnly: true");
@@ -145,8 +165,7 @@ public partial class App : Application
         {
             Console.WriteLine($"Profile {args.ScanProfile} is not implemented in the C# rewrite yet.");
             Console.WriteLine("No local or Active Directory checks were run. Use the PowerShell artifact for the current cloud assessment path.");
-            Shutdown((int)ExitCode.ReviewNeeded);
-            return;
+            return (int)ExitCode.ReviewNeeded;
         }
 
         var progress = new Progress<(string checkId, CheckResult result)>(update =>
@@ -357,7 +376,7 @@ public partial class App : Application
             exitCode = ExitCode.ReviewNeeded;
 
         Console.WriteLine($"  Exit code: {(int)exitCode}");
-        Shutdown((int)exitCode);
+        return (int)exitCode;
     }
 
     private static bool HasFrameworkBelowThreshold(

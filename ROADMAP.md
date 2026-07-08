@@ -1471,15 +1471,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 ---
 
-### P0 — Ship-blocking
-
-- [ ] **P0 — Headless CLI modes are fire-and-forget; any exception hangs the process forever with no exit code.**
-  Why: `_ = RunDashboardAsync(args)` / `_ = RunSilentAsync(args)` under `ShutdownMode.OnExplicitShutdown` with no try/catch. A corrupt `--waivers`/`--branding`/`.audit.json` (throws `JsonException`), an invalid `--output`, or any file-write IO error faults the discarded task; `Shutdown()` is never called -> zombie WPF process, no console output, no exit code. Silent mode is marketed for scheduled/RMM tasks whose contract is exit codes 0-3.
-  Where: `src/NetworkSecurityAuditor/App.xaml.cs:59,67` (bodies 77-115, 117-361).
-  Fix: wrap both runner bodies in try/catch -> `Console.Error.WriteLine(ex)` + `Shutdown(nonzero)`; observe the task rather than discarding it.
-
----
-
 ### P1 — Critical (correctness / security / core UX)
 
 **Group A — Concurrency & app lifecycle (fix first; several P2/P3 items depend on this)**
