@@ -11,21 +11,30 @@ using NetworkSecurityAuditor.Models;
 /// </summary>
 public sealed class CF02_EgressTestCheck : ISecurityCheck
 {
+    private const string EgressTestHost = "portquiz.net";
+    private const int ControlPort = 80;
+    private readonly Func<string, int, TimeSpan, bool> _tcpConnect;
+
     public string Id => "CF02";
 
     // Ports that should typically be blocked outbound from workstations
-    private static readonly (int Port, string Service, string TestHost)[] EgressTests =
+    private static readonly (int Port, string Service)[] EgressTests =
     [
-        (25, "SMTP", "smtp.gmail.com"),
-        (445, "SMB", "1.1.1.1"),
-        (1433, "MSSQL", "1.1.1.1"),
-        (3389, "RDP", "1.1.1.1"),
-        (23, "Telnet", "1.1.1.1"),
-        (21, "FTP", "1.1.1.1"),
-        (5900, "VNC", "1.1.1.1"),
-        (4444, "Metasploit Default", "1.1.1.1"),
-        (8080, "HTTP Proxy", "1.1.1.1"),
+        (25, "SMTP"),
+        (445, "SMB"),
+        (1433, "MSSQL"),
+        (3389, "RDP"),
+        (23, "Telnet"),
+        (21, "FTP"),
+        (5900, "VNC"),
+        (4444, "Metasploit Default"),
+        (8080, "HTTP Proxy"),
     ];
+
+    public CF02_EgressTestCheck(Func<string, int, TimeSpan, bool>? tcpConnect = null)
+    {
+        _tcpConnect = tcpConnect ?? TestTcpConnect;
+    }
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -48,26 +57,40 @@ public sealed class CF02_EgressTestCheck : ISecurityCheck
             int testedPorts = 0;
             var openPortList = new List<string>();
 
+            var timeout = TimeSpan.FromSeconds(3);
             evidence.AppendLine("[Egress Filtering Test]");
-            evidence.AppendLine("  Test method: TCP connect with 3-second timeout");
+            evidence.AppendLine($"  Test method: TCP connect to {EgressTestHost} with {timeout.TotalSeconds:0}-second timeout");
+            evidence.AppendLine($"  Control: {EgressTestHost}:{ControlPort}");
 
-            foreach (var (port, service, host) in EgressTests)
+            if (!_tcpConnect(EgressTestHost, ControlPort, timeout))
+            {
+                return Task.FromResult(new CheckResult
+                {
+                    Status = CheckStatus.NA,
+                    Findings = "Egress filtering test could not reach the control port on the outbound test service. Filtering cannot be confirmed.",
+                    Evidence = evidence.AppendLine("  Control connection failed; high-risk port results not attempted.").ToString().TrimEnd()
+                });
+            }
+
+            evidence.AppendLine("  Control connection succeeded; high-risk port failures are counted as filtered.");
+
+            foreach (var (port, service) in EgressTests)
             {
                 ct.ThrowIfCancellationRequested();
                 testedPorts++;
 
-                bool reachable = TestTcpConnect(host, port, TimeSpan.FromSeconds(3));
+                bool reachable = _tcpConnect(EgressTestHost, port, timeout);
 
                 if (reachable)
                 {
                     openPorts++;
                     openPortList.Add($"{port} ({service})");
-                    evidence.AppendLine($"  OPEN: {host}:{port} ({service}) - outbound connection succeeded");
+                    evidence.AppendLine($"  OPEN: {EgressTestHost}:{port} ({service}) - outbound connection succeeded");
                 }
                 else
                 {
                     blockedPorts++;
-                    evidence.AppendLine($"  BLOCKED: {host}:{port} ({service}) - connection failed/timeout");
+                    evidence.AppendLine($"  BLOCKED: {EgressTestHost}:{port} ({service}) - expected listener was unreachable");
                 }
             }
 
