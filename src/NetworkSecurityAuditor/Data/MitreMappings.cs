@@ -157,9 +157,9 @@ public static class MitreMappings
             // ── Logging & Monitoring ───────────────────────────────────────
             ["LM01"] = new AttackMapping
             {
-                Tactics = ["TA0112"],
-                Techniques = ["T1685.002", "T1070.001"],
-                Description = "Inadequate audit policy creates blind spots"
+                Tactics = ["TA0011", "TA0005"],
+                Techniques = ["T1071.004", "T1568"],
+                Description = "Missing DNS logging hides DNS-based C2 and dynamic resolution"
             },
             ["LM02"] = new AttackMapping
             {
@@ -181,15 +181,15 @@ public static class MitreMappings
             },
             ["LM05"] = new AttackMapping
             {
-                Tactics = ["TA0112"],
-                Techniques = ["T1685.002", "T1070.001", "T1070.002"],
-                Description = "Logs without integrity protection can be tampered with"
+                Tactics = ["TA0006", "TA0001"],
+                Techniques = ["T1110", "T1078"],
+                Description = "Unmonitored failed logons hide brute-force and password-guessing attempts"
             },
             ["LM06"] = new AttackMapping
             {
-                Tactics = ["TA0112"],
-                Techniques = ["T1070.001", "T1685.002"],
-                Description = "Missing log review means alerts never acted upon"
+                Tactics = ["TA0005"],
+                Techniques = ["T1562.001", "T1070.004"],
+                Description = "Missing file integrity monitoring lets defense tampering and file deletion go unnoticed"
             },
             ["LM07"] = new AttackMapping
             {
@@ -269,9 +269,9 @@ public static class MitreMappings
             },
             ["NP04"] = new AttackMapping
             {
-                Tactics = ["TA0001", "TA0005"],
-                Techniques = ["T1190", "T1686.003"],
-                Description = "WAF gaps allow web app exploitation"
+                Tactics = ["TA0011", "TA0005"],
+                Techniques = ["T1071.004", "T1568"],
+                Description = "Missing DNS filtering allows DNS-based C2 and dynamic resolution"
             },
             ["NP05"] = new AttackMapping
             {
@@ -281,9 +281,9 @@ public static class MitreMappings
             },
             ["NP06"] = new AttackMapping
             {
-                Tactics = ["TA0001", "TA0011"],
-                Techniques = ["T1190", "T1071.001"],
-                Description = "Missing SSL inspection allows encrypted C2"
+                Tactics = ["TA0001", "TA0008"],
+                Techniques = ["T1133", "T1021", "T1210"],
+                Description = "Temporary firewall rules leave forgotten remote-service exposure"
             },
             ["NP07"] = new AttackMapping
             {
@@ -369,9 +369,9 @@ public static class MitreMappings
             },
             ["CF02"] = new AttackMapping
             {
-                Tactics = ["TA0008", "TA0005"],
-                Techniques = ["T1021.002", "T1570"],
-                Description = "SMBv1 and legacy protocols enable EternalBlue-class exploits"
+                Tactics = ["TA0011", "TA0010"],
+                Techniques = ["T1071", "T1041", "T1105"],
+                Description = "Missing egress filtering allows outbound C2, tool transfer, and exfiltration"
             },
             ["CF03"] = new AttackMapping
             {
@@ -381,9 +381,9 @@ public static class MitreMappings
             },
             ["CF04"] = new AttackMapping
             {
-                Tactics = ["TA0009", "TA0010"],
-                Techniques = ["T1005", "T1039", "T1048"],
-                Description = "Excessive permissions enable data collection and exfiltration"
+                Tactics = ["TA0003", "TA0004", "TA0005"],
+                Techniques = ["T1078.002", "T1098"],
+                Description = "Active former employee accounts remain valid domain access paths"
             },
             ["CF05"] = new AttackMapping
             {
@@ -393,21 +393,21 @@ public static class MitreMappings
             },
             ["CF06"] = new AttackMapping
             {
-                Tactics = ["TA0008", "TA0011"],
-                Techniques = ["T1021.001", "T1071"],
-                Description = "Unrestricted remote access enables lateral movement"
+                Tactics = ["TA0008"],
+                Techniques = ["T1021", "T1570", "T1210"],
+                Description = "Flat networks enable unrestricted lateral movement"
             },
             ["CF07"] = new AttackMapping
             {
                 Tactics = ["TA0004", "TA0008"],
-                Techniques = ["T1078.001", "T1021"],
+                Techniques = ["T1078.003", "T1021"],
                 Description = "Excessive local admin rights enable privilege escalation"
             },
             ["CF08"] = new AttackMapping
             {
-                Tactics = ["TA0001", "TA0005"],
-                Techniques = ["T1190", "T1211", "T1685.001"],
-                Description = "Missing vulnerability management leaves known CVEs exploitable"
+                Tactics = ["TA0011", "TA0005"],
+                Techniques = ["T1071.004", "T1568"],
+                Description = "Unfiltered DNS resolvers allow DNS C2 and dynamic resolution"
             },
 
             // ── Policies & Standards ───────────────────────────────────────

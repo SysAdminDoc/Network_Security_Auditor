@@ -179,9 +179,9 @@ public static class D3FendMappings
             ["LM01"] = new DefendMapping
             {
                 Stages = ["Detect"],
-                Techniques = ["D3-SFA", "D3-OSM"],
-                Labels = ["System File Analysis", "Operating System Monitoring"],
-                Description = "Configures comprehensive audit policy"
+                Techniques = ["D3-NM", "D3-OSM"],
+                Labels = ["Network Monitoring", "Operating System Monitoring"],
+                Description = "Collects DNS query logs for C2 and resolver investigation"
             },
             ["LM02"] = new DefendMapping
             {
@@ -206,17 +206,17 @@ public static class D3FendMappings
             },
             ["LM05"] = new DefendMapping
             {
-                Stages = ["Harden", "Detect"],
-                Techniques = ["D3-DENCR", "D3-FV"],
-                Labels = ["Disk Encryption", "File Verification"],
-                Description = "Protects log integrity against tampering"
+                Stages = ["Detect"],
+                Techniques = ["D3-PM", "D3-UAP"],
+                Labels = ["Platform Monitoring", "User Account Permissions"],
+                Description = "Monitors failed logons and account lockout patterns"
             },
             ["LM06"] = new DefendMapping
             {
-                Stages = ["Detect"],
-                Techniques = ["D3-FV", "D3-PM"],
-                Labels = ["File Verification", "Platform Monitoring"],
-                Description = "Implements scheduled log review processes"
+                Stages = ["Detect", "Harden"],
+                Techniques = ["D3-FV", "D3-SFA"],
+                Labels = ["File Verification", "System File Analysis"],
+                Description = "Monitors file integrity for unauthorized system changes"
             },
             ["LM07"] = new DefendMapping
             {
@@ -309,9 +309,9 @@ public static class D3FendMappings
             ["NP04"] = new DefendMapping
             {
                 Stages = ["Isolate", "Detect"],
-                Techniques = ["D3-NTF", "D3-HTSA"],
-                Labels = ["Network Traffic Filtering", "HTTP Session Analysis"],
-                Description = "Deploys WAF to protect web applications"
+                Techniques = ["D3-NTF", "D3-NM"],
+                Labels = ["Network Traffic Filtering", "Network Monitoring"],
+                Description = "Filters DNS resolution and monitors DNS traffic for malicious domains"
             },
             ["NP05"] = new DefendMapping
             {
@@ -322,10 +322,10 @@ public static class D3FendMappings
             },
             ["NP06"] = new DefendMapping
             {
-                Stages = ["Detect", "Isolate"],
-                Techniques = ["D3-MENCR", "D3-NTF"],
-                Labels = ["Message Encryption", "Network Traffic Filtering"],
-                Description = "Inspects encrypted traffic for C2 indicators"
+                Stages = ["Isolate", "Model"],
+                Techniques = ["D3-IOPR", "D3-NTF"],
+                Labels = ["Inbound/Outbound Port Restriction", "Network Traffic Filtering"],
+                Description = "Reviews and removes temporary firewall rules"
             },
             ["NP07"] = new DefendMapping
             {
@@ -424,10 +424,10 @@ public static class D3FendMappings
             },
             ["CF02"] = new DefendMapping
             {
-                Stages = ["Harden"],
-                Techniques = ["D3-PH", "D3-MENCR"],
-                Labels = ["Platform Hardening", "Message Encryption"],
-                Description = "Disables legacy protocols and enforces modern alternatives"
+                Stages = ["Isolate"],
+                Techniques = ["D3-NTF", "D3-IOPR"],
+                Labels = ["Network Traffic Filtering", "Inbound/Outbound Port Restriction"],
+                Description = "Blocks unauthorized egress traffic and C2 paths"
             },
             ["CF03"] = new DefendMapping
             {
@@ -441,7 +441,7 @@ public static class D3FendMappings
                 Stages = ["Model", "Isolate"],
                 Techniques = ["D3-AM", "D3-UAP"],
                 Labels = ["Access Modeling", "User Account Permissions"],
-                Description = "Enforces least-privilege file and application access"
+                Description = "Removes stale former employee accounts and entitlements"
             },
             ["CF05"] = new DefendMapping
             {
@@ -453,9 +453,9 @@ public static class D3FendMappings
             ["CF06"] = new DefendMapping
             {
                 Stages = ["Isolate", "Harden"],
-                Techniques = ["D3-NTF", "D3-MFA"],
-                Labels = ["Network Traffic Filtering", "Multi-factor Authentication"],
-                Description = "Controls and audits remote access paths"
+                Techniques = ["D3-NI", "D3-NTF"],
+                Labels = ["Network Isolation", "Network Traffic Filtering"],
+                Description = "Segments flat networks to constrain lateral movement"
             },
             ["CF07"] = new DefendMapping
             {
@@ -466,10 +466,10 @@ public static class D3FendMappings
             },
             ["CF08"] = new DefendMapping
             {
-                Stages = ["Detect", "Harden"],
-                Techniques = ["D3-SU", "D3-PM"],
-                Labels = ["Software Update", "Platform Monitoring"],
-                Description = "Implements continuous vulnerability scanning and remediation"
+                Stages = ["Isolate", "Detect"],
+                Techniques = ["D3-NTF", "D3-NM"],
+                Labels = ["Network Traffic Filtering", "Network Monitoring"],
+                Description = "Tests and enforces DNS filtering for malicious domains"
             },
 
             // ── Policies & Standards ───────────────────────────────────────

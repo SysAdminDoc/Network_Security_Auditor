@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# per-check ATT&CK, D3FEND, and framework rows now match current labels for DNS filtering, temporary firewall rules, egress filtering, former-employee access, network flatness, failed-logon monitoring, file-integrity monitoring, and local-admin rights.
 - Fixed: C# CF03 security awareness training now maps to awareness/training controls and no longer appears in the Essential Eight backup profile.
 - Fixed: C# EP10 mappings now represent end-of-life operating system exposure with T1190/T1210, Software Update hardening, and SI-2/CM-8 controls instead of removable-media controls.
 - Changed: C# STIG scoring no longer emits fabricated sequential V-IDs; only prose-backed IA11/IA12 STIG readiness notes remain, and the STIG profile is narrowed to those checks.

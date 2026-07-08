@@ -348,18 +348,18 @@ public static class FrameworkMappings
                 PCI = "10.3.1, 10.3.2",
                 SOC2 = "CC7.2, CC7.3",
                 ISO27001 = "A.8.15, A.8.16",
-                FedRAMP = "AU-6, AU-7, AU-9",
+                FedRAMP = "AU-6, AC-7, SI-4",
             },
             ["LM06"] = new()
             {
                 CIS = "3.14",
-                NIST = "3.3.5",
-                CMMC = "AU.L2-3.3.5",
-                HIPAA = "164.312(b), 164.312(c)(2)",
-                PCI = "10.3.4, 10.5.1",
-                SOC2 = "CC7.2, CC7.4",
-                ISO27001 = "A.8.15",
-                FedRAMP = "AU-9, AU-9(4), AU-11",
+                NIST = "3.14.6, 3.14.7",
+                CMMC = "SI.L2-3.14.6, SI.L2-3.14.7",
+                HIPAA = "164.312(c)(1), 164.312(c)(2)",
+                PCI = "10.5.1, 11.5.2",
+                SOC2 = "CC7.1, CC7.2",
+                ISO27001 = "A.8.15, A.8.16",
+                FedRAMP = "SI-7, CM-6, AU-9",
             },
             ["LM07"] = new()
             {
@@ -533,14 +533,14 @@ public static class FrameworkMappings
             ["NP06"] = new()
             {
                 CIS = "4.5",
-                NIST = "3.13.1, 3.13.8",
-                CMMC = "SC.L2-3.13.1, SC.L2-3.13.8",
+                NIST = "3.13.1, 3.13.6",
+                CMMC = "SC.L2-3.13.1, SC.L2-3.13.6",
                 HIPAA = "164.312(e)(1)",
-                PCI = "11.5.1",
+                PCI = "1.2.1, 1.3.1",
                 SOC2 = "CC6.6, CC7.1",
                 ISO27001 = "A.8.20, A.8.21",
                 CyberEssentials = "Cyber Essentials v3.3: Firewalls",
-                FedRAMP = "SC-7(5), SC-7(8)",
+                FedRAMP = "SC-7, SC-7(4), CM-7",
             },
             ["NP07"] = new()
             {
@@ -709,14 +709,14 @@ public static class FrameworkMappings
             ["CF02"] = new()
             {
                 CIS = "4.4, 4.5, 9.3",
-                NIST = "3.4.6, 3.4.7",
-                CMMC = "CM.L2-3.4.6, CM.L2-3.4.7",
+                NIST = "3.13.1, 3.13.5",
+                CMMC = "SC.L2-3.13.1, SC.L2-3.13.5",
                 HIPAA = "164.312(e)(1)",
-                PCI = "2.2.4, 2.2.7",
+                PCI = "1.2.1, 1.3.1",
                 SOC2 = "CC6.1, CC6.8",
                 ISO27001 = "A.8.19, A.8.20",
                 CyberEssentials = "Cyber Essentials v3.3: Secure configuration; Firewalls",
-                FedRAMP = "AC-4, SC-7, SC-8",
+                FedRAMP = "SC-7, SC-7(5), SC-7(8)",
             },
             ["CF03"] = new()
             {
@@ -732,14 +732,14 @@ public static class FrameworkMappings
             ["CF04"] = new()
             {
                 CIS = "5.1, 5.3",
-                NIST = "3.1.1, 3.1.2",
-                CMMC = "AC.L2-3.1.1, AC.L2-3.1.2",
+                NIST = "3.1.1, 3.1.2, 3.1.12",
+                CMMC = "AC.L2-3.1.1, AC.L2-3.1.2, AC.L2-3.1.12",
                 HIPAA = "164.308(a)(3)(ii)(C), 164.312(a)(2)(ii)",
                 PCI = "7.2.1, 7.2.4",
                 SOC2 = "CC6.1, CC6.3",
                 ISO27001 = "A.5.15, A.8.3",
                 CyberEssentials = "Cyber Essentials v3.3: Secure configuration",
-                FedRAMP = "CM-6, SC-8",
+                FedRAMP = "AC-2, PS-4, PS-5",
             },
             ["CF05"] = new()
             {
@@ -756,14 +756,14 @@ public static class FrameworkMappings
             ["CF06"] = new()
             {
                 CIS = "12.2, 12.8",
-                NIST = "3.1.17",
-                CMMC = "AC.L2-3.1.17",
+                NIST = "3.13.1, 3.13.2",
+                CMMC = "SC.L2-3.13.1, SC.L2-3.13.2",
                 HIPAA = "164.312(e)(1)",
-                PCI = "7.2.5",
+                PCI = "1.2.1, 1.3.1",
                 SOC2 = "CC6.1",
                 ISO27001 = "A.5.15, A.8.20",
-                CyberEssentials = "Cyber Essentials v3.3: Secure configuration",
-                FedRAMP = "CM-2, CM-6, CM-7",
+                CyberEssentials = "Cyber Essentials v3.3: Firewalls",
+                FedRAMP = "AC-4, SC-7, SC-7(4)",
             },
             ["CF07"] = new()
             {
@@ -781,14 +781,14 @@ public static class FrameworkMappings
             ["CF08"] = new()
             {
                 CIS = "9.2, 9.3",
-                NIST = "3.14.1, 3.14.6",
-                CMMC = "SI.L2-3.14.1, SI.L2-3.14.6",
+                NIST = "3.13.1, 3.13.8",
+                CMMC = "SC.L2-3.13.1, SC.L2-3.13.8",
                 HIPAA = "164.312(e)(1)",
-                PCI = "5.2.1, 11.5.1",
-                SOC2 = "CC7.1, CC7.2",
-                ISO27001 = "A.8.7, A.8.8",
+                PCI = "1.2.6, 5.4.1",
+                SOC2 = "CC6.8, CC7.1",
+                ISO27001 = "A.8.20, A.8.23",
                 CyberEssentials = "Cyber Essentials v3.3: Malware protection",
-                FedRAMP = "CM-7, SC-7(4)",
+                FedRAMP = "SC-20, SC-21, SC-22",
             },
 
             // ──────────────────────────────────────────────

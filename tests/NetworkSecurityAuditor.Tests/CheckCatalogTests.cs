@@ -211,6 +211,42 @@ public class CheckCatalogTests
         Assert.DoesNotContain("CF03", e8Ids);
     }
 
+    [Theory]
+    [InlineData("NP04", "DNS filtering", "DNS", "T1071.004", "T1190", "Network Traffic Filtering", "3.13.1, 3.13.15", "SC-20, SC-21, SC-22")]
+    [InlineData("NP06", "Temporary firewall rules", "firewall", "T1133", "T1071.001", "Inbound/Outbound Port Restriction", "3.13.1, 3.13.6", "SC-7, SC-7(4), CM-7")]
+    [InlineData("CF02", "Egress filtering test", "egress", "T1071", "T1021.002", "Inbound/Outbound Port Restriction", "3.13.1, 3.13.5", "SC-7, SC-7(5), SC-7(8)")]
+    [InlineData("CF04", "Former employee access", "former employee", "T1078.002", "T1048", "User Account Permissions", "3.1.1, 3.1.2, 3.1.12", "AC-2, PS-4, PS-5")]
+    [InlineData("CF06", "Network flatness", "flat", "T1021", "T1021.001", "Network Isolation", "3.13.1, 3.13.2", "AC-4, SC-7, SC-7(4)")]
+    [InlineData("CF08", "DNS filtering test", "DNS", "T1071.004", "T1190", "Network Traffic Filtering", "3.13.1, 3.13.8", "SC-20, SC-21, SC-22")]
+    [InlineData("LM01", "DNS logging", "DNS", "T1071.004", "T1070.001", "Network Monitoring", "3.3.1, 3.3.2", "AU-2, AU-3, AU-12")]
+    [InlineData("LM05", "Failed logon monitoring", "failed logon", "T1110", "T1070.002", "Platform Monitoring", "3.3.3, 3.3.4", "AU-6, AC-7, SI-4")]
+    [InlineData("LM06", "File integrity monitoring", "file integrity", "T1562.001", "T1685.002", "File Verification", "3.14.6, 3.14.7", "SI-7, CM-6, AU-9")]
+    [InlineData("CF07", "Local admin rights", "local admin", "T1078.003", "T1078.001", "User Account Permissions", "3.1.5, 3.1.6", "AC-6, AU-9")]
+    public void Drifted_Mappings_Match_Current_Catalog_Labels(
+        string id,
+        string expectedLabel,
+        string expectedDescriptionTerm,
+        string requiredTechnique,
+        string forbiddenTechnique,
+        string expectedDefendLabel,
+        string expectedNist,
+        string expectedFedramp)
+    {
+        var catalog = CheckCatalog.All[id];
+        var attack = MitreMappings.All[id];
+        var defend = D3FendMappings.All[id];
+        var framework = FrameworkMappings.All[id];
+
+        Assert.Equal(expectedLabel, catalog.Label);
+        Assert.Contains(requiredTechnique, attack.Techniques);
+        Assert.DoesNotContain(forbiddenTechnique, attack.Techniques);
+        Assert.Contains(expectedDescriptionTerm, attack.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(expectedDescriptionTerm, defend.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(expectedDefendLabel, defend.Labels);
+        Assert.Equal(expectedNist, framework.NIST);
+        Assert.Equal(expectedFedramp, framework.FedRAMP);
+    }
+
     [Fact]
     public void Severity_Weights_Match_Enum_Values()
     {

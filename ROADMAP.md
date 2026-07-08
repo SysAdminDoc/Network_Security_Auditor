@@ -1478,7 +1478,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 **Group C — Compliance mapping drift (client-facing, feeds every export; add parity/format tests alongside)**
 
-- [ ] **P1 — Additional per-check mapping/label drift (single re-mapping pass):** NP04 DNS-filtering->"WAF gaps"; NP06 temp-firewall-rules->"SSL inspection" (NP08's topic); CF02 egress-test->legacy-protocol/SMBv1; CF04 former-employee->data-collection/exfil; CF06 network-flatness->remote-access; CF08 DNS-filter-test->vuln-management; LM01 DNS-logging->audit-policy; LM05 failed-logon->log-integrity; LM06 FIM->log-review; CF07 uses T1078.001 (should be T1078.003). Where: `MitreMappings.cs` + `D3FendMappings.cs` + `FrameworkMappings.cs`. Fix: catalog-label-driven re-map.
 
 **Group D — Check correctness (confident-but-wrong findings; highest reputational risk)**
 
