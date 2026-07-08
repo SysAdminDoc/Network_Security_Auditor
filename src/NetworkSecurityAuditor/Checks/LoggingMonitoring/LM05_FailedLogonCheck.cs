@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.LoggingMonitoring;
 
-using System.Diagnostics;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// LM05 - Failed logon analysis: event 4625 in the last 7 days, grouped by username.
@@ -111,50 +111,15 @@ public sealed class LM05_FailedLogonCheck : ISecurityCheck
 
         try
         {
-            var startTime = DateTime.UtcNow.AddDays(-LookbackDays);
+            string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(LookbackDays), "EventID=4625");
+            var records = EventLogQueryHelper.Read("Security", query, maxEvents: 0, ct);
+            evidence.AppendLine($"  4625 events returned by XPath query: {records.Count}");
 
-            // Use EventLog reader
-            var log = new EventLog("Security");
-            int totalEntries = log.Entries.Count;
-            evidence.AppendLine($"  Security log entries: {totalEntries}");
-
-            // Read backwards for efficiency (newest first)
-            for (int i = totalEntries - 1; i >= 0; i--)
+            foreach (var record in records)
             {
                 ct.ThrowIfCancellationRequested();
 
-                EventLogEntry entry;
-                try
-                {
-                    entry = log.Entries[i];
-                }
-                catch
-                {
-                    continue; // Entry may have been purged
-                }
-
-                // Stop if we've gone past the lookback window
-                if (entry.TimeGenerated.ToUniversalTime() < startTime)
-                    break;
-
-                if (entry.InstanceId != 4625) continue;
-
-                // Extract target username from the event message
-                // ReplacementStrings[5] = TargetUserName in 4625 events
-                string account = "Unknown";
-                try
-                {
-                    if (entry.ReplacementStrings.Length > 6)
-                    {
-                        string domain = entry.ReplacementStrings[6]; // TargetDomainName
-                        string user = entry.ReplacementStrings[5]; // TargetUserName
-                        account = string.IsNullOrEmpty(domain) ? user : $"{domain}\\{user}";
-                    }
-                }
-                catch
-                {
-                    // Malformed event
-                }
+                string? account = ExtractFailedLogonAccount(record.Properties);
 
                 if (string.IsNullOrWhiteSpace(account) || account == "-" || account == @"\")
                     continue;
@@ -162,8 +127,6 @@ public sealed class LM05_FailedLogonCheck : ISecurityCheck
                 results.TryGetValue(account, out int existing);
                 results[account] = existing + 1;
             }
-
-            log.Dispose();
         }
         catch (Exception ex)
         {
@@ -171,6 +134,16 @@ public sealed class LM05_FailedLogonCheck : ISecurityCheck
         }
 
         return results;
+    }
+
+    internal static string? ExtractFailedLogonAccount(IReadOnlyList<object?> properties)
+    {
+        if (properties.Count <= 6)
+            return null;
+
+        string user = properties[5]?.ToString() ?? string.Empty;
+        string domain = properties[6]?.ToString() ?? string.Empty;
+        return string.IsNullOrEmpty(domain) ? user : $"{domain}\\{user}";
     }
 
     private static void CheckAttackPatterns(

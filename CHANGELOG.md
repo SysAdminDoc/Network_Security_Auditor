@@ -20,6 +20,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# EP03 NetBIOS assessment now fails only on explicitly enabled adapter settings instead of treating DHCP-default values or non-P-node `NodeType` as exposure proof.
 - Fixed: C# EP01 SecurityCenter2 AV evidence now decodes `productState` as provider/scanner/signature bytes instead of non-standard nibbles.
 - Fixed: C# EP02 and EP08 now treat unavailable BitLocker, Device Guard, and Secure Boot platform evidence as N/A instead of confirmed failed controls.
+- Fixed: C# BR03, BR06, and LM05 now query recent event-log windows with `EventLogReader` XPath instead of iterating full `EventLog.Entries` collections.
 - Fixed: C# GUI export commands now stay disabled until at least one check is assessed and automatically disable while a scan is running.
 - Fixed: C# GUI scan progress now has deterministic sequential running-state coverage so only the active check is marked as running and cancellation clears the active row.
 - Added: Export contract schemas and golden fixtures now cover structured findings, JSONL events, OCSF, OSCAL, Intune, compliance summary, dashboard aggregate rows, and SIEM field mappings.

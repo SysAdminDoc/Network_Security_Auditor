@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.BackupRecovery;
 
-using System.Diagnostics;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// BR03 - Restore Testing: Interview-required. Check for recent backup job completions
@@ -22,11 +22,11 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
 
             // 1. Check Windows Backup event log
             ct.ThrowIfCancellationRequested();
-            CheckBackupEventLog(sb, evidence, ref hasRecentBackup);
+            CheckBackupEventLog(sb, evidence, ref hasRecentBackup, ct);
 
             // 2. Check Application event log for backup-related events
             ct.ThrowIfCancellationRequested();
-            CheckApplicationBackupEvents(sb, evidence, ref hasRecentBackup);
+            CheckApplicationBackupEvents(sb, evidence, ref hasRecentBackup, ct);
 
             // Summary and interview items
             if (hasRecentBackup)
@@ -64,20 +64,14 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
     }
 
     private static void CheckBackupEventLog(StringBuilder sb, StringBuilder evidence,
-        ref bool hasRecentBackup)
+        ref bool hasRecentBackup, CancellationToken ct)
     {
         evidence.AppendLine("[Windows Backup Event Log]");
 
         try
         {
-            // Check Microsoft-Windows-Backup event log
-            using var log = new EventLog("Microsoft-Windows-Backup");
-
-            var recentEntries = log.Entries.Cast<EventLogEntry>()
-                .Where(e => e.TimeGenerated >= DateTime.Now.AddDays(-30))
-                .OrderByDescending(e => e.TimeGenerated)
-                .Take(10)
-                .ToList();
+            string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(30));
+            var recentEntries = EventLogQueryHelper.Read("Microsoft-Windows-Backup", query, maxEvents: 10, ct);
 
             if (recentEntries.Count > 0)
             {
@@ -86,8 +80,8 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
 
                 foreach (var entry in recentEntries.Take(5))
                 {
-                    evidence.AppendLine($"    {entry.TimeGenerated:yyyy-MM-dd HH:mm} " +
-                        $"[{entry.EntryType}] InstanceId={entry.InstanceId}: " +
+                    evidence.AppendLine($"    {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
+                        $"[{entry.LevelDisplayName}] EventId={entry.Id}: " +
                         $"{Truncate(entry.Message, 100)}");
                 }
 
@@ -105,25 +99,21 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
     }
 
     private static void CheckApplicationBackupEvents(StringBuilder sb, StringBuilder evidence,
-        ref bool hasRecentBackup)
+        ref bool hasRecentBackup, CancellationToken ct)
     {
         evidence.AppendLine("\n[Application Log - Backup Events]");
 
         try
         {
-            using var log = new EventLog("Application");
-
             string[] backupSources =
             [
                 "Veeam", "Acronis", "Windows Server Backup",
                 "wbengine", "Datto", "Commvault", "Backup Exec"
             ];
 
-            var recentBackupEntries = log.Entries.Cast<EventLogEntry>()
-                .Where(e => e.TimeGenerated >= DateTime.Now.AddDays(-30))
-                .Where(e => backupSources.Any(src =>
-                    (e.Source ?? "").Contains(src, StringComparison.OrdinalIgnoreCase)))
-                .OrderByDescending(e => e.TimeGenerated)
+            string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(30));
+            var recentBackupEntries = EventLogQueryHelper.Read("Application", query, maxEvents: 0, ct)
+                .Where(e => backupSources.Any(src => e.ProviderName.Contains(src, StringComparison.OrdinalIgnoreCase)))
                 .Take(10)
                 .ToList();
 
@@ -134,8 +124,8 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
 
                 foreach (var entry in recentBackupEntries.Take(5))
                 {
-                    evidence.AppendLine($"    {entry.TimeGenerated:yyyy-MM-dd HH:mm} " +
-                        $"[{entry.Source}] {entry.EntryType}: {Truncate(entry.Message, 80)}");
+                    evidence.AppendLine($"    {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
+                        $"[{entry.ProviderName}] {entry.LevelDisplayName}: {Truncate(entry.Message, 80)}");
                 }
             }
             else

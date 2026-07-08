@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.BackupRecovery;
 
-using System.Diagnostics;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// BR06 - Backup Monitoring: Check for backup monitoring alerts. Check backup service
@@ -23,11 +23,11 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
 
             // 1. Check for backup failure events in Application log
             ct.ThrowIfCancellationRequested();
-            CheckBackupFailureEvents(sb, evidence, ref hasFailures, ref hasRecentActivity);
+            CheckBackupFailureEvents(sb, evidence, ref hasFailures, ref hasRecentActivity, ct);
 
             // 2. Check System log for VSS errors
             ct.ThrowIfCancellationRequested();
-            CheckVssErrors(sb, evidence, ref hasFailures);
+            CheckVssErrors(sb, evidence, ref hasFailures, ct);
 
             // 3. Check for monitoring agent services
             ct.ThrowIfCancellationRequested();
@@ -74,16 +74,12 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
     }
 
     private static void CheckBackupFailureEvents(StringBuilder sb, StringBuilder evidence,
-        ref bool hasFailures, ref bool hasRecentActivity)
+        ref bool hasFailures, ref bool hasRecentActivity, CancellationToken ct)
     {
         evidence.AppendLine("[Backup Events - Application Log]");
 
         try
         {
-            using var log = new EventLog("Application");
-
-            var cutoff = DateTime.Now.AddDays(-7);
-
             string[] backupSources =
             [
                 "Veeam", "Acronis", "Windows Backup", "wbengine",
@@ -95,27 +91,26 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
             int warningCount = 0;
             int infoCount = 0;
 
-            foreach (EventLogEntry entry in log.Entries)
+            string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(7));
+            foreach (var entry in EventLogQueryHelper.Read("Application", query, maxEvents: 0, ct))
             {
-                if (entry.TimeGenerated < cutoff) continue;
-
-                string source = entry.Source ?? "";
+                string source = entry.ProviderName;
                 if (!backupSources.Any(s => source.Contains(s, StringComparison.OrdinalIgnoreCase)))
                     continue;
 
                 hasRecentActivity = true;
 
-                switch (entry.EntryType)
+                switch (entry.Level)
                 {
-                    case EventLogEntryType.Error:
+                    case 2:
                         errorCount++;
                         if (errorCount <= 5)
                         {
-                            evidence.AppendLine($"  ERROR: {entry.TimeGenerated:yyyy-MM-dd HH:mm} " +
+                            evidence.AppendLine($"  ERROR: {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
                                 $"[{source}] {Truncate(entry.Message, 100)}");
                         }
                         break;
-                    case EventLogEntryType.Warning:
+                    case 3:
                         warningCount++;
                         break;
                     default:
@@ -143,23 +138,18 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
         }
     }
 
-    private static void CheckVssErrors(StringBuilder sb, StringBuilder evidence, ref bool hasFailures)
+    private static void CheckVssErrors(StringBuilder sb, StringBuilder evidence, ref bool hasFailures, CancellationToken ct)
     {
         evidence.AppendLine("\n[VSS Errors - System Log]");
 
         try
         {
-            using var log = new EventLog("System");
-
-            var cutoff = DateTime.Now.AddDays(-7);
             int vssErrors = 0;
 
-            foreach (EventLogEntry entry in log.Entries)
+            string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(7), "Level=2");
+            foreach (var entry in EventLogQueryHelper.Read("System", query, maxEvents: 0, ct))
             {
-                if (entry.TimeGenerated < cutoff) continue;
-                if (entry.EntryType != EventLogEntryType.Error) continue;
-
-                string source = entry.Source ?? "";
+                string source = entry.ProviderName;
                 if (source.Contains("VSS", StringComparison.OrdinalIgnoreCase) ||
                     source.Contains("Volume Shadow", StringComparison.OrdinalIgnoreCase) ||
                     source.Contains("volsnap", StringComparison.OrdinalIgnoreCase))
@@ -167,7 +157,7 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
                     vssErrors++;
                     if (vssErrors <= 3)
                     {
-                        evidence.AppendLine($"  {entry.TimeGenerated:yyyy-MM-dd HH:mm} " +
+                        evidence.AppendLine($"  {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
                             $"[{source}] {Truncate(entry.Message, 100)}");
                     }
                 }

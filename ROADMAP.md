@@ -1443,7 +1443,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 ### P3 — Medium / Low
 
 **Checks**
-- [ ] P3 — BR03/BR06/LM05 iterate full `EventLog.Entries` via the COM indexer (slow/O(n^2) on large logs). Prefer `EventLogReader` + XPath.
 - [ ] P3 — NP03 infers split-tunnel from `defaultRoutes > 1` -> false positive on multi-NIC machines. `NP03:190-207`.
 - [ ] P3 — NA03 wireless netsh parse is English-locale-dependent + substring `Contains` false matches. `NA03:20-24,73-77`.
 - [ ] P3 — IA05 `Math.Abs(maxPwdAgeTicks)` throws `OverflowException` on `long.MinValue` ("never" sentinel) -> NA. `IA05:59,126`. Use unchecked negation / handle MinValue.
