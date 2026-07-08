@@ -9,6 +9,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# dashboard exports now reuse the shared CSV escaping routine and constrain grade CSS classes to an allowlist before rendering HTML attributes.
 
 ### Correctness
+- Fixed: C# silent/dashboard modes no longer trigger UAC self-elevation and immediately return success before the real scan; headless runs stay in-process and warn when unelevated.
 - Fixed: C# D3FEND IA01 mapping now uses the valid `D3-UGPH` technique ID instead of malformed `D3F-UGPH`.
 - Fixed: C# SPRS scoring now treats Partial checks as unmet controls instead of awarding full SPRS credit.
 - Fixed: C# overall risk scoring now matches the documented per-category weighted-average formula and no longer squares severity by multiplying severity and check weight.

@@ -31,8 +31,9 @@ public partial class App : Application
         var args = ParseArgs(e.Args);
         _headlessMode = args.Dashboard || args.Silent;
         RegisterGlobalExceptionHandlers();
+        var isRunningAsAdmin = IsRunningAsAdmin();
 
-        if (!args.NoElevate && !IsRunningAsAdmin())
+        if (ShouldAttemptSelfElevation(args, isRunningAsAdmin))
         {
             try
             {
@@ -54,6 +55,11 @@ public partial class App : Application
                 }
             }
             catch { }
+        }
+        else if (ShouldWarnHeadlessWithoutElevation(args, isRunningAsAdmin))
+        {
+            AttachConsole(-1);
+            Console.Error.WriteLine("WARNING: Headless mode is running without elevation; checks requiring administrator rights may return limited evidence.");
         }
 
         if (args.Dashboard)
@@ -142,6 +148,17 @@ public partial class App : Application
             return (int)ExitCode.ImmediateAlert;
         }
     }
+
+    internal static bool ShouldAttemptSelfElevation(CliArgs args, bool isRunningAsAdmin)
+    {
+        if (isRunningAsAdmin || args.NoElevate)
+            return false;
+
+        return !args.Silent && !args.Dashboard;
+    }
+
+    internal static bool ShouldWarnHeadlessWithoutElevation(CliArgs args, bool isRunningAsAdmin) =>
+        !isRunningAsAdmin && !args.NoElevate && (args.Silent || args.Dashboard);
 
     private async Task<int> RunDashboardAsync(CliArgs args)
     {

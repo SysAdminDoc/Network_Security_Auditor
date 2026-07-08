@@ -187,6 +187,35 @@ public class CliArgsTests
     }
 
     [Fact]
+    public void Gui_Mode_Attempts_Self_Elevation_When_Not_Admin()
+    {
+        var args = App.ParseArgs([]);
+
+        Assert.True(App.ShouldAttemptSelfElevation(args, isRunningAsAdmin: false));
+        Assert.False(App.ShouldWarnHeadlessWithoutElevation(args, isRunningAsAdmin: false));
+    }
+
+    [Theory]
+    [InlineData("--silent")]
+    [InlineData("--dashboard")]
+    public void Headless_Mode_Does_Not_Attempt_Self_Elevation_When_Not_Admin(string flag)
+    {
+        var args = App.ParseArgs([flag]);
+
+        Assert.False(App.ShouldAttemptSelfElevation(args, isRunningAsAdmin: false));
+        Assert.True(App.ShouldWarnHeadlessWithoutElevation(args, isRunningAsAdmin: false));
+    }
+
+    [Fact]
+    public void NoElevate_Suppresses_Elevation_And_Headless_Warning()
+    {
+        var args = App.ParseArgs(["--silent", "--no-elevate"]);
+
+        Assert.False(App.ShouldAttemptSelfElevation(args, isRunningAsAdmin: false));
+        Assert.False(App.ShouldWarnHeadlessWithoutElevation(args, isRunningAsAdmin: false));
+    }
+
+    [Fact]
     public async Task Headless_Exception_Returns_Alert_ExitCode_And_Writes_Error()
     {
         using var errorWriter = new StringWriter();
