@@ -50,7 +50,7 @@ public partial class MainViewModel : ViewModelBase
     private string _selectedTheme = "Catppuccin Mocha";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Grade), nameof(GradeColor))]
+    [NotifyPropertyChangedFor(nameof(Grade), nameof(GradeColor), nameof(OverallScoreDisplay))]
     private int _overallScore;
 
     [ObservableProperty]
@@ -120,9 +120,13 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    public string Grade => RiskScoreEngine.GradeFromScore(OverallScore);
+    public bool HasAssessedChecks => Checks.Any(c => c.Status is CheckStatus.Pass or CheckStatus.Partial or CheckStatus.Fail);
 
-    public string GradeColor => Grade switch
+    public string Grade => HasAssessedChecks ? RiskScoreEngine.GradeFromScore(OverallScore) : "\u2014";
+
+    public string OverallScoreDisplay => HasAssessedChecks ? $"{OverallScore}/100" : "Not scanned";
+
+    public string GradeColor => HasAssessedChecks ? Grade switch
     {
         "A" => "#a6e3a1",
         "B" => "#94e2d5",
@@ -130,7 +134,7 @@ public partial class MainViewModel : ViewModelBase
         "D" => "#fab387",
         "F" => "#f38ba8",
         _ => "#9399b2"
-    };
+    } : "#9399b2";
 
     public EnvironmentInfo Environment { get; set; } = new();
 
@@ -645,6 +649,10 @@ public partial class MainViewModel : ViewModelBase
         DomainMaturityScore = dmScore;
         DomainMaturityGrade = dmGrade;
 
+        OnPropertyChanged(nameof(HasAssessedChecks));
+        OnPropertyChanged(nameof(Grade));
+        OnPropertyChanged(nameof(GradeColor));
+        OnPropertyChanged(nameof(OverallScoreDisplay));
         OnPropertyChanged(nameof(FilteredChecks));
     }
 }

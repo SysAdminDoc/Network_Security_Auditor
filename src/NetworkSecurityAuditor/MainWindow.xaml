@@ -43,11 +43,8 @@
                                        HorizontalAlignment="Center"
                                        Foreground="{Binding GradeColor}"
                                        AutomationProperties.Name="Overall security grade" />
-                            <TextBlock HorizontalAlignment="Center" FontSize="22" Foreground="{StaticResource TextSecondary}">
-                                <TextBlock.Text>
-                                    <Binding Path="OverallScore" StringFormat="{}{0}/100" />
-                                </TextBlock.Text>
-                            </TextBlock>
+                            <TextBlock Text="{Binding OverallScoreDisplay}"
+                                       HorizontalAlignment="Center" FontSize="22" Foreground="{StaticResource TextSecondary}" />
                             <TextBlock Text="Overall Score" HorizontalAlignment="Center"
                                        FontSize="11" Foreground="{StaticResource BorderDim}" Margin="0,4,0,0" />
                         </StackPanel>

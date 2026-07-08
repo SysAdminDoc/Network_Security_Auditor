@@ -29,6 +29,15 @@ public class MainWindowXamlTests
     }
 
     [Fact]
+    public void Main_Window_Uses_Not_Scanned_Overall_Score_Display()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+
+        Assert.Contains("Text=\"{Binding OverallScoreDisplay}\"", xaml);
+        Assert.DoesNotContain("Path=\"OverallScore\" StringFormat=\"{}{0}/100\"", xaml);
+    }
+
+    [Fact]
     public void Main_Window_Uses_Dark_Due_Date_Text_Field()
     {
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");

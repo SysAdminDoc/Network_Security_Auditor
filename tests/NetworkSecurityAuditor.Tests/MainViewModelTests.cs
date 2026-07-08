@@ -35,19 +35,26 @@ public class MainViewModelTests
         Assert.Equal(0, vm.PassCount);
         Assert.Equal(0, vm.FailCount);
         Assert.Equal(0, vm.OverallScore);
+        Assert.False(vm.HasAssessedChecks);
+        Assert.Equal("\u2014", vm.Grade);
+        Assert.Equal("Not scanned", vm.OverallScoreDisplay);
 
         check.Status = CheckStatus.Pass;
 
         Assert.Equal(1, vm.PassCount);
         Assert.Equal(0, vm.FailCount);
+        Assert.True(vm.HasAssessedChecks);
         Assert.Equal(100, vm.OverallScore);
+        Assert.Equal("100/100", vm.OverallScoreDisplay);
         Assert.Equal("A", vm.Grade);
 
         check.Status = CheckStatus.Fail;
 
         Assert.Equal(0, vm.PassCount);
         Assert.Equal(1, vm.FailCount);
+        Assert.True(vm.HasAssessedChecks);
         Assert.Equal(0, vm.OverallScore);
+        Assert.Equal("0/100", vm.OverallScoreDisplay);
         Assert.Equal("F", vm.Grade);
     }
 }
