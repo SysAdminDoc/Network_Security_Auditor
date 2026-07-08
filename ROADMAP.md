@@ -1388,13 +1388,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 ## Research-Driven Additions
 
-- [ ] P2 - Add benchmark and lifecycle data refresh strategy
-  Why: CIS/STIG/Windows lifecycle and Defender baselines change frequently, and current metadata is code-embedded rather than update-reviewed through a repeatable manifest.
-  Evidence: `src/NetworkSecurityAuditor/Data/CheckCatalog.cs`; CIS Benchmarks; DoD STIG library; Microsoft Windows Server 2025 and SMB signing docs; HardeningKitty finding-list model.
-  Touches: `Data/CheckCatalog.cs`, `Data/FrameworkMappings.cs`, new benchmark metadata manifest, validation tests.
-  Acceptance: A versioned metadata manifest records CIS/STIG/Microsoft baseline source URL, reviewed date, supported OS/build, and check coverage; validation fails when source metadata is missing or stale beyond the chosen review window.
-  Complexity: L
-
 - [ ] P2 - Add signed local C# release artifact flow
   Why: The repo now has a .NET/WPF executable path but no documented local publish artifact contract comparable to the downloadable PowerShell script.
   Evidence: `src/NetworkSecurityAuditor/NetworkSecurityAuditor.csproj`; README download section; local-build-only repo policy.

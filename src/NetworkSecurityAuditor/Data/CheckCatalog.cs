@@ -1064,6 +1064,9 @@ public static class CheckCatalog
 
     private static Dictionary<string, CheckMetadata> ApplyCisBenchmarks(Dictionary<string, CheckMetadata> checks)
     {
+        var cisWindowsBenchmark = BenchmarkMetadata.CisWindowsCatalogLabel;
+        var cisControlsBenchmark = BenchmarkMetadata.CisControlsCatalogLabel;
+
         foreach (var (id, meta) in checks.ToList())
         {
             if (meta.CisBenchmark is not null) continue;
@@ -1071,11 +1074,11 @@ public static class CheckCatalog
             var benchmark = id switch
             {
                 "EP01" or "EP02" or "EP03" or "EP04" or "EP05" or "EP06" or "EP07" or "EP08" or "EP09" or "EP10"
-                    => "CIS Windows 11 Enterprise v5.0.0 / Windows Server 2025 v2.0.0",
+                    => cisWindowsBenchmark,
                 "LM03" or "LM04" or "LM05" or "LM07"
-                    => "CIS Windows 11 Enterprise v5.0.0 / Windows Server 2025 v2.0.0",
+                    => cisWindowsBenchmark,
                 _ when meta.Compliance.Contains("CIS Control")
-                    => "CIS Controls v8.1",
+                    => cisControlsBenchmark,
                 _ => null
             };
 

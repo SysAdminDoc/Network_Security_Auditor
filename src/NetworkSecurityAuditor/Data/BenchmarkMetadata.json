@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "manifest_version": "2026.07.08",
+  "reviewed_on": "2026-07-08",
+  "default_stale_after_days": 180,
+  "sources": [
+    {
+      "id": "cis-windows-baselines-2026-03",
+      "name": "CIS Microsoft Windows benchmarks",
+      "source_version": "Windows 11 Enterprise v5.0.0; Windows Server 2025 v2.0.0",
+      "source_url": "https://www.cisecurity.org/insights/blog/cis-benchmarks-march-2026-update",
+      "reviewed_on": "2026-07-08",
+      "stale_after_days": 180,
+      "supported_os": [
+        "Windows 11 Enterprise",
+        "Windows Server 2025"
+      ],
+      "supported_builds": [
+        "Windows 11 24H2 / 10.0.26100+",
+        "Windows Server 2025 / 10.0.26100+"
+      ],
+      "catalog_label": "CIS Windows 11 Enterprise v5.0.0 / Windows Server 2025 v2.0.0",
+      "covered_check_ids": [
+        "EP01",
+        "EP02",
+        "EP03",
+        "EP04",
+        "EP05",
+        "EP06",
+        "EP07",
+        "EP08",
+        "EP09",
+        "EP10",
+        "LM03",
+        "LM04",
+        "LM05",
+        "LM07"
+      ]
+    },
+    {
+      "id": "cis-controls-v8.1",
+      "name": "CIS Controls",
+      "source_version": "v8.1",
+      "source_url": "https://www.cisecurity.org/controls/v8",
+      "reviewed_on": "2026-07-08",
+      "stale_after_days": 365,
+      "supported_os": [
+        "Technology-neutral control mapping"
+      ],
+      "supported_builds": [
+        "All supported Windows client/server builds assessed by mapped checks"
+      ],
+      "catalog_label": "CIS Controls v8.1",
+      "covered_check_ids": [
+        "IA01",
+        "IA02",
+        "IA03",
+        "IA04",
+        "IA05",
+        "IA06",
+        "IA07",
+        "IA08",
+        "IA09",
+        "IA10",
+        "IA11",
+        "IA12",
+        "LM01",
+        "LM02",
+        "LM06",
+        "LM08",
+        "NA01",
+        "NA02",
+        "NA03",
+        "NA04",
+        "NA05",
+        "NA06",
+        "NA07",
+        "NP01",
+        "NP02",
+        "NP03",
+        "NP04",
+        "NP05",
+        "NP06",
+        "NP07",
+        "NP08",
+        "NP09",
+        "NP10",
+        "BR01",
+        "BR02",
+        "BR03",
+        "BR04",
+        "BR05",
+        "BR06",
+        "BR07",
+        "BR08",
+        "CF01",
+        "CF02",
+        "CF03",
+        "CF04",
+        "CF05",
+        "CF06",
+        "CF07",
+        "CF08",
+        "PS01",
+        "PS02",
+        "PS03",
+        "PS04",
+        "PS05",
+        "PS06"
+      ]
+    },
+    {
+      "id": "disa-windows-server-2025-stig",
+      "name": "DISA Microsoft Windows Server 2025 STIG",
+      "source_version": "V1R1",
+      "source_url": "https://ncp.nist.gov/checklist/1324",
+      "reviewed_on": "2026-07-08",
+      "stale_after_days": 180,
+      "supported_os": [
+        "Windows Server 2025 domain controllers",
+        "Windows Server 2025 member servers"
+      ],
+      "supported_builds": [
+        "Windows Server 2025 / 10.0.26100+"
+      ],
+      "catalog_label": "DISA Windows Server 2025 STIG V1R1",
+      "covered_check_ids": [
+        "IA11",
+        "IA12"
+      ]
+    },
+    {
+      "id": "microsoft-windows-lifecycle",
+      "name": "Microsoft Windows lifecycle",
+      "source_version": "Windows Server 2025 lifecycle page reviewed 2026-07-08",
+      "source_url": "https://learn.microsoft.com/en-us/lifecycle/products/windows-server-2025",
+      "reviewed_on": "2026-07-08",
+      "stale_after_days": 180,
+      "supported_os": [
+        "Windows Server 2025"
+      ],
+      "supported_builds": [
+        "Windows Server 2025 / 10.0.26100+"
+      ],
+      "catalog_label": "Microsoft Windows lifecycle",
+      "covered_check_ids": [
+        "EP10"
+      ]
+    },
+    {
+      "id": "microsoft-smb-signing",
+      "name": "Microsoft SMB signing guidance",
+      "source_version": "Windows Server 2025 outbound signing behavior reviewed 2026-07-08",
+      "source_url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing",
+      "reviewed_on": "2026-07-08",
+      "stale_after_days": 180,
+      "supported_os": [
+        "Windows 11 version 24H2",
+        "Windows Server 2025"
+      ],
+      "supported_builds": [
+        "Windows 11 24H2 / 10.0.26100+",
+        "Windows Server 2025 / 10.0.26100+"
+      ],
+      "catalog_label": "Microsoft SMB signing guidance",
+      "covered_check_ids": [
+        "EP03"
+      ]
+    },
+    {
+      "id": "hardeningkitty-finding-list-model",
+      "name": "HardeningKitty finding-list model",
+      "source_version": "repository finding-list CSV model reviewed 2026-07-08",
+      "source_url": "https://github.com/scipag/HardeningKitty",
+      "reviewed_on": "2026-07-08",
+      "stale_after_days": 180,
+      "supported_os": [
+        "Windows client",
+        "Windows Server"
+      ],
+      "supported_builds": [
+        "Mapped Windows builds supported by selected finding list"
+      ],
+      "catalog_label": "HardeningKitty finding-list model",
+      "covered_check_ids": [
+        "EP03",
+        "EP06",
+        "EP07",
+        "EP08",
+        "EP09",
+        "LM03",
+        "LM04",
+        "LM07"
+      ]
+    }
+  ]
+}

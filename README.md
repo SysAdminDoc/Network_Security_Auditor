@@ -517,6 +517,10 @@ arguments, the WinRM-bootstrap WMI call, and so on). The lint gate must report
 fixtures for paging, throttling, and permission/license classification; these do
 not require tenant credentials.
 
+The C# xUnit suite validates `Data/BenchmarkMetadata.json` so CIS, STIG,
+Microsoft lifecycle/SMB, and hardening-list provenance includes source URLs,
+review dates, supported OS/builds, check coverage, and stale-review windows.
+
 ---
 
 ## Parameters
@@ -694,6 +698,7 @@ tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
 tools/NetworkSecurityAudit.Tests.ps1        # Pester v5 quality-gate suite
 tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
 src/NetworkSecurityAuditor/                 # .NET 9 WPF rewrite
+src/NetworkSecurityAuditor/Data/BenchmarkMetadata.json # C# benchmark/lifecycle source manifest
 tests/NetworkSecurityAuditor.Tests/         # xUnit tests for the C# rewrite
 publish/NetworkSecurityAuditor/             # Local publish output, generated and not committed
 ```
