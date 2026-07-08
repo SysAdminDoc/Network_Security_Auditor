@@ -81,4 +81,43 @@ public class MainViewModelTests
         Assert.Same(view, vm.FilteredChecks);
         Assert.Contains(check, view.Cast<CheckItemViewModel>());
     }
+
+    [Fact]
+    public void Export_Commands_Are_Gated_By_Assessment_And_Scan_State()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+        var exportCanExecute = new Func<bool>[]
+        {
+            () => vm.ExportHtmlCommand.CanExecute(null),
+            () => vm.ExportPdfCommand.CanExecute(null),
+            () => vm.ExportJsonCommand.CanExecute(null),
+            () => vm.ExportCsvCommand.CanExecute(null),
+            () => vm.ExportJsonlCommand.CanExecute(null),
+            () => vm.ExportSarifCommand.CanExecute(null),
+            () => vm.ExportNavigatorCommand.CanExecute(null),
+            () => vm.ExportDefectDojoCommand.CanExecute(null),
+            () => vm.ExportOcsfCommand.CanExecute(null),
+            () => vm.ExportOscalCommand.CanExecute(null),
+            () => vm.ExportIntuneCommand.CanExecute(null),
+            () => vm.ExportComplianceSummaryCommand.CanExecute(null)
+        };
+        var htmlCanExecuteChanges = 0;
+        vm.ExportHtmlCommand.CanExecuteChanged += (_, _) => htmlCanExecuteChanges++;
+
+        Assert.All(exportCanExecute, canExecute => Assert.False(canExecute()));
+
+        vm.Checks[0].Status = CheckStatus.Pass;
+
+        Assert.All(exportCanExecute, canExecute => Assert.True(canExecute()));
+        Assert.True(htmlCanExecuteChanges > 0);
+
+        vm.IsScanning = true;
+
+        Assert.All(exportCanExecute, canExecute => Assert.False(canExecute()));
+
+        vm.IsScanning = false;
+
+        Assert.All(exportCanExecute, canExecute => Assert.True(canExecute()));
+    }
 }

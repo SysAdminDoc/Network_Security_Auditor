@@ -305,6 +305,26 @@ public partial class MainViewModel : ViewModelBase
 
     private bool CanStopScan() => IsScanning;
 
+    partial void OnIsScanningChanged(bool value) => NotifyExportCommandCanExecuteChanged();
+
+    private bool CanExport() => !IsScanning && HasAssessedChecks;
+
+    private void NotifyExportCommandCanExecuteChanged()
+    {
+        ExportHtmlCommand.NotifyCanExecuteChanged();
+        ExportJsonCommand.NotifyCanExecuteChanged();
+        ExportCsvCommand.NotifyCanExecuteChanged();
+        ExportJsonlCommand.NotifyCanExecuteChanged();
+        ExportSarifCommand.NotifyCanExecuteChanged();
+        ExportNavigatorCommand.NotifyCanExecuteChanged();
+        ExportDefectDojoCommand.NotifyCanExecuteChanged();
+        ExportOcsfCommand.NotifyCanExecuteChanged();
+        ExportOscalCommand.NotifyCanExecuteChanged();
+        ExportComplianceSummaryCommand.NotifyCanExecuteChanged();
+        ExportIntuneCommand.NotifyCanExecuteChanged();
+        ExportPdfCommand.NotifyCanExecuteChanged();
+    }
+
     private sealed class InlineProgress<T>(Action<T> handler) : IProgress<T>
     {
         public void Report(T value) => handler(value);
@@ -322,7 +342,7 @@ public partial class MainViewModel : ViewModelBase
             Export.PrivacyExportSanitizer.RedactEnvironment(Environment, redactor));
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportHtmlAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -341,7 +361,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportJsonAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -360,7 +380,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportCsvAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -377,7 +397,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportJsonlAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -394,7 +414,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportSarifAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -411,7 +431,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportNavigatorAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -428,7 +448,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportDefectDojoAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -445,7 +465,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportOcsfAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -462,7 +482,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportOscalAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -479,7 +499,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportComplianceSummaryAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -496,7 +516,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportIntuneAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -513,7 +533,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportPdfAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -657,5 +677,6 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(Grade));
         OnPropertyChanged(nameof(GradeBrushKey));
         OnPropertyChanged(nameof(OverallScoreDisplay));
+        NotifyExportCommandCanExecuteChanged();
     }
 }

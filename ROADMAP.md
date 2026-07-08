@@ -1500,7 +1500,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 **Legacy PS1 branding / fleet security**
 
 **GUI theme / a11y / layout**
-- [ ] **P2 — Export buttons enabled during a scan and before any scan** (writes partial or all-"F" reports silently). Where: `MainWindow.xaml:128-165`. Fix: gate on `!IsScanning`.
 
 ---
 

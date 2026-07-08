@@ -101,6 +101,16 @@ public class MainWindowXamlTests
     }
 
     [Fact]
+    public void Main_Window_Export_Commands_Use_CanExport_Gate()
+    {
+        var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
+
+        Assert.Contains("private bool CanExport() => !IsScanning && HasAssessedChecks;", mainVm);
+        Assert.Equal(12, mainVm.Split("[RelayCommand(CanExecute = nameof(CanExport))]").Length - 1);
+        Assert.Contains("NotifyExportCommandCanExecuteChanged();", mainVm);
+    }
+
+    [Fact]
     public void Main_Window_Detects_Environment_Off_Dispatcher()
     {
         var source = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml.cs");
