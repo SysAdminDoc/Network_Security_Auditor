@@ -188,27 +188,48 @@ public sealed class NP03_VpnCheck : ISecurityCheck
             // Check route table for default gateway count
             string output = RunCommand("route", "print 0.0.0.0", ct);
 
-            int defaultRoutes = 0;
-            foreach (var line in output.Split('\n'))
-            {
-                string trimmed = line.Trim();
-                if (trimmed.StartsWith("0.0.0.0") && trimmed.Contains("0.0.0.0"))
-                    defaultRoutes++;
-            }
+            var assessment = AssessSplitTunnelRoutes(output);
 
-            evidence.AppendLine($"  Default routes: {defaultRoutes}");
+            evidence.AppendLine($"  Default routes: {assessment.DefaultRouteCount}");
 
-            // Multiple default routes can indicate split tunnel (one for VPN, one for internet)
-            if (defaultRoutes > 1)
+            if (assessment.HasMultipleDefaultRoutes)
+                evidence.AppendLine("  Multiple default routes observed; this is common on multi-NIC systems and is not treated as split tunneling by itself.");
+
+            if (assessment.IsConfirmedSplitTunnel)
             {
                 splitTunnel = true;
-                evidence.AppendLine("  Multiple default routes detected - split tunnel indicator");
+                evidence.AppendLine("  Explicit split tunnel route indicator detected.");
             }
         }
         catch (Exception ex)
         {
             evidence.AppendLine($"  Route analysis error: {ex.Message}");
         }
+    }
+
+    internal static SplitTunnelRouteAssessment AssessSplitTunnelRoutes(string routeOutput)
+    {
+        int defaultRoutes = 0;
+        foreach (var line in routeOutput.Split('\n'))
+        {
+            string trimmed = line.Trim();
+            if (trimmed.StartsWith("0.0.0.0", StringComparison.Ordinal) &&
+                trimmed.Contains("0.0.0.0", StringComparison.Ordinal))
+            {
+                defaultRoutes++;
+            }
+        }
+
+        return new SplitTunnelRouteAssessment(
+            DefaultRouteCount: defaultRoutes,
+            IsConfirmedSplitTunnel: false);
+    }
+
+    internal readonly record struct SplitTunnelRouteAssessment(
+        int DefaultRouteCount,
+        bool IsConfirmedSplitTunnel)
+    {
+        public bool HasMultipleDefaultRoutes => DefaultRouteCount > 1;
     }
 
     private static string RunCommand(string fileName, string arguments, CancellationToken ct)
