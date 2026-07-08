@@ -314,7 +314,8 @@ public class ExportTests
         var root = doc.RootElement;
 
         Assert.Equal("2.1.0", root.GetProperty("version").GetString());
-        Assert.True(root.TryGetProperty("schema", out _));
+        Assert.True(root.TryGetProperty("$schema", out _));
+        Assert.False(root.TryGetProperty("schema", out _));
         var runs = root.GetProperty("runs");
         Assert.True(runs.GetArrayLength() > 0);
         var driver = runs[0].GetProperty("tool").GetProperty("driver");
