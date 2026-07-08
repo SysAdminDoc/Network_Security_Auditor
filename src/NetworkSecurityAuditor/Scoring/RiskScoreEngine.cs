@@ -8,17 +8,14 @@ public static class RiskScoreEngine
 {
     public static (int Score, string Grade) Calculate(IEnumerable<CheckItemViewModel> checks)
     {
-        double earned = 0;
-        double possible = 0;
+        var categories = new Dictionary<string, CategoryAccumulator>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var check in checks)
         {
             if (check.Status is CheckStatus.NA or CheckStatus.NotAssessed)
                 continue;
 
-            double severityWeight = (int)check.Severity;
-            double categoryWeight = CategoryWeights.GetWeight(check.Category);
-            double itemPossible = severityWeight * categoryWeight * check.Weight;
+            double itemPossible = check.Weight;
 
             double statusFactor = check.Status switch
             {
@@ -28,11 +25,25 @@ public static class RiskScoreEngine
                 _ => 0.0
             };
 
-            earned += itemPossible * statusFactor;
-            possible += itemPossible;
+            var category = categories.GetValueOrDefault(check.Category);
+            category.Earned += itemPossible * statusFactor;
+            category.Possible += itemPossible;
+            category.Weight = CategoryWeights.GetWeight(check.Category);
+            categories[check.Category] = category;
         }
 
-        int score = possible > 0 ? (int)Math.Round(earned / possible * 100) : 0;
+        double weightedTotal = 0;
+        double assessedWeight = 0;
+        foreach (var category in categories.Values)
+        {
+            if (category.Possible <= 0)
+                continue;
+
+            weightedTotal += (category.Earned / category.Possible * 100) * category.Weight;
+            assessedWeight += category.Weight;
+        }
+
+        int score = assessedWeight > 0 ? (int)Math.Round(weightedTotal / assessedWeight) : 0;
         return (score, GradeFromScore(score));
     }
 
@@ -44,4 +55,11 @@ public static class RiskScoreEngine
         >= 60 => "D",
         _ => "F"
     };
+
+    private struct CategoryAccumulator
+    {
+        public double Earned { get; set; }
+        public double Possible { get; set; }
+        public double Weight { get; set; }
+    }
 }

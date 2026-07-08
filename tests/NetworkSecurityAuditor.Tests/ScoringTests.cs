@@ -81,6 +81,31 @@ public class ScoringTests
         Assert.Equal(50, score);
     }
 
+    [Fact]
+    public void Uses_Check_Weight_Without_Severity_Squaring()
+    {
+        var checks = CreateChecks(
+            ("EP01", CheckStatus.Pass),
+            ("EP02", CheckStatus.Fail));
+
+        var (score, _) = RiskScoreEngine.Calculate(checks);
+
+        Assert.Equal(59, score);
+    }
+
+    [Fact]
+    public void Normalizes_Per_Category_Before_Applying_Category_Weights()
+    {
+        var checks = CreateChecks(
+            ("IA01", CheckStatus.Fail),
+            ("EP01", CheckStatus.Pass),
+            ("EP02", CheckStatus.Pass));
+
+        var (score, _) = RiskScoreEngine.Calculate(checks);
+
+        Assert.Equal(44, score);
+    }
+
     [Theory]
     [InlineData(95, "A")]
     [InlineData(90, "A")]
