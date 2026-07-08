@@ -250,6 +250,56 @@ public class ExportTests
     }
 
     [Fact]
+    public void Oscal_Uses_Kebab_Case_Fields_And_Valid_Status_Values()
+    {
+        var criticalMeta = CheckCatalog.All.Values.First(m => m.Severity == Severity.Critical);
+        var partialMeta = CheckCatalog.All.Values.First(m => m.Id != criticalMeta.Id && m.Severity == Severity.High);
+        var failedCheck = CheckItemViewModel.FromMetadata(criticalMeta);
+        failedCheck.Status = CheckStatus.Fail;
+        failedCheck.Findings = "Critical control failed";
+        failedCheck.Evidence = "Critical evidence";
+        var partialCheck = CheckItemViewModel.FromMetadata(partialMeta);
+        partialCheck.Status = CheckStatus.Partial;
+        partialCheck.Findings = "High control partially satisfied";
+        partialCheck.Evidence = "Partial evidence";
+        var checks = new ObservableCollection<CheckItemViewModel> { failedCheck, partialCheck };
+        var env = new EnvironmentInfo { ComputerName = "TEST", OSCaption = "Windows 11", IsDomainJoined = true, DomainName = "TEST.LOCAL" };
+
+        var json = OscalExporter.Export(checks, env, 40, "F");
+
+        Assert.Contains("\"assessment-results\"", json);
+        Assert.DoesNotContain("assessment_results", json);
+        Assert.DoesNotContain("last_modified", json);
+        Assert.DoesNotContain("oscal_version", json);
+        Assert.DoesNotContain("subject_uuid", json);
+        Assert.DoesNotContain("relevant_evidence", json);
+        Assert.DoesNotContain("target_id", json);
+        Assert.DoesNotContain("related_observations", json);
+        Assert.DoesNotContain("observation_uuid", json);
+        Assert.DoesNotContain("risk_level", json);
+
+        var doc = JsonDocument.Parse(json);
+        var result = doc.RootElement.GetProperty("assessment-results").GetProperty("results")[0];
+        var findings = result.GetProperty("findings").EnumerateArray().ToArray();
+
+        Assert.Equal(2, findings.Length);
+        Assert.All(findings, finding =>
+        {
+            Assert.True(finding.GetProperty("target").TryGetProperty("target-id", out _));
+            Assert.True(finding.TryGetProperty("related-observations", out _));
+            Assert.Equal("not-satisfied", finding.GetProperty("target").GetProperty("status").GetProperty("state").GetString());
+        });
+        Assert.Contains(findings, finding => finding.GetProperty("target").GetProperty("status").GetProperty("reason").GetString() == "fail");
+        Assert.Contains(findings, finding => finding.GetProperty("target").GetProperty("status").GetProperty("reason").GetString() == "other");
+
+        var risk = Assert.Single(result.GetProperty("risks").EnumerateArray());
+        Assert.True(risk.TryGetProperty("props", out var riskProps));
+        Assert.Contains(riskProps.EnumerateArray(), prop =>
+            prop.GetProperty("name").GetString() == "risk-level" &&
+            prop.GetProperty("value").GetString() == "high");
+    }
+
+    [Fact]
     public void Sarif_Has_Schema_And_Version()
     {
         var (checks, env) = CreateTestData();

@@ -1475,7 +1475,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 **Group B — Export security & schema validity**
 
-- [ ] **P1 — OSCAL output is not valid OSCAL.** Members are `snake_case` but `JsonNamingPolicy.KebabCaseLower` only inserts separators at case boundaries — existing underscores pass through, emitting `assessment_results` where the schema requires `assessment-results` (schemas are `additionalProperties:false` -> every conformant consumer rejects it). Also `status.state="other"` and `risk_level` are not valid OSCAL values. The existing test only greps for `"uuid"`. Where: `Export/OscalExporter.cs:15-20,58,88,91-93,106,114,120-122`. Fix: name members camelCase (so kebab converts) or use `[JsonPropertyName]` literals; fix the enum values.
 
 **Group C — Compliance mapping drift (client-facing, feeds every export; add parity/format tests alongside)**
 

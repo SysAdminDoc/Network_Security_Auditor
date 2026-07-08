@@ -55,9 +55,9 @@ public static class OscalExporter
                 collected = timestamp,
                 subjects = new[]
                 {
-                    new { subject_uuid = runId, type = "component", title = env.ComputerName }
+                    new { subjectUuid = runId, type = "component", title = env.ComputerName }
                 },
-                relevant_evidence = !string.IsNullOrEmpty(check.Evidence) ? new[]
+                relevantEvidence = !string.IsNullOrEmpty(check.Evidence) ? new[]
                 {
                     new { description = check.Evidence.Length > 2000 ? check.Evidence[..2000] : check.Evidence }
                 } : null
@@ -85,12 +85,16 @@ public static class OscalExporter
                     target = new
                     {
                         type = "objective-id",
-                        target_id = mapping?.NIST ?? check.Id,
-                        status = new { state = check.Status == CheckStatus.Fail ? "not-satisfied" : "other" }
+                        targetId = mapping?.NIST ?? check.Id,
+                        status = new
+                        {
+                            state = "not-satisfied",
+                            reason = check.Status == CheckStatus.Fail ? "fail" : "other"
+                        }
                     },
-                    related_observations = new[]
+                    relatedObservations = new[]
                     {
-                        new { observation_uuid = obsUuid }
+                        new { observationUuid = obsUuid }
                     },
                     props = props.Count > 0 ? props : null
                 });
@@ -103,7 +107,14 @@ public static class OscalExporter
                         title = $"Risk: {check.Label}",
                         description = check.Findings,
                         status = "open",
-                        risk_level = check.Severity == Severity.Critical ? "high" : "moderate"
+                        props = new[]
+                        {
+                            new
+                            {
+                                name = "risk-level",
+                                value = check.Severity == Severity.Critical ? "high" : "moderate"
+                            }
+                        }
                     });
                 }
             }
@@ -111,15 +122,15 @@ public static class OscalExporter
 
         var oscal = new
         {
-            assessment_results = new
+            assessmentResults = new
             {
                 uuid = Guid.NewGuid().ToString(),
                 metadata = new
                 {
                     title = $"Security Assessment - {env.ComputerName}",
-                    last_modified = timestamp,
+                    lastModified = timestamp,
                     version = "1.0.0",
-                    oscal_version = "1.1.3",
+                    oscalVersion = "1.1.3",
                     roles = new[]
                     {
                         new { id = "assessor", title = "Security Assessor" }

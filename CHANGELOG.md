@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# OSCAL export now emits OSCAL kebab-case field names, valid finding status states/reasons, and risk levels as risk properties instead of invalid top-level fields.
 - Fixed: C# privacy mode now uses redacted environment clones and redacted check copies across GUI and silent exporters, including notes, remediation assignees, auditor/client strings, tenant names, and client-derived filenames.
 - Fixed: C# HTML reports now escape environment subtitle fields (`ComputerName` and `OSCaption`) to block stored report XSS from hostile local system metadata.
 - Fixed: C# `--output` now treats the supplied value as the report output directory and sanitizes client-derived filename segments before writing dashboard or silent-mode artifacts.
