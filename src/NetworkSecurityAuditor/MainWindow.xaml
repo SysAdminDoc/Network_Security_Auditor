@@ -335,11 +335,9 @@
                                                 VerticalAlignment="Bottom">
                                         <TextBlock Text="Due Date" FontSize="11"
                                                    Foreground="{StaticResource BorderDim}" Margin="0,0,0,2" />
-                                        <DatePicker SelectedDate="{Binding RemediationDueDate}"
-                                                    Width="130"
-                                                    Background="{StaticResource InputBg}"
-                                                    Foreground="{StaticResource TextPrimary}"
-                                                    BorderBrush="{StaticResource BorderDim}" />
+                                        <TextBox Text="{Binding RemediationDueDate, StringFormat={}{0:yyyy-MM-dd}, TargetNullValue='', UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
+                                                 Style="{StaticResource DarkTextBox}"
+                                                 Width="130" />
                                     </StackPanel>
                                 </Grid>
 

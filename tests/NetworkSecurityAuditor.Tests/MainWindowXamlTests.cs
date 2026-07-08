@@ -29,6 +29,19 @@ public class MainWindowXamlTests
     }
 
     [Fact]
+    public void Main_Window_Uses_Dark_Due_Date_Text_Field()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+        var theme = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
+
+        Assert.DoesNotContain("<DatePicker", xaml);
+        Assert.Contains("Text=\"{Binding RemediationDueDate, StringFormat={}{0:yyyy-MM-dd}, TargetNullValue='', UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True, NotifyOnValidationError=True}\"", xaml);
+        Assert.Contains("Style=\"{StaticResource DarkTextBox}\"", xaml);
+        Assert.Contains("Property=\"Validation.ErrorTemplate\"", theme);
+        Assert.Contains("Path=(Validation.Errors)[0].ErrorContent", theme);
+    }
+
+    [Fact]
     public void Main_Window_Detects_Environment_Off_Dispatcher()
     {
         var source = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml.cs");
