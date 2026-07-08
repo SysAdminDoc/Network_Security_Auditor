@@ -1,9 +1,9 @@
 namespace NetworkSecurityAuditor.Checks.NetworkPerimeter;
 
-using System.Diagnostics;
 using System.Management;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// NP09 - NAT/Port Forwarding: Check for port forwarding rules via netsh.
@@ -215,21 +215,6 @@ public sealed class NP09_NatCheck : ISecurityCheck
 
     private static string RunCommand(string fileName, string arguments, CancellationToken ct)
     {
-        var psi = new ProcessStartInfo(fileName, arguments)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var proc = Process.Start(psi)
-            ?? throw new InvalidOperationException($"Failed to start {fileName}");
-
-        ct.Register(() => { try { proc.Kill(); } catch { } });
-
-        string output = proc.StandardOutput.ReadToEnd();
-        proc.WaitForExit(15_000);
-        return output;
+        return CommandRunner.RunForOutput(fileName, arguments, TimeSpan.FromSeconds(15), ct);
     }
 }

@@ -1,6 +1,5 @@
 namespace NetworkSecurityAuditor.Checks.NetworkArchitecture;
 
-using System.Diagnostics;
 using System.IO;
 using System.Text;
 using Microsoft.Win32;
@@ -122,26 +121,9 @@ public sealed class NA06_MgmtIsolationCheck : ISecurityCheck
 
         try
         {
-            var psi = new ProcessStartInfo("winrm", "enumerate winrm/config/listener")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var proc = Process.Start(psi);
-            if (proc is null)
-            {
-                evidence.AppendLine("  Could not query WinRM.");
-                return;
-            }
-
-            ct.Register(() => { try { proc.Kill(); } catch { } });
-
-            string output = proc.StandardOutput.ReadToEnd();
-            string error = proc.StandardError.ReadToEnd();
-            proc.WaitForExit(15_000);
+            var result = CommandRunner.Run("winrm", "enumerate winrm/config/listener", TimeSpan.FromSeconds(15), ct);
+            string output = result.StandardOutput;
+            string error = result.StandardError;
 
             if (!string.IsNullOrWhiteSpace(error) && error.Contains("not running", StringComparison.OrdinalIgnoreCase))
             {

@@ -1,10 +1,10 @@
 namespace NetworkSecurityAuditor.Checks.NetworkArchitecture;
 
-using System.Diagnostics;
 using System.Management;
 using System.Net;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// NA01 - Network segmentation indicators: adapter info, subnet sizing, ARP table analysis.
@@ -245,22 +245,7 @@ public sealed class NA01_SegmentationCheck : ISecurityCheck
 
     private static string RunCommand(string fileName, string arguments, CancellationToken ct)
     {
-        var psi = new ProcessStartInfo(fileName, arguments)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var proc = Process.Start(psi)
-            ?? throw new InvalidOperationException($"Failed to start {fileName}");
-
-        ct.Register(() => { try { proc.Kill(); } catch { } });
-
-        string output = proc.StandardOutput.ReadToEnd();
-        proc.WaitForExit(15_000);
-        return output;
+        return CommandRunner.RunForOutput(fileName, arguments, TimeSpan.FromSeconds(15), ct);
     }
 
     private sealed class AdapterInfo

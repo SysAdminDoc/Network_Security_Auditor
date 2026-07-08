@@ -1,10 +1,10 @@
 namespace NetworkSecurityAuditor.Checks.CommonFindings;
 
-using System.Diagnostics;
 using System.Management;
 using System.Net;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// CF06 - Network Flatness: Check IP subnet size, ARP table density.
@@ -137,21 +137,7 @@ public sealed class CF06_NetworkFlatnessCheck : ISecurityCheck
 
         try
         {
-            var psi = new ProcessStartInfo("arp", "-a")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var proc = Process.Start(psi)
-                ?? throw new InvalidOperationException("Failed to start arp");
-
-            ct.Register(() => { try { proc.Kill(); } catch { } });
-
-            string output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(15_000);
+            string output = CommandRunner.RunForOutput("arp", "-a", TimeSpan.FromSeconds(15), ct);
 
             var subnetCounts = new Dictionary<string, int>();
 

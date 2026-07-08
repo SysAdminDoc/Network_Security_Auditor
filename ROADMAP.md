@@ -1443,7 +1443,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 ### P3 — Medium / Low
 
 **Checks**
-- [ ] P3 — `RunCommand` helpers redirect StandardError but never drain it -> pipe-buffer deadlock on chatty stderr (EP06:240, LM03:341, NA01:246, NA02/03/07, NP02/03/09, CF05/06/07). Fix: async-read both streams.
 - [ ] P3 — EP04 parses `Win32_QuickFixEngineering.InstalledOn` with current culture (fails on non-US locales; hex-FILETIME case unhandled) -> fail-open patch recency. `EP04:118`. Use `CultureInfo.InvariantCulture`.
 - [ ] P3 — EP03 NetBIOS check flags `nodeType != 2` and `NetbiosOptions == 0` as failures -> false NetBIOS FAIL on most hardened machines. `EP03:212-223`.
 - [ ] P3 — EP01 SecurityCenter2 `productState` bit decode is non-standard (`>>12&0xF`, `>>4&0xF`) -> misreports enabled/up-to-date (evidence text only). `EP01:143-144`.

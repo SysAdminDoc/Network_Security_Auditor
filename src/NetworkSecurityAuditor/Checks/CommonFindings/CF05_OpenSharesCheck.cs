@@ -1,9 +1,9 @@
 namespace NetworkSecurityAuditor.Checks.CommonFindings;
 
-using System.Diagnostics;
 using System.Management;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// CF05 - Open Shares: Enumerate local SMB shares. Check share permissions for
@@ -116,21 +116,7 @@ public sealed class CF05_OpenSharesCheck : ISecurityCheck
         try
         {
             // Use net share command to get permissions
-            var psi = new ProcessStartInfo("net", $"share \"{shareName}\"")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var proc = Process.Start(psi);
-            if (proc is null) return;
-
-            ct.Register(() => { try { proc.Kill(); } catch { } });
-
-            string output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(10_000);
+            string output = CommandRunner.RunForOutput("net", $"share \"{shareName}\"", TimeSpan.FromSeconds(10), ct);
 
             bool inPermissions = false;
             evidence.AppendLine($"\n  Share: {shareName}");

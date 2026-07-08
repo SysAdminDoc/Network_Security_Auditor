@@ -15,6 +15,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Added: C# benchmark and lifecycle metadata now lives in a versioned manifest with source URLs, review dates, supported OS/builds, check coverage, and stale-review validation.
 - Added: Local C# release tooling now cleans generated artifacts, runs xUnit by default, publishes the WPF app, signs when a code-signing certificate is available, and emits a zipped artifact with SHA256 and release manifest files.
 - Fixed: C# EP10, LM06, LM07, and LM08 now dispose LDAP search-result and service-controller collections instead of leaking handles during repeated scans.
+- Fixed: C# command helpers now drain stdout and stderr concurrently with timeout-aware process termination, preventing chatty child commands from deadlocking scans.
 - Fixed: C# GUI export commands now stay disabled until at least one check is assessed and automatically disable while a scan is running.
 - Fixed: C# GUI scan progress now has deterministic sequential running-state coverage so only the active check is marked as running and cancellation clears the active row.
 - Added: Export contract schemas and golden fixtures now cover structured findings, JSONL events, OCSF, OSCAL, Intune, compliance summary, dashboard aggregate rows, and SIEM field mappings.

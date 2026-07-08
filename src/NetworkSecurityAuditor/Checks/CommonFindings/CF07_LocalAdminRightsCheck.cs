@@ -3,6 +3,7 @@ namespace NetworkSecurityAuditor.Checks.CommonFindings;
 using System.Management;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// CF07 - Enumerate local Administrators group. Flag overly broad members
@@ -194,20 +195,7 @@ public sealed class CF07_LocalAdminRightsCheck : ISecurityCheck
     {
         try
         {
-            var psi = new System.Diagnostics.ProcessStartInfo("net", "localgroup Administrators")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc is null) return;
-
-            ct.Register(() => { try { proc.Kill(); } catch { } });
-
-            string output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(10_000);
+            string output = CommandRunner.RunForOutput("net", "localgroup Administrators", TimeSpan.FromSeconds(10), ct);
 
             evidence.AppendLine("\n  [Fallback: net localgroup]");
             bool inMembers = false;

@@ -1,10 +1,10 @@
 namespace NetworkSecurityAuditor.Checks.NetworkArchitecture;
 
-using System.Diagnostics;
 using System.Management;
 using System.Net;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// NA02 - VLAN Configuration: Query network adapters for VLAN IDs and check static routes
@@ -137,21 +137,7 @@ public sealed class NA02_VlanCheck : ISecurityCheck
 
         try
         {
-            var psi = new ProcessStartInfo("route", "print")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var proc = Process.Start(psi)
-                ?? throw new InvalidOperationException("Failed to start route command");
-
-            ct.Register(() => { try { proc.Kill(); } catch { } });
-
-            string output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(15_000);
+            string output = CommandRunner.RunForOutput("route", "print", TimeSpan.FromSeconds(15), ct);
 
             int persistentRoutes = 0;
             bool inPersistent = false;
