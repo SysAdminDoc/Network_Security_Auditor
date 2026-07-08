@@ -20,14 +20,19 @@ public sealed class CheckRunner
         EnvironmentInfo env,
         AuditOptions options,
         IProgress<(string checkId, CheckResult result)>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        IProgress<(string checkId, int index, int total)>? startedProgress = null)
     {
         var results = new Dictionary<string, CheckResult>();
         var applicableIds = GetApplicableCheckIds(env, options);
+        var total = applicableIds.Count;
+        var index = 0;
 
         foreach (var checkId in applicableIds)
         {
             ct.ThrowIfCancellationRequested();
+            index++;
+            startedProgress?.Report((checkId, index, total));
 
             if (!_checks.TryGetValue(checkId, out var check))
             {
@@ -56,10 +61,25 @@ public sealed class CheckRunner
         try
         {
             var timeout = TimeSpan.FromSeconds(options.CheckTimeoutSeconds);
-            using var timeoutCts = new CancellationTokenSource(timeout);
+            using var timeoutCts = new CancellationTokenSource();
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
 
-            var result = await check.ExecuteAsync(env, options, linkedCts.Token);
+            var checkTask = Task.Run(
+                async () => await check.ExecuteAsync(env, options, linkedCts.Token),
+                CancellationToken.None);
+            var timeoutTask = Task.Delay(timeout, ct);
+            var completedTask = await Task.WhenAny(checkTask, timeoutTask);
+
+            if (completedTask != checkTask)
+            {
+                timeoutCts.Cancel();
+                ObserveLateFault(checkTask);
+                ct.ThrowIfCancellationRequested();
+                sw.Stop();
+                return TimeoutResult(check.Id, options.CheckTimeoutSeconds, sw.Elapsed);
+            }
+
+            var result = await checkTask;
             sw.Stop();
 
             return result with { Duration = sw.Elapsed };
@@ -87,6 +107,24 @@ public sealed class CheckRunner
             var error = CheckResult.FromError(check.Id, ex);
             return error with { Duration = sw.Elapsed };
         }
+    }
+
+    private static CheckResult TimeoutResult(string checkId, int timeoutSeconds, TimeSpan duration) => new()
+    {
+        Status = CheckStatus.NA,
+        Findings = $"Check {checkId} timed out after {timeoutSeconds}s.",
+        Evidence = $"Timeout @ {DateTime.Now:yyyy-MM-dd HH:mm}",
+        Duration = duration,
+        TimedOut = true
+    };
+
+    private static void ObserveLateFault(Task<CheckResult> abandonedTask)
+    {
+        _ = abandonedTask.ContinueWith(
+            task => _ = task.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     /// <summary>

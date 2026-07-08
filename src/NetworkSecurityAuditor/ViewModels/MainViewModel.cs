@@ -29,10 +29,15 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FilteredChecks))]
+    [NotifyCanExecuteChangedFor(nameof(StartScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopScanCommand))]
     private bool _isScanning;
 
     [ObservableProperty]
     private string _scanStatus = "Ready";
+
+    [ObservableProperty]
+    private double _scanProgressPercent;
 
     [ObservableProperty]
     private ScanProfileType _selectedProfile = ScanProfileType.Full;
@@ -162,6 +167,7 @@ public partial class MainViewModel : ViewModelBase
         _scanCts = new CancellationTokenSource();
         IsScanning = true;
         ScanStatus = "Scanning...";
+        ScanProgressPercent = 0;
 
         var options = new AuditOptions
         {
@@ -171,11 +177,32 @@ public partial class MainViewModel : ViewModelBase
         var allChecks = CheckRegistry.GetAllChecks();
         var runner = new CheckRunner(allChecks);
         var completed = 0;
+        var runningTotal = 0;
         var checkLookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
         var unsupportedProfile = false;
 
-        var progress = new Progress<(string checkId, CheckResult result)>(update =>
+        var startedProgress = new InlineProgress<(string checkId, int index, int total)>(update =>
         {
+            runningTotal = update.total;
+            foreach (var checkVm in Checks) checkVm.IsRunning = false;
+            ScanProgressPercent = update.total > 0
+                ? (double)(update.index - 1) / update.total * 100
+                : 0;
+
+            if (checkLookup.TryGetValue(update.checkId, out var vm))
+            {
+                vm.IsRunning = true;
+                ScanStatus = $"Running {update.checkId}: {vm.Label} ({update.index}/{update.total})";
+            }
+            else
+            {
+                ScanStatus = $"Running {update.checkId} ({update.index}/{update.total})";
+            }
+        });
+
+        var progress = new InlineProgress<(string checkId, CheckResult result)>(update =>
+        {
+            var nextCompleted = completed + 1;
             if (checkLookup.TryGetValue(update.checkId, out var vm))
             {
                 vm.Status = update.result.Status;
@@ -183,9 +210,17 @@ public partial class MainViewModel : ViewModelBase
                 vm.Evidence = update.result.Evidence;
                 vm.DurationMs = update.result.Duration.TotalMilliseconds;
                 vm.IsRunning = false;
+                ScanStatus = $"Completed {update.checkId}: {vm.Label} ({nextCompleted}/{runningTotal})";
+            }
+            else
+            {
+                ScanStatus = $"Completed {update.checkId} ({nextCompleted}/{runningTotal})";
             }
 
-            completed++;
+            completed = nextCompleted;
+            ScanProgressPercent = runningTotal > 0
+                ? (double)completed / runningTotal * 100
+                : 0;
             UpdateScoreCounts();
         });
 
@@ -194,23 +229,17 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var profileIds = ScanProfiles.Resolve(options.ScanProfile);
+            runningTotal = profileIds.Length;
             if (profileIds.Length == 0)
             {
                 unsupportedProfile = true;
                 ScanStatus = $"{options.ScanProfile} profile is not implemented in the C# rewrite yet. No local or AD checks were run.";
+                ScanProgressPercent = 0;
                 return;
             }
 
-            foreach (var id in profileIds)
-            {
-                if (checkLookup.TryGetValue(id, out var vm))
-                {
-                    vm.IsRunning = true;
-                    ScanStatus = $"Running {id}: {vm.Label} ({completed + 1}/{profileIds.Length})";
-                }
-            }
-
-            await runner.RunAsync(Environment, options, progress, _scanCts.Token);
+            var results = await runner.RunAsync(Environment, options, progress, _scanCts.Token, startedProgress);
+            completed = results.Count;
         }
         catch (OperationCanceledException)
         {
@@ -220,12 +249,14 @@ public partial class MainViewModel : ViewModelBase
         {
             foreach (var vm in Checks) vm.IsRunning = false;
             IsScanning = false;
-            var total = ScanProfiles.Resolve(options.ScanProfile).Length;
+            var total = runningTotal;
             if (!unsupportedProfile)
             {
                 ScanStatus = _scanCts.Token.IsCancellationRequested
                     ? $"Scan cancelled ({completed}/{total} completed)"
                     : $"Scan complete ({completed}/{total} checks)";
+                if (!_scanCts.Token.IsCancellationRequested && total > 0)
+                    ScanProgressPercent = 100;
             }
             _scanCts.Dispose();
             _scanCts = null;
@@ -245,6 +276,11 @@ public partial class MainViewModel : ViewModelBase
     }
 
     private bool CanStopScan() => IsScanning;
+
+    private sealed class InlineProgress<T>(Action<T> handler) : IProgress<T>
+    {
+        public void Report(T value) => handler(value);
+    }
 
     private IEnumerable<CheckItemViewModel> GetExportChecks()
     {

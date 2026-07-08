@@ -5,6 +5,8 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# scans now run each check on a worker task, abandon blocking checks when the per-check timeout expires, and update GUI progress from sequential start/completion events instead of freezing the dispatcher.
+- Fixed: Stop Scan command enablement now follows scan state immediately, and final scan status uses the returned result count instead of queued progress callbacks.
 - Fixed: C# dashboard and silent headless modes now observe runner exceptions, write failures to stderr, and always shut down with a non-zero exit code instead of leaving a hung WPF process.
 - Fixed: C# `Cloud` profile no longer expands to all local and Active Directory checks. It is explicitly disabled until Graph-backed CLxx checks are implemented, and CLI/GUI scans now report that state instead of running misleading endpoint/domain coverage.
 - Added: Regression tests proving the C# Cloud profile resolves to no local/AD checks and the runner returns no results for it.
