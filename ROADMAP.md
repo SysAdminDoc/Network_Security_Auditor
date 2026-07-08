@@ -1494,7 +1494,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 **Checks (fail-open / masking)**
 
 **Export / scoring**
-- [ ] **P2 — NavigatorExporter: NA/NotAssessed (score -1) outranks Fail (0) as "worst"** -> failing techniques render grey instead of red in the ATT&CK layer (understates risk). Where: `Export/NavigatorExporter.cs:23-36`. Fix: order Fail > Partial > Pass; assessed statuses always dominate NA.
 - [ ] **P2 — SarifExporter root property is `"schema"`, not `"$schema"`** -> strict SARIF validators reject the file. Where: `Export/SarifExporter.cs:97`. Fix: `[JsonPropertyName("$schema")]`.
 - [ ] **P2 — DomainMaturityEngine: an all-N/A domain contributes 0% but keeps its weight in the denominator**, hard-capping a non-domain-joined host at ~45/"F" even with perfect endpoint/logging results (domains 1-2 are all `CheckType.AD`). Where: `Scoring/DomainMaturityEngine.cs:51-53`. Fix: divide by the sum of weights of domains with `possible > 0` (mirror `RansomwareReadinessEngine`).
 - [ ] **P2 — Errors and timeouts collapse to `CheckStatus.NA`** (fail-open; NA is excluded from all denominators, so a crashed/hung check *raises* the score). No `Error` status exists. Where: `Models/CheckResult.cs:19-25`, `Checks/CheckRunner.cs:72-76`, `Models/Enums.cs:3-10`. Fix: add an `Error` status (string-serialized -> save-compatible), surface error/timeout counts separately, decide explicitly whether errors score as unmet. **Partly Blocked** (product decision).

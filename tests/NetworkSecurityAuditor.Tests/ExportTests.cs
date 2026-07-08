@@ -460,6 +460,8 @@ public class ExportTests
         // Set one check to Fail — its techniques should show as failed in Navigator
         var firstFail = checks.FirstOrDefault(c => c.Id == "EP01");
         if (firstFail is not null) firstFail.Status = CheckStatus.Fail;
+        var notAssessedSharedTechnique = checks.FirstOrDefault(c => c.Id == "EP02");
+        if (notAssessedSharedTechnique is not null) notAssessedSharedTechnique.Status = CheckStatus.NotAssessed;
 
         var json = NavigatorExporter.Export(checks);
         var doc = System.Text.Json.JsonDocument.Parse(json);
@@ -478,6 +480,11 @@ public class ExportTests
                 }
             }
         }
+
+        var t1059 = techniques.EnumerateArray()
+            .Single(tech => tech.GetProperty("techniqueID").GetString() == "T1059");
+        Assert.Equal(0, t1059.GetProperty("score").GetInt32());
+        Assert.Equal("#f38ba8", t1059.GetProperty("color").GetString());
     }
 
     [Fact]

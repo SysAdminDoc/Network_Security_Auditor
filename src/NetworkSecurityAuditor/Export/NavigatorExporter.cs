@@ -13,40 +13,35 @@ public static class NavigatorExporter
         var checkList = checks.ToList();
         var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
 
-        var techniqueScores = new Dictionary<string, (int worstScore, CheckStatus worstStatus, List<string> checkIds)>(StringComparer.OrdinalIgnoreCase);
+        var techniqueScores = new Dictionary<string, (int priority, int worstScore, CheckStatus worstStatus, List<string> checkIds)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var (checkId, mapping) in MitreMappings.All)
         {
             if (!statusLookup.TryGetValue(checkId, out var status))
                 continue;
 
-            int score = status switch
-            {
-                CheckStatus.Pass => 100,
-                CheckStatus.Partial => 50,
-                CheckStatus.Fail => 0,
-                _ => -1
-            };
+            int score = GetNavigatorScore(status);
+            int priority = GetWorstStatusPriority(status);
 
             foreach (var techId in mapping.Techniques)
             {
                 if (techniqueScores.TryGetValue(techId, out var existing))
                 {
-                    if (score < existing.worstScore)
-                        techniqueScores[techId] = (score, status, [..existing.checkIds, checkId]);
+                    if (priority > existing.priority)
+                        techniqueScores[techId] = (priority, score, status, [..existing.checkIds, checkId]);
                     else
                         existing.checkIds.Add(checkId);
                 }
                 else
                 {
-                    techniqueScores[techId] = (score, status, [checkId]);
+                    techniqueScores[techId] = (priority, score, status, [checkId]);
                 }
             }
         }
 
         var techniques = techniqueScores.Select(kv =>
         {
-            var (techId, (worstScore, worstStatus, checkIds)) = (kv.Key, kv.Value);
+            var (techId, (_, worstScore, worstStatus, checkIds)) = (kv.Key, kv.Value);
             string color = worstStatus switch
             {
                 CheckStatus.Pass => "#a6e3a1",
@@ -95,4 +90,20 @@ public static class NavigatorExporter
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         });
     }
+
+    private static int GetNavigatorScore(CheckStatus status) => status switch
+    {
+        CheckStatus.Fail => 0,
+        CheckStatus.Partial => 50,
+        CheckStatus.Pass => 100,
+        _ => -1
+    };
+
+    private static int GetWorstStatusPriority(CheckStatus status) => status switch
+    {
+        CheckStatus.Fail => 3,
+        CheckStatus.Partial => 2,
+        CheckStatus.Pass => 1,
+        _ => 0
+    };
 }
