@@ -1388,20 +1388,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 ## Research-Driven Additions
 
-- [ ] P1 - Port PowerShell MSP automation parity into the C# CLI
-  Why: The C# silent mode lacks PowerShell v4.11 MSP workflows such as RMM field writes, remote fleet scanning, continuous history/delta, benchmark import, cloud assessment import, remediation dry-run, and write-suppression flags.
-  Evidence: `NetworkSecurityAudit.ps1`; `src/NetworkSecurityAuditor/App.xaml.cs`; PingCastle console aggregation; Prowler scheduled scans; HardeningKitty audit/config/backup modes.
-  Touches: `src/NetworkSecurityAuditor/App.xaml.cs`, `Models/AuditOptions.cs`, `Services/`, `Export/`, new tests under `tests/NetworkSecurityAuditor.Tests/`.
-  Acceptance: C# CLI supports documented equivalents for RMM/write manifest controls, `--targets-csv`, `--benchmark-import`, `--cloud-assessment-path`, `--history`, and remediation dry-run with rollback manifest tests.
-  Complexity: XL
-
-- [ ] P1 - Add Graph-backed Entra/M365 C# check pack
-  Why: Competitors now treat cloud identity posture as table-stakes, and local IA03/IA09 checks cannot prove tenant MFA or Conditional Access coverage.
-  Evidence: Microsoft Graph Secure Score, Conditional Access policy, authentication methods, sign-in activity, and Maester v2.1.0 sources; `src/NetworkSecurityAuditor/Data/ScanProfiles.cs`.
-  Touches: new `Checks/Cloud/` classes, `Services/GraphClient`, `Models/CloudAssessment*`, `Data/CheckCatalog.cs`, `Data/FrameworkMappings.cs`, exporters, tests with offline fixtures.
-  Acceptance: Cloud profile runs CL01 Secure Score, CL02 Conditional Access baseline/exclusions, MFA registration/auth methods, stale guests/sign-in activity, privileged role exposure, and MDE/Intune availability checks with permission/license skip states.
-  Complexity: XL
-
 - [ ] P1 - Add GUI export parity and a compact export settings flow
   Why: WPF exposes most exports as crowded sidebar buttons but omits SIEM content packs and CMMC reports that the CLI already supports.
   Evidence: `src/NetworkSecurityAuditor/MainWindow.xaml`; `src/NetworkSecurityAuditor/App.xaml.cs`; Prowler OCSF/SARIF/export examples.
