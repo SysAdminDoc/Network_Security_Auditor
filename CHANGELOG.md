@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# EP06 host firewall checks now prefer structured `MSFT_NetFirewallProfile` data, parse `netsh` fallback output without fixed spacing, and fail closed when profile status cannot be verified.
 - Fixed: C# EP07, LM07, and LM01 now track applicable sub-checks directly instead of using `failCount--`/`totalChecks--` adjustments that could mask real failures.
 - Fixed: C# CF08 DNS filtering now uses known-valid vendor test domains with a control lookup instead of counting arbitrary NXDOMAIN responses as proof of filtering.
 - Fixed: C# CF02 egress filtering now uses a known outbound port test listener with a control-port guard instead of treating closed public IP ports as confirmed filtering.

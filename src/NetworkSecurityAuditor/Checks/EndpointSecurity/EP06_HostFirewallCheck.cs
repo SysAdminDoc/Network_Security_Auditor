@@ -1,6 +1,7 @@
 namespace NetworkSecurityAuditor.Checks.EndpointSecurity;
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Management;
 using System.Text;
 using NetworkSecurityAuditor.Models;
@@ -10,10 +11,21 @@ using NetworkSecurityAuditor.Models;
 /// </summary>
 public sealed class EP06_HostFirewallCheck : ISecurityCheck
 {
+    private readonly Func<IReadOnlyList<FirewallProfileSnapshot>> _profileProvider;
+    private readonly Func<string, string, CancellationToken, string> _runCommand;
+
     public string Id => "EP06";
 
     private static readonly int[] HighRiskPorts =
         [21, 23, 69, 135, 139, 445, 1433, 3389, 5900, 5985, 5986];
+
+    internal EP06_HostFirewallCheck(
+        Func<IReadOnlyList<FirewallProfileSnapshot>>? profileProvider = null,
+        Func<string, string, CancellationToken, string>? runCommand = null)
+    {
+        _profileProvider = profileProvider ?? QueryFirewallProfilesViaWmi;
+        _runCommand = runCommand ?? RunCommand;
+    }
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -21,20 +33,23 @@ public sealed class EP06_HostFirewallCheck : ISecurityCheck
         {
             var sb = new StringBuilder();
             var evidence = new StringBuilder();
-            bool hasIssue = false;
+            bool hasFailure = false;
+            bool hasWarning = false;
 
-            // -- Firewall profile status via netsh --
+            // -- Firewall profile status via structured provider first --
             ct.ThrowIfCancellationRequested();
-            CheckFirewallProfiles(sb, evidence, ref hasIssue, ct);
+            CheckFirewallProfiles(sb, evidence, ref hasFailure, ref hasWarning, ct);
 
             // -- High-risk inbound ports --
             ct.ThrowIfCancellationRequested();
-            CheckHighRiskPorts(sb, evidence, ref hasIssue, ct);
+            CheckHighRiskPorts(sb, evidence, ref hasFailure, ct);
 
-            if (!hasIssue)
+            if (!hasFailure && !hasWarning)
                 sb.Insert(0, "All Windows Firewall profiles enabled with appropriate defaults.\n");
 
-            var status = hasIssue ? CheckStatus.Fail : CheckStatus.Pass;
+            var status = hasFailure ? CheckStatus.Fail
+                : hasWarning ? CheckStatus.Partial
+                : CheckStatus.Pass;
 
             return Task.FromResult(new CheckResult
             {
@@ -49,114 +64,334 @@ public sealed class EP06_HostFirewallCheck : ISecurityCheck
         }
     }
 
-    private static void CheckFirewallProfiles(StringBuilder sb, StringBuilder evidence, ref bool hasIssue, CancellationToken ct)
+    private void CheckFirewallProfiles(
+        StringBuilder sb,
+        StringBuilder evidence,
+        ref bool hasFailure,
+        ref bool hasWarning,
+        CancellationToken ct)
     {
         evidence.AppendLine("[Firewall Profile Status]");
 
         try
         {
-            string output = RunCommand("netsh", "advfirewall show allprofiles", ct);
-            evidence.AppendLine(output);
+            var profiles = _profileProvider();
+            if (profiles.Count == 0)
+                throw new InvalidOperationException("MSFT_NetFirewallProfile returned no profiles.");
 
-            // Parse profiles
-            string[] profiles = ["Domain", "Private", "Public"];
-            foreach (var profile in profiles)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                // Look for State line under each profile section
-                bool enabled = output.Contains($"State", StringComparison.OrdinalIgnoreCase)
-                    && !ContainsProfileDisabled(output, profile);
-
-                // Check inbound/outbound defaults
-                bool inboundBlock = output.Contains("Firewall Policy") && output.Contains("BlockInbound");
-            }
-
-            // Simpler: check for any OFF state
-            if (output.Contains("State                                 OFF", StringComparison.OrdinalIgnoreCase))
-            {
-                hasIssue = true;
-                sb.AppendLine("FAIL: One or more firewall profiles are DISABLED.");
-            }
-
-            // Check log file sizes
-            if (output.Contains("LogMaxFileSize", StringComparison.OrdinalIgnoreCase))
-            {
-                // Parse max file size values
-                foreach (var line in output.Split('\n'))
-                {
-                    if (line.Contains("MaxFileSize", StringComparison.OrdinalIgnoreCase))
-                    {
-                        evidence.AppendLine($"  Log setting: {line.Trim()}");
-                    }
-                }
-            }
-
-            // Check if logging dropped packets is enabled
-            if (output.Contains("LogDroppedConnections") &&
-                output.Contains("Disable", StringComparison.OrdinalIgnoreCase))
-            {
-                sb.AppendLine("WARNING: Firewall dropped-connection logging is disabled on one or more profiles.");
-            }
+            EvaluateFirewallProfiles(profiles, sb, evidence, ref hasFailure, ref hasWarning, ct);
         }
         catch (Exception ex)
         {
-            evidence.AppendLine($"  netsh error: {ex.Message}");
-            sb.AppendLine("Could not query firewall status via netsh.");
+            evidence.AppendLine($"  WMI profile query failed: {ex.Message}");
+            evidence.AppendLine("  Falling back to netsh profile parsing.");
 
-            // Fallback to WMI
-            CheckFirewallViaWmi(sb, evidence, ref hasIssue);
-        }
-    }
-
-    private static void CheckFirewallViaWmi(StringBuilder sb, StringBuilder evidence, ref bool hasIssue)
-    {
-        try
-        {
-            // HNetCfg.FwPolicy2 COM object via WMI fallback
-            using var searcher = new ManagementObjectSearcher(
-                @"root\StandardCimv2",
-                "SELECT Name, Enabled, DefaultInboundAction, DefaultOutboundAction FROM MSFT_NetFirewallProfile");
-
-            foreach (ManagementObject obj in searcher.Get())
+            try
             {
-                string name = obj["Name"]?.ToString() ?? "Unknown";
-                bool enabled = Convert.ToUInt16(obj["Enabled"] ?? 0) == 1;
-                int inbound = Convert.ToInt32(obj["DefaultInboundAction"] ?? 0);
-                int outbound = Convert.ToInt32(obj["DefaultOutboundAction"] ?? 0);
+                var netshOutput = _runCommand("netsh", "advfirewall show allprofiles", ct);
+                evidence.AppendLine(netshOutput);
 
-                string inboundLabel = inbound == 2 ? "Block" : inbound == 3 ? "Allow" : $"({inbound})";
-                string outboundLabel = outbound == 2 ? "Block" : outbound == 3 ? "Allow" : $"({outbound})";
+                var netshProfiles = ParseNetshProfiles(netshOutput);
+                if (netshProfiles.Count == 0)
+                    throw new InvalidOperationException("netsh output did not contain parseable firewall profiles.");
 
-                evidence.AppendLine($"  [WMI] {name}: Enabled={enabled}, InboundDefault={inboundLabel}, OutboundDefault={outboundLabel}");
-
-                if (!enabled)
-                {
-                    hasIssue = true;
-                    sb.AppendLine($"FAIL: Firewall profile '{name}' is DISABLED.");
-                }
-
-                if (inbound != 2) // Not Block
-                {
-                    hasIssue = true;
-                    sb.AppendLine($"WARNING: Firewall profile '{name}' default inbound action is not Block.");
-                }
+                EvaluateFirewallProfiles(netshProfiles, sb, evidence, ref hasFailure, ref hasWarning, ct);
+            }
+            catch (Exception fallbackEx)
+            {
+                hasFailure = true;
+                evidence.AppendLine($"  netsh profile query failed: {fallbackEx.Message}");
+                sb.AppendLine("FAIL: Could not verify Windows Firewall profile status via WMI or netsh.");
             }
         }
-        catch (ManagementException ex)
+    }
+
+    private static IReadOnlyList<FirewallProfileSnapshot> QueryFirewallProfilesViaWmi()
+    {
+        var profiles = new List<FirewallProfileSnapshot>();
+        using var searcher = new ManagementObjectSearcher(
+            @"root\StandardCimv2",
+            "SELECT Name, Enabled, DefaultInboundAction, DefaultOutboundAction, LogBlocked, LogMaxSizeKilobytes FROM MSFT_NetFirewallProfile");
+        using var results = searcher.Get();
+
+        foreach (ManagementObject obj in results)
         {
-            evidence.AppendLine($"  WMI fallback error: {ex.Message}");
+            try
+            {
+                profiles.Add(new FirewallProfileSnapshot(
+                    obj["Name"]?.ToString() ?? "Unknown",
+                    ConvertWmiOptionalBool(obj["Enabled"]),
+                    ConvertWmiAction(obj["DefaultInboundAction"]),
+                    ConvertWmiAction(obj["DefaultOutboundAction"]),
+                    ConvertWmiOptionalBool(obj["LogBlocked"]),
+                    ConvertWmiOptionalUInt64(obj["LogMaxSizeKilobytes"]),
+                    "WMI"));
+            }
+            finally
+            {
+                obj.Dispose();
+            }
+        }
+
+        return profiles;
+    }
+
+    internal static IReadOnlyList<FirewallProfileSnapshot> ParseNetshProfiles(string output)
+    {
+        var profiles = new List<FirewallProfileSnapshot>();
+        string? name = null;
+        bool? enabled = null;
+        FirewallDefaultAction inbound = FirewallDefaultAction.Unknown;
+        FirewallDefaultAction outbound = FirewallDefaultAction.Unknown;
+        bool? logDropped = null;
+        ulong? logMaxSizeKb = null;
+
+        void Flush()
+        {
+            if (name is null)
+                return;
+
+            profiles.Add(new FirewallProfileSnapshot(
+                name,
+                enabled,
+                inbound,
+                outbound,
+                logDropped,
+                logMaxSizeKb,
+                "netsh"));
+        }
+
+        foreach (var rawLine in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.Trim();
+            var profileName = TryGetNetshProfileName(line);
+            if (profileName is not null)
+            {
+                Flush();
+                name = profileName;
+                enabled = null;
+                inbound = FirewallDefaultAction.Unknown;
+                outbound = FirewallDefaultAction.Unknown;
+                logDropped = null;
+                logMaxSizeKb = null;
+                continue;
+            }
+
+            if (name is null)
+                continue;
+
+            if (TryGetNetshValue(line, "State", out var state))
+            {
+                enabled = ParseNetshEnabled(state);
+            }
+            else if (TryGetNetshValue(line, "Firewall Policy", out var policy))
+            {
+                inbound = ParseNetshInboundAction(policy);
+                outbound = ParseNetshOutboundAction(policy);
+            }
+            else if (TryGetNetshValue(line, "LogDroppedConnections", out var logDroppedValue))
+            {
+                logDropped = ParseNetshEnabled(logDroppedValue);
+            }
+            else if (TryGetNetshValue(line, "LogMaxFileSize", out var logSizeValue) &&
+                ulong.TryParse(logSizeValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLogSize))
+            {
+                logMaxSizeKb = parsedLogSize;
+            }
+        }
+
+        Flush();
+        return profiles;
+    }
+
+    private static void EvaluateFirewallProfiles(
+        IReadOnlyList<FirewallProfileSnapshot> profiles,
+        StringBuilder sb,
+        StringBuilder evidence,
+        ref bool hasFailure,
+        ref bool hasWarning,
+        CancellationToken ct)
+    {
+        foreach (var profile in profiles)
+        {
+            ct.ThrowIfCancellationRequested();
+            evidence.AppendLine(
+                $"  [{profile.Source}] {profile.Name}: Enabled={FormatNullableBool(profile.Enabled)}, " +
+                $"InboundDefault={FormatAction(profile.DefaultInboundAction)}, " +
+                $"OutboundDefault={FormatAction(profile.DefaultOutboundAction)}, " +
+                $"LogDropped={FormatNullableBool(profile.LogDroppedConnections)}, " +
+                $"LogMaxSizeKb={profile.LogMaxSizeKb?.ToString(CultureInfo.InvariantCulture) ?? "Unknown"}");
+
+            if (profile.Enabled is not true)
+            {
+                hasFailure = true;
+                sb.AppendLine(profile.Enabled is false
+                    ? $"FAIL: Firewall profile '{profile.Name}' is DISABLED."
+                    : $"FAIL: Firewall profile '{profile.Name}' enabled state could not be verified.");
+            }
+
+            if (profile.DefaultInboundAction != FirewallDefaultAction.Block)
+            {
+                hasFailure = true;
+                sb.AppendLine(
+                    $"FAIL: Firewall profile '{profile.Name}' default inbound action is {FormatAction(profile.DefaultInboundAction)}; expected Block.");
+            }
+
+            if (profile.LogDroppedConnections is false)
+            {
+                hasWarning = true;
+                sb.AppendLine($"WARNING: Firewall profile '{profile.Name}' dropped-connection logging is disabled.");
+            }
         }
     }
 
-    private static void CheckHighRiskPorts(StringBuilder sb, StringBuilder evidence, ref bool hasIssue, CancellationToken ct)
+    private static string? TryGetNetshProfileName(string line)
+    {
+        foreach (var name in new[] { "Domain", "Private", "Public" })
+        {
+            if (line.StartsWith($"{name} Profile", StringComparison.OrdinalIgnoreCase))
+                return name;
+        }
+
+        return null;
+    }
+
+    private static bool TryGetNetshValue(string line, string key, out string value)
+    {
+        if (!line.StartsWith(key, StringComparison.OrdinalIgnoreCase))
+        {
+            value = string.Empty;
+            return false;
+        }
+
+        value = line[key.Length..].Trim();
+        return value.Length > 0;
+    }
+
+    private static bool? ParseNetshEnabled(string value)
+    {
+        var normalized = value.Trim();
+        if (normalized.StartsWith("ON", StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith("Enable", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (normalized.StartsWith("OFF", StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith("Disable", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return null;
+    }
+
+    private static FirewallDefaultAction ParseNetshInboundAction(string value)
+    {
+        if (value.Contains("BlockInbound", StringComparison.OrdinalIgnoreCase))
+            return FirewallDefaultAction.Block;
+
+        if (value.Contains("AllowInbound", StringComparison.OrdinalIgnoreCase))
+            return FirewallDefaultAction.Allow;
+
+        return FirewallDefaultAction.Unknown;
+    }
+
+    private static FirewallDefaultAction ParseNetshOutboundAction(string value)
+    {
+        if (value.Contains("BlockOutbound", StringComparison.OrdinalIgnoreCase))
+            return FirewallDefaultAction.Block;
+
+        if (value.Contains("AllowOutbound", StringComparison.OrdinalIgnoreCase))
+            return FirewallDefaultAction.Allow;
+
+        return FirewallDefaultAction.Unknown;
+    }
+
+    private static FirewallDefaultAction ConvertWmiAction(object? value)
+    {
+        if (value is null)
+            return FirewallDefaultAction.Unknown;
+
+        if (value is string text)
+        {
+            if (text.Equals("Block", StringComparison.OrdinalIgnoreCase))
+                return FirewallDefaultAction.Block;
+            if (text.Equals("Allow", StringComparison.OrdinalIgnoreCase))
+                return FirewallDefaultAction.Allow;
+        }
+
+        try
+        {
+            return Convert.ToUInt16(value, CultureInfo.InvariantCulture) switch
+            {
+                2 => FirewallDefaultAction.Allow,
+                4 => FirewallDefaultAction.Block,
+                _ => FirewallDefaultAction.Unknown
+            };
+        }
+        catch
+        {
+            return FirewallDefaultAction.Unknown;
+        }
+    }
+
+    private static bool? ConvertWmiOptionalBool(object? value)
+    {
+        if (value is null)
+            return null;
+
+        if (value is bool boolValue)
+            return boolValue;
+
+        if (value is string text)
+        {
+            if (bool.TryParse(text, out var parsedBool))
+                return parsedBool;
+
+            return ParseNetshEnabled(text);
+        }
+
+        try
+        {
+            return Convert.ToUInt64(value, CultureInfo.InvariantCulture) != 0;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static ulong? ConvertWmiOptionalUInt64(object? value)
+    {
+        if (value is null)
+            return null;
+
+        try
+        {
+            return Convert.ToUInt64(value, CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string FormatNullableBool(bool? value) => value.HasValue
+        ? value.Value.ToString(CultureInfo.InvariantCulture)
+        : "Unknown";
+
+    private static string FormatAction(FirewallDefaultAction action) => action switch
+    {
+        FirewallDefaultAction.Allow => "Allow",
+        FirewallDefaultAction.Block => "Block",
+        _ => "Unknown"
+    };
+
+    private void CheckHighRiskPorts(StringBuilder sb, StringBuilder evidence, ref bool hasIssue, CancellationToken ct)
     {
         evidence.AppendLine("\n[High-Risk Inbound Ports - Listening]");
 
         try
         {
             // Use netstat to find listening TCP ports
-            string output = RunCommand("netstat", "-an -p TCP", ct);
+            string output = _runCommand("netstat", "-an -p TCP", ct);
             var listeningPorts = new HashSet<int>();
 
             foreach (var line in output.Split('\n'))
@@ -257,3 +492,19 @@ public sealed class EP06_HostFirewallCheck : ISecurityCheck
         return output;
     }
 }
+
+internal enum FirewallDefaultAction
+{
+    Unknown,
+    Allow,
+    Block
+}
+
+internal sealed record FirewallProfileSnapshot(
+    string Name,
+    bool? Enabled,
+    FirewallDefaultAction DefaultInboundAction,
+    FirewallDefaultAction DefaultOutboundAction,
+    bool? LogDroppedConnections,
+    ulong? LogMaxSizeKb,
+    string Source);

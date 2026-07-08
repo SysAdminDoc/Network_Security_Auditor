@@ -1492,7 +1492,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 ### P2 — High
 
 **Checks (fail-open / masking)**
-- [ ] **P2 — EP06 host-firewall parse is English-locale-dependent and fails open** (`Contains("State ... OFF")` with hardcoded spacing; WMI fallback only runs on throw; dead vars). Where: `EP06_HostFirewallCheck.cs:66-72,76,209-222`. Fix: parse robustly / use WMI `MSFT_NetFirewallProfile`.
 
 **Export / scoring**
 - [ ] **P2 — CSV formula-injection neutralizer misses tab- and CR-prefixed payloads** (`\t=...`, `\r=...` emitted raw; `\t`/`\r` not in the quote-trigger set). Where: `Export/CsvExporter.cs:62-63`. Fix: neutralize when the first (or first non-whitespace) char is `= + - @ \t \r`.
