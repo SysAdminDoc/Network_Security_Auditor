@@ -162,10 +162,10 @@ public static class DashboardGenerator
 
         foreach (var c in clients.OrderByDescending(c => c.CriticalCount).ThenBy(c => c.OverallScore))
         {
-            var gradeClass = $"grade-{c.Grade.ToLowerInvariant()}";
+            var gradeClass = GradeCssClass(c.Grade);
             var dateDisplay = DateTime.TryParse(c.Timestamp, out var d) ? d.ToString("yyyy-MM-dd") : "N/A";
             var staleFlag = c.IsStale ? " <span class=\"stale\">[STALE]</span>" : "";
-            var reportLink = c.ReportPath is not null ? $"<a href=\"{c.ReportPath}\">View</a>" : "";
+            var reportLink = c.ReportPath is not null ? $"<a href=\"{Esc(c.ReportPath)}\">View</a>" : "";
 
             sb.AppendLine($"<tr>");
             sb.AppendLine($"<td>{Esc(c.Client)}</td>");
@@ -204,8 +204,19 @@ public static class DashboardGenerator
 
     private static string CsvEsc(string? value)
     {
-        if (string.IsNullOrEmpty(value)) return "\"\"";
-        return "\"" + value.Replace("\"", "\"\"") + "\"";
+        return CsvExporter.Escape(value);
+    }
+
+    private static string GradeCssClass(string? grade)
+    {
+        var trimmed = grade?.Trim();
+        if (trimmed is { Length: 1 } &&
+            (trimmed[0] is 'A' or 'a' or 'B' or 'b' or 'C' or 'c' or 'D' or 'd' or 'E' or 'e' or 'F' or 'f'))
+        {
+            return $"grade-{char.ToLowerInvariant(trimmed[0])}";
+        }
+
+        return "grade-unknown";
     }
 
     private sealed class ClientSummary

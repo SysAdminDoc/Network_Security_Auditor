@@ -53,14 +53,13 @@ public static class CsvExporter
         return sb.ToString();
     }
 
-    private static string Escape(string? value)
+    internal static string Escape(string? value)
     {
         if (string.IsNullOrEmpty(value)) return "\"\"";
 
         var sanitized = value;
         bool formulaPrefixed = false;
-        if (sanitized.StartsWith('=') || sanitized.StartsWith('+') ||
-            sanitized.StartsWith('-') || sanitized.StartsWith('@'))
+        if (StartsWithSpreadsheetFormulaTrigger(sanitized))
         {
             sanitized = "'" + sanitized;
             formulaPrefixed = true;
@@ -73,5 +72,24 @@ public static class CsvExporter
         }
 
         return sanitized;
+    }
+
+    private static bool StartsWithSpreadsheetFormulaTrigger(string value)
+    {
+        if (value.Length == 0)
+            return false;
+
+        if (value[0] is '\t' or '\r')
+            return true;
+
+        foreach (var c in value)
+        {
+            if (char.IsWhiteSpace(c))
+                continue;
+
+            return c is '=' or '+' or '-' or '@';
+        }
+
+        return false;
     }
 }

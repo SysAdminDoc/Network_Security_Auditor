@@ -1494,9 +1494,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 **Checks (fail-open / masking)**
 
 **Export / scoring**
-- [ ] **P2 — CSV formula-injection neutralizer misses tab- and CR-prefixed payloads** (`\t=...`, `\r=...` emitted raw; `\t`/`\r` not in the quote-trigger set). Where: `Export/CsvExporter.cs:62-63`. Fix: neutralize when the first (or first non-whitespace) char is `= + - @ \t \r`.
-- [ ] **P2 — DashboardGenerator CSV has zero formula-injection neutralization** (`client/host/os/grade/timestamp` from ingested `*_findings.json`). Where: `Export/DashboardGenerator.cs:205-209`. Fix: reuse `CsvExporter.Escape`.
-- [ ] **P2 — DashboardGenerator injects the untrusted `grade` value unescaped into an HTML class attribute.** Where: `DashboardGenerator.cs:165,174`. Fix: allowlist grades A-F or `Esc()` the class value.
 - [ ] **P2 — NavigatorExporter: NA/NotAssessed (score -1) outranks Fail (0) as "worst"** -> failing techniques render grey instead of red in the ATT&CK layer (understates risk). Where: `Export/NavigatorExporter.cs:23-36`. Fix: order Fail > Partial > Pass; assessed statuses always dominate NA.
 - [ ] **P2 — SarifExporter root property is `"schema"`, not `"$schema"`** -> strict SARIF validators reject the file. Where: `Export/SarifExporter.cs:97`. Fix: `[JsonPropertyName("$schema")]`.
 - [ ] **P2 — DomainMaturityEngine: an all-N/A domain contributes 0% but keeps its weight in the denominator**, hard-capping a non-domain-joined host at ~45/"F" even with perfect endpoint/logging results (domains 1-2 are all `CheckType.AD`). Where: `Scoring/DomainMaturityEngine.cs:51-53`. Fix: divide by the sum of weights of domains with `possible > 0` (mirror `RansomwareReadinessEngine`).

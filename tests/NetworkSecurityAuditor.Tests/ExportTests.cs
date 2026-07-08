@@ -139,9 +139,15 @@ public class ExportTests
     {
         var (checks, env) = CreateTestData();
         checks[0].Findings = "=DANGEROUS()";
+        checks[1].Evidence = "\t=DANGEROUS()";
+        checks[2].Notes = "\r=DANGEROUS()";
+        checks[3].Findings = "  =DANGEROUS()";
         var csv = CsvExporter.Export(checks, env, 85, "B");
         Assert.DoesNotContain("\"=DANGEROUS", csv);
         Assert.Contains("'=DANGEROUS", csv);
+        Assert.Contains("\"'\t=DANGEROUS()\"", csv);
+        Assert.Contains("\"'\r=DANGEROUS()\"", csv);
+        Assert.Contains("\"'  =DANGEROUS()\"", csv);
     }
 
     [Fact]
@@ -498,12 +504,117 @@ public class ExportTests
     }
 
     [Fact]
-    public void Dashboard_Escapes_Client_Names()
+    public async Task Dashboard_Escapes_Client_Names()
     {
-        // Verify the Esc helper exists and works
-        var html = "<script>alert(1)</script>";
-        var escaped = html.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
-        Assert.DoesNotContain("<script>", escaped);
-        Assert.Contains("&lt;script&gt;", escaped);
+        var dir = await WriteDashboardFixtureAsync("""
+            {
+              "timestamp": "2026-07-08T00:00:00Z",
+              "client": "<script>alert(1)</script>",
+              "environment": {
+                "computer_name": "<b>HOST</b>",
+                "os_caption": "Windows <img src=x onerror=alert(1)>"
+              },
+              "score": {
+                "overall": 90,
+                "grade": "A",
+                "ransomware_readiness": 80
+              },
+              "findings": []
+            }
+            """);
+
+        try
+        {
+            var html = await DashboardGenerator.GenerateAsync(dir);
+
+            Assert.DoesNotContain("<script>", html);
+            Assert.DoesNotContain("<b>HOST</b>", html);
+            Assert.Contains("&lt;script&gt;alert(1)&lt;/script&gt;", html);
+            Assert.Contains("&lt;b&gt;HOST&lt;/b&gt;", html);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Dashboard_Csv_Uses_Spreadsheet_Safe_Escaping()
+    {
+        var dir = await WriteDashboardFixtureAsync("""
+            {
+              "timestamp": "\t=DATE(2026,7,8)",
+              "client": "\t=DANGEROUS()",
+              "environment": {
+                "computer_name": "\r=DANGEROUS()",
+                "os_caption": "  =DANGEROUS()"
+              },
+              "score": {
+                "overall": 42,
+                "grade": "=DANGEROUS()",
+                "ransomware_readiness": 7
+              },
+              "findings": [
+                { "status": "Fail", "severity": "Critical" }
+              ]
+            }
+            """);
+
+        try
+        {
+            var csv = await DashboardGenerator.GenerateCsvAsync(dir);
+
+            Assert.Contains("\"'\t=DANGEROUS()\"", csv);
+            Assert.Contains("\"'\r=DANGEROUS()\"", csv);
+            Assert.Contains("\"'  =DANGEROUS()\"", csv);
+            Assert.Contains("\"'=DANGEROUS()\"", csv);
+            Assert.Contains("\"'\t=DATE(2026,7,8)\"", csv);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Dashboard_Grade_Class_Is_Allowlisted()
+    {
+        var dir = await WriteDashboardFixtureAsync("""
+            {
+              "timestamp": "2026-07-08T00:00:00Z",
+              "client": "Client",
+              "environment": {
+                "computer_name": "Host",
+                "os_caption": "Windows"
+              },
+              "score": {
+                "overall": 70,
+                "grade": "A\" onmouseover=\"alert(1)",
+                "ransomware_readiness": 50
+              },
+              "findings": []
+            }
+            """);
+
+        try
+        {
+            var html = await DashboardGenerator.GenerateAsync(dir);
+
+            Assert.Contains("class=\"grade-unknown\"", html);
+            Assert.DoesNotContain("class=\"grade-a&quot;", html);
+            Assert.Contains("A&quot; onmouseover=&quot;alert(1)", html);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private static async Task<string> WriteDashboardFixtureAsync(string json)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-export-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        await File.WriteAllTextAsync(Path.Combine(dir, "client_findings.json"), json);
+        return dir;
     }
 }
