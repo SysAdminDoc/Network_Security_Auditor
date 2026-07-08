@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -147,16 +148,35 @@ public partial class MainViewModel : ViewModelBase
 
     public void LoadCheckCatalog()
     {
+        DetachCheckStatusHandlers();
         Checks.Clear();
         foreach (var meta in CheckCatalog.All.Values.OrderBy(m => m.Id))
         {
-            Checks.Add(CheckItemViewModel.FromMetadata(meta));
+            var check = CheckItemViewModel.FromMetadata(meta);
+            check.PropertyChanged += OnCheckPropertyChanged;
+            Checks.Add(check);
         }
 
         Categories = ["All", .. CheckCatalog.Categories];
         OnPropertyChanged(nameof(Categories));
         OnPropertyChanged(nameof(FilteredChecks));
         UpdateScoreCounts();
+    }
+
+    private void DetachCheckStatusHandlers()
+    {
+        foreach (var check in Checks)
+        {
+            check.PropertyChanged -= OnCheckPropertyChanged;
+        }
+    }
+
+    private void OnCheckPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(CheckItemViewModel.Status)) return;
+
+        UpdateScoreCounts();
+        OnPropertyChanged(nameof(FilteredChecks));
     }
 
     [RelayCommand(CanExecute = nameof(CanStartScan))]

@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Correctness
+- Fixed: C# GUI manual status changes now refresh pass/fail/partial/N/A counters, overall grade, ransomware readiness, domain maturity, and status-filtered views immediately.
 - Fixed: PowerShell fleet mode now validates `-TargetsCsv`, deduplicates target names before queuing jobs, sanitizes per-host artifact names, parses localhost findings JSON from the derived silent-mode path, and forwards v4.11 fleet/remediation/export switches through elevation.
 - Fixed: C# NP01, NP05, and NP06 firewall checks now read port and address constraints from associated WMI filter classes, with `netsh` fallback when filter access is denied, instead of relying on missing `MSFT_NetFirewallRule` properties.
 - Fixed: C# per-check ATT&CK, D3FEND, and framework rows now match current labels for DNS filtering, temporary firewall rules, egress filtering, former-employee access, network flatness, failed-logon monitoring, file-integrity monitoring, and local-admin rights.
