@@ -16,9 +16,11 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        _viewModel.Environment = EnvironmentDetector.Detect();
+        Loaded -= OnLoaded;
+        _viewModel.ScanStatus = "Detecting environment...";
+        _viewModel.Environment = await Task.Run(EnvironmentDetector.Detect);
         _viewModel.LoadCheckCatalog();
         _viewModel.RunPreflight();
     }

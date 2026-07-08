@@ -9,6 +9,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# dashboard exports now reuse the shared CSV escaping routine and constrain grade CSS classes to an allowlist before rendering HTML attributes.
 
 ### Correctness
+- Fixed: C# GUI startup now detects WMI, domain, Azure AD, and Intune environment signals on a worker thread instead of blocking the WPF dispatcher during window load.
 - Fixed: C# silent-mode active waivers now exclude waived Fail/Partial checks from effective scoring, fail/partial counts, framework threshold checks, and exit-code decisions while preserving accepted-risk notes in exports.
 - Fixed: C# silent-mode progress now prints through an inline runner callback instead of dispatcher-posted `Progress<T>` output that could appear after the summary.
 - Fixed: C# silent/dashboard modes no longer trigger UAC self-elevation and immediately return success before the real scan; headless runs stay in-process and warn when unelevated.

@@ -29,6 +29,16 @@ public class MainWindowXamlTests
     }
 
     [Fact]
+    public void Main_Window_Detects_Environment_Off_Dispatcher()
+    {
+        var source = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml.cs");
+
+        Assert.Contains("private async void OnLoaded", source);
+        Assert.Contains("await Task.Run(EnvironmentDetector.Detect)", source);
+        Assert.DoesNotContain("_viewModel.Environment = EnvironmentDetector.Detect();", source);
+    }
+
+    [Fact]
     public void Theme_Provides_Dark_Popup_Control_Templates()
     {
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");

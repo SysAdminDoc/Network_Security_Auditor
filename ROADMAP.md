@@ -1496,7 +1496,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 **Export / scoring**
 
 **App / silent mode**
-- [ ] **P2 — Startup blocks the UI thread on WMI + `dsregcmd`** (multi-second freeze; unbounded hang if dsregcmd wedges). Where: `MainWindow.xaml.cs:19-24`, `Services/EnvironmentDetector.cs:12-31,156-200`. Fix: `await Task.Run(EnvironmentDetector.Detect)`.
 
 **Legacy PS1 branding / fleet security**
 - [ ] **P2 — Branding `footer_text` injected unencoded into the report header** (other FooterText sinks encode it) -> XSS in delivered reports. Where: `NetworkSecurityAudit.ps1:11177`. Fix: `HtmlEncode` the value.
