@@ -1443,7 +1443,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 ### P3 — Medium / Low
 
 **Checks**
-- [ ] P3 — EP04 parses `Win32_QuickFixEngineering.InstalledOn` with current culture (fails on non-US locales; hex-FILETIME case unhandled) -> fail-open patch recency. `EP04:118`. Use `CultureInfo.InvariantCulture`.
 - [ ] P3 — EP03 NetBIOS check flags `nodeType != 2` and `NetbiosOptions == 0` as failures -> false NetBIOS FAIL on most hardened machines. `EP03:212-223`.
 - [ ] P3 — EP01 SecurityCenter2 `productState` bit decode is non-standard (`>>12&0xF`, `>>4&0xF`) -> misreports enabled/up-to-date (evidence text only). `EP01:143-144`.
 - [ ] P3 — EP02/EP08 treat non-admin / unsupported-OS WMI unavailability as `Fail` instead of `NA` -> false failures. `EP02:87-94`, `EP08:121-133,187-190`.

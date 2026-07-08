@@ -1,5 +1,6 @@
 namespace NetworkSecurityAuditor.Checks.EndpointSecurity;
 
+using System.Globalization;
 using System.Management;
 using System.Text;
 using NetworkSecurityAuditor.Models;
@@ -57,9 +58,9 @@ public sealed class EP04_PatchComplianceCheck : ISecurityCheck
                 if (mostRecent != default)
                 {
                     int daysSinceLast = (int)(DateTime.Now - mostRecent.InstalledOn).TotalDays;
-                    evidence.AppendLine($"  Most recent hotfix: {mostRecent.HotFixId} installed {mostRecent.InstalledOn:yyyy-MM-dd} ({daysSinceLast} days ago)");
+                    evidence.AppendLine($"  Most recent hotfix: {mostRecent.HotFixId} installed {FormatDate(mostRecent.InstalledOn)} ({daysSinceLast} days ago)");
 
-                    sb.AppendLine($"Hotfix count: {hotfixes.Count}. Most recent: {mostRecent.HotFixId} ({mostRecent.InstalledOn:yyyy-MM-dd}, {daysSinceLast}d ago).");
+                    sb.AppendLine($"Hotfix count: {hotfixes.Count}. Most recent: {mostRecent.HotFixId} ({FormatDate(mostRecent.InstalledOn)}, {daysSinceLast}d ago).");
 
                     if (daysSinceLast > StalePatchDays)
                     {
@@ -109,24 +110,10 @@ public sealed class EP04_PatchComplianceCheck : ISecurityCheck
 
                 string id = obj["HotFixID"]?.ToString() ?? "Unknown";
                 string desc = obj["Description"]?.ToString() ?? "";
-                string installedBy = obj["InstalledBy"]?.ToString() ?? "";
-                DateTime installedOn = DateTime.MinValue;
-
-                try
-                {
-                    var raw = obj["InstalledOn"];
-                    if (raw is string dateStr && DateTime.TryParse(dateStr, out var parsed))
-                        installedOn = parsed;
-                    else if (raw is DateTime dt)
-                        installedOn = dt;
-                }
-                catch
-                {
-                    // InstalledOn can be in various formats
-                }
+                DateTime installedOn = ParseInstalledOn(obj["InstalledOn"]);
 
                 results.Add(new HotfixInfo(id, installedOn, desc));
-                evidence.AppendLine($"  {id}: {(installedOn == DateTime.MinValue ? "date unknown" : installedOn.ToString("yyyy-MM-dd"))}, {desc}");
+                evidence.AppendLine($"  {id}: {(installedOn == DateTime.MinValue ? "date unknown" : FormatDate(installedOn))}, {desc}");
             }
         }
         catch (ManagementException ex)
@@ -135,6 +122,80 @@ public sealed class EP04_PatchComplianceCheck : ISecurityCheck
         }
 
         return results;
+    }
+
+    internal static DateTime ParseInstalledOn(object? raw)
+    {
+        if (raw is DateTime dt)
+            return dt.Date;
+
+        string value = raw?.ToString()?.Trim() ?? string.Empty;
+        if (value.Length == 0)
+            return DateTime.MinValue;
+
+        string[] formats =
+        [
+            "M/d/yyyy",
+            "MM/dd/yyyy",
+            "M/d/yy",
+            "MM/dd/yy",
+            "yyyyMMdd",
+            "yyyy-MM-dd"
+        ];
+
+        if (DateTime.TryParseExact(
+            value,
+            formats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeLocal | DateTimeStyles.AllowWhiteSpaces,
+            out var exactParsed))
+        {
+            return exactParsed.Date;
+        }
+
+        if (DateTime.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeLocal | DateTimeStyles.AllowWhiteSpaces,
+            out var invariantParsed))
+        {
+            return invariantParsed.Date;
+        }
+
+        return TryParseFileTime(value, out var fileTimeDate) ? fileTimeDate : DateTime.MinValue;
+    }
+
+    private static string FormatDate(DateTime value)
+    {
+        return value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    private static bool TryParseFileTime(string value, out DateTime date)
+    {
+        string digits = value.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            ? value[2..]
+            : value;
+
+        NumberStyles style = value.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            ? NumberStyles.HexNumber
+            : NumberStyles.Integer;
+
+        if (long.TryParse(digits, style, CultureInfo.InvariantCulture, out long fileTime))
+        {
+            try
+            {
+                date = DateTime.FromFileTimeUtc(fileTime).ToLocalTime().Date;
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                date = DateTime.MinValue;
+                return false;
+            }
+        }
+
+        date = DateTime.MinValue;
+        return false;
     }
 
     private static void CheckBuildCurrency(EnvironmentInfo env, StringBuilder sb, StringBuilder evidence, ref bool hasIssue)
