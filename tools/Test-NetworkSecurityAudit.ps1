@@ -407,6 +407,10 @@ if ($scriptText -notmatch "\`$compObj\['Cyber_Essentials'\]" -or $scriptText -no
 if ($scriptText -notmatch 'function ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Findings\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Evidence\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Notes\s+=\s+ConvertTo-CsvSafeText') {
     Add-Failure 'CSV export free-text fields must be formula-injection neutralized.'
 }
+if ($scriptText -notmatch '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterText\)\s*\{\s*\[System\.Net\.WebUtility\]::HtmlEncode\(\$script:Branding\.FooterText\)\s*\}' -or
+    $scriptText -match '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterText\)\s*\{\s*\$script:Branding\.FooterText\s*\}') {
+    Add-Failure 'HTML report branded subtitle must HTML-encode Branding.FooterText.'
+}
 if ($scriptText -notmatch 'findings_truncated' -or $scriptText -notmatch 'findings_original_length' -or $scriptText -notmatch 'evidence_truncated' -or $scriptText -notmatch 'evidence_original_length') {
     Add-Failure 'JSONL truncation must include flags and original lengths.'
 }

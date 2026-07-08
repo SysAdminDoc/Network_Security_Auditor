@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Security
+- Fixed: PowerShell HTML reports now HTML-encode branding `footer_text` in the report header subtitle instead of injecting it as raw markup.
 - Fixed: C# CSV exports now neutralize spreadsheet formulas that begin after leading whitespace, tab, or carriage-return characters.
 - Fixed: C# dashboard exports now reuse the shared CSV escaping routine and constrain grade CSS classes to an allowlist before rendering HTML attributes.
 

@@ -11232,7 +11232,7 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 
     # ── HEADER ───────────────────────────────────────────────────────────────
     $brandedTitle = if ($script:Branding.CompanyName) { "$($script:Branding.CompanyName) - Security Assessment" } else { "$($script:ProductName) Report" }
-    $brandedSub = if ($script:Branding.FooterText) { $script:Branding.FooterText } else { "Confidential - Prepared for $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))" }
+    $brandedSub = if ($script:Branding.FooterText) { [System.Net.WebUtility]::HtmlEncode($script:Branding.FooterText) } else { "Confidential - Prepared for $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))" }
     $html += @"
 <div class="hdr"$(if($script:Branding.PrimaryColor){" style='border-color:$brandPrimary'"})>
 $(if($script:Branding.PrimaryColor){"<style>.hdr::before{background:linear-gradient(90deg,$brandPrimary,$brandAccent)!important}</style>"})
