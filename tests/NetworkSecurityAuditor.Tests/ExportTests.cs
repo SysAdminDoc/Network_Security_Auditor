@@ -160,6 +160,21 @@ public class ExportTests
     }
 
     [Fact]
+    public void Html_Escapes_Environment_Subtitle_Fields()
+    {
+        var (checks, env) = CreateTestData();
+        env.ComputerName = "\"><script>alert(1)</script>";
+        env.OSCaption = "Windows <img src=x onerror=alert(2)>";
+
+        var html = HtmlReportGenerator.Generate(checks, env, 85, "B", 70, "C", 60, "D");
+
+        Assert.DoesNotContain("<script>", html);
+        Assert.DoesNotContain("<img src=x", html);
+        Assert.Contains("&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;", html);
+        Assert.Contains("Windows &lt;img src=x onerror=alert(2)&gt;", html);
+    }
+
+    [Fact]
     public void Html_Framework_Scores_Present()
     {
         var (checks, env) = CreateTestData();
