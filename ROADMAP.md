@@ -1496,7 +1496,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 **Export / scoring**
 
 **App / silent mode**
-- [ ] **P2 — Waivers don't affect score, fail counts, or exit codes** — a fully-waived environment still exits non-zero forever, so CI can't gate. `--waivers` only annotates `vm.Notes`; GUI has no waiver support. Where: `App.xaml.cs:185-207,209-214,351-357`. Fix: exclude actively-waived checks from failCount/scoring, or add a documented flag. **May be Blocked** (product decision).
 - [ ] **P2 — Startup blocks the UI thread on WMI + `dsregcmd`** (multi-second freeze; unbounded hang if dsregcmd wedges). Where: `MainWindow.xaml.cs:19-24`, `Services/EnvironmentDetector.cs:12-31,156-200`. Fix: `await Task.Run(EnvironmentDetector.Detect)`.
 
 **Legacy PS1 branding / fleet security**

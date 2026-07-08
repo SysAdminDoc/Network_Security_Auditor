@@ -1,5 +1,8 @@
 using System.IO;
+using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Scoring;
+using NetworkSecurityAuditor.ViewModels;
 
 namespace NetworkSecurityAuditor.Tests;
 
@@ -191,5 +194,49 @@ public class WaiverStoreTests
         {
             File.Delete(path);
         }
+    }
+
+    [Fact]
+    public void Active_Waived_Fail_Is_Excluded_From_Effective_Scoring()
+    {
+        var checks = new[]
+        {
+            Check("EP01", CheckStatus.Fail),
+            Check("EP02", CheckStatus.Pass)
+        };
+
+        var scoredChecks = App.ExcludeWaivedChecksFromScoring(
+            checks,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "EP01" });
+
+        Assert.DoesNotContain(scoredChecks, check => check.Id == "EP01");
+        Assert.Contains(scoredChecks, check => check.Id == "EP02");
+        var (score, grade) = RiskScoreEngine.Calculate(scoredChecks);
+        Assert.Equal(100, score);
+        Assert.Equal("A", grade);
+    }
+
+    [Fact]
+    public void Active_Waived_Pass_Remains_In_Effective_Scoring()
+    {
+        var checks = new[]
+        {
+            Check("EP01", CheckStatus.Fail),
+            Check("EP02", CheckStatus.Pass)
+        };
+
+        var scoredChecks = App.ExcludeWaivedChecksFromScoring(
+            checks,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "EP02" });
+
+        Assert.Contains(scoredChecks, check => check.Id == "EP01");
+        Assert.Contains(scoredChecks, check => check.Id == "EP02");
+    }
+
+    private static CheckItemViewModel Check(string id, CheckStatus status)
+    {
+        var vm = CheckItemViewModel.FromMetadata(CheckCatalog.All[id]);
+        vm.Status = status;
+        return vm;
     }
 }

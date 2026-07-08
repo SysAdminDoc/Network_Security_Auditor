@@ -267,6 +267,7 @@ public partial class App : Application
         }
 
         WaiverStore? waiverStore = null;
+        var activeWaivedCheckIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (args.WaiversPath.Length > 0)
         {
             waiverStore = await WaiverStore.LoadFromFileAsync(args.WaiversPath);
@@ -284,24 +285,29 @@ public partial class App : Application
                 if (waiver is not null)
                 {
                     vm.Notes = $"[ACCEPTED RISK] {waiver.Justification} (approved by {waiver.ApprovedBy}{(waiver.ExpirationDate.HasValue ? $", expires {waiver.ExpirationDate:yyyy-MM-dd}" : "")})";
+                    activeWaivedCheckIds.Add(vm.Id);
                     activeCount++;
                 }
             }
             Console.WriteLine($"  Waivers: {activeCount} active, {expired.Count} expired");
         }
 
-        var (score, grade) = RiskScoreEngine.Calculate(checkVms);
-        var (rwScore, rwGrade) = RansomwareReadinessEngine.Calculate(checkVms);
-        var (dmScore, dmGrade, _) = DomainMaturityEngine.Calculate(checkVms);
-        var passCount = checkVms.Count(c => c.Status == CheckStatus.Pass);
-        var failCount = checkVms.Count(c => c.Status == CheckStatus.Fail);
-        var partialCount = checkVms.Count(c => c.Status == CheckStatus.Partial);
+        var scoredCheckVms = ExcludeWaivedChecksFromScoring(checkVms, activeWaivedCheckIds);
+        var scoringWaivedCount = checkVms.Count - scoredCheckVms.Count;
+        var (score, grade) = RiskScoreEngine.Calculate(scoredCheckVms);
+        var (rwScore, rwGrade) = RansomwareReadinessEngine.Calculate(scoredCheckVms);
+        var (dmScore, dmGrade, _) = DomainMaturityEngine.Calculate(scoredCheckVms);
+        var passCount = scoredCheckVms.Count(c => c.Status == CheckStatus.Pass);
+        var failCount = scoredCheckVms.Count(c => c.Status == CheckStatus.Fail);
+        var partialCount = scoredCheckVms.Count(c => c.Status == CheckStatus.Partial);
 
         Console.WriteLine();
         Console.WriteLine($"  Score: {score}% (Grade: {grade})");
         Console.WriteLine($"  Ransomware Readiness: {rwScore}% ({rwGrade})");
         Console.WriteLine($"  Domain Maturity: {dmScore}% ({dmGrade})");
         Console.WriteLine($"  Pass: {passCount} | Fail: {failCount} | Partial: {partialCount}");
+        if (scoringWaivedCount > 0)
+            Console.WriteLine($"  Waived findings excluded from scoring: {scoringWaivedCount}");
 
         var redactor = PrivacyExportSanitizer.CreateRedactor(
             args.PrivacyMode,
@@ -435,13 +441,23 @@ public partial class App : Application
         var exitCode = ExitCode.Green;
         if (score < 60 || rwScore < 40)
             exitCode = ExitCode.ImmediateAlert;
-        else if (HasFrameworkBelowThreshold(checkVms, 60))
+        else if (HasFrameworkBelowThreshold(scoredCheckVms, 60))
             exitCode = ExitCode.ComplianceAlert;
         else if (failCount > 0)
             exitCode = ExitCode.ReviewNeeded;
 
         Console.WriteLine($"  Exit code: {(int)exitCode}");
         return (int)exitCode;
+    }
+
+    internal static System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel> ExcludeWaivedChecksFromScoring(
+        IEnumerable<CheckItemViewModel> checks,
+        IReadOnlySet<string> activeWaivedCheckIds)
+    {
+        return new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>(
+            checks.Where(check =>
+                !activeWaivedCheckIds.Contains(check.Id) ||
+                check.Status is not (CheckStatus.Fail or CheckStatus.Partial)));
     }
 
     private static bool HasFrameworkBelowThreshold(
