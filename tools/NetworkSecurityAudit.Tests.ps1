@@ -573,6 +573,12 @@ Describe 'Fleet orchestration safeguards' {
         $script:FleetBlock | Should -Match '\$fleetHosts\s*=\s*@\(\$fleetHostList\.ToArray\(\)\)'
     }
 
+    It 'rejects quoted fleet CSV values before starting jobs' {
+        $script:FleetBlock | Should -Match '\$fleetSafeColumns\s*='
+        $script:FleetBlock | Should -Match 'Targets CSV column'
+        $script:FleetBlock | Should -Match 'Quotes are not allowed in fleet CSV fields'
+    }
+
     It 'uses a local HTML output path and parses the derived findings JSON' {
         $script:FleetBlock | Should -Match '\$hostOutFile\s*=\s*Join-Path \$fleetDir "\$\{safeTarget\}\.html"'
         $script:FleetBlock | Should -Match '\$localJsonPath\s*=\s*\$hostOutFile -replace ''\\\.html\$'', ''_findings\.json'''

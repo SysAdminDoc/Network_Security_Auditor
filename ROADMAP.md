@@ -1498,7 +1498,6 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 **App / silent mode**
 
 **Legacy PS1 branding / fleet security**
-- [ ] **P2 — CSV `Client` field allows parameter injection into remote audit runs** (PS 5.1 doesn't escape embedded quotes in native command lines; `x" -ReadOnly "False` flips flags on every fleet host). Where: `NetworkSecurityAudit.ps1:326,349-351`. Fix: reject/escape `"` in CSV fields, or pass values via env/`-EncodedCommand`.
 
 **GUI theme / a11y / layout**
 - [ ] **P2 — DatePicker renders light** (calendar popup uses SystemColors). Where: `MainWindow.xaml:311-315`. Fix: dark DatePicker/Calendar template or styled TextBox+validation.

@@ -407,6 +407,11 @@ if ($scriptText -notmatch "\`$compObj\['Cyber_Essentials'\]" -or $scriptText -no
 if ($scriptText -notmatch 'function ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Findings\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Evidence\s+=\s+ConvertTo-CsvSafeText' -or $scriptText -notmatch 'Notes\s+=\s+ConvertTo-CsvSafeText') {
     Add-Failure 'CSV export free-text fields must be formula-injection neutralized.'
 }
+if ($scriptText -notmatch '\$fleetSafeColumns\s*=' -or
+    $scriptText -notmatch 'Targets CSV column' -or
+    $scriptText -notmatch 'Quotes are not allowed in fleet CSV fields') {
+    Add-Failure 'Fleet TargetsCsv values must reject embedded double quotes before building child scan parameters.'
+}
 if ($scriptText -notmatch '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterText\)\s*\{\s*\[System\.Net\.WebUtility\]::HtmlEncode\(\$script:Branding\.FooterText\)\s*\}' -or
     $scriptText -match '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterText\)\s*\{\s*\$script:Branding\.FooterText\s*\}') {
     Add-Failure 'HTML report branded subtitle must HTML-encode Branding.FooterText.'

@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## [v5.2.4] - 2026-06-28
 
 ### Security
+- Fixed: PowerShell fleet mode now rejects double quotes in `TargetsCsv` Host/Client/Site/Tags fields before building child scan parameters, blocking CSV-driven flag injection in remote audit runs.
 - Fixed: PowerShell branding logos now validate `logo_base64` image data URIs and whitelist `logo_path` MIME types before placing logo data in HTML `src` attributes.
 - Fixed: PowerShell HTML reports now HTML-encode branding `footer_text` in the report header subtitle instead of injecting it as raw markup.
 - Fixed: C# CSV exports now neutralize spreadsheet formulas that begin after leading whitespace, tab, or carriage-return characters.

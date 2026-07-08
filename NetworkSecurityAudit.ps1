@@ -358,11 +358,21 @@ if ($Silent.IsPresent -and $TargetsCsv) {
         exit 1
     }
     $hostCol = if ('Host' -in $requiredCol) { 'Host' } elseif ('Hostname' -in $requiredCol) { 'Hostname' } else { 'ComputerName' }
+    $fleetSafeColumns = @($hostCol, 'Client', 'Site', 'Tags') | Select-Object -Unique
     $fleetRowsByHost = @{}
     $fleetHostList = [System.Collections.Generic.List[string]]::new()
     foreach ($row in $fleetCsv) {
         $targetName = ([string]$row.$hostCol).Trim()
         if (-not $targetName) { continue }
+        foreach ($column in $fleetSafeColumns) {
+            if ($row.PSObject.Properties[$column]) {
+                $fieldValue = [string]$row.$column
+                if ($fieldValue.Contains('"')) {
+                    Write-Host "[Fleet Mode] ERROR: Targets CSV column '$column' for host '$targetName' contains a double quote. Quotes are not allowed in fleet CSV fields." -ForegroundColor Red
+                    exit 1
+                }
+            }
+        }
         if (-not $fleetRowsByHost.ContainsKey($targetName)) {
             $fleetRowsByHost[$targetName] = $row
             $fleetHostList.Add($targetName)
