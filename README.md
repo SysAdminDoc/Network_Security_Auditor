@@ -271,7 +271,7 @@ imports or future Graph-backed checks for tenant proof.
 |----|-------|----------|
 | CF01 | Service Accounts with DA + Weak Passwords | Critical |
 | CF02 | Egress Filtering Absent | Critical |
-| CF03 | Backups Never Restore-Tested | Critical |
+| CF03 | Security Awareness Training | Medium |
 | CF04 | Former Employee Accounts Active | Critical |
 | CF05 | Open File Shares | High |
 | CF06 | Flat Network (no segmentation) | High |

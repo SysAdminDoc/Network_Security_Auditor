@@ -888,7 +888,7 @@ public static class CheckCatalog
             Weight = 5,
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
-            Compliance = "NIST CSF PR.IP-4, PR.IP-9 | CIS Control 11.4, 11.5 | HIPAA 164.308(a)(7)(ii)(D)",
+            Compliance = "NIST CSF PR.AT-1, PR.AT-2 | CIS Control 14.1, 14.2 | HIPAA 164.308(a)(5)(i), 164.308(a)(5)(ii)(A)",
             EvidenceMode = EvidenceMode.InterviewRequired,
             RemediationUrl = "https://learn.microsoft.com/en-us/security/adoption/security-awareness-training"
         });

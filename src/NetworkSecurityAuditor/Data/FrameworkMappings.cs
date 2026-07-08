@@ -720,15 +720,14 @@ public static class FrameworkMappings
             },
             ["CF03"] = new()
             {
-                CIS = "11.4, 11.5",
+                CIS = "14.1, 14.2",
                 NIST = "3.2.1, 3.2.2",
                 CMMC = "AT.L2-3.2.1, AT.L2-3.2.2",
-                HIPAA = "164.308(a)(7)(ii)(D)",
+                HIPAA = "164.308(a)(5)(i), 164.308(a)(5)(ii)(A)",
                 PCI = "12.6.1, 12.6.2",
                 SOC2 = "CC1.4, CC2.2",
                 ISO27001 = "A.6.3",
-                E8 = "E8 Regular Backups ML1-ML3",
-                FedRAMP = "CM-6, CM-7, AC-3",
+                FedRAMP = "AT-1, AT-2, AT-3",
             },
             ["CF04"] = new()
             {

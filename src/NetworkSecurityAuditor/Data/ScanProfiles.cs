@@ -83,7 +83,7 @@ public static class ScanProfiles
             {
                 "EP01", "EP04", "EP07", "EP09", "EP10",
                 "IA01", "IA02", "IA03", "IA06", "IA09", "IA10", "IA12",
-                "CF01", "CF03", "CF07",
+                "CF01", "CF07",
                 "BR01", "BR02", "BR03", "BR04", "BR05", "BR06", "BR07", "BR08",
                 "LM02", "LM03", "LM08",
                 "NP03", "NP10"

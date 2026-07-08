@@ -192,6 +192,26 @@ public class CheckCatalogTests
     }
 
     [Fact]
+    public void Cf03_Mapping_Matches_Security_Awareness_Training()
+    {
+        var catalog = CheckCatalog.All["CF03"];
+        var framework = FrameworkMappings.All["CF03"];
+        var e8Ids = ScanProfiles.Resolve(ScanProfileType.E8);
+
+        Assert.Equal("Security awareness training", catalog.Label);
+        Assert.Equal("NIST CSF PR.AT-1, PR.AT-2 | CIS Control 14.1, 14.2 | HIPAA 164.308(a)(5)(i), 164.308(a)(5)(ii)(A)", catalog.Compliance);
+        Assert.Equal("14.1, 14.2", framework.CIS);
+        Assert.Equal("164.308(a)(5)(i), 164.308(a)(5)(ii)(A)", framework.HIPAA);
+        Assert.Equal("AT-1, AT-2, AT-3", framework.FedRAMP);
+        Assert.Null(framework.E8);
+        Assert.DoesNotContain("11.4", framework.FormatAll());
+        Assert.DoesNotContain("11.5", framework.FormatAll());
+        Assert.DoesNotContain("164.308(a)(7", catalog.Compliance);
+        Assert.DoesNotContain("Regular Backups", framework.FormatAll());
+        Assert.DoesNotContain("CF03", e8Ids);
+    }
+
+    [Fact]
     public void Severity_Weights_Match_Enum_Values()
     {
         foreach (var meta in CheckCatalog.All.Values)
