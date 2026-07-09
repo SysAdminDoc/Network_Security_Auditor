@@ -2,6 +2,22 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.3.0 / v4.11.2] - 2026-07-09
+
+### UX
+- Changed: Re-imagined the C# GUI as a premium 1440x900 security posture workstation with a calmer command deck, stronger posture hierarchy, clearer control boundaries, and a resizable checks-and-inspector workbench.
+- Changed: The selected-check inspector now exposes assessment status and findings immediately, keeps the full evidence/remediation workflow accessible through one continuous scroll surface, and labels report export accurately.
+- Fixed: Unscanned ransomware and domain-maturity summaries now remain neutral instead of showing false `F 0/100` results, while degraded pre-flight readiness uses warning semantics instead of success green.
+- Changed: The activity console now follows new entries, scan selection no longer disrupts an analyst's current inspector work, and save/load actions use explicit state-oriented labels.
+
+### Accessibility
+- Added: Interactive controls now use a higher-contrast boundary token, buttons include pressed and intentional disabled states, and check rows expose a full keyboard-focus outline.
+- Fixed: The unavailable Cloud profile is no longer offered by the C# GUI, and scan controls stay disabled with explanatory help until environment detection and pre-flight checks complete.
+
+### Reliability
+- Fixed: Unexpected check-runner failures now leave the workspace in a recoverable error state, preserve completed evidence, write a crash log, and do not generate a misleading completion report.
+- Fixed: Automated GUI screenshots now wait for initialization readiness and warm the WPF render surface before capture, preventing partially painted acceptance images.
+
 ## [v5.2.9 / v4.11.2] - 2026-07-09
 
 ### Reliability

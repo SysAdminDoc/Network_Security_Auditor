@@ -9,15 +9,18 @@ namespace NetworkSecurityAuditor;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel = new();
+    private readonly bool _activityAutoFollowEnabled;
 
-    public MainWindow()
+    public MainWindow(bool enableActivityAutoFollow = true)
     {
         InitializeComponent();
+        _activityAutoFollowEnabled = enableActivityAutoFollow;
         Title = $"Network Security Auditor v{VersionInfo.Version}";
         DataContext = _viewModel;
         Loaded += OnLoaded;
         Closed += OnClosed;
-        _viewModel.ActivityLog.CollectionChanged += OnActivityLogChanged;
+        if (_activityAutoFollowEnabled)
+            _viewModel.ActivityLog.CollectionChanged += OnActivityLogChanged;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -36,7 +39,8 @@ public partial class MainWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
-        _viewModel.ActivityLog.CollectionChanged -= OnActivityLogChanged;
+        if (_activityAutoFollowEnabled)
+            _viewModel.ActivityLog.CollectionChanged -= OnActivityLogChanged;
         Closed -= OnClosed;
     }
 }

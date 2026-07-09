@@ -123,6 +123,9 @@ public partial class App : Application
         try
         {
             await window.Dispatcher.InvokeAsync(
+                static () => { },
+                DispatcherPriority.ApplicationIdle);
+            await window.Dispatcher.InvokeAsync(
                 () => SaveWindowScreenshot(window, path),
                 DispatcherPriority.Render);
         }
@@ -134,7 +137,7 @@ public partial class App : Application
 
     private static MainWindow CreateMainWindow(CliArgs args)
     {
-        var window = new MainWindow();
+        var window = new MainWindow(enableActivityAutoFollow: !args.UiaBackground);
         if (args.UiaBackground)
         {
             RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
@@ -158,16 +161,37 @@ public partial class App : Application
         window.UpdateLayout();
         var width = Math.Max(1, (int)Math.Ceiling(window.ActualWidth));
         var height = Math.Max(1, (int)Math.Ceiling(window.ActualHeight));
-        var warmupBitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        warmupBitmap.Render(window);
+        window.InvalidateVisual();
         window.UpdateLayout();
-        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(window);
+
+        _ = RenderWindowVisual(window, width, height);
+        var bitmap = RenderWindowVisual(window, width, height);
 
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(targetPath);
         encoder.Save(stream);
+    }
+
+    private static RenderTargetBitmap RenderWindowVisual(Window window, int width, int height)
+    {
+        var drawingVisual = new DrawingVisual();
+        using (var context = drawingVisual.RenderOpen())
+        {
+            var bounds = new Rect(0, 0, width, height);
+            context.DrawRectangle(new SolidColorBrush(Color.FromRgb(8, 17, 26)), null, bounds);
+            var brush = new VisualBrush(window)
+            {
+                AlignmentX = AlignmentX.Left,
+                AlignmentY = AlignmentY.Top,
+                Stretch = Stretch.None
+            };
+            context.DrawRectangle(brush, null, bounds);
+        }
+
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(drawingVisual);
+        return bitmap;
     }
 
     private void RegisterGlobalExceptionHandlers()

@@ -252,6 +252,7 @@ public class MainWindowXamlTests
         Assert.Contains("private async void OnLoaded", source);
         Assert.Contains("await Task.Run(EnvironmentDetector.Detect)", source);
         Assert.Contains("_viewModel.RunPreflight();", source);
+        Assert.Contains("enableActivityAutoFollow", source);
         Assert.DoesNotContain("_viewModel.Environment = EnvironmentDetector.Detect();", source);
     }
 
@@ -267,6 +268,7 @@ public class MainWindowXamlTests
         Assert.Contains("window.ShowActivated = false;", source);
         Assert.Contains("window.ShowInTaskbar = false;", source);
         Assert.Contains("window.UpdateLayout();", source);
+        Assert.Contains("enableActivityAutoFollow: !args.UiaBackground", source);
         Assert.Contains("RenderTargetBitmap", source);
     }
 

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "tool": "NetworkSecurityAuditor",
-  "tool_version": "5.2.9",
+  "tool_version": "5.3.0",
   "timestamp": "2026-07-08T00:00:00Z",
   "host": "HOST01",
   "os": "Windows 11 Enterprise",
