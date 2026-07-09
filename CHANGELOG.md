@@ -12,6 +12,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# CF01 SYSVOL GPP password scanning now honors cancellation, skips oversized preference XML files, and records traversal/read limits instead of reading every matched file unbounded.
 - Fixed: C# saved audit-state loading now restores the saved scan profile, parses remediation due dates with invariant `yyyy-MM-dd`, and clears invalid due dates instead of preserving stale UI values.
 - Fixed: C# firewall netsh fallback checks now use the shared timeout-aware command runner instead of raw process reads that could block before timeout handling.
+- Fixed: C# automated error, not-implemented, and timeout evidence timestamps now use invariant UTC formatting across host cultures.
 
 ### UX
 - Changed: C# GUI scan controls now expose disabled-state help text, lock profile changes during active scans, and show a visible `yyyy-MM-dd` due-date hint for remediation tracking.

@@ -94,7 +94,7 @@ public sealed class CheckRunner
             {
                 Status = CheckStatus.NA,
                 Findings = $"Check {check.Id} timed out after {options.CheckTimeoutSeconds}s.",
-                Evidence = $"Timeout @ {DateTime.Now:yyyy-MM-dd HH:mm}",
+                Evidence = $"Timeout @ {CheckResult.EvidenceTimestampUtc()}",
                 Duration = sw.Elapsed,
                 TimedOut = true
             };
@@ -116,7 +116,7 @@ public sealed class CheckRunner
     {
         Status = CheckStatus.NA,
         Findings = $"Check {checkId} timed out after {timeoutSeconds}s.",
-        Evidence = $"Timeout @ {DateTime.Now:yyyy-MM-dd HH:mm}",
+        Evidence = $"Timeout @ {CheckResult.EvidenceTimestampUtc()}",
         Duration = duration,
         TimedOut = true
     };

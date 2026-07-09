@@ -30,6 +30,7 @@ public class CheckRunnerTests
         Assert.True(results["EP01"].TimedOut);
         Assert.Equal(CheckStatus.NA, results["EP01"].Status);
         Assert.Contains("timed out", results["EP01"].Findings);
+        Assert.Matches(@"^Timeout @ \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$", results["EP01"].Evidence);
     }
 
     [Fact]

@@ -1,5 +1,7 @@
 namespace NetworkSecurityAuditor.Models;
 
+using System.Globalization;
+
 public sealed record CheckResult
 {
     public required CheckStatus Status { get; init; }
@@ -13,14 +15,17 @@ public sealed record CheckResult
     {
         Status = CheckStatus.NA,
         Findings = $"Check {checkId} is not yet implemented in this version.",
-        Evidence = $"Not implemented @ {DateTime.Now:yyyy-MM-dd HH:mm}"
+        Evidence = $"Not implemented @ {EvidenceTimestampUtc()}"
     };
 
     public static CheckResult FromError(string checkId, Exception ex) => new()
     {
         Status = CheckStatus.NA,
         Findings = $"Check {checkId} failed: {ex.Message}",
-        Evidence = $"Error @ {DateTime.Now:yyyy-MM-dd HH:mm}",
+        Evidence = $"Error @ {EvidenceTimestampUtc()}",
         Error = ex.Message
     };
+
+    internal static string EvidenceTimestampUtc() =>
+        DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 }
