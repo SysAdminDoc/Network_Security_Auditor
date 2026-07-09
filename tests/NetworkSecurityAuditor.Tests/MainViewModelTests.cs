@@ -334,6 +334,27 @@ public class MainViewModelTests
         Assert.Contains("Scan cancelled", vm.ScanStatus);
     }
 
+    [Fact]
+    public async Task StartScan_Stops_When_Profile_Has_No_Applicable_Checks()
+    {
+        var runnerCalled = false;
+        var vm = new MainViewModel((_, _, _, _, _) =>
+        {
+            runnerCalled = true;
+            return Task.FromResult(new Dictionary<string, CheckResult>());
+        });
+        vm.LoadCheckCatalog();
+        vm.Environment = new EnvironmentInfo { IsDomainJoined = false, ComputerName = "WORKGROUP-PC" };
+        vm.SelectedProfile = ScanProfileType.ADOnly;
+
+        await vm.StartScanCommand.ExecuteAsync(null);
+
+        Assert.False(runnerCalled);
+        Assert.False(vm.IsScanning);
+        Assert.Equal(0, vm.ScanProgressPercent);
+        Assert.Contains("No checks in the ADOnly profile apply", vm.ScanStatus);
+    }
+
     private static string RunningIds(MainViewModel vm)
     {
         return string.Join(",", vm.Checks.Where(c => c.IsRunning).Select(c => c.Id).OrderBy(id => id));

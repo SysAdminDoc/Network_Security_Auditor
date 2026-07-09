@@ -100,8 +100,10 @@ Run the C# silent mode:
 
 Use `Start-Process -Wait -PassThru` when automating C# headless runs from
 PowerShell so Windows reports the WPF executable's exit code. Missing dashboard
-input folders return 64; malformed or unknown headless arguments are written as
-warnings rather than consuming the next switch as a value.
+input folders return 64, and scans with no applicable/scorable checks return
+65 instead of a security-alert exit code. Malformed or unknown headless
+arguments are written as warnings rather than consuming the next switch as a
+value.
 
 Build the local C# installable artifact:
 

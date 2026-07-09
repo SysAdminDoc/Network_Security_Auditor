@@ -74,6 +74,40 @@ public class CheckRunnerTests
         Assert.Equal(ScanProfiles.Resolve(ScanProfileType.Quick).Length, completions.Count);
     }
 
+    [Fact]
+    public void ResolveApplicableCheckIds_Filters_Ad_Checks_When_Not_DomainJoined()
+    {
+        var applicable = CheckRunner.ResolveApplicableCheckIds(
+            new EnvironmentInfo { IsDomainJoined = false },
+            new AuditOptions { ScanProfile = ScanProfileType.ADOnly });
+
+        Assert.Empty(applicable);
+    }
+
+    [Fact]
+    public async Task RunAsync_Reports_Applicable_Total_After_Ad_Filtering()
+    {
+        var runner = new CheckRunner(new Dictionary<string, ISecurityCheck>
+        {
+            ["EP01"] = new PassingSecurityCheck()
+        });
+        var totals = new List<int>();
+        var options = new AuditOptions { ScanProfile = ScanProfileType.Quick };
+        var env = new EnvironmentInfo { IsDomainJoined = false };
+        var expectedTotal = CheckRunner.ResolveApplicableCheckIds(env, options).Length;
+
+        await runner.RunAsync(
+            env,
+            options,
+            progress: null,
+            ct: CancellationToken.None,
+            startedProgress: new RecordingProgress<(string checkId, int index, int total)>(update => totals.Add(update.total)));
+
+        Assert.NotEmpty(totals);
+        Assert.All(totals, total => Assert.Equal(expectedTotal, total));
+        Assert.True(expectedTotal < ScanProfiles.Resolve(ScanProfileType.Quick).Length);
+    }
+
     private sealed class BlockingSecurityCheck(ManualResetEventSlim releaseCheck) : ISecurityCheck
     {
         public string Id => "EP01";

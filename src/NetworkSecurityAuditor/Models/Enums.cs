@@ -74,5 +74,6 @@ public enum ExitCode
     ImmediateAlert = 1,
     ReviewNeeded = 2,
     ComplianceAlert = 3,
-    InputPathUnavailable = 64
+    InputPathUnavailable = 64,
+    NoScorableChecks = 65
 }

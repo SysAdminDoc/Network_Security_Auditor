@@ -25,8 +25,8 @@ public sealed class CheckRunner
         Action<(string checkId, CheckResult result)>? completedCallback = null)
     {
         var results = new Dictionary<string, CheckResult>();
-        var applicableIds = GetApplicableCheckIds(env, options);
-        var total = applicableIds.Count;
+        var applicableIds = ResolveApplicableCheckIds(env, options);
+        var total = applicableIds.Length;
         var index = 0;
 
         foreach (var checkId in applicableIds)
@@ -133,7 +133,7 @@ public sealed class CheckRunner
     /// <summary>
     /// Determines which check IDs apply for the current profile and environment.
     /// </summary>
-    private List<string> GetApplicableCheckIds(EnvironmentInfo env, AuditOptions options)
+    internal static string[] ResolveApplicableCheckIds(EnvironmentInfo env, AuditOptions options)
     {
         var profileCheckIds = ScanProfiles.Resolve(options.ScanProfile);
         var applicable = new List<string>(profileCheckIds.Length);
@@ -147,7 +147,7 @@ public sealed class CheckRunner
             applicable.Add(id);
         }
 
-        return applicable;
+        return [.. applicable];
     }
 
     private static bool IsAdCheck(string checkId)

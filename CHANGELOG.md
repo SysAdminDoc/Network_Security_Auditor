@@ -11,6 +11,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# headless argument parsing now warns on missing or unknown flags, keeps following switches from being consumed as values, supports `-NoElevate` and `-ExportDefectDojo`, preserves the elevated relaunch working directory, and returns exit code 64 for missing dashboard input folders.
 - Fixed: C# NA03 wireless checks now prefer invariant exported WLAN profile XML and exact normalized authentication classification, avoiding English `netsh` label dependence and substring false positives.
 - Fixed: C# IA05 password-policy conversion now handles Active Directory's `long.MinValue` interval sentinel without overflowing and reports it as a never-expiring password age policy.
+- Fixed: C# scan progress now uses AD-filtered applicable check counts, no-data scans report grade `N/A` with exit code 65 instead of a false critical alert, console attachment checks its return value, and version display derives from assembly informational metadata instead of a stale fallback literal.
 
 ### UX
 - Changed: C# GUI now uses a premium security-operations workstation shell with a persistent category progress rail, command/status bar, risk score band, dense virtualized check table, selected-check inspector, and integrated activity console.

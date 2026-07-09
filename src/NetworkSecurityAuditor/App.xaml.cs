@@ -63,13 +63,13 @@ public partial class App : Application
         }
         else if (ShouldWarnHeadlessWithoutElevation(args, isRunningAsAdmin))
         {
-            AttachConsole(-1);
+            AttachParentConsoleIfAvailable();
             Console.Error.WriteLine("WARNING: Headless mode is running without elevation; checks requiring administrator rights may return limited evidence.");
         }
 
         if (_headlessMode && args.ParseWarnings.Count > 0)
         {
-            AttachConsole(-1);
+            AttachParentConsoleIfAvailable();
             foreach (var warning in args.ParseWarnings)
                 Console.Error.WriteLine($"WARNING: {warning}");
         }
@@ -186,7 +186,7 @@ public partial class App : Application
 
         if (_headlessMode)
         {
-            AttachConsole(-1);
+            AttachParentConsoleIfAvailable();
             Console.Error.WriteLine($"ERROR: {source}: {exception.Message}");
             Console.Error.WriteLine($"Crash log: {logPath}");
             return;
@@ -200,9 +200,15 @@ public partial class App : Application
 
     private async Task RunHeadlessAndShutdownAsync(string modeName, Func<Task<int>> runModeAsync)
     {
-        AttachConsole(-1);
+        AttachParentConsoleIfAvailable();
         var exitCode = await RunHeadlessWithExitHandlingAsync(modeName, runModeAsync, Console.Error);
         Shutdown(exitCode);
+    }
+
+    private static void AttachParentConsoleIfAvailable()
+    {
+        if (!AttachConsole(-1))
+            Debug.WriteLine("Parent console attachment was unavailable or already attached.");
     }
 
     internal static async Task<int> RunHeadlessWithExitHandlingAsync(
@@ -293,12 +299,20 @@ public partial class App : Application
         var runner = new CheckRunner(allChecks);
         var completed = 0;
         var profileIds = ScanProfiles.Resolve(args.ScanProfile);
+        var applicableIds = CheckRunner.ResolveApplicableCheckIds(env, options);
 
         if (profileIds.Length == 0)
         {
             Console.WriteLine($"Profile {args.ScanProfile} is not available in this preview.");
             Console.WriteLine("No local or Active Directory checks were run. Use the production PowerShell artifact for the current cloud assessment path.");
             return (int)ExitCode.ReviewNeeded;
+        }
+
+        if (applicableIds.Length == 0)
+        {
+            Console.WriteLine($"No checks in the {args.ScanProfile} profile apply to this host/environment.");
+            Console.WriteLine("No local or Active Directory checks were run.");
+            return (int)ExitCode.NoScorableChecks;
         }
 
         void WriteProgress((string checkId, CheckResult result) update)
@@ -312,10 +326,10 @@ public partial class App : Application
                 CheckStatus.NA => "N/A ",
                 _ => "----"
             };
-            Console.WriteLine($"  [{completed}/{profileIds.Length}] [{symbol}] {update.checkId}");
+            Console.WriteLine($"  [{completed}/{applicableIds.Length}] [{symbol}] {update.checkId}");
         }
 
-        Console.WriteLine($"Running {profileIds.Length} checks...");
+        Console.WriteLine($"Running {applicableIds.Length} checks...");
         Console.WriteLine();
 
         var results = await runner.RunAsync(
@@ -380,6 +394,7 @@ public partial class App : Application
         var passCount = scoredCheckVms.Count(c => c.Status == CheckStatus.Pass);
         var failCount = scoredCheckVms.Count(c => c.Status == CheckStatus.Fail);
         var partialCount = scoredCheckVms.Count(c => c.Status == CheckStatus.Partial);
+        var hasScorableChecks = passCount + failCount + partialCount > 0;
 
         Console.WriteLine();
         Console.WriteLine($"  Score: {score}% (Grade: {grade})");
@@ -388,6 +403,8 @@ public partial class App : Application
         Console.WriteLine($"  Pass: {passCount} | Fail: {failCount} | Partial: {partialCount}");
         if (scoringWaivedCount > 0)
             Console.WriteLine($"  Waived findings excluded from scoring: {scoringWaivedCount}");
+        if (!hasScorableChecks)
+            Console.WriteLine("  No scorable checks produced Pass, Partial, or Fail evidence.");
 
         var redactor = PrivacyExportSanitizer.CreateRedactor(
             args.PrivacyMode,
@@ -528,7 +545,9 @@ public partial class App : Application
         Console.WriteLine();
 
         var exitCode = ExitCode.Green;
-        if (score < 60 || rwScore < 40)
+        if (!hasScorableChecks)
+            exitCode = ExitCode.NoScorableChecks;
+        else if (score < 60 || rwScore < 40)
             exitCode = ExitCode.ImmediateAlert;
         else if (HasFrameworkBelowThreshold(scoredCheckVms, 60))
             exitCode = ExitCode.ComplianceAlert;

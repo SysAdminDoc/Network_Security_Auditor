@@ -39,6 +39,27 @@ public class ReleaseToolingTests
         Assert.Contains(".NET 10 Desktop Runtime", readme);
     }
 
+    [Fact]
+    public void VersionInfo_Derives_From_InformationalVersion_Without_Stale_Literal()
+    {
+        var source = ReadSourceFile("src", "NetworkSecurityAuditor", "VersionInfo.cs");
+
+        Assert.Contains("AssemblyInformationalVersionAttribute", source);
+        Assert.DoesNotContain("?? \"5.", source);
+        Assert.Equal("5.2.6", VersionInfo.Version);
+    }
+
+    [Fact]
+    public void App_Checks_AttachConsole_Return_And_Documents_Waited_Exit_Codes()
+    {
+        var app = ReadSourceFile("src", "NetworkSecurityAuditor", "App.xaml.cs");
+        var readme = ReadSourceFile("README.md");
+
+        Assert.Contains("if (!AttachConsole(-1))", app);
+        Assert.DoesNotContain("AttachConsole(-1);", app);
+        Assert.Contains("Start-Process -Wait -PassThru", readme);
+    }
+
     private static string ReadSourceFile(params string[] segments)
     {
         var pathSegments = new string[segments.Length + 1];

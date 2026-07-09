@@ -503,6 +503,7 @@ public partial class MainViewModel : ViewModelBase
         var runningTotal = 0;
         var checkLookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
         var unsupportedProfile = false;
+        var noApplicableChecks = false;
 
         var startedProgress = new InlineProgress<(string checkId, int index, int total)>(update =>
         {
@@ -557,11 +558,21 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var profileIds = ScanProfiles.Resolve(options.ScanProfile);
-            runningTotal = profileIds.Length;
             if (profileIds.Length == 0)
             {
                 unsupportedProfile = true;
                 ScanStatus = $"{options.ScanProfile} profile is not available in this preview. No local or Active Directory checks were run.";
+                AppendActivity(ScanStatus);
+                ScanProgressPercent = 0;
+                return;
+            }
+
+            var applicableIds = CheckRunner.ResolveApplicableCheckIds(Environment, options);
+            runningTotal = applicableIds.Length;
+            if (applicableIds.Length == 0)
+            {
+                noApplicableChecks = true;
+                ScanStatus = $"No checks in the {options.ScanProfile} profile apply to this host/environment.";
                 AppendActivity(ScanStatus);
                 ScanProgressPercent = 0;
                 return;
@@ -579,7 +590,7 @@ public partial class MainViewModel : ViewModelBase
             ClearRunningChecks();
             IsScanning = false;
             var total = runningTotal;
-            if (!unsupportedProfile)
+            if (!unsupportedProfile && !noApplicableChecks)
             {
                 ScanStatus = _scanCts.Token.IsCancellationRequested
                     ? $"Scan cancelled ({completed}/{total} completed)"

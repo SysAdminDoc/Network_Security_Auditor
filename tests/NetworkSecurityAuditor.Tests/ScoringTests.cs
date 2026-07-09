@@ -156,5 +156,19 @@ public class ScoringTests
         var checks = new ObservableCollection<CheckItemViewModel>();
         var (score, grade) = RiskScoreEngine.Calculate(checks);
         Assert.Equal(0, score);
+        Assert.Equal("N/A", grade);
+    }
+
+    [Fact]
+    public void All_NA_Checks_Return_NoData_Grade()
+    {
+        var checks = CreateChecks(
+            ("EP01", CheckStatus.NA),
+            ("EP02", CheckStatus.NotAssessed));
+
+        var (score, grade) = RiskScoreEngine.Calculate(checks);
+
+        Assert.Equal(0, score);
+        Assert.Equal("N/A", grade);
     }
 }

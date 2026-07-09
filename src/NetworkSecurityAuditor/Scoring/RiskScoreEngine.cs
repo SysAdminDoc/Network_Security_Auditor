@@ -43,7 +43,10 @@ public static class RiskScoreEngine
             assessedWeight += category.Weight;
         }
 
-        int score = assessedWeight > 0 ? (int)Math.Round(weightedTotal / assessedWeight) : 0;
+        if (assessedWeight <= 0)
+            return (0, "N/A");
+
+        int score = (int)Math.Round(weightedTotal / assessedWeight);
         return (score, GradeFromScore(score));
     }
 
