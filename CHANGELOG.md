@@ -12,6 +12,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Changed: C# GUI now uses a premium security-operations workstation shell with a persistent category progress rail, command/status bar, risk score band, dense virtualized check table, selected-check inspector, and integrated activity console.
 - Fixed: C# GUI startup now loads the check catalog before slower environment detection completes, giving the first-run shell immediate structure and avoiding a blank workspace during preflight.
 - Changed: C# GUI now surfaces scan readiness, export availability, filter result counts, search placeholder text, no-results recovery, preflight detail in the console, stable focus states, and screen-reader live scan progress.
+- Added: C# GUI now has non-intrusive WPF UI Automation smoke coverage for the background launch mode, primary scan/export/filter controls, inspector fields, activity log, and accessibility landmarks.
 - Fixed: C# GUI selected-format exports now show a busy status, disable duplicate export actions while writing, and surface crash-log-backed failure recovery.
 - Fixed: C# GUI neutral status badges now use readable foreground contrast, and category health cards use explicit Pass/Partial/Fail labels instead of terse color-dependent abbreviations.
 

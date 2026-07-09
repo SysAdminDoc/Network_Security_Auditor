@@ -10,7 +10,9 @@
         Background="{StaticResource WindowBg}"
         FontFamily="Segoe UI Variable Text, Segoe UI"
         FontSize="13"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        AutomationProperties.AutomationId="NetworkSecurityAuditorMainWindow"
+        AutomationProperties.Name="Network Security Auditor">
 
     <Window.Resources>
         <ObjectDataProvider x:Key="CheckStatusValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
@@ -71,6 +73,7 @@
                             ToolTip="{Binding DataContext.ExportAvailabilityText, RelativeSource={RelativeSource AncestorType=Window}}"
                             ToolTipService.ShowOnDisabled="True"
                             AutomationProperties.HelpText="{Binding DataContext.ExportAvailabilityText, RelativeSource={RelativeSource AncestorType=Window}}"
+                            AutomationProperties.AutomationId="InspectorExportButton"
                             AutomationProperties.Name="Export selected audit format" />
                 </Grid>
 
@@ -132,6 +135,7 @@
                                   SelectedItem="{Binding Status}"
                                   Style="{StaticResource DarkComboBox}"
                                   Margin="0,0,0,12"
+                                  AutomationProperties.AutomationId="InspectorStatusSelector"
                                   AutomationProperties.Name="{Binding Id, StringFormat='Status for {0}'}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
@@ -149,6 +153,7 @@
                                  MaxHeight="150"
                                  VerticalScrollBarVisibility="Auto"
                                  Margin="0,0,0,12"
+                                 AutomationProperties.AutomationId="InspectorFindingsTextBox"
                                  AutomationProperties.Name="{Binding Id, StringFormat='Findings for {0}'}" />
 
                         <TextBlock Text="EVIDENCE" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
@@ -161,6 +166,7 @@
                                  MaxHeight="190"
                                  VerticalScrollBarVisibility="Auto"
                                  Margin="0,0,0,12"
+                                 AutomationProperties.AutomationId="InspectorEvidenceTextBox"
                                  AutomationProperties.Name="{Binding Id, StringFormat='Evidence for {0}'}" />
 
                         <TextBlock Text="REMEDIATION NOTES" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
@@ -172,6 +178,7 @@
                                  MaxHeight="120"
                                  VerticalScrollBarVisibility="Auto"
                                  Margin="0,0,0,12"
+                                 AutomationProperties.AutomationId="InspectorNotesTextBox"
                                  AutomationProperties.Name="{Binding Id, StringFormat='Remediation notes for {0}'}" />
 
                         <Grid>
@@ -184,12 +191,14 @@
                                 <TextBlock Text="ASSIGNEE" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
                                 <TextBox Text="{Binding RemediationAssignee, UpdateSourceTrigger=PropertyChanged}"
                                          Style="{StaticResource DarkTextBox}"
+                                         AutomationProperties.AutomationId="InspectorAssigneeTextBox"
                                          AutomationProperties.Name="{Binding Id, StringFormat='Remediation assignee for {0}'}" />
                             </StackPanel>
                             <StackPanel Grid.Column="2">
                                 <TextBlock Text="DUE" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
                                 <TextBox Text="{Binding RemediationDueDate, StringFormat={}{0:yyyy-MM-dd}, TargetNullValue='', UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
                                          Style="{StaticResource DarkTextBox}"
+                                         AutomationProperties.AutomationId="InspectorDueDateTextBox"
                                          AutomationProperties.Name="{Binding Id, StringFormat='Remediation due date for {0}'}" />
                             </StackPanel>
                         </Grid>
@@ -300,6 +309,7 @@
                          SelectedValuePath="Name"
                          Style="{StaticResource DarkListBox}"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         AutomationProperties.AutomationId="CategoryRail"
                          AutomationProperties.Name="Category progress navigation">
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
@@ -396,6 +406,7 @@
                             <TextBlock Text="{Binding VisibleChecksDisplay}"
                                        Foreground="{StaticResource TextPrimary}"
                                        FontWeight="SemiBold"
+                                       AutomationProperties.AutomationId="FilteredCheckCount"
                                        AutomationProperties.Name="Filtered check count" />
                             <TextBlock Text="{Binding OutcomeSummaryDisplay}"
                                        Foreground="{StaticResource TextMuted}"
@@ -404,6 +415,7 @@
                             <CheckBox Content="Privacy mode"
                                       IsChecked="{Binding PrivacyMode}"
                                       Style="{StaticResource DarkCheckBox}"
+                                      AutomationProperties.AutomationId="PrivacyModeToggle"
                                       AutomationProperties.Name="Privacy mode" />
                         </StackPanel>
                     </Border>
@@ -467,6 +479,7 @@
                                           SelectedItem="{Binding SelectedProfile}"
                                           Style="{StaticResource DarkComboBox}"
                                           Margin="0,6,0,0"
+                                          AutomationProperties.AutomationId="ScanProfileSelector"
                                           AutomationProperties.Name="Scan profile selector" />
                             </Grid>
                         </Border>
@@ -486,6 +499,7 @@
                                            TextTrimming="CharacterEllipsis"
                                            ToolTip="{Binding PreflightSummary}"
                                            AutomationProperties.LiveSetting="Polite"
+                                           AutomationProperties.AutomationId="ScanReadinessStatus"
                                            AutomationProperties.Name="Scan readiness" />
                             </StackPanel>
                         </Border>
@@ -508,7 +522,9 @@
                                     <TextBlock Text="{Binding ScanProgressDisplay}"
                                                Foreground="{StaticResource TextMuted}"
                                                FontSize="11"
-                                               AutomationProperties.LiveSetting="Polite" />
+                                               AutomationProperties.LiveSetting="Polite"
+                                               AutomationProperties.AutomationId="ScanProgressText"
+                                               AutomationProperties.Name="Scan progress" />
                                 </StackPanel>
                                 <Grid Grid.Column="1" Width="52" Height="52" Margin="14,0,0,0">
                                     <Ellipse Stroke="{StaticResource TrackBg}" StrokeThickness="7" />
@@ -536,11 +552,13 @@
                                     Style="{StaticResource AccentButton}"
                                     Padding="18,10"
                                     Margin="0,0,8,0"
+                                    AutomationProperties.AutomationId="StartScanButton"
                                     AutomationProperties.Name="Start security scan" />
                             <Button Content="Stop"
                                     Command="{Binding StopScanCommand}"
                                     Style="{StaticResource SecondaryButton}"
                                     Padding="14,10"
+                                    AutomationProperties.AutomationId="StopScanButton"
                                     AutomationProperties.Name="Stop running scan" />
                         </StackPanel>
                     </Grid>
@@ -563,18 +581,21 @@
                                   SelectedItem="{Binding SelectedExportFormat}"
                                   DisplayMemberPath="DisplayName"
                                   Style="{StaticResource DarkComboBox}"
+                                  AutomationProperties.AutomationId="ExportFormatSelector"
                                   AutomationProperties.Name="Export format selector" />
                         <TextBox Grid.Column="2"
                                  Text="{Binding ExportOutputFolder, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource DarkTextBox}"
                                  VerticalContentAlignment="Center"
                                  Margin="10,0,8,0"
+                                 AutomationProperties.AutomationId="ExportOutputFolder"
                                  AutomationProperties.Name="Export output folder" />
                         <Button Grid.Column="3"
                                 Content="Browse"
                                 Command="{Binding BrowseExportFolderCommand}"
                                 Style="{StaticResource SecondaryButton}"
                                 Padding="10,7"
+                                AutomationProperties.AutomationId="BrowseExportFolderButton"
                                 AutomationProperties.Name="Browse export folder" />
                         <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="10,0,0,0">
                             <Button Content="Save"
@@ -582,12 +603,14 @@
                                     Style="{StaticResource SecondaryButton}"
                                     Padding="12,7"
                                     Margin="0,0,8,0"
+                                    AutomationProperties.AutomationId="SaveAuditStateButton"
                                     AutomationProperties.Name="Save audit state" />
                             <Button Content="Load"
                                     Command="{Binding LoadStateCommand}"
                                     Style="{StaticResource SecondaryButton}"
                                     Padding="12,7"
                                     Margin="0,0,8,0"
+                                    AutomationProperties.AutomationId="LoadAuditStateButton"
                                     AutomationProperties.Name="Load audit state" />
                             <Button Content="Export"
                                     Command="{Binding ExportSelectedCommand}"
@@ -596,6 +619,7 @@
                                     ToolTip="{Binding ExportAvailabilityText}"
                                     ToolTipService.ShowOnDisabled="True"
                                     AutomationProperties.HelpText="{Binding ExportAvailabilityText}"
+                                    AutomationProperties.AutomationId="ExportSelectedFormatButton"
                                     AutomationProperties.Name="Export selected format" />
                         </StackPanel>
                     </Grid>
@@ -767,10 +791,12 @@
                                       SelectedItem="{Binding StatusFilter}"
                                       Style="{StaticResource DarkComboBox}"
                                       Margin="0,9,0,9"
+                                      AutomationProperties.AutomationId="StatusFilter"
                                       AutomationProperties.Name="Status filter" />
                             <Grid Grid.Column="3" Margin="0,9,14,9">
                                 <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                                          Style="{StaticResource DarkTextBox}"
+                                         AutomationProperties.AutomationId="CheckSearchBox"
                                          AutomationProperties.Name="Search checks" />
                                 <TextBlock Text="Search ID, check, or category"
                                            Foreground="{StaticResource TextMuted}"
@@ -806,6 +832,7 @@
                                  ScrollViewer.CanContentScroll="True"
                                  VirtualizingPanel.IsVirtualizing="True"
                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                 AutomationProperties.AutomationId="FilteredChecksList"
                                  AutomationProperties.Name="Filtered security checks">
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -945,6 +972,7 @@
                                         Padding="16,8"
                                         HorizontalAlignment="Center"
                                         Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVis}}"
+                                        AutomationProperties.AutomationId="ClearFiltersButton"
                                         AutomationProperties.Name="Clear active filters" />
                             </StackPanel>
                         </Border>
@@ -955,6 +983,7 @@
                     <Grid>
                         <ContentControl Content="{Binding SelectedCheck}"
                                         ContentTemplate="{StaticResource InspectorTemplate}"
+                                        AutomationProperties.AutomationId="SelectedCheckInspector"
                                         AutomationProperties.Name="Selected check evidence and remediation inspector" />
                         <Border Background="{StaticResource PanelBg}"
                                 Visibility="{Binding HasNoVisibleChecks, Converter={StaticResource BoolToVis}}">
@@ -1006,6 +1035,7 @@
                                      BorderThickness="0"
                                      VerticalAlignment="Center"
                                      Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"
+                                     AutomationProperties.AutomationId="ScanProgressBar"
                                      AutomationProperties.Name="Scan progress"
                                      AutomationProperties.HelpText="{Binding ScanStatus}"
                                      AutomationProperties.LiveSetting="Polite" />
@@ -1022,6 +1052,7 @@
                                       HorizontalScrollBarVisibility="Disabled">
                             <ItemsControl ItemsSource="{Binding ActivityLog}"
                                           Margin="14,8"
+                                          AutomationProperties.AutomationId="ActivityLogList"
                                           AutomationProperties.Name="Scan activity log">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -1048,6 +1079,7 @@
                            Foreground="{StaticResource TextMuted}"
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="ExportAvailabilityText"
                            AutomationProperties.Name="Export availability" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <TextBlock Foreground="{StaticResource ProgressGood}" FontSize="12" Margin="0,0,12,0"
