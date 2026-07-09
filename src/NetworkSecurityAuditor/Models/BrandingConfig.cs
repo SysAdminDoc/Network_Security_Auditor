@@ -2,11 +2,14 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using NetworkSecurityAuditor.Services;
 
 namespace NetworkSecurityAuditor.Models;
 
 public sealed partial class BrandingConfig
 {
+    internal const long MaxConfigBytes = 1_048_576;
+
     public string CompanyName { get; set; } = "";
     public string LogoBase64 { get; set; } = "";
     public string PrimaryColor { get; set; } = "";
@@ -28,6 +31,7 @@ public sealed partial class BrandingConfig
     public static async Task<BrandingConfig?> LoadAsync(string path)
     {
         if (!File.Exists(path)) return null;
+        ImportFileGuard.EnsureWithinSizeLimit(path, MaxConfigBytes, "Branding config");
         var json = await File.ReadAllTextAsync(path);
         return JsonSerializer.Deserialize<BrandingConfig>(json, Options);
     }

@@ -104,4 +104,26 @@ public class BrandingConfigTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public async Task LoadAsync_Rejects_Oversized_Config()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            using (var stream = File.OpenWrite(path))
+            {
+                stream.SetLength(BrandingConfig.MaxConfigBytes + 1);
+            }
+
+            var ex = await Assert.ThrowsAsync<InvalidDataException>(() => BrandingConfig.LoadAsync(path));
+
+            Assert.Contains("Branding config file", ex.Message);
+            Assert.Contains("maximum supported size", ex.Message);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

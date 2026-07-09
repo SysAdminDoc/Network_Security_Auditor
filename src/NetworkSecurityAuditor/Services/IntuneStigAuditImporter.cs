@@ -8,6 +8,8 @@ namespace NetworkSecurityAuditor.Services;
 
 public static class IntuneStigAuditImporter
 {
+    internal const long MaxImportBytes = 50 * 1_024 * 1_024;
+
     public static async Task<IntuneStigAuditImport> LoadAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -16,6 +18,7 @@ public static class IntuneStigAuditImporter
         if (!File.Exists(path))
             throw new FileNotFoundException("Intune STIG audit import file was not found.", path);
 
+        ImportFileGuard.EnsureWithinSizeLimit(path, MaxImportBytes, "Intune STIG audit import");
         var extension = Path.GetExtension(path);
         return extension.Equals(".csv", StringComparison.OrdinalIgnoreCase)
             ? LoadCsv(path)
