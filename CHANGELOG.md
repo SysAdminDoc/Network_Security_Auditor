@@ -6,6 +6,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ### Platform
 - Changed: C# rewrite now targets .NET 10 (`net10.0-windows`), refreshes compatible package pins, and emits `windows-net10` release artifacts with `.NET 10 Desktop Runtime` install metadata.
+- Added: C# release tool now emits a CycloneDX SBOM, includes package/license inventory and .NET runtime support metadata in the release manifest, and covers the SBOM in `SHA256SUMS.txt`.
 
 ### UX
 - Changed: C# GUI now uses a premium security-operations workstation shell with a persistent category progress rail, command/status bar, risk score band, dense virtualized check table, selected-check inspector, and integrated activity console.

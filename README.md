@@ -105,9 +105,9 @@ The release tool cleans `artifacts/csharp-release`, runs the xUnit suite,
 publishes the C# rewrite, signs `.exe`/`.dll` files when a local code-signing
 certificate is available, then writes
 `artifacts/csharp-release/release/NetworkSecurityAuditor-csharp-v<version>-windows-net10.zip`,
-`SHA256SUMS.txt`, and `release-manifest.json`. Users install the C# preview by
-unzipping that package on Windows with the .NET 10 Desktop Runtime installed and
-running `NetworkSecurityAuditor.exe`.
+a CycloneDX SBOM (`*.cdx.json`), `SHA256SUMS.txt`, and
+`release-manifest.json` with package inventory and runtime support metadata.
+Users install the C# preview by unzipping that package on Windows with the .NET 10 Desktop Runtime installed and running `NetworkSecurityAuditor.exe`.
 
 ### Multi-Client Dashboard
 

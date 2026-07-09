@@ -64,6 +64,16 @@ function Get-ProjectVersion {
     return [string]$versionNode
 }
 
+function Get-ProjectTargetFramework {
+    [xml]$project = Get-Content -LiteralPath $projectPath -Raw
+    $targetFrameworkNode = $project.Project.PropertyGroup.TargetFramework | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($targetFrameworkNode)) {
+        throw "Project target framework not found in $projectPath"
+    }
+
+    return [string]$targetFrameworkNode
+}
+
 function Get-CodeSigningCertificate {
     $stores = @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\My')
     foreach ($store in $stores) {
@@ -134,6 +144,215 @@ function Get-Sha256Hex {
     }
 }
 
+function Resolve-NuGetPackageRoot {
+    if (-not [string]::IsNullOrWhiteSpace($env:NUGET_PACKAGES)) {
+        return [System.IO.Path]::GetFullPath($env:NUGET_PACKAGES)
+    }
+
+    return [System.IO.Path]::Combine(
+        [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile),
+        '.nuget',
+        'packages')
+}
+
+function Get-NuGetPackageMetadata {
+    param(
+        [string]$PackageId,
+        [string]$Version
+    )
+
+    $packageRoot = Resolve-NuGetPackageRoot
+    $packageDir = Join-Path (Join-Path $packageRoot $PackageId.ToLowerInvariant()) $Version
+    $metadata = [ordered]@{
+        license_expression = ''
+        license_url = ''
+        authors = ''
+        project_url = ''
+    }
+
+    if (-not (Test-Path -LiteralPath $packageDir)) {
+        return $metadata
+    }
+
+    $nuspec = Get-ChildItem -LiteralPath $packageDir -Filter '*.nuspec' -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $nuspec) {
+        return $metadata
+    }
+
+    try {
+        [xml]$nuspecXml = Get-Content -LiteralPath $nuspec.FullName -Raw
+        $metadataNode = $nuspecXml.package.metadata
+        if ($metadataNode.license) {
+            $metadata.license_expression = [string]$metadataNode.license.InnerText
+        }
+
+        if ($metadataNode.licenseUrl) {
+            $metadata.license_url = [string]$metadataNode.licenseUrl
+        }
+
+        if ($metadataNode.authors) {
+            $metadata.authors = [string]$metadataNode.authors
+        }
+
+        if ($metadataNode.projectUrl) {
+            $metadata.project_url = [string]$metadataNode.projectUrl
+        }
+    }
+    catch {
+        Write-Warning "Could not parse package metadata for $PackageId $Version`: $($_.Exception.Message)"
+    }
+
+    return $metadata
+}
+
+function Get-PackageInventory {
+    $jsonText = (& dotnet list $projectPath package --include-transitive --format json) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet list package failed with exit code $LASTEXITCODE"
+    }
+
+    $packageGraph = $jsonText | ConvertFrom-Json
+    $packages = [ordered]@{}
+    foreach ($project in $packageGraph.projects) {
+        foreach ($framework in $project.frameworks) {
+            foreach ($package in @($framework.topLevelPackages)) {
+                $key = "$($package.id)|$($package.resolvedVersion)"
+                if (-not $packages.Contains($key)) {
+                    $metadata = Get-NuGetPackageMetadata -PackageId $package.id -Version $package.resolvedVersion
+                    $packages[$key] = [ordered]@{
+                        name = [string]$package.id
+                        version = [string]$package.resolvedVersion
+                        requested_version = [string]$package.requestedVersion
+                        dependency_type = 'TopLevel'
+                        license_expression = [string]$metadata.license_expression
+                        license_url = [string]$metadata.license_url
+                        authors = [string]$metadata.authors
+                        project_url = [string]$metadata.project_url
+                        purl = "pkg:nuget/$($package.id)@$($package.resolvedVersion)"
+                    }
+                }
+            }
+
+            foreach ($package in @($framework.transitivePackages)) {
+                $key = "$($package.id)|$($package.resolvedVersion)"
+                if (-not $packages.Contains($key)) {
+                    $metadata = Get-NuGetPackageMetadata -PackageId $package.id -Version $package.resolvedVersion
+                    $packages[$key] = [ordered]@{
+                        name = [string]$package.id
+                        version = [string]$package.resolvedVersion
+                        requested_version = ''
+                        dependency_type = 'Transitive'
+                        license_expression = [string]$metadata.license_expression
+                        license_url = [string]$metadata.license_url
+                        authors = [string]$metadata.authors
+                        project_url = [string]$metadata.project_url
+                        purl = "pkg:nuget/$($package.id)@$($package.resolvedVersion)"
+                    }
+                }
+            }
+        }
+    }
+
+    return @($packages.Values | Sort-Object name, version)
+}
+
+function New-CycloneDxLicense {
+    param([object]$Package)
+
+    if (-not [string]::IsNullOrWhiteSpace($Package.license_expression)) {
+        return @([ordered]@{ expression = $Package.license_expression })
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Package.license_url)) {
+        return @([ordered]@{
+            license = [ordered]@{
+                name = $Package.license_url
+                url = $Package.license_url
+            }
+        })
+    }
+
+    return @([ordered]@{ license = [ordered]@{ name = 'Unknown' } })
+}
+
+function Write-CycloneDxSbom {
+    param(
+        [string]$Path,
+        [string]$Version,
+        [string]$TargetFramework,
+        [object[]]$Packages
+    )
+
+    $components = @()
+    foreach ($package in $Packages) {
+        $component = [ordered]@{
+            type = 'library'
+            'bom-ref' = $package.purl
+            name = $package.name
+            version = $package.version
+            scope = 'required'
+            purl = $package.purl
+            licenses = New-CycloneDxLicense -Package $package
+            properties = @(
+                [ordered]@{ name = 'nuget:dependency_type'; value = $package.dependency_type }
+            )
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($package.authors)) {
+            $component.author = $package.authors
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($package.project_url)) {
+            $component.externalReferences = @(
+                [ordered]@{
+                    type = 'website'
+                    url = $package.project_url
+                }
+            )
+        }
+
+        $components += $component
+    }
+
+    $rootComponentRef = "pkg:generic/NetworkSecurityAuditor@$Version"
+    $bom = [ordered]@{
+        bomFormat = 'CycloneDX'
+        specVersion = '1.5'
+        serialNumber = "urn:uuid:$([guid]::NewGuid())"
+        version = 1
+        metadata = [ordered]@{
+            timestamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            tools = @(
+                [ordered]@{
+                    vendor = 'NetworkSecurityAuditor'
+                    name = 'Publish-CSharpRelease.ps1'
+                    version = $Version
+                }
+            )
+            component = [ordered]@{
+                type = 'application'
+                'bom-ref' = $rootComponentRef
+                name = 'NetworkSecurityAuditor'
+                version = $Version
+                properties = @(
+                    [ordered]@{ name = 'dotnet:target_framework'; value = $TargetFramework },
+                    [ordered]@{ name = 'dotnet:runtime'; value = '.NET 10 Desktop Runtime' }
+                )
+            }
+        }
+        components = $components
+        dependencies = @(
+            [ordered]@{
+                ref = $rootComponentRef
+                dependsOn = @($Packages | ForEach-Object { $_.purl })
+            }
+        )
+    }
+
+    $bom | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
 Assert-UnderRepo $resolvedArtifactsDir
 
 if (Test-Path -LiteralPath $resolvedArtifactsDir) {
@@ -160,8 +379,10 @@ Invoke-Checked dotnet @(
 )
 
 $version = Get-ProjectVersion
+$targetFramework = Get-ProjectTargetFramework
 $packageName = "NetworkSecurityAuditor-csharp-v$version-windows-net10"
 $zipPath = Join-Path $releaseDir "$packageName.zip"
+$sbomPath = Join-Path $releaseDir "$packageName.cdx.json"
 $checksumPath = Join-Path $releaseDir 'SHA256SUMS.txt'
 $manifestPath = Join-Path $releaseDir 'release-manifest.json'
 $commit = (git -C $repoRoot rev-parse HEAD 2>$null)
@@ -199,12 +420,17 @@ else {
 
 Compress-Archive -Path (Join-Path $publishDir '*') -DestinationPath $zipPath -Force
 
+$packageInventory = Get-PackageInventory
+Write-CycloneDxSbom -Path $sbomPath -Version $version -TargetFramework $targetFramework -Packages $packageInventory
+
 $zipHash = Get-Sha256Hex -Path $zipPath
+$sbomHash = Get-Sha256Hex -Path $sbomPath
 $manifest = [ordered]@{
     project = 'NetworkSecurityAuditor'
     artifact = 'CSharpRewrite'
     version = $version
     configuration = $Configuration
+    target_framework = $targetFramework
     generated_at_utc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     git_commit = [string]$commit
     install = [ordered]@{
@@ -213,18 +439,38 @@ $manifest = [ordered]@{
         entrypoint = 'NetworkSecurityAuditor.exe'
         framework = '.NET 10 Desktop Runtime'
     }
+    runtime_support = [ordered]@{
+        framework = '.NET 10 Desktop Runtime'
+        target_framework = $targetFramework
+        support_policy = 'LTS'
+        support_status = 'Supported'
+        support_end_date = '2028-11-14'
+        source = 'https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core'
+    }
     signing = $signing
+    sbom = [ordered]@{
+        format = 'CycloneDX'
+        spec_version = '1.5'
+        file = [System.IO.Path]::GetFileName($sbomPath)
+        sha256 = $sbomHash
+        component_count = $packageInventory.Count
+    }
+    package_inventory = $packageInventory
     artifacts = @(
         [ordered]@{
             file = [System.IO.Path]::GetFileName($zipPath)
             sha256 = $zipHash
+        },
+        [ordered]@{
+            file = [System.IO.Path]::GetFileName($sbomPath)
+            sha256 = $sbomHash
         }
     )
 }
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 
 $hashes = @()
-foreach ($file in @($zipPath, $manifestPath)) {
+foreach ($file in @($zipPath, $sbomPath, $manifestPath)) {
     $hash = Get-Sha256Hex -Path $file
     $hashes += "$hash  $([System.IO.Path]::GetFileName($file))"
 }

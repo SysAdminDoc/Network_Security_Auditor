@@ -14,6 +14,11 @@ public class ReleaseToolingTests
         Assert.Contains("Get-CodeSigningCertificate", script);
         Assert.Contains("Compress-Archive", script);
         Assert.Contains("Get-Sha256Hex -Path $zipPath", script);
+        Assert.Contains("Write-CycloneDxSbom", script);
+        Assert.Contains("dotnet list $projectPath package --include-transitive --format json", script);
+        Assert.Contains("runtime_support", script);
+        Assert.Contains("package_inventory", script);
+        Assert.Contains(".cdx.json", script);
         Assert.Contains("SHA256SUMS.txt", script);
         Assert.Contains("release-manifest.json", script);
         Assert.Contains("windows-net10", script);
@@ -29,6 +34,7 @@ public class ReleaseToolingTests
         Assert.Contains(".\\tools\\Publish-CSharpRelease.ps1", readme);
         Assert.Contains("NetworkSecurityAuditor-csharp-v", readme);
         Assert.Contains("windows-net10", readme);
+        Assert.Contains("CycloneDX SBOM", readme);
         Assert.Contains("SHA256SUMS.txt", readme);
         Assert.Contains(".NET 10 Desktop Runtime", readme);
     }
