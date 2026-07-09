@@ -2,6 +2,15 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.3.1 / v4.11.2] - 2026-07-09
+
+### UX
+- Added: The C# workstation now exposes live assessment persistence status, distinguishing unsaved edits, active scans, report exports, and a clean in-memory state in the footer.
+- Changed: Save state and Load state now provide actionable disabled help and pause while scans or report exports are mutating assessment data.
+
+### Reliability
+- Fixed: Check-result, evidence, findings, remediation, profile, and theme changes now mark assessment state as unsaved; successful saves and state loads clear the indicator deterministically.
+
 ## [v5.3.0 / v4.11.2] - 2026-07-09
 
 ### UX
