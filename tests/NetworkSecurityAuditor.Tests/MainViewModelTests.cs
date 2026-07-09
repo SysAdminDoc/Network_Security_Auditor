@@ -18,6 +18,8 @@ public class MainViewModelTests
 
         Assert.False(vm.StartScanCommand.CanExecute(null));
         Assert.False(vm.StopScanCommand.CanExecute(null));
+        Assert.True(vm.SaveStateCommand.CanExecute(null));
+        Assert.True(vm.LoadStateCommand.CanExecute(null));
         Assert.True(vm.CanEditScanOptions);
         Assert.Contains("still running", vm.StartScanHelpText);
         Assert.Equal("No scan is currently running.", vm.StopScanHelpText);
@@ -34,6 +36,8 @@ public class MainViewModelTests
 
         Assert.False(vm.StartScanCommand.CanExecute(null));
         Assert.True(vm.StopScanCommand.CanExecute(null));
+        Assert.False(vm.SaveStateCommand.CanExecute(null));
+        Assert.False(vm.LoadStateCommand.CanExecute(null));
         Assert.False(vm.CanEditScanOptions);
         Assert.Equal("A scan is already running.", vm.StartScanHelpText);
         Assert.Contains("Cancel the running scan", vm.StopScanHelpText);
@@ -41,6 +45,40 @@ public class MainViewModelTests
         Assert.Equal("Accent", vm.ScanProgressBrushKey);
         Assert.True(startChanges > 0);
         Assert.True(stopChanges > 0);
+    }
+
+    [Fact]
+    public void Assessment_Edits_Expose_Unsaved_State_And_State_Action_Gates()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+        var check = vm.Checks[0];
+
+        Assert.False(vm.HasUnsavedChanges);
+        Assert.Equal("No unsaved assessment changes", vm.StatePersistenceText);
+        Assert.Equal("StatusNeutral", vm.StatePersistenceBrushKey);
+        Assert.Contains("Save statuses", vm.SaveStateHelpText);
+        Assert.Contains("Restore statuses", vm.LoadStateHelpText);
+
+        check.Notes = "Validate compensating control with the owner.";
+
+        Assert.True(vm.HasUnsavedChanges);
+        Assert.Equal("Unsaved assessment changes", vm.StatePersistenceText);
+        Assert.Equal("ProgressMid", vm.StatePersistenceBrushKey);
+
+        vm.IsExporting = true;
+
+        Assert.False(vm.SaveStateCommand.CanExecute(null));
+        Assert.False(vm.LoadStateCommand.CanExecute(null));
+        Assert.Equal("Report export in progress", vm.StatePersistenceText);
+        Assert.Contains("unavailable", vm.SaveStateHelpText);
+        Assert.Contains("unavailable", vm.LoadStateHelpText);
+
+        vm.IsExporting = false;
+        vm.ApplyAuditState(new AuditState());
+
+        Assert.False(vm.HasUnsavedChanges);
+        Assert.Equal("No unsaved assessment changes", vm.StatePersistenceText);
     }
 
     [Fact]
@@ -480,6 +518,7 @@ public class MainViewModelTests
         Assert.Equal(CheckStatus.Fail, check.Status);
         Assert.Equal("Loaded finding", check.Findings);
         Assert.Null(check.RemediationDueDate);
+        Assert.False(vm.HasUnsavedChanges);
     }
 
     [Fact]

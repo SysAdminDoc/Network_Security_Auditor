@@ -81,12 +81,17 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveStateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadStateCommand))]
     [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ExportAvailabilityText), nameof(ScanProgressDisplay), nameof(ScanStatusHeadline), nameof(ScanProgressBrushKey))]
-    [NotifyPropertyChangedFor(nameof(CanEditScanOptions), nameof(StartScanHelpText), nameof(StopScanHelpText), nameof(ScanProfileHelpText))]
+    [NotifyPropertyChangedFor(nameof(CanEditScanOptions), nameof(StartScanHelpText), nameof(StopScanHelpText), nameof(ScanProfileHelpText), nameof(SaveStateHelpText), nameof(LoadStateHelpText), nameof(StatePersistenceText), nameof(StatePersistenceBrushKey))]
     private bool _isScanning;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveStateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadStateCommand))]
     [NotifyPropertyChangedFor(nameof(ScanReadinessText), nameof(ExportAvailabilityText), nameof(ScanStatusHeadline))]
+    [NotifyPropertyChangedFor(nameof(SaveStateHelpText), nameof(LoadStateHelpText), nameof(StatePersistenceText), nameof(StatePersistenceBrushKey))]
     private bool _isExporting;
 
     [ObservableProperty]
@@ -105,6 +110,10 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ProfileSummary), nameof(StartScanHelpText), nameof(ScanProfileHelpText))]
     private ScanProfileType _selectedProfile = ScanProfileType.Full;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatePersistenceText), nameof(StatePersistenceBrushKey))]
+    private bool _hasUnsavedChanges;
 
     [ObservableProperty]
     private bool _privacyMode;
@@ -254,6 +263,16 @@ public partial class MainViewModel : ViewModelBase
         RefreshFilteredChecks();
     }
 
+    partial void OnSelectedProfileChanged(ScanProfileType value)
+    {
+        HasUnsavedChanges = true;
+    }
+
+    partial void OnSelectedThemeChanged(string value)
+    {
+        HasUnsavedChanges = true;
+    }
+
     public bool HasAssessedChecks => Checks.Any(c => c.Status is CheckStatus.Pass or CheckStatus.Partial or CheckStatus.Fail);
 
     public bool HasVisibleChecks => VisibleCheckCount > 0;
@@ -327,6 +346,32 @@ public partial class MainViewModel : ViewModelBase
 
     public string PrivacyModeHelpText =>
         "Redacts host, domain, tenant, client, and user identifiers from exported reports.";
+
+    public string SaveStateHelpText => IsScanning
+        ? "Saving audit state is unavailable while a scan is updating results."
+        : IsExporting
+            ? "Saving audit state is unavailable while a report is exporting."
+            : "Save statuses, evidence, and remediation tracking to an audit state file.";
+
+    public string LoadStateHelpText => IsScanning
+        ? "Loading audit state is unavailable while a scan is updating results."
+        : IsExporting
+            ? "Loading audit state is unavailable while a report is exporting."
+            : "Restore statuses, evidence, and remediation tracking from an audit state file.";
+
+    public string StatePersistenceText => IsScanning
+        ? "Assessment changing during scan"
+        : IsExporting
+            ? "Report export in progress"
+            : HasUnsavedChanges
+                ? "Unsaved assessment changes"
+                : "No unsaved assessment changes";
+
+    public string StatePersistenceBrushKey => IsScanning || IsExporting
+        ? "InfoAccent"
+        : HasUnsavedChanges
+            ? "ProgressMid"
+            : "StatusNeutral";
 
     public string ReadinessDisplay => !IsEnvironmentReady
         ? "Detecting environment"
@@ -555,6 +600,7 @@ public partial class MainViewModel : ViewModelBase
         SelectedCheck = Checks.FirstOrDefault();
         RefreshFilteredChecks(preserveSelection: true);
         UpdateScoreCounts();
+        HasUnsavedChanges = false;
         AppendActivity($"Catalog loaded: {Checks.Count} checks across {CategorySummaries.Count} categories");
     }
 
@@ -568,6 +614,16 @@ public partial class MainViewModel : ViewModelBase
 
     private void OnCheckPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(CheckItemViewModel.Status)
+            or nameof(CheckItemViewModel.Findings)
+            or nameof(CheckItemViewModel.Evidence)
+            or nameof(CheckItemViewModel.Notes)
+            or nameof(CheckItemViewModel.RemediationAssignee)
+            or nameof(CheckItemViewModel.RemediationDueDate))
+        {
+            HasUnsavedChanges = true;
+        }
+
         if (e.PropertyName != nameof(CheckItemViewModel.Status)) return;
 
         UpdateScoreCounts();
@@ -1176,7 +1232,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanManageState))]
     private async Task SaveStateAsync()
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -1217,11 +1273,12 @@ public partial class MainViewModel : ViewModelBase
             }
 
             await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, state.Serialize());
+            HasUnsavedChanges = false;
             ScanStatus = $"State saved: {dialog.FileName}";
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanManageState))]
     private async Task LoadStateAsync()
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
@@ -1277,8 +1334,11 @@ public partial class MainViewModel : ViewModelBase
         }
 
         UpdateScoreCounts();
+        HasUnsavedChanges = false;
         return restored;
     }
+
+    private bool CanManageState() => !IsScanning && !IsExporting;
 
     private static DateTime? ParseStateRemediationDueDate(string? value)
     {

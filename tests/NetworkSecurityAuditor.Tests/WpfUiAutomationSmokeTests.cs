@@ -55,8 +55,12 @@ public class WpfUiAutomationSmokeTests
             AssertNamedElement(window, "ExportFormatSelector", "Export format selector", ControlType.ComboBox);
             AssertNamedElement(window, "ExportOutputFolder", "Export output folder", ControlType.Edit);
             AssertNamedElement(window, "BrowseExportFolderButton", "Browse export folder", ControlType.Button);
-            AssertNamedElement(window, "SaveAuditStateButton", "Save audit state", ControlType.Button);
-            AssertNamedElement(window, "LoadAuditStateButton", "Load audit state", ControlType.Button);
+            var saveStateButton = AssertNamedElement(window, "SaveAuditStateButton", "Save audit state", ControlType.Button);
+            Assert.True(saveStateButton.Current.IsEnabled);
+            Assert.False(string.IsNullOrWhiteSpace(saveStateButton.Current.HelpText));
+            var loadStateButton = AssertNamedElement(window, "LoadAuditStateButton", "Load audit state", ControlType.Button);
+            Assert.True(loadStateButton.Current.IsEnabled);
+            Assert.False(string.IsNullOrWhiteSpace(loadStateButton.Current.HelpText));
             var exportButton = AssertNamedElement(window, "ExportSelectedFormatButton", "Export selected format", ControlType.Button);
             Assert.False(exportButton.Current.IsEnabled);
             Assert.False(string.IsNullOrWhiteSpace(exportButton.Current.HelpText));
@@ -72,6 +76,7 @@ public class WpfUiAutomationSmokeTests
             AssertElementNameStartsWith(window, "InspectorDueDateTextBox", "Remediation due date for ", ControlType.Edit);
             AssertNamedElement(window, "ActivityLogList", "Scan activity log");
             AssertNamedElement(window, "ExportAvailabilityText", "Export availability", ControlType.Text);
+            AssertNamedElement(window, "StatePersistenceStatus", "Assessment save status", ControlType.Text);
         }
         finally
         {

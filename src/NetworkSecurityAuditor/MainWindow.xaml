@@ -601,6 +601,9 @@
                                     Style="{StaticResource SecondaryButton}"
                                     Padding="12,7"
                                     Margin="0,0,8,0"
+                                    ToolTip="{Binding SaveStateHelpText}"
+                                    ToolTipService.ShowOnDisabled="True"
+                                    AutomationProperties.HelpText="{Binding SaveStateHelpText}"
                                     AutomationProperties.AutomationId="SaveAuditStateButton"
                                     AutomationProperties.Name="Save audit state" />
                             <Button Content="Load state"
@@ -608,6 +611,9 @@
                                     Style="{StaticResource SecondaryButton}"
                                     Padding="12,7"
                                     Margin="0,0,8,0"
+                                    ToolTip="{Binding LoadStateHelpText}"
+                                    ToolTipService.ShowOnDisabled="True"
+                                    AutomationProperties.HelpText="{Binding LoadStateHelpText}"
                                     AutomationProperties.AutomationId="LoadAuditStateButton"
                                     AutomationProperties.Name="Load audit state" />
                             <Button Content="Export"
@@ -1088,6 +1094,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0"
                            Text="{Binding ExportAvailabilityText}"
@@ -1096,7 +1103,15 @@
                            TextTrimming="CharacterEllipsis"
                            AutomationProperties.AutomationId="ExportAvailabilityText"
                            AutomationProperties.Name="Export availability" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <TextBlock Grid.Column="1"
+                           Text="{Binding StatePersistenceText}"
+                           Foreground="{Binding StatePersistenceBrushKey, Converter={StaticResource ResourceBrush}}"
+                           FontSize="11"
+                           Margin="18,0,18,0"
+                           AutomationProperties.LiveSetting="Polite"
+                           AutomationProperties.AutomationId="StatePersistenceStatus"
+                           AutomationProperties.Name="Assessment save status" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <TextBlock Foreground="{StaticResource ProgressGood}" FontSize="12" Margin="0,0,12,0"
                                Text="{Binding PassCount, StringFormat=Pass: {0}}" />
                     <TextBlock Foreground="{StaticResource ProgressMid}" FontSize="12" Margin="0,0,12,0"

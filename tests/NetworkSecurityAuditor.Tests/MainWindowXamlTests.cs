@@ -161,6 +161,8 @@ public class MainWindowXamlTests
         Assert.Contains("ClearFiltersCommand", xaml);
         Assert.Contains("ScanReadinessText", xaml);
         Assert.Contains("x:Name=\"ActivityLogScrollViewer\"", xaml);
+        Assert.Contains("AutomationProperties.AutomationId=\"StatePersistenceStatus\"", xaml);
+        Assert.Contains("Text=\"{Binding StatePersistenceText}\"", xaml);
         Assert.Contains("x:Key=\"InspectorCard\"", theme);
         Assert.Contains("<GridSplitter Grid.Column=\"1\"", xaml);
         Assert.Contains("Width=\"1440\" Height=\"900\"", xaml);
