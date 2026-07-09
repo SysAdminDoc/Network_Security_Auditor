@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -40,7 +41,7 @@ public static class CmmcReportGenerator
 
         sb.AppendLine("<div class=\"header\">");
         sb.AppendLine("<h1>CMMC Level 2 Self-Assessment Report</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">NIST SP 800-171 Rev 2 | {EscapeHtml(env.ComputerName)} | {DateTime.UtcNow:yyyy-MM-dd}</p>");
+        sb.AppendLine($"<p class=\"subtitle\">NIST SP 800-171 Rev 2 | {EscapeHtml(env.ComputerName)} | {DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}</p>");
         sb.AppendLine("</div>");
 
         var sprsColor = sprsScore >= 88 ? "#a6e3a1" : sprsScore >= 50 ? "#f9e2af" : "#f38ba8";

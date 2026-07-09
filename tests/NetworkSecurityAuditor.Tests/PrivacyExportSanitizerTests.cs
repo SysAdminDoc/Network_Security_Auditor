@@ -22,6 +22,7 @@ public class PrivacyExportSanitizerTests
         check.Evidence = "Agent connected from 192.168.1.10";
         check.Notes = "Accepted by admin.user for Acme Client";
         check.RemediationAssignee = "admin.user";
+        check.DurationMs = 1234.5;
 
         var redactor = PrivacyExportSanitizer.CreateRedactor(
             true,
@@ -39,6 +40,7 @@ public class PrivacyExportSanitizerTests
         Assert.DoesNotContain("192.168.1.10", redactedCheck.Evidence, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("admin.user", redactedCheck.Notes, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("admin.user", redactedCheck.RemediationAssignee, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1234.5, redactedCheck.DurationMs);
         Assert.DoesNotContain("Acme Client", clientSegment, StringComparison.OrdinalIgnoreCase);
         Assert.Matches(@"\[CLIENT-[0-9a-f]{8}\]", clientSegment);
     }

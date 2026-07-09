@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NetworkSecurityAuditor.Data;
@@ -75,7 +76,7 @@ public static class JsonExporter
                     Compliance = c.Compliance,
                     Notes = c.Notes,
                     RemediationAssignee = c.RemediationAssignee,
-                    RemediationDueDate = c.RemediationDueDate?.ToString("yyyy-MM-dd"),
+                    RemediationDueDate = c.RemediationDueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     RemediationUrl = c.RemediationUrl,
                     EvidenceMode = c.EvidenceMode.ToString(),
                     MitreTactics = mitre?.Tactics,

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text.Json;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Export;
@@ -48,6 +49,54 @@ public class ExportTests
         Assert.Equal(85, score.GetProperty("overall").GetInt32());
         Assert.Equal(60, score.GetProperty("domain_maturity").GetInt32());
         Assert.Equal("D", score.GetProperty("domain_maturity_grade").GetString());
+    }
+
+    [Fact]
+    public void Json_Export_Remediation_Due_Date_Uses_Invariant_Gregorian_Format()
+    {
+        var originalCulture = Thread.CurrentThread.CurrentCulture;
+        var originalUiCulture = Thread.CurrentThread.CurrentUICulture;
+        try
+        {
+            Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");
+            Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("ar-SA");
+            var (checks, env) = CreateTestData();
+            checks[0].RemediationDueDate = new DateTime(2026, 7, 9);
+
+            var json = JsonExporter.Export(checks, env, 85, "B", 70, "C", ScanProfileType.Full, 60, "D");
+
+            Assert.Contains("\"remediation_due_date\": \"2026-07-09\"", json);
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = originalCulture;
+            Thread.CurrentThread.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public void Export_Date_Contracts_Use_Invariant_Culture()
+    {
+        var files = new[]
+        {
+            Path.Combine("src", "NetworkSecurityAuditor", "App.xaml.cs"),
+            Path.Combine("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs"),
+            Path.Combine("src", "NetworkSecurityAuditor", "Export", "CsvExporter.cs"),
+            Path.Combine("src", "NetworkSecurityAuditor", "Export", "DefectDojoExporter.cs"),
+            Path.Combine("src", "NetworkSecurityAuditor", "Export", "HtmlReportGenerator.cs"),
+            Path.Combine("src", "NetworkSecurityAuditor", "Export", "JsonExporter.cs"),
+            Path.Combine("src", "NetworkSecurityAuditor", "Export", "CmmcReportGenerator.cs"),
+            Path.Combine("src", "NetworkSecurityAuditor", "Export", "NavigatorExporter.cs")
+        };
+
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(Path.Combine(FindRepoRoot(), file));
+            Assert.DoesNotContain("DateTime.UtcNow:yyyy", source);
+            Assert.DoesNotContain("DateTime.Now:yyyy", source);
+            Assert.DoesNotMatch("""ToString\("yyyy-MM-dd"\)""", source);
+            Assert.DoesNotContain(":MMMM d, yyyy", source);
+        }
     }
 
     [Fact]
@@ -1005,5 +1054,16 @@ public class ExportTests
             .Single(prop => prop.GetProperty("name").GetString() == name)
             .GetProperty("value")
             .GetString()!;
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "NetworkSecurityAuditor.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir?.FullName ?? throw new DirectoryNotFoundException("Could not locate NetworkSecurityAuditor.slnx from test output directory.");
     }
 }

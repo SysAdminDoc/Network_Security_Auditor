@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
@@ -262,7 +263,7 @@ public partial class App : Application
         var outputDir = ResolveOutputDirectory(args.OutputPath, inputDir);
         Directory.CreateDirectory(outputDir);
 
-        var dashPath = Path.Combine(outputDir, $"SecurityDashboard_{DateTime.Now:yyyy-MM-dd_HHmm}.html");
+        var dashPath = Path.Combine(outputDir, $"SecurityDashboard_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.html");
         await File.WriteAllTextAsync(dashPath, html);
         Console.WriteLine($"  Dashboard: {dashPath}");
 
@@ -425,7 +426,7 @@ public partial class App : Application
             System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop));
         Directory.CreateDirectory(outputDir);
 
-        var baseName = $"SecurityAudit_{SafeFileNameSegment(exportClient, "Client")}_{DateTime.Now:yyyy-MM-dd_HHmm}";
+        var baseName = $"SecurityAudit_{SafeFileNameSegment(exportClient, "Client")}_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}";
 
         var jsonPath = Path.Combine(outputDir, $"{baseName}_findings.json");
         var json = JsonExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade, client: exportClient, auditor: exportAuditor, intuneStigAudit: exportIntuneStigAudit);

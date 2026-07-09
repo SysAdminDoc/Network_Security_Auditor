@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NetworkSecurityAuditor.Data;
@@ -60,12 +61,14 @@ public static class DefectDojoExporter
             if (defend is not null)
                 references.Add($"D3FEND: {string.Join(", ", defend.Techniques)}");
 
+            var scanDate = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
             findings.Add(new
             {
                 title = $"[{check.Id}] {check.Label}",
                 description = check.Findings,
                 severity,
-                date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                date = scanDate,
                 active,
                 verified = true,
                 mitigation = meta?.Hint ?? "",
@@ -92,7 +95,7 @@ public static class DefectDojoExporter
         {
             findings,
             scan_type = "Network Security Auditor",
-            scan_date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+            scan_date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             engagement_name = $"Security Audit - {env.ComputerName}",
             product_name = $"Network Security Auditor - {env.ComputerName}",
             test_type_name = "Network Security Auditor Scan",

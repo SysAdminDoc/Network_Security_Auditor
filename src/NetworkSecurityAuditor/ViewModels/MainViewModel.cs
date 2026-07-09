@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -706,7 +707,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             Directory.CreateDirectory(ExportOutputFolder);
-            var baseName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}";
+            var baseName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}";
 
             if (option.IsFolderExport)
             {
@@ -814,7 +815,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "HTML Report|*.html",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.html",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.html",
             DefaultExt = ".html"
         };
 
@@ -833,7 +834,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "JSON Report|*.json",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.json",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.json",
             DefaultExt = ".json"
         };
 
@@ -852,7 +853,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "CSV|*.csv",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.csv",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.csv",
             DefaultExt = ".csv"
         };
         if (dialog.ShowDialog() == true)
@@ -869,7 +870,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "JSONL|*.jsonl",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_siem.jsonl",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_siem.jsonl",
             DefaultExt = ".jsonl"
         };
         if (dialog.ShowDialog() == true)
@@ -886,7 +887,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "SARIF|*.sarif",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.sarif",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.sarif",
             DefaultExt = ".sarif"
         };
         if (dialog.ShowDialog() == true)
@@ -903,7 +904,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "ATT&CK Navigator|*.json",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_navigator.json",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_navigator.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
@@ -920,7 +921,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "DefectDojo JSON|*.json",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_defectdojo.json",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_defectdojo.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
@@ -937,7 +938,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "OCSF JSONL|*.jsonl",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_ocsf.jsonl",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_ocsf.jsonl",
             DefaultExt = ".jsonl"
         };
         if (dialog.ShowDialog() == true)
@@ -954,7 +955,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "OSCAL JSON|*.json",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_oscal.json",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_oscal.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
@@ -971,7 +972,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "Compliance Summary JSON|*.json",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_summary.json",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_summary.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
@@ -988,7 +989,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "Intune JSON|*.json",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}_intune.json",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_intune.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
@@ -1005,7 +1006,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "PDF Report|*.pdf",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.pdf",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.pdf",
             DefaultExt = ".pdf"
         };
         if (dialog.ShowDialog() == true)
@@ -1034,7 +1035,7 @@ public partial class MainViewModel : ViewModelBase
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "Audit State|*.audit.json",
-            FileName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}.audit.json",
+            FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.audit.json",
             DefaultExt = ".audit.json"
         };
 
@@ -1064,7 +1065,7 @@ public partial class MainViewModel : ViewModelBase
                     Evidence = check.Evidence,
                     Notes = check.Notes,
                     RemediationAssignee = check.RemediationAssignee,
-                    RemediationDueDate = check.RemediationDueDate?.ToString("yyyy-MM-dd")
+                    RemediationDueDate = check.RemediationDueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 });
             }
 

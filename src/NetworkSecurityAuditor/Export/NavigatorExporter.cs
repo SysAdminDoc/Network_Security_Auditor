@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NetworkSecurityAuditor.Data;
@@ -66,7 +67,7 @@ public static class NavigatorExporter
             name = "Network Security Auditor Coverage",
             versions = new { attack = "19.0", navigator = "4.9.0", layer = "4.5" },
             domain = "enterprise-attack",
-            description = $"Generated {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC by Network Security Auditor v{VersionInfo.Version}",
+            description = $"Generated {DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} UTC by Network Security Auditor v{VersionInfo.Version}",
             sorting = 3,
             layout = new { layout = "side", aggregateFunction = "average", showID = true, showName = true, showAggregateScores = true, countUnscored = false },
             hideDisabled = false,

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
@@ -49,7 +50,7 @@ public static class HtmlReportGenerator
             if (branding.Tagline.Length > 0)
                 sb.AppendLine($"<p class=\"cover-tagline\">{EscapeHtml(branding.Tagline)}</p>");
             sb.AppendLine($"<p class=\"cover-subtitle\">Security Assessment Report</p>");
-            sb.AppendLine($"<p class=\"cover-date\">{DateTime.UtcNow:MMMM d, yyyy}</p>");
+            sb.AppendLine($"<p class=\"cover-date\">{DateTime.UtcNow.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)}</p>");
             sb.AppendLine("</div>");
         }
 
@@ -60,7 +61,7 @@ public static class HtmlReportGenerator
             ? $"{branding.CompanyName} Security Audit Report"
             : "Network Security Audit Report";
         sb.AppendLine($"<h1>{EscapeHtml(h1)}</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">Generated {DateTime.UtcNow:yyyy-MM-dd HH:mm} | {EscapeHtml(env.ComputerName)} | {EscapeHtml(env.OSCaption)}</p>");
+        sb.AppendLine($"<p class=\"subtitle\">Generated {DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} | {EscapeHtml(env.ComputerName)} | {EscapeHtml(env.OSCaption)}</p>");
         sb.AppendLine("</div>");
 
         var passCount = checkList.Count(c => c.Status == CheckStatus.Pass);
@@ -205,7 +206,7 @@ public static class HtmlReportGenerator
                 sb.AppendLine($"<tr><td>{priorityOrder++}</td><td class=\"id-cell\">{check.Id}</td>");
                 sb.AppendLine($"<td>{EscapeHtml(check.Label)}</td><td><span class=\"badge status-{StatusCssClass(check.Status)}\">{DisplayStatus(check.Status)}</span></td><td>{EscapeHtml(check.Category)}</td>");
                 sb.AppendLine($"<td>{EscapeHtml(check.RemediationAssignee)}</td>");
-                sb.AppendLine($"<td>{(check.RemediationDueDate.HasValue ? check.RemediationDueDate.Value.ToString("yyyy-MM-dd") : "")}</td></tr>");
+                sb.AppendLine($"<td>{(check.RemediationDueDate.HasValue ? check.RemediationDueDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "")}</td></tr>");
             }
             AppendTableEnd(sb);
         }
