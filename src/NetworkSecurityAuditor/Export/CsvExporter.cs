@@ -11,7 +11,8 @@ public static class CsvExporter
         IEnumerable<CheckItemViewModel> checks,
         EnvironmentInfo env,
         int overallScore,
-        string grade)
+        string grade,
+        IntuneStigAuditImport? intuneStigAudit = null)
     {
         var sb = new StringBuilder();
 
@@ -48,6 +49,28 @@ public static class CsvExporter
             sb.Append(Escape(defend is not null ? string.Join("; ", defend.Stages) : "")).Append(',');
             sb.Append(Escape(defend is not null ? string.Join("; ", defend.Techniques) : ""));
             sb.AppendLine();
+        }
+
+        if (intuneStigAudit is not null)
+        {
+            sb.AppendLine("# Intune STIG audit baseline evidence");
+            sb.AppendLine("EvidenceType,Source,BaselineVersion,DeviceName,SettingId,ReferenceId,Severity,Status,XccdfResult,LastCheckInUtc,PolicyId,SourceUrl");
+            foreach (var finding in intuneStigAudit.Findings)
+            {
+                sb.Append(Escape("IntuneSTIG")).Append(',');
+                sb.Append(Escape(intuneStigAudit.Source)).Append(',');
+                sb.Append(Escape(intuneStigAudit.BaselineVersion)).Append(',');
+                sb.Append(Escape(finding.DeviceName)).Append(',');
+                sb.Append(Escape(finding.SettingId)).Append(',');
+                sb.Append(Escape(finding.ReferenceId)).Append(',');
+                sb.Append(Escape(finding.Severity)).Append(',');
+                sb.Append(Escape(finding.Status)).Append(',');
+                sb.Append(Escape(finding.XccdfResult)).Append(',');
+                sb.Append(Escape(finding.LastCheckInUtc)).Append(',');
+                sb.Append(Escape(finding.SourcePolicyId)).Append(',');
+                sb.Append(Escape(intuneStigAudit.SourceUrl));
+                sb.AppendLine();
+            }
         }
 
         return sb.ToString();

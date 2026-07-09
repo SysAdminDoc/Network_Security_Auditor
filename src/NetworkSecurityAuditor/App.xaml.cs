@@ -357,6 +357,13 @@ public partial class App : Application
             Console.WriteLine($"  Waivers: {activeCount} active, {expired.Count} expired");
         }
 
+        IntuneStigAuditImport? intuneStigAudit = null;
+        if (args.IntuneStigImportPath.Length > 0)
+        {
+            intuneStigAudit = await IntuneStigAuditImporter.LoadAsync(args.IntuneStigImportPath);
+            Console.WriteLine($"  Intune STIG import: {intuneStigAudit.ImportStatus} ({intuneStigAudit.Findings.Count} row(s))");
+        }
+
         var scoredCheckVms = ExcludeWaivedChecksFromScoring(checkVms, activeWaivedCheckIds);
         var scoringWaivedCount = checkVms.Count - scoredCheckVms.Count;
         var (score, grade) = RiskScoreEngine.Calculate(scoredCheckVms);
@@ -382,6 +389,7 @@ public partial class App : Application
         var exportEnv = PrivacyExportSanitizer.RedactEnvironment(env, redactor);
         var exportChecks = PrivacyExportSanitizer.RedactChecks(checkVms, redactor);
         var exportWaivers = PrivacyExportSanitizer.RedactActiveWaivers(waiverStore, redactor);
+        var exportIntuneStigAudit = PrivacyExportSanitizer.RedactIntuneStigAudit(intuneStigAudit, redactor);
         var exportClient = redactor.Redact(options.Client);
         var exportAuditor = redactor.Redact(options.Auditor);
         if (args.PrivacyMode)
@@ -395,7 +403,7 @@ public partial class App : Application
         var baseName = $"SecurityAudit_{SafeFileNameSegment(exportClient, "Client")}_{DateTime.Now:yyyy-MM-dd_HHmm}";
 
         var jsonPath = Path.Combine(outputDir, $"{baseName}_findings.json");
-        var json = JsonExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade, client: exportClient, auditor: exportAuditor);
+        var json = JsonExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade, client: exportClient, auditor: exportAuditor, intuneStigAudit: exportIntuneStigAudit);
         await File.WriteAllTextAsync(jsonPath, json);
         Console.WriteLine($"  JSON: {jsonPath}");
 
@@ -410,14 +418,14 @@ public partial class App : Application
         }
 
         var htmlPath = Path.Combine(outputDir, $"{baseName}.html");
-        var html = HtmlReportGenerator.Generate(exportChecks, exportEnv, score, grade, rwScore, rwGrade, dmScore, dmGrade, tier: args.ReportTier, branding: branding);
+        var html = HtmlReportGenerator.Generate(exportChecks, exportEnv, score, grade, rwScore, rwGrade, dmScore, dmGrade, tier: args.ReportTier, branding: branding, intuneStigAudit: exportIntuneStigAudit);
         await File.WriteAllTextAsync(htmlPath, html);
         Console.WriteLine($"  HTML: {htmlPath}");
 
         if (args.ExportCsv)
         {
             var csvPath = Path.Combine(outputDir, $"{baseName}.csv");
-            await File.WriteAllTextAsync(csvPath, CsvExporter.Export(exportChecks, exportEnv, score, grade));
+            await File.WriteAllTextAsync(csvPath, CsvExporter.Export(exportChecks, exportEnv, score, grade, exportIntuneStigAudit));
             Console.WriteLine($"  CSV: {csvPath}");
         }
 
@@ -459,7 +467,7 @@ public partial class App : Application
         if (args.ExportOscal)
         {
             var oscalPath = Path.Combine(outputDir, $"{baseName}_oscal.json");
-            await File.WriteAllTextAsync(oscalPath, OscalExporter.Export(exportChecks, exportEnv, score, grade));
+            await File.WriteAllTextAsync(oscalPath, OscalExporter.Export(exportChecks, exportEnv, score, grade, exportIntuneStigAudit));
             Console.WriteLine($"  OSCAL: {oscalPath}");
         }
 
@@ -637,6 +645,8 @@ public partial class App : Application
                 result.WaiversPath = args[++i];
             else if ((arg.Equals("--branding", StringComparison.OrdinalIgnoreCase) || arg.Equals("-BrandingConfig", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
                 result.BrandingPath = args[++i];
+            else if ((arg.Equals("--intune-stig-import", StringComparison.OrdinalIgnoreCase) || arg.Equals("-IntuneStigImportPath", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
+                result.IntuneStigImportPath = args[++i];
             else if (arg.Equals("--export-csv", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportCSV", StringComparison.OrdinalIgnoreCase))
                 result.ExportCsv = true;
             else if (arg.Equals("--export-jsonl", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportJSONL", StringComparison.OrdinalIgnoreCase))
@@ -715,5 +725,6 @@ public partial class App : Application
         public string Auditor = "";
         public string WaiversPath = "";
         public string BrandingPath = "";
+        public string IntuneStigImportPath = "";
     }
 }

@@ -17,7 +17,8 @@ public static class HtmlReportGenerator
         int domainMaturityScore = 0,
         string domainMaturityGrade = "N/A",
         ReportTier tier = ReportTier.All,
-        BrandingConfig? branding = null)
+        BrandingConfig? branding = null,
+        IntuneStigAuditImport? intuneStigAudit = null)
     {
         var checkList = checks.ToList();
         var sb = new StringBuilder();
@@ -78,6 +79,9 @@ public static class HtmlReportGenerator
 
         if (tier is ReportTier.Technical or ReportTier.All)
             AppendTechnical(sb, checkList);
+
+        if (intuneStigAudit is not null)
+            AppendIntuneStigAudit(sb, intuneStigAudit);
 
         if (branding is not null && branding.FooterText.Length > 0)
         {
@@ -266,6 +270,37 @@ public static class HtmlReportGenerator
         {
             var allTechniques = checks2.SelectMany(c => c.techniques).Distinct().OrderBy(t => t).ToList();
             sb.AppendLine($"<tr><td style=\"font-weight:600\">{stage}</td><td>{checks2.Count}</td><td style=\"font-size:12px\">{EscapeHtml(string.Join(", ", allTechniques))}</td></tr>");
+        }
+        AppendTableEnd(sb);
+    }
+
+    private static void AppendIntuneStigAudit(StringBuilder sb, IntuneStigAuditImport import)
+    {
+        var summary = import.Summary;
+        sb.AppendLine("<h2>Intune STIG Audit Baseline Evidence</h2>");
+        sb.AppendLine("<div class=\"score-card\" style=\"margin-bottom:18px\">");
+        sb.AppendLine($"<div><strong>Source:</strong> {EscapeHtml(import.Source)}</div>");
+        sb.AppendLine($"<div><strong>Baseline:</strong> {EscapeHtml(import.BaselineName)} {EscapeHtml(import.BaselineVersion)}</div>");
+        sb.AppendLine($"<div><strong>Policy:</strong> {EscapeHtml(import.PolicyId)}</div>");
+        sb.AppendLine($"<div><strong>Exported:</strong> {EscapeHtml(import.ExportedAtUtc)}</div>");
+        sb.AppendLine($"<div><strong>Status:</strong> {EscapeHtml(import.ImportStatus)} | Pass {summary.Pass} | Fail {summary.Fail} | N/A {summary.NotApplicable} | Error {summary.Error} | Conflict {summary.Conflict} | Unknown {summary.Unknown} | Not licensed {summary.NotLicensed} | Not permitted {summary.NotPermitted}</div>");
+        sb.AppendLine($"<div><a href=\"{EscapeHtml(import.SourceUrl)}\" style=\"color:#89b4fa\">Microsoft Intune STIG audit baseline source</a></div>");
+        sb.AppendLine("</div>");
+
+        if (import.Findings.Count == 0)
+            return;
+
+        AppendTableHeader(sb, "category-table", "Imported Intune STIG audit evidence", ["Device", "Setting", "Reference", "Severity", "Status", "Last check-in"]);
+        foreach (var finding in import.Findings.OrderBy(f => f.DeviceName).ThenBy(f => f.ReferenceId).Take(100))
+        {
+            sb.AppendLine("<tr>");
+            sb.AppendLine($"<td>{EscapeHtml(finding.DeviceName)}</td>");
+            sb.AppendLine($"<td>{EscapeHtml(finding.SettingName)}</td>");
+            sb.AppendLine($"<td>{EscapeHtml(finding.ReferenceId)}</td>");
+            sb.AppendLine($"<td>{EscapeHtml(finding.Severity)}</td>");
+            sb.AppendLine($"<td>{EscapeHtml(finding.Status)}</td>");
+            sb.AppendLine($"<td>{EscapeHtml(finding.LastCheckInUtc)}</td>");
+            sb.AppendLine("</tr>");
         }
         AppendTableEnd(sb);
     }

@@ -118,6 +118,13 @@ public class CliArgsTests
     }
 
     [Fact]
+    public void IntuneStigImport_Parsed()
+    {
+        var args = App.ParseArgs(["--intune-stig-import", @"C:\Exports\stig.json"]);
+        Assert.Equal(@"C:\Exports\stig.json", args.IntuneStigImportPath);
+    }
+
+    [Fact]
     public void ExportAll_Sets_All_Formats()
     {
         var args = App.ParseArgs(["--export-all"]);

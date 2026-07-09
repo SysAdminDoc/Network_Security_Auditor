@@ -23,7 +23,8 @@ public static class OscalExporter
         IEnumerable<CheckItemViewModel> checks,
         EnvironmentInfo env,
         int overallScore,
-        string grade)
+        string grade,
+        IntuneStigAuditImport? intuneStigAudit = null)
     {
         var checkList = checks.ToList();
         var timestamp = DateTime.UtcNow.ToString("o");
@@ -114,6 +115,68 @@ public static class OscalExporter
                                 name = "risk-level",
                                 value = check.Severity == Severity.Critical ? "high" : "moderate"
                             }
+                        }
+                    });
+                }
+            }
+        }
+
+        if (intuneStigAudit is not null)
+        {
+            foreach (var finding in intuneStigAudit.Findings)
+            {
+                var sourceKey = $"{finding.DeviceId}|{finding.DeviceName}|{finding.SettingId}|{finding.ReferenceId}";
+                var obsUuid = OscalIds.ExternalObservation("intune-stig", sourceKey);
+                var findingUuid = OscalIds.ExternalFinding("intune-stig", sourceKey);
+                observations.Add(new
+                {
+                    uuid = obsUuid,
+                    title = $"Intune STIG audit: {finding.ReferenceId}",
+                    description = string.IsNullOrWhiteSpace(finding.SettingName) ? finding.ReferenceId : finding.SettingName,
+                    methods = new[] { "EXAMINE" },
+                    types = new[] { "finding" },
+                    collected = string.IsNullOrWhiteSpace(finding.LastCheckInUtc) ? timestamp : finding.LastCheckInUtc,
+                    subjects = new[]
+                    {
+                        new { subjectUuid = runId, type = "component", title = finding.DeviceName }
+                    },
+                    props = new[]
+                    {
+                        new { name = "source", value = intuneStigAudit.Source },
+                        new { name = "setting-id", value = finding.SettingId },
+                        new { name = "reference-id", value = finding.ReferenceId },
+                        new { name = "intune-status", value = finding.Status },
+                        new { name = "xccdf-result", value = finding.XccdfResult },
+                        new { name = "baseline-version", value = intuneStigAudit.BaselineVersion }
+                    }
+                });
+
+                if (!finding.Status.Equals("Pass", StringComparison.OrdinalIgnoreCase) &&
+                    !finding.Status.Equals("NotApplicable", StringComparison.OrdinalIgnoreCase))
+                {
+                    findings.Add(new
+                    {
+                        uuid = findingUuid,
+                        title = $"Intune STIG audit: {finding.ReferenceId}",
+                        description = $"{finding.DeviceName}: {finding.SettingName}",
+                        target = new
+                        {
+                            type = "objective-id",
+                            targetId = string.IsNullOrWhiteSpace(finding.ReferenceId) ? finding.SettingId : finding.ReferenceId,
+                            status = new
+                            {
+                                state = finding.Status is "NotLicensed" or "NotPermitted" ? "not-applicable" : "not-satisfied",
+                                reason = finding.XccdfResult
+                            }
+                        },
+                        relatedObservations = new[] { new { observationUuid = obsUuid } },
+                        props = new[]
+                        {
+                            new { name = "source", value = intuneStigAudit.Source },
+                            new { name = "source-url", value = intuneStigAudit.SourceUrl },
+                            new { name = "setting-id", value = finding.SettingId },
+                            new { name = "intune-status", value = finding.Status },
+                            new { name = "device-name", value = finding.DeviceName }
                         }
                     });
                 }

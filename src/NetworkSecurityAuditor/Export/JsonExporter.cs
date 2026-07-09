@@ -27,7 +27,8 @@ public static class JsonExporter
         int domainMaturityScore = 0,
         string domainMaturityGrade = "N/A",
         string client = "",
-        string auditor = "")
+        string auditor = "",
+        IntuneStigAuditImport? intuneStigAudit = null)
     {
         var checkList = checks.ToList();
         var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
@@ -102,7 +103,8 @@ public static class JsonExporter
                     DurationMs = Math.Round(c.DurationMs, 1)
                 };
             }).ToArray(),
-            ComplianceFrameworks = BuildComplianceSummary(statusLookup)
+            ComplianceFrameworks = BuildComplianceSummary(statusLookup),
+            IntuneStigAudit = intuneStigAudit
         };
 
         return JsonSerializer.Serialize(report, SerializerOptions);
@@ -184,6 +186,7 @@ public static class JsonExporter
         public ScoreSection Score { get; set; } = new();
         public FindingEntry[] Findings { get; set; } = [];
         public Dictionary<string, ComplianceFrameworkSummary> ComplianceFrameworks { get; set; } = [];
+        public IntuneStigAuditImport? IntuneStigAudit { get; set; }
     }
 
     private sealed class EnvironmentSection

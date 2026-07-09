@@ -25,6 +25,12 @@ internal static class OscalIds
     public static string Party(string role, string name)
         => StableUuid("party", role, name);
 
+    public static string ExternalObservation(string source, string key)
+        => StableUuid("external-observation", source, key);
+
+    public static string ExternalFinding(string source, string key)
+        => StableUuid("external-finding", source, key);
+
     private static string StableUuid(params string[] parts)
     {
         var input = string.Join('\u001f', parts.Prepend("network-security-auditor-oscal"));

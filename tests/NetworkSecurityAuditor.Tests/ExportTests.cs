@@ -3,6 +3,7 @@ using System.Text.Json;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Export;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 using NetworkSecurityAuditor.ViewModels;
 
 namespace NetworkSecurityAuditor.Tests;
@@ -457,6 +458,78 @@ public class ExportTests
         var secondFailedRisk = secondRisks.Single(r => GetProp(r, "check-id") == failedCheck.Id);
         Assert.Equal(failedRisk.GetProperty("uuid").GetString(), secondFailedRisk.GetProperty("uuid").GetString());
         Assert.Equal(GetProp(failedRisk, "finding-uuid"), GetProp(secondFailedRisk, "finding-uuid"));
+    }
+
+    [Fact]
+    public async Task Intune_Stig_Import_Flows_Into_Json_Csv_Html_And_Oscal()
+    {
+        var importPath = Path.Combine(Path.GetTempPath(), "nsa-intune-stig-" + Guid.NewGuid().ToString("N") + ".json");
+        await File.WriteAllTextAsync(importPath, """
+        {
+          "baseline_name": "Microsoft Windows 11 STIG SCAP Benchmark",
+          "baseline_version": "Version 2, Release 7 Benchmark Date: 05 Jan 2026",
+          "tenant_id": "tenant-123",
+          "policy_id": "policy-456",
+          "source_url": "https://learn.microsoft.com/en-us/intune/device-security/security-baselines/stig-audit-baseline",
+          "exported_at_utc": "2026-01-06T12:00:00Z",
+          "results": [
+            {
+              "DeviceName": "WIN11-01",
+              "DeviceId": "device-001",
+              "SettingId": "setting-001",
+              "StigRuleId": "SV-253275r828909",
+              "SettingName": "Accounts must require password complexity",
+              "StigSeverity": "CAT I",
+              "MaxSettingStatus": "Fail",
+              "PspdpuLastModifiedTimeUtc": "2026-01-06T11:00:00Z"
+            },
+            {
+              "DeviceName": "WIN11-02",
+              "DeviceId": "device-002",
+              "SettingId": "setting-002",
+              "StigRuleId": "SV-253276r828910",
+              "SettingName": "Commercial tenant prerequisite missing",
+              "StigSeverity": "medium",
+              "MaxSettingStatus": "NotLicensed",
+              "PspdpuLastModifiedTimeUtc": "2026-01-06T11:15:00Z"
+            }
+          ]
+        }
+        """);
+
+        try
+        {
+            var import = await IntuneStigAuditImporter.LoadAsync(importPath);
+            Assert.Equal(2, import.Findings.Count);
+            Assert.Equal("high", import.Findings[0].Severity);
+            Assert.Equal("Fail", import.Findings[0].Status);
+            Assert.Equal("fail", import.Findings[0].XccdfResult);
+            Assert.Equal(1, import.Summary.NotLicensed);
+
+            var (checks, env) = CreateTestData();
+            var json = JsonExporter.Export(checks, env, 85, "B", 70, "C", ScanProfileType.Full, intuneStigAudit: import);
+            Assert.Contains("\"intune_stig_audit\"", json);
+            Assert.Contains("SV-253275r828909", json);
+            Assert.Contains("NotLicensed", json);
+
+            var csv = CsvExporter.Export(checks, env, 85, "B", import);
+            Assert.Contains("# Intune STIG audit baseline evidence", csv);
+            Assert.Contains("IntuneSTIG", csv);
+            Assert.Contains("SV-253276r828910", csv);
+
+            var html = HtmlReportGenerator.Generate(checks, env, 85, "B", 70, "C", intuneStigAudit: import);
+            Assert.Contains("Intune STIG Audit Baseline Evidence", html);
+            Assert.Contains("Not licensed 1", html);
+
+            var oscal = OscalExporter.Export(checks, env, 85, "B", import);
+            Assert.Contains("Intune STIG audit", oscal);
+            Assert.Contains("SV-253275r828909", oscal);
+            Assert.Contains("\"source-url\"", oscal);
+        }
+        finally
+        {
+            File.Delete(importPath);
+        }
     }
 
     [Fact]

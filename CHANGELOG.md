@@ -18,6 +18,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ### Exports
 - Added: C# GUI and silent mode can now emit OSCAL POA&M JSON with remediation tasks linked to stable OSCAL finding UUIDs, active waiver metadata, owners, due dates, and remediation text.
+- Added: C# silent mode can import Intune STIG audit baseline JSON/CSV evidence and carry source/version/device/status details into HTML, JSON, CSV, and OSCAL exports without claiming new local STIG checks.
 - Fixed: C# HTML, JSON, and compliance summary exports now separate Met, Partial, Fail, and Not assessed framework counts instead of counting Partial controls as passing.
 - Fixed: C# HTML reports now include Partial findings in top findings and remediation roadmap sections, use semantic table captions/headers, and render clearer remediation link text.
 - Fixed: C# CMMC reports now choose evidence from the worst mapped check for shared controls and emit semantic control-table markup.

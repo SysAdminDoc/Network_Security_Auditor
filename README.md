@@ -95,6 +95,7 @@ Run the C# silent mode:
 ```powershell
 .\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --profile Full --output C:\Reports
 .\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --profile Full --output C:\Reports --export-oscal-poam
+.\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --profile Full --output C:\Reports --intune-stig-import C:\Exports\stig-audit.json --export-oscal --export-csv
 ```
 
 Build the local C# installable artifact:
@@ -448,6 +449,12 @@ Automatic platform detection and field population:
 Machine-readable contract schemas for JSON, JSONL, OCSF, OSCAL, OSCAL POA&M,
 Intune, compliance summary, dashboard aggregate rows, and SIEM field mappings are
 committed under `schemas/exports` and covered by xUnit golden fixture tests.
+
+The C# silent mode can also import an Intune STIG audit baseline JSON or CSV
+export with `--intune-stig-import`. Imported STIG evidence remains explicitly
+external: reports carry source URL/version, device scope, timestamps, XCCDF
+status mapping, and `NotLicensed`/`NotPermitted` states without adding local
+STIG rule IDs to the built-in check catalog.
 
 Reports and exports label each check as `Automated`, `Heuristic`, `Checklist`,
 `InterviewRequired`, or `ExternalRequired`. Framework scores keep the existing

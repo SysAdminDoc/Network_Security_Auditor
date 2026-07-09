@@ -109,4 +109,40 @@ public static class PrivacyExportSanitizer
 
         return waivers;
     }
+
+    public static IntuneStigAuditImport? RedactIntuneStigAudit(
+        IntuneStigAuditImport? import,
+        PrivacyRedactor redactor)
+    {
+        if (import is null || !redactor.IsEnabled)
+            return import;
+
+        return new IntuneStigAuditImport
+        {
+            SchemaVersion = import.SchemaVersion,
+            Source = import.Source,
+            SourceUrl = import.SourceUrl,
+            BaselineName = import.BaselineName,
+            BaselineVersion = import.BaselineVersion,
+            TenantId = redactor.Redact(import.TenantId),
+            PolicyId = import.PolicyId,
+            ExportedAtUtc = import.ExportedAtUtc,
+            ImportedAtUtc = import.ImportedAtUtc,
+            ImportStatus = import.ImportStatus,
+            Findings = import.Findings.Select(finding => new IntuneStigAuditFinding
+            {
+                DeviceName = redactor.Redact(finding.DeviceName),
+                DeviceId = redactor.Redact(finding.DeviceId),
+                SettingId = finding.SettingId,
+                SettingName = finding.SettingName,
+                ReferenceId = finding.ReferenceId,
+                Severity = finding.Severity,
+                Status = finding.Status,
+                XccdfResult = finding.XccdfResult,
+                LastCheckInUtc = finding.LastCheckInUtc,
+                SourcePolicyId = finding.SourcePolicyId,
+                SourceTenantId = redactor.Redact(finding.SourceTenantId)
+            }).ToList()
+        };
+    }
 }
