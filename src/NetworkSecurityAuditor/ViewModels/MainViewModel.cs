@@ -74,6 +74,7 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(StartScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopScanCommand))]
     [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ExportAvailabilityText), nameof(ScanProgressDisplay), nameof(ScanStatusHeadline))]
+    [NotifyPropertyChangedFor(nameof(CanEditScanOptions), nameof(StartScanHelpText), nameof(StopScanHelpText), nameof(ScanProfileHelpText))]
     private bool _isScanning;
 
     [ObservableProperty]
@@ -89,7 +90,7 @@ public partial class MainViewModel : ViewModelBase
     private double _scanProgressPercent;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ProfileSummary))]
+    [NotifyPropertyChangedFor(nameof(ProfileSummary), nameof(StartScanHelpText), nameof(ScanProfileHelpText))]
     private ScanProfileType _selectedProfile = ScanProfileType.Full;
 
     [ObservableProperty]
@@ -288,6 +289,23 @@ public partial class MainViewModel : ViewModelBase
     public string OutcomeSummaryDisplay => $"{PassCount} pass - {PartialCount} partial - {FailCount} fail";
 
     public string ProfileSummary => $"{SelectedProfile} profile";
+
+    public bool CanEditScanOptions => !IsScanning;
+
+    public string StartScanHelpText => IsScanning
+        ? "A scan is already running."
+        : $"Run the {SelectedProfile} profile against applicable checks.";
+
+    public string StopScanHelpText => IsScanning
+        ? "Cancel the running scan after the active check responds."
+        : "No scan is currently running.";
+
+    public string ScanProfileHelpText => IsScanning
+        ? "Profile selection is locked until the running scan finishes."
+        : $"Choose the check set for the next scan. Current profile: {SelectedProfile}.";
+
+    public string PrivacyModeHelpText =>
+        "Redacts host, domain, tenant, client, and user identifiers from exported reports.";
 
     public string ReadinessDisplay => PreflightTotalCount > 0
         ? $"{PreflightPassedCount}/{PreflightTotalCount} ready"

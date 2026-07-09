@@ -18,11 +18,20 @@ public class MainViewModelTests
 
         Assert.True(vm.StartScanCommand.CanExecute(null));
         Assert.False(vm.StopScanCommand.CanExecute(null));
+        Assert.True(vm.CanEditScanOptions);
+        Assert.Contains("Run the Full profile", vm.StartScanHelpText);
+        Assert.Equal("No scan is currently running.", vm.StopScanHelpText);
+        Assert.Contains("Current profile: Full", vm.ScanProfileHelpText);
+        Assert.Contains("Redacts host", vm.PrivacyModeHelpText);
 
         vm.IsScanning = true;
 
         Assert.False(vm.StartScanCommand.CanExecute(null));
         Assert.True(vm.StopScanCommand.CanExecute(null));
+        Assert.False(vm.CanEditScanOptions);
+        Assert.Equal("A scan is already running.", vm.StartScanHelpText);
+        Assert.Contains("Cancel the running scan", vm.StopScanHelpText);
+        Assert.Contains("locked", vm.ScanProfileHelpText);
         Assert.True(startChanges > 0);
         Assert.True(stopChanges > 0);
     }

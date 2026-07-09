@@ -198,8 +198,14 @@
                                 <TextBlock Text="DUE" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
                                 <TextBox Text="{Binding RemediationDueDate, StringFormat={}{0:yyyy-MM-dd}, TargetNullValue='', UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
                                          Style="{StaticResource DarkTextBox}"
+                                         ToolTip="Use yyyy-MM-dd. Invalid dates are highlighted and not saved."
+                                         AutomationProperties.HelpText="Use yyyy-MM-dd. Invalid dates are highlighted and not saved."
                                          AutomationProperties.AutomationId="InspectorDueDateTextBox"
                                          AutomationProperties.Name="{Binding Id, StringFormat='Remediation due date for {0}'}" />
+                                <TextBlock Text="yyyy-MM-dd"
+                                           Foreground="{StaticResource TextMuted}"
+                                           FontSize="10"
+                                           Margin="0,4,0,0" />
                             </StackPanel>
                         </Grid>
                     </StackPanel>
@@ -415,6 +421,8 @@
                             <CheckBox Content="Privacy mode"
                                       IsChecked="{Binding PrivacyMode}"
                                       Style="{StaticResource DarkCheckBox}"
+                                      ToolTip="{Binding PrivacyModeHelpText}"
+                                      AutomationProperties.HelpText="{Binding PrivacyModeHelpText}"
                                       AutomationProperties.AutomationId="PrivacyModeToggle"
                                       AutomationProperties.Name="Privacy mode" />
                         </StackPanel>
@@ -479,6 +487,10 @@
                                           SelectedItem="{Binding SelectedProfile}"
                                           Style="{StaticResource DarkComboBox}"
                                           Margin="0,6,0,0"
+                                          IsEnabled="{Binding CanEditScanOptions}"
+                                          ToolTip="{Binding ScanProfileHelpText}"
+                                          ToolTipService.ShowOnDisabled="True"
+                                          AutomationProperties.HelpText="{Binding ScanProfileHelpText}"
                                           AutomationProperties.AutomationId="ScanProfileSelector"
                                           AutomationProperties.Name="Scan profile selector" />
                             </Grid>
@@ -552,12 +564,18 @@
                                     Style="{StaticResource AccentButton}"
                                     Padding="18,10"
                                     Margin="0,0,8,0"
+                                    ToolTip="{Binding StartScanHelpText}"
+                                    ToolTipService.ShowOnDisabled="True"
+                                    AutomationProperties.HelpText="{Binding StartScanHelpText}"
                                     AutomationProperties.AutomationId="StartScanButton"
                                     AutomationProperties.Name="Start security scan" />
                             <Button Content="Stop"
                                     Command="{Binding StopScanCommand}"
                                     Style="{StaticResource SecondaryButton}"
                                     Padding="14,10"
+                                    ToolTip="{Binding StopScanHelpText}"
+                                    ToolTipService.ShowOnDisabled="True"
+                                    AutomationProperties.HelpText="{Binding StopScanHelpText}"
                                     AutomationProperties.AutomationId="StopScanButton"
                                     AutomationProperties.Name="Stop running scan" />
                         </StackPanel>
@@ -588,6 +606,8 @@
                                  Style="{StaticResource DarkTextBox}"
                                  VerticalContentAlignment="Center"
                                  Margin="10,0,8,0"
+                                 ToolTip="Folder where selected reports and content packs will be written."
+                                 AutomationProperties.HelpText="Folder where selected reports and content packs will be written."
                                  AutomationProperties.AutomationId="ExportOutputFolder"
                                  AutomationProperties.Name="Export output folder" />
                         <Button Grid.Column="3"
