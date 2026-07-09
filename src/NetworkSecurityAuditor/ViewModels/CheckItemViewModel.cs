@@ -17,6 +17,7 @@ public partial class CheckItemViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusBrushKey))]
+    [NotifyPropertyChangedFor(nameof(StatusForegroundBrushKey))]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
     private CheckStatus _status = CheckStatus.NotAssessed;
 
@@ -62,6 +63,10 @@ public partial class CheckItemViewModel : ViewModelBase
         CheckStatus.NotAssessed => "BadgeBg",
         _ => "BadgeBg"
     };
+
+    public string StatusForegroundBrushKey => Status == CheckStatus.NotAssessed
+        ? "TextSecondary"
+        : "WindowBg";
 
     public string SeverityLabel => Severity switch
     {

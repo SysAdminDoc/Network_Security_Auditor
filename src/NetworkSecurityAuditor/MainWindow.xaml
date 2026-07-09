@@ -51,6 +51,9 @@
                             Padding="14,7"
                             Margin="12,0,0,0"
                             VerticalAlignment="Top"
+                            ToolTip="{Binding DataContext.ExportAvailabilityText, RelativeSource={RelativeSource AncestorType=Window}}"
+                            ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.HelpText="{Binding DataContext.ExportAvailabilityText, RelativeSource={RelativeSource AncestorType=Window}}"
                             AutomationProperties.Name="Export selected audit format" />
                 </Grid>
 
@@ -264,15 +267,27 @@
 
                 <StackPanel Grid.Row="2" Margin="0,16,0,0">
                     <TextBlock Text="FILTER" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
-                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource DarkTextBox}"
-                             Margin="0,0,0,8"
-                             AutomationProperties.Name="Search checks" />
+                    <Grid Margin="0,0,0,8">
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource DarkTextBox}"
+                                 AutomationProperties.Name="Search checks" />
+                        <TextBlock Text="Search ID, check, or category"
+                                   Foreground="{StaticResource TextMuted}"
+                                   Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   Visibility="{Binding IsSearchWatermarkVisible, Converter={StaticResource BoolToVis}}" />
+                    </Grid>
                     <ComboBox ItemsSource="{Binding StatusFilters}"
                               SelectedItem="{Binding StatusFilter}"
                               Style="{StaticResource DarkComboBox}"
-                              Margin="0,0,0,10"
+                              Margin="0,0,0,6"
                               AutomationProperties.Name="Status filter" />
+                    <TextBlock Text="{Binding VisibleChecksDisplay}"
+                               Foreground="{StaticResource TextMuted}"
+                               FontSize="11"
+                               Margin="0,0,0,10"
+                               AutomationProperties.Name="Filtered check count" />
                     <CheckBox Content="Privacy mode"
                               IsChecked="{Binding PrivacyMode}"
                               Style="{StaticResource DarkCheckBox}"
@@ -283,7 +298,7 @@
 
         <Grid Grid.Column="1" Margin="18">
             <Grid.RowDefinitions>
-                <RowDefinition Height="72" />
+                <RowDefinition Height="96" />
                 <RowDefinition Height="132" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="126" />
@@ -295,6 +310,10 @@
                     Padding="12"
                     Margin="0,0,0,10">
                 <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="180" />
@@ -375,8 +394,32 @@
                                 Command="{Binding ExportSelectedCommand}"
                                 Style="{StaticResource SecondaryButton}"
                                 Padding="14,9"
+                                ToolTip="{Binding ExportAvailabilityText}"
+                                ToolTipService.ShowOnDisabled="True"
+                                AutomationProperties.HelpText="{Binding ExportAvailabilityText}"
                                 AutomationProperties.Name="Export selected format" />
                     </StackPanel>
+
+                    <Grid Grid.Row="1" Grid.ColumnSpan="6" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding ScanReadinessText}"
+                                   Foreground="{StaticResource TextMuted}"
+                                   FontSize="11"
+                                   TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   AutomationProperties.Name="Scan readiness" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding ExportAvailabilityText}"
+                                   Foreground="{StaticResource TextMuted}"
+                                   FontSize="11"
+                                   Margin="16,0,0,0"
+                                   TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.Name="Export availability" />
+                    </Grid>
                 </Grid>
             </Border>
 
@@ -419,10 +462,11 @@
                                        Foreground="{StaticResource TextPrimary}"
                                        TextWrapping="Wrap"
                                        TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{Binding ScanStatus}"
+                            <TextBlock Text="{Binding ScoreSubtitle}"
                                        Foreground="{StaticResource TextMuted}"
                                        TextTrimming="CharacterEllipsis"
-                                       Margin="0,3,0,0" />
+                                       Margin="0,3,0,0"
+                                       AutomationProperties.LiveSetting="Polite" />
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -521,9 +565,9 @@
                                                    Margin="0,0,0,4" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="2" Orientation="Horizontal">
-                                        <TextBlock Text="{Binding FailCount, StringFormat=F:{0}}" Foreground="{StaticResource ProgressBad}" FontSize="11" Margin="0,0,8,0" />
-                                        <TextBlock Text="{Binding PartialCount, StringFormat=P:{0}}" Foreground="{StaticResource ProgressMid}" FontSize="11" Margin="0,0,8,0" />
-                                        <TextBlock Text="{Binding PassCount, StringFormat=OK:{0}}" Foreground="{StaticResource ProgressGood}" FontSize="11" />
+                                        <TextBlock Text="{Binding FailCount, StringFormat=Fail {0}}" Foreground="{StaticResource ProgressBad}" FontSize="11" Margin="0,0,8,0" />
+                                        <TextBlock Text="{Binding PartialCount, StringFormat=Partial {0}}" Foreground="{StaticResource ProgressMid}" FontSize="11" Margin="0,0,8,0" />
+                                        <TextBlock Text="{Binding PassCount, StringFormat=Pass {0}}" Foreground="{StaticResource ProgressGood}" FontSize="11" />
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -651,7 +695,7 @@
                                                 HorizontalAlignment="Left"
                                                 VerticalAlignment="Center">
                                             <TextBlock Text="{Binding StatusLabel}"
-                                                       Foreground="{StaticResource WindowBg}"
+                                                       Foreground="{Binding StatusForegroundBrushKey, Converter={StaticResource ResourceBrush}}"
                                                        FontSize="10"
                                                        FontWeight="Bold" />
                                         </Border>
@@ -674,13 +718,61 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
+
+                        <Border Grid.Row="1"
+                                Background="{StaticResource CardBg}"
+                                Padding="26"
+                                Visibility="{Binding HasNoVisibleChecks, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.Name="No matching checks">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        MaxWidth="420">
+                                <TextBlock Text="{Binding FilterEmptyStateTitle}"
+                                           Foreground="{StaticResource TextPrimary}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           TextAlignment="Center" />
+                                <TextBlock Text="{Binding FilterEmptyStateDetail}"
+                                           Foreground="{StaticResource TextMuted}"
+                                           Margin="0,8,0,16"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap" />
+                                <Button Content="Clear filters"
+                                        Command="{Binding ClearFiltersCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Padding="16,8"
+                                        HorizontalAlignment="Center"
+                                        Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVis}}"
+                                        AutomationProperties.Name="Clear active filters" />
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
 
                 <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Style="{StaticResource InspectorCard}">
-                    <ContentControl Content="{Binding SelectedCheck}"
-                                    ContentTemplate="{StaticResource InspectorTemplate}"
-                                    AutomationProperties.Name="Selected check evidence and remediation inspector" />
+                    <Grid>
+                        <ContentControl Content="{Binding SelectedCheck}"
+                                        ContentTemplate="{StaticResource InspectorTemplate}"
+                                        AutomationProperties.Name="Selected check evidence and remediation inspector" />
+                        <Border Background="{StaticResource PanelBg}"
+                                Visibility="{Binding HasNoVisibleChecks, Converter={StaticResource BoolToVis}}">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        MaxWidth="260">
+                                <TextBlock Text="{Binding FilterEmptyStateTitle}"
+                                           Foreground="{StaticResource TextPrimary}"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding FilterEmptyStateDetail}"
+                                           Foreground="{StaticResource TextMuted}"
+                                           Margin="0,8,0,0"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </Border>
             </Grid>
 
@@ -711,12 +803,16 @@
                                      Foreground="{StaticResource ProgressGood}"
                                      BorderThickness="0"
                                      VerticalAlignment="Center"
-                                     Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}" />
+                                     Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"
+                                     AutomationProperties.Name="Scan progress"
+                                     AutomationProperties.HelpText="{Binding ScanStatus}"
+                                     AutomationProperties.LiveSetting="Polite" />
                         <TextBlock Grid.Column="2"
                                    Text="{Binding ScanProgressPercent, StringFormat={}{0:0}%}"
                                    Foreground="{StaticResource TextMuted}"
                                    Margin="18,0,14,0"
-                                   VerticalAlignment="Center" />
+                                   VerticalAlignment="Center"
+                                   AutomationProperties.LiveSetting="Polite" />
                     </Grid>
 
                     <ScrollViewer Grid.Row="1"
@@ -745,10 +841,11 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0"
-                           Text="{Binding PreflightSummary}"
+                           Text="{Binding ScanReadinessText}"
                            Foreground="{StaticResource TextMuted}"
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding PreflightSummary}"
                            AutomationProperties.Name="Pre-flight connectivity check results" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <TextBlock Foreground="{StaticResource ProgressGood}" FontSize="12" Margin="0,0,12,0"

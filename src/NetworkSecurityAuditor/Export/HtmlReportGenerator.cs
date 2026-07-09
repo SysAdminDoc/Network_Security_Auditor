@@ -74,7 +74,7 @@ public static class HtmlReportGenerator
                 passCount, failCount, partialCount, naCount);
 
         if (tier is ReportTier.Management or ReportTier.All)
-            AppendManagement(sb, checkList, passCount, failCount);
+            AppendManagement(sb, checkList);
 
         if (tier is ReportTier.Technical or ReportTier.All)
             AppendTechnical(sb, checkList);
@@ -121,81 +121,89 @@ public static class HtmlReportGenerator
         sb.AppendLine("</div>");
 
         var topFindings = checkList
-            .Where(c => c.Status == CheckStatus.Fail)
-            .OrderByDescending(c => c.Severity)
+            .Where(c => c.Status is CheckStatus.Fail or CheckStatus.Partial)
+            .OrderByDescending(c => StatusPriority(c.Status))
+            .ThenByDescending(c => c.Severity)
             .Take(5)
             .ToList();
 
         if (topFindings.Count > 0)
         {
             sb.AppendLine("<h2>Top Findings</h2>");
-            sb.AppendLine("<table class=\"category-table\">");
-            sb.AppendLine("<tr><th>ID</th><th>Check</th><th>Severity</th><th>Recommendation</th></tr>");
+            AppendTableHeader(sb, "category-table", "Top failed and partial findings", ["ID", "Check", "Severity", "Status", "Recommendation"]);
             foreach (var check in topFindings)
             {
                 var hint = CheckCatalog.All.TryGetValue(check.Id, out var meta) ? meta.Hint : "";
                 sb.AppendLine($"<tr><td class=\"id-cell\">{check.Id}</td><td>{EscapeHtml(check.Label)}</td>");
                 sb.AppendLine($"<td><span class=\"badge severity-{check.Severity.ToString().ToLowerInvariant()}\">{check.SeverityLabel}</span></td>");
+                sb.AppendLine($"<td><span class=\"badge status-{StatusCssClass(check.Status)}\">{DisplayStatus(check.Status)}</span></td>");
                 sb.AppendLine($"<td style=\"font-size:13px;color:#b5bcd6\">{EscapeHtml(hint.Length > 200 ? hint[..200] + "..." : hint)}</td></tr>");
             }
-            sb.AppendLine("</table>");
+            AppendTableEnd(sb);
         }
     }
 
-    private static void AppendManagement(StringBuilder sb, List<CheckItemViewModel> checkList,
-        int passCount, int failCount)
+    private static void AppendManagement(StringBuilder sb, List<CheckItemViewModel> checkList)
     {
         sb.AppendLine("<h2>Score by Category</h2>");
-        sb.AppendLine("<table class=\"category-table\">");
-        sb.AppendLine("<tr><th>Category</th><th>Pass</th><th>Partial</th><th>Fail</th><th>N/A</th></tr>");
+        AppendTableHeader(sb, "category-table", "Score by category", ["Category", "Pass", "Partial", "Fail", "N/A"]);
         foreach (var group in checkList.GroupBy(c => c.Category).OrderBy(g => g.Key))
         {
             var gPass = group.Count(c => c.Status == CheckStatus.Pass);
             var gPartial = group.Count(c => c.Status == CheckStatus.Partial);
             var gFail = group.Count(c => c.Status == CheckStatus.Fail);
             var gNa = group.Count(c => c.Status is CheckStatus.NA or CheckStatus.NotAssessed);
-            sb.AppendLine($"<tr><td>{group.Key}</td><td class=\"pass-cell\">{gPass}</td><td class=\"partial-cell\">{gPartial}</td><td class=\"fail-cell\">{gFail}</td><td>{gNa}</td></tr>");
+            sb.AppendLine($"<tr><td>{EscapeHtml(group.Key)}</td><td class=\"pass-cell\">{gPass}</td><td class=\"partial-cell\">{gPartial}</td><td class=\"fail-cell\">{gFail}</td><td>{gNa}</td></tr>");
         }
-        sb.AppendLine("</table>");
+        AppendTableEnd(sb);
 
         var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
 
-        sb.AppendLine("<h2>Compliance Framework Coverage</h2>");
-        sb.AppendLine("<table class=\"category-table\">");
-        sb.AppendLine("<tr><th>Framework</th><th>Mapped Checks</th><th>Passing</th><th>Coverage</th></tr>");
+        sb.AppendLine("<h2>Compliance Framework Readiness</h2>");
+        AppendTableHeader(sb, "category-table", "Compliance framework readiness", ["Framework", "Mapped Checks", "Met", "Partial", "Fail", "Not assessed", "Met Coverage"]);
         foreach (var (fwName, sel) in FrameworkDefinitions.All)
         {
             var mapped = FrameworkMappings.All.Where(kv => sel(kv.Value) is not null).Select(kv => kv.Key).ToList();
-            int fwTotal = 0, fwPass = 0;
+            int fwAssessed = 0, fwMet = 0, fwPartial = 0, fwFail = 0, fwNotAssessed = 0;
             foreach (var cid in mapped)
             {
-                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed) continue;
-                fwTotal++;
-                if (st is CheckStatus.Pass or CheckStatus.Partial) fwPass++;
-            }
-            var pct = fwTotal > 0 ? Math.Round((double)fwPass / fwTotal * 100) : 0;
-            var color = pct >= 80 ? "#a6e3a1" : pct >= 60 ? "#f9e2af" : "#f38ba8";
-            sb.AppendLine($"<tr><td>{fwName}</td><td>{mapped.Count}</td><td class=\"pass-cell\">{fwPass}/{fwTotal}</td><td style=\"color:{color};font-weight:600\">{pct}%</td></tr>");
-        }
-        sb.AppendLine("</table>");
+                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed)
+                {
+                    fwNotAssessed++;
+                    continue;
+                }
 
-        if (failCount > 0)
+                fwAssessed++;
+                if (st == CheckStatus.Pass) fwMet++;
+                else if (st == CheckStatus.Partial) fwPartial++;
+                else if (st == CheckStatus.Fail) fwFail++;
+            }
+            var pct = fwAssessed > 0 ? Math.Round((double)fwMet / fwAssessed * 100) : 0;
+            var color = pct >= 80 ? "#a6e3a1" : pct >= 60 ? "#f9e2af" : "#f38ba8";
+            sb.AppendLine($"<tr><td>{EscapeHtml(fwName)}</td><td>{mapped.Count}</td><td class=\"pass-cell\">{fwMet}</td><td class=\"partial-cell\">{fwPartial}</td><td class=\"fail-cell\">{fwFail}</td><td>{fwNotAssessed}</td><td style=\"color:{color};font-weight:600\">{pct}%</td></tr>");
+        }
+        AppendTableEnd(sb);
+
+        var roadmapItems = checkList
+            .Where(c => c.Status is CheckStatus.Fail or CheckStatus.Partial)
+            .OrderByDescending(c => StatusPriority(c.Status))
+            .ThenByDescending(c => c.Severity)
+            .ThenBy(c => c.Category)
+            .ToList();
+
+        if (roadmapItems.Count > 0)
         {
             sb.AppendLine("<h2>Remediation Roadmap</h2>");
-            sb.AppendLine("<table class=\"category-table\">");
-            sb.AppendLine("<tr><th>Priority</th><th>ID</th><th>Check</th><th>Category</th><th>Assignee</th><th>Due</th></tr>");
+            AppendTableHeader(sb, "category-table", "Failed and partial remediation roadmap", ["Priority", "ID", "Check", "Status", "Category", "Assignee", "Due"]);
             var priorityOrder = 1;
-            foreach (var check in checkList
-                .Where(c => c.Status == CheckStatus.Fail)
-                .OrderByDescending(c => c.Severity)
-                .ThenBy(c => c.Category))
+            foreach (var check in roadmapItems)
             {
                 sb.AppendLine($"<tr><td>{priorityOrder++}</td><td class=\"id-cell\">{check.Id}</td>");
-                sb.AppendLine($"<td>{EscapeHtml(check.Label)}</td><td>{check.Category}</td>");
+                sb.AppendLine($"<td>{EscapeHtml(check.Label)}</td><td><span class=\"badge status-{StatusCssClass(check.Status)}\">{DisplayStatus(check.Status)}</span></td><td>{EscapeHtml(check.Category)}</td>");
                 sb.AppendLine($"<td>{EscapeHtml(check.RemediationAssignee)}</td>");
                 sb.AppendLine($"<td>{(check.RemediationDueDate.HasValue ? check.RemediationDueDate.Value.ToString("yyyy-MM-dd") : "")}</td></tr>");
             }
-            sb.AppendLine("</table>");
+            AppendTableEnd(sb);
         }
     }
 
@@ -205,12 +213,11 @@ public static class HtmlReportGenerator
         foreach (var group in checkList.GroupBy(c => c.Category).OrderBy(g => g.Key))
         {
             sb.AppendLine($"<h3>{group.Key}</h3>");
-            sb.AppendLine("<table class=\"findings-table\">");
-            sb.AppendLine("<tr><th>ID</th><th>Check</th><th>Severity</th><th>Status</th><th>ATT&amp;CK</th><th>Findings</th><th>Evidence</th></tr>");
+            AppendTableHeader(sb, "findings-table", $"{group.Key} detailed findings", ["ID", "Check", "Severity", "Status", "ATT&CK", "Findings", "Evidence"]);
             foreach (var check in group.OrderBy(c => c.Id))
             {
                 var severityClass = check.Severity.ToString().ToLowerInvariant();
-                var statusClass = check.Status.ToString().ToLowerInvariant();
+                var statusClass = StatusCssClass(check.Status);
                 var mitre = MitreMappings.All.GetValueOrDefault(check.Id);
                 var mitreCell = mitre is not null
                     ? string.Join(", ", mitre.Techniques.Select(t => $"<span class=\"badge severity-medium\">{t}</span>"))
@@ -218,21 +225,20 @@ public static class HtmlReportGenerator
                 sb.AppendLine($"<tr>");
                 sb.AppendLine($"<td class=\"id-cell\">{check.Id}</td>");
                 var safeUrl = check.RemediationUrl is not null && (check.RemediationUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || check.RemediationUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-                    ? $" <a href=\"{EscapeHtml(check.RemediationUrl)}\" style=\"color:#89b4fa;font-size:11px\">[remediation]</a>" : "";
+                    ? $" <a href=\"{EscapeHtml(check.RemediationUrl)}\" aria-label=\"Remediation guidance for {EscapeHtml(check.Id)}\" style=\"color:#89b4fa;font-size:11px\">Remediation guidance</a>" : "";
                 sb.AppendLine($"<td>{EscapeHtml(check.Label)}{safeUrl}</td>");
                 sb.AppendLine($"<td><span class=\"badge severity-{severityClass}\">{check.SeverityLabel}</span></td>");
-                sb.AppendLine($"<td><span class=\"badge status-{statusClass}\">{check.Status}</span></td>");
+                sb.AppendLine($"<td><span class=\"badge status-{statusClass}\">{DisplayStatus(check.Status)}</span></td>");
                 sb.AppendLine($"<td class=\"mitre-cell\">{mitreCell}</td>");
                 sb.AppendLine($"<td class=\"findings-cell\">{EscapeHtml(check.Findings)}</td>");
                 sb.AppendLine($"<td class=\"evidence-cell\">{EscapeHtml(check.Evidence)}</td>");
                 sb.AppendLine("</tr>");
             }
-            sb.AppendLine("</table>");
+            AppendTableEnd(sb);
         }
 
         sb.AppendLine("<h3>Per-Check Framework Control IDs</h3>");
-        sb.AppendLine("<table class=\"compliance-table\">");
-        sb.AppendLine("<tr><th>Check ID</th><th>Label</th><th>Framework Controls</th></tr>");
+        AppendTableHeader(sb, "compliance-table", "Per-check framework control IDs", ["Check ID", "Label", "Framework Controls"]);
         foreach (var check in checkList.OrderBy(c => c.Id))
         {
             var mapping = FrameworkMappings.All.GetValueOrDefault(check.Id);
@@ -240,11 +246,10 @@ public static class HtmlReportGenerator
             if (string.IsNullOrWhiteSpace(controls)) continue;
             sb.AppendLine($"<tr><td>{check.Id}</td><td>{EscapeHtml(check.Label)}</td><td style=\"font-size:12px\">{EscapeHtml(controls)}</td></tr>");
         }
-        sb.AppendLine("</table>");
+        AppendTableEnd(sb);
 
         sb.AppendLine("<h2>MITRE D3FEND Defensive Coverage</h2>");
-        sb.AppendLine("<table class=\"category-table\">");
-        sb.AppendLine("<tr><th>Stage</th><th>Checks</th><th>Techniques</th></tr>");
+        AppendTableHeader(sb, "category-table", "MITRE D3FEND defensive coverage", ["Stage", "Checks", "Techniques"]);
         var stageChecks = new Dictionary<string, List<(string id, string[] techniques)>>();
         foreach (var check in checkList)
         {
@@ -262,8 +267,49 @@ public static class HtmlReportGenerator
             var allTechniques = checks2.SelectMany(c => c.techniques).Distinct().OrderBy(t => t).ToList();
             sb.AppendLine($"<tr><td style=\"font-weight:600\">{stage}</td><td>{checks2.Count}</td><td style=\"font-size:12px\">{EscapeHtml(string.Join(", ", allTechniques))}</td></tr>");
         }
+        AppendTableEnd(sb);
+    }
+
+    private static void AppendTableHeader(StringBuilder sb, string className, string caption, IReadOnlyList<string> headers)
+    {
+        sb.AppendLine($"<table class=\"{className}\">");
+        sb.AppendLine($"<caption>{EscapeHtml(caption)}</caption>");
+        sb.AppendLine("<thead><tr>");
+        foreach (var header in headers)
+        {
+            sb.AppendLine($"<th scope=\"col\">{EscapeHtml(header)}</th>");
+        }
+        sb.AppendLine("</tr></thead>");
+        sb.AppendLine("<tbody>");
+    }
+
+    private static void AppendTableEnd(StringBuilder sb)
+    {
+        sb.AppendLine("</tbody>");
         sb.AppendLine("</table>");
     }
+
+    private static int StatusPriority(CheckStatus status) => status switch
+    {
+        CheckStatus.Fail => 3,
+        CheckStatus.Partial => 2,
+        CheckStatus.Pass => 1,
+        _ => 0
+    };
+
+    private static string DisplayStatus(CheckStatus status) => status switch
+    {
+        CheckStatus.NotAssessed => "Not assessed",
+        CheckStatus.NA => "N/A",
+        _ => status.ToString()
+    };
+
+    private static string StatusCssClass(CheckStatus status) => status switch
+    {
+        CheckStatus.NotAssessed => "notassessed",
+        CheckStatus.NA => "na",
+        _ => status.ToString().ToLowerInvariant()
+    };
 
     private static string GradeColor(string grade) => grade switch
     {
@@ -326,6 +372,10 @@ public static class HtmlReportGenerator
             background: #313244; border-radius: 8px; overflow: hidden;
             margin-bottom: 16px;
         }
+        caption {
+            text-align: left; color: #b5bcd6; font-size: 12px;
+            padding: 0 0 8px; font-weight: 600;
+        }
         th {
             background: #45475a; color: #cba6f7; text-align: left;
             padding: 10px 14px; font-size: 13px; text-transform: uppercase;
@@ -351,7 +401,7 @@ public static class HtmlReportGenerator
         .status-partial { background: rgba(249,226,175,0.2); color: #f9e2af; }
         .status-fail { background: rgba(243,139,168,0.2); color: #f38ba8; }
         .status-na { background: rgba(147,153,178,0.2); color: #9399b2; }
-        .status-notassessed { background: rgba(88,91,112,0.2); color: #585b70; }
+        .status-notassessed { background: rgba(88,91,112,0.35); color: #cdd6f4; }
         .footer {
             text-align: center; padding: 24px; color: #585b70;
             font-size: 12px; margin-top: 32px;

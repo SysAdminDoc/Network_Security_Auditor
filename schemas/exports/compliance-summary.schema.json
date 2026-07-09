@@ -36,8 +36,36 @@
         "critical_failures": { "type": "integer" }
       }
     },
-    "category_scores": { "type": "object" },
-    "framework_scores": { "type": "object" },
+    "category_scores": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["total", "met", "partial", "failing", "pct"],
+        "properties": {
+          "total": { "type": "integer" },
+          "met": { "type": "integer" },
+          "partial": { "type": "integer" },
+          "failing": { "type": "integer" },
+          "pct": { "type": "number" }
+        }
+      }
+    },
+    "framework_scores": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["mapped", "total", "met", "partial", "failing", "not_assessed", "pct"],
+        "properties": {
+          "mapped": { "type": "integer" },
+          "total": { "type": "integer" },
+          "met": { "type": "integer" },
+          "partial": { "type": "integer" },
+          "failing": { "type": "integer" },
+          "not_assessed": { "type": "integer" },
+          "pct": { "type": "number" }
+        }
+      }
+    },
     "critical_failures": { "type": "array" }
   }
 }

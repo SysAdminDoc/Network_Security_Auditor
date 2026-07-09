@@ -28,22 +28,47 @@ public static class ComplianceSummaryExporter
                 g =>
                 {
                     var assessed = g.Where(c => c.Status is not (CheckStatus.NA or CheckStatus.NotAssessed)).ToList();
-                    var passing = assessed.Count(c => c.Status is CheckStatus.Pass or CheckStatus.Partial);
-                    return new { Total = assessed.Count, Passing = passing, Pct = assessed.Count > 0 ? Math.Round((double)passing / assessed.Count * 100, 1) : 0.0 };
+                    var met = assessed.Count(c => c.Status == CheckStatus.Pass);
+                    var partial = assessed.Count(c => c.Status == CheckStatus.Partial);
+                    var failing = assessed.Count(c => c.Status == CheckStatus.Fail);
+                    return new
+                    {
+                        Total = assessed.Count,
+                        Met = met,
+                        Partial = partial,
+                        Failing = failing,
+                        Pct = assessed.Count > 0 ? Math.Round((double)met / assessed.Count * 100, 1) : 0.0
+                    };
                 });
 
         var frameworkScores = new Dictionary<string, object>();
         foreach (var (name, sel) in FrameworkDefinitions.All)
         {
             var mapped = FrameworkMappings.All.Where(kv => sel(kv.Value) is not null).Select(kv => kv.Key).ToList();
-            int total = 0, passing = 0;
+            int assessed = 0, met = 0, partial = 0, failing = 0, notAssessed = 0;
             foreach (var cid in mapped)
             {
-                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed) continue;
-                total++;
-                if (st is CheckStatus.Pass or CheckStatus.Partial) passing++;
+                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed)
+                {
+                    notAssessed++;
+                    continue;
+                }
+
+                assessed++;
+                if (st == CheckStatus.Pass) met++;
+                else if (st == CheckStatus.Partial) partial++;
+                else if (st == CheckStatus.Fail) failing++;
             }
-            frameworkScores[name] = new { Total = total, Passing = passing, Pct = total > 0 ? Math.Round((double)passing / total * 100, 1) : 0.0 };
+            frameworkScores[name] = new
+            {
+                Mapped = mapped.Count,
+                Total = assessed,
+                Met = met,
+                Partial = partial,
+                Failing = failing,
+                NotAssessed = notAssessed,
+                Pct = assessed > 0 ? Math.Round((double)met / assessed * 100, 1) : 0.0
+            };
         }
 
         var criticalFails = checkList

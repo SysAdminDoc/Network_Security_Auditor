@@ -10,6 +10,7 @@ public class MainWindowXamlTests
         Assert.Contains("Foreground=\"{Binding GradeBrushKey, Converter={StaticResource ResourceBrush}}\"", xaml);
         Assert.Contains("Background=\"{Binding SeverityBrushKey, Converter={StaticResource ResourceBrush}}\"", xaml);
         Assert.Contains("Background=\"{Binding StatusBrushKey, Converter={StaticResource ResourceBrush}}\"", xaml);
+        Assert.Contains("Foreground=\"{Binding StatusForegroundBrushKey, Converter={StaticResource ResourceBrush}}\"", xaml);
     }
 
     [Fact]
@@ -18,6 +19,8 @@ public class MainWindowXamlTests
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
 
         Assert.Contains("Text=\"{Binding SearchText, UpdateSourceTrigger=PropertyChanged}\"", xaml);
+        Assert.Contains("Search ID, check, or category", xaml);
+        Assert.Contains("Text=\"{Binding VisibleChecksDisplay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding StatusFilters}\"", xaml);
         Assert.Contains("IsChecked=\"{Binding PrivacyMode}\"", xaml);
         Assert.Contains("Text=\"{Binding DomainMaturityGrade}\"", xaml);
@@ -37,7 +40,9 @@ public class MainWindowXamlTests
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
 
         Assert.Contains("Text=\"{Binding OverallScoreDisplay}\"", xaml);
+        Assert.Contains("Text=\"{Binding ScoreSubtitle}\"", xaml);
         Assert.DoesNotContain("Path=\"OverallScore\" StringFormat=\"{}{0}/100\"", xaml);
+        Assert.DoesNotContain("<TextBlock Text=\"{Binding ScanStatus}\"", xaml);
     }
 
     [Fact]
@@ -108,10 +113,11 @@ public class MainWindowXamlTests
     {
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
 
-        Assert.Contains("private bool CanExport() => !IsScanning && HasAssessedChecks && !string.IsNullOrWhiteSpace(ExportOutputFolder);", mainVm);
+        Assert.Contains("private bool CanExport() => !IsScanning && !IsExporting && HasAssessedChecks && !string.IsNullOrWhiteSpace(ExportOutputFolder);", mainVm);
         Assert.Equal(13, mainVm.Split("[RelayCommand(CanExecute = nameof(CanExport))]").Length - 1);
         Assert.Contains("ExportSelectedCommand.NotifyCanExecuteChanged();", mainVm);
         Assert.Contains("NotifyExportCommandCanExecuteChanged();", mainVm);
+        Assert.Contains("ExportAvailabilityText", mainVm);
     }
 
     [Fact]
@@ -125,6 +131,8 @@ public class MainWindowXamlTests
         Assert.Contains("ItemsSource=\"{Binding ExportFormats}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedExportFormat}\"", xaml);
         Assert.Contains("Text=\"{Binding ExportOutputFolder, UpdateSourceTrigger=PropertyChanged}\"", xaml);
+        Assert.Contains("ToolTip=\"{Binding ExportAvailabilityText}\"", xaml);
+        Assert.Contains("ToolTipService.ShowOnDisabled=\"True\"", xaml);
         Assert.Contains("Command=\"{Binding BrowseExportFolderCommand}\"", xaml);
         Assert.Contains("Command=\"{Binding ExportSelectedCommand}\"", xaml);
         Assert.DoesNotContain("Command=\"{Binding ExportHtmlCommand}\"", xaml);
@@ -146,6 +154,9 @@ public class MainWindowXamlTests
         Assert.Contains("Scan Console", xaml);
         Assert.Contains("ActivityLog", xaml);
         Assert.Contains("TargetDisplay", xaml);
+        Assert.Contains("FilterEmptyStateTitle", xaml);
+        Assert.Contains("ClearFiltersCommand", xaml);
+        Assert.Contains("ScanReadinessText", xaml);
         Assert.Contains("x:Key=\"InspectorCard\"", theme);
         Assert.Contains("public ObservableCollection<CategorySummaryViewModel> CategorySummaries { get; }", mainVm);
         Assert.Contains("public ObservableCollection<string> ActivityLog { get; }", mainVm);
@@ -173,6 +184,22 @@ public class MainWindowXamlTests
         Assert.Contains("Property=\"IsKeyboardFocusWithin\" Value=\"True\"", theme);
         Assert.Contains("x:Key=\"AccentSoft\"", theme);
         Assert.Contains("x:Key=\"RailBg\"", theme);
+        Assert.Contains("Property=\"ToolTipService.ShowOnDisabled\" Value=\"True\"", theme);
+        Assert.DoesNotContain("TargetName=\"ButtonBorder\" Property=\"BorderThickness\" Value=\"1\"", theme);
+    }
+
+    [Fact]
+    public void Main_Window_Announces_Dynamic_Scan_And_Filter_States()
+    {
+        var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
+
+        Assert.Contains("AutomationProperties.LiveSetting=\"Polite\"", xaml);
+        Assert.Contains("AutomationProperties.Name=\"Scan progress\"", xaml);
+        Assert.Contains("AutomationProperties.Name=\"No matching checks\"", xaml);
+        Assert.Contains("AutomationProperties.Name=\"Filtered check count\"", xaml);
+        Assert.Contains("Fail {0}", xaml);
+        Assert.Contains("Partial {0}", xaml);
+        Assert.Contains("Pass {0}", xaml);
     }
 
     [Fact]

@@ -160,9 +160,43 @@ public class ExportTests
         Assert.Contains("Overall Score", html);
         Assert.Contains("Ransomware Readiness", html);
         Assert.Contains("Domain Maturity", html);
-        Assert.Contains("Compliance Framework Coverage", html);
+        Assert.Contains("Compliance Framework Readiness", html);
         Assert.Contains("Detailed Findings", html);
         Assert.Contains("ATT&amp;CK", html);
+    }
+
+    [Fact]
+    public void Json_Compliance_Splits_Partial_From_Met_Controls()
+    {
+        var checks = new ObservableCollection<CheckItemViewModel>();
+        foreach (var meta in CheckCatalog.All.Values)
+        {
+            var vm = CheckItemViewModel.FromMetadata(meta);
+            vm.Status = CheckStatus.NotAssessed;
+            checks.Add(vm);
+        }
+
+        var nistMapped = FrameworkMappings.All
+            .Where(kv => kv.Value.NIST is not null)
+            .Select(kv => kv.Key)
+            .Take(3)
+            .ToArray();
+        checks.Single(c => c.Id == nistMapped[0]).Status = CheckStatus.Pass;
+        checks.Single(c => c.Id == nistMapped[1]).Status = CheckStatus.Partial;
+        checks.Single(c => c.Id == nistMapped[2]).Status = CheckStatus.Fail;
+
+        var env = new EnvironmentInfo { ComputerName = "TEST", OSCaption = "Windows 11" };
+        var json = JsonExporter.Export(checks, env, 33, "F", 20, "F", ScanProfileType.Full);
+        using var doc = JsonDocument.Parse(json);
+        var nist = doc.RootElement.GetProperty("compliance_frameworks").GetProperty("NIST 800-171");
+
+        Assert.Equal(1, nist.GetProperty("passing_controls").GetInt32());
+        Assert.Equal(1, nist.GetProperty("met_controls").GetInt32());
+        Assert.Equal(1, nist.GetProperty("partial_controls").GetInt32());
+        Assert.Equal(1, nist.GetProperty("failing_controls").GetInt32());
+        Assert.True(nist.GetProperty("not_assessed_controls").GetInt32() > 0);
+        Assert.True(nist.GetProperty("mapped_controls").GetInt32() > nist.GetProperty("total_controls").GetInt32());
+        Assert.Equal(33.3, nist.GetProperty("coverage").GetDouble(), precision: 1);
     }
 
     [Fact]
@@ -189,6 +223,56 @@ public class ExportTests
         Assert.Contains("NIST 800-171", html);
         Assert.Contains("PCI-DSS 4.0.1", html);
         Assert.DoesNotContain("DISA STIG", html);
+    }
+
+    [Fact]
+    public void Html_Uses_Accessible_Tables_And_Surfaces_Partial_Findings()
+    {
+        var (checks, env) = CreateTestData();
+        var meta = CheckCatalog.All[checks[0].Id];
+        checks[0] = CheckItemViewModel.FromMetadata(new CheckMetadata
+        {
+            Id = meta.Id,
+            Category = meta.Category,
+            Label = meta.Label,
+            Hint = meta.Hint,
+            Severity = meta.Severity,
+            Weight = meta.Weight,
+            Type = meta.Type,
+            RiskTier = meta.RiskTier,
+            Compliance = meta.Compliance,
+            RemediationUrl = "https://example.com/remediate"
+        });
+        checks[0].Status = CheckStatus.Fail;
+        checks[0].Findings = "Critical failed finding";
+        checks[1].Status = CheckStatus.Partial;
+        checks[1].Findings = "Partial finding needs review";
+
+        var html = HtmlReportGenerator.Generate(checks, env, 45, "F", 30, "F", 20, "F");
+
+        Assert.Contains("<caption>Top failed and partial findings</caption>", html);
+        Assert.Contains("<thead><tr>", html);
+        Assert.Contains("<th scope=\"col\">Status</th>", html);
+        Assert.Contains("<tbody>", html);
+        Assert.Contains("status-partial\">Partial", html);
+        Assert.Contains("Failed and partial remediation roadmap", html);
+        Assert.Contains("Met Coverage", html);
+        Assert.Contains("Remediation guidance", html);
+        Assert.DoesNotContain("[remediation]", html);
+    }
+
+    [Fact]
+    public void Csv_Uses_Human_Status_Labels()
+    {
+        var (checks, env) = CreateTestData();
+        checks[0].Status = CheckStatus.NotAssessed;
+        checks[1].Status = CheckStatus.NA;
+
+        var csv = CsvExporter.Export(checks.Take(2), env, 0, "F");
+
+        Assert.Contains(",Not assessed,", csv);
+        Assert.Contains(",N/A,", csv);
+        Assert.DoesNotContain(",NotAssessed,", csv);
     }
 
     [Fact]
@@ -449,6 +533,41 @@ public class ExportTests
     }
 
     [Fact]
+    public void Cmmc_Evidence_Uses_Worst_Status_For_Shared_Controls()
+    {
+        var sharedControl = FrameworkMappings.All
+            .Where(kv => kv.Value.NIST is not null)
+            .SelectMany(kv => kv.Value.NIST!
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Select(control => new { Control = control, CheckId = kv.Key }))
+            .GroupBy(item => item.Control)
+            .First(group => group.Select(item => item.CheckId).Distinct().Count() >= 2);
+        var sharedIds = sharedControl
+            .Select(item => item.CheckId)
+            .Distinct()
+            .Take(2)
+            .ToArray();
+        var passing = CheckItemViewModel.FromMetadata(CheckCatalog.All[sharedIds[0]]);
+        passing.Status = CheckStatus.Pass;
+        passing.Findings = "Passing evidence should not win";
+        var failing = CheckItemViewModel.FromMetadata(CheckCatalog.All[sharedIds[1]]);
+        failing.Status = CheckStatus.Fail;
+        failing.Findings = "Failing evidence should win";
+        var checks = new ObservableCollection<CheckItemViewModel> { passing, failing };
+        var env = new EnvironmentInfo { ComputerName = "TEST", IsDomainJoined = true, DomainName = "TEST.LOCAL" };
+
+        var html = CmmcReportGenerator.ExportHtml(checks, env, 50, "F");
+        var rowStart = html.IndexOf($">{sharedControl.Key}</td>", StringComparison.Ordinal);
+        var rowEnd = html.IndexOf("</tr>", rowStart, StringComparison.Ordinal);
+        var row = html[rowStart..rowEnd];
+
+        Assert.Contains("<caption>CMMC control assessment by NIST 800-171 control</caption>", html);
+        Assert.Contains("<th scope=\"col\">Control</th>", html);
+        Assert.Contains($"{failing.Id}: Failing evidence should win", row);
+        Assert.DoesNotContain($"{passing.Id}: Passing evidence should not win", row);
+    }
+
+    [Fact]
     public void Navigator_Uses_Worst_Status_For_Shared_Techniques()
     {
         var checks = new ObservableCollection<CheckItemViewModel>();
@@ -611,6 +730,47 @@ public class ExportTests
             Assert.Contains("class=\"grade-unknown\"", html);
             Assert.DoesNotContain("class=\"grade-a&quot;", html);
             Assert.Contains("A&quot; onmouseover=&quot;alert(1)", html);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Dashboard_Empty_And_Invalid_Date_States_Are_Actionable()
+    {
+        var emptyDir = Path.Combine(Path.GetTempPath(), "nsa-export-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(emptyDir);
+        try
+        {
+            var emptyHtml = await DashboardGenerator.GenerateAsync(emptyDir);
+
+            Assert.Contains("No scan exports found", emptyHtml);
+            Assert.Contains("*_findings.json", emptyHtml);
+            Assert.DoesNotContain("<table>", emptyHtml);
+        }
+        finally
+        {
+            Directory.Delete(emptyDir, recursive: true);
+        }
+
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-export-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        await WriteDashboardFixtureAsync(dir, "client one_findings.json", DashboardJson("not-a-date", "Client One", "HOST01", 64, "D", 40, "Fail", "Critical"));
+        await File.WriteAllTextAsync(Path.Combine(dir, "client one.html"), "<html></html>");
+
+        try
+        {
+            var html = await DashboardGenerator.GenerateAsync(dir, staleDays: 9999);
+
+            Assert.Contains("<caption>Latest scan per client and host</caption>", html);
+            Assert.Contains("<th scope=\"col\">Client</th>", html);
+            Assert.Contains("Invalid scan date: not-a-date", html);
+            Assert.Contains("[STALE]", html);
+            Assert.Contains("Open report", html);
+            Assert.Contains("href=\"client%20one.html\"", html);
+            Assert.Contains("aria-label=\"Open report for Client One HOST01\"", html);
         }
         finally
         {

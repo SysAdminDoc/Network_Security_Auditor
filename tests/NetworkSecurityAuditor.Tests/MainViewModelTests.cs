@@ -1,3 +1,4 @@
+using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.ViewModels;
 
@@ -111,20 +112,39 @@ public class MainViewModelTests
 
         Assert.Same(view, vm.FilteredChecks);
         Assert.Equal(vm.Checks.Count, view.Cast<CheckItemViewModel>().Count());
+        Assert.Equal(vm.Checks.Count, vm.VisibleCheckCount);
+        Assert.True(vm.HasVisibleChecks);
+        Assert.False(vm.HasActiveFilters);
+        Assert.True(vm.IsSearchWatermarkVisible);
 
         vm.SearchText = check.Id;
         Assert.Same(view, vm.FilteredChecks);
         Assert.Single(view.Cast<CheckItemViewModel>());
         Assert.Equal(check, vm.SelectedCheck);
+        Assert.Equal(1, vm.VisibleCheckCount);
+        Assert.True(vm.HasActiveFilters);
+        Assert.False(vm.IsSearchWatermarkVisible);
 
         vm.StatusFilter = "Pass";
         Assert.Empty(view.Cast<CheckItemViewModel>());
         Assert.Null(vm.SelectedCheck);
+        Assert.Equal(0, vm.VisibleCheckCount);
+        Assert.True(vm.HasNoVisibleChecks);
+        Assert.Equal("No checks match this view", vm.FilterEmptyStateTitle);
+        Assert.Contains("Clear filters", vm.FilterEmptyStateDetail, StringComparison.Ordinal);
 
         check.Status = CheckStatus.Pass;
 
         Assert.Same(view, vm.FilteredChecks);
         Assert.Contains(check, view.Cast<CheckItemViewModel>());
+        Assert.Equal(check, vm.SelectedCheck);
+
+        vm.ClearFiltersCommand.Execute(null);
+
+        Assert.Equal("All", vm.SelectedCategory);
+        Assert.Equal("", vm.SearchText);
+        Assert.Equal("All", vm.StatusFilter);
+        Assert.Equal(vm.Checks.Count, vm.VisibleCheckCount);
         Assert.Equal(check, vm.SelectedCheck);
     }
 
@@ -153,19 +173,72 @@ public class MainViewModelTests
         vm.ExportHtmlCommand.CanExecuteChanged += (_, _) => htmlCanExecuteChanges++;
 
         Assert.All(exportCanExecute, canExecute => Assert.False(canExecute()));
+        Assert.Equal("Run a scan or mark at least one check before exporting.", vm.ExportAvailabilityText);
 
         vm.Checks[0].Status = CheckStatus.Pass;
 
         Assert.All(exportCanExecute, canExecute => Assert.True(canExecute()));
+        Assert.Equal("Ready to export HTML report.", vm.ExportAvailabilityText);
         Assert.True(htmlCanExecuteChanges > 0);
 
+        vm.ExportOutputFolder = "";
+        Assert.All(exportCanExecute, canExecute => Assert.False(canExecute()));
+        Assert.Equal("Choose an export folder before exporting.", vm.ExportAvailabilityText);
+
+        vm.ExportOutputFolder = Path.Combine(Path.GetTempPath(), "nsa-export");
         vm.IsScanning = true;
 
         Assert.All(exportCanExecute, canExecute => Assert.False(canExecute()));
+        Assert.Equal("Export pauses while a scan is running.", vm.ExportAvailabilityText);
 
         vm.IsScanning = false;
 
         Assert.All(exportCanExecute, canExecute => Assert.True(canExecute()));
+
+        vm.IsExporting = true;
+
+        Assert.All(exportCanExecute, canExecute => Assert.False(canExecute()));
+        Assert.Equal("Exporting HTML report...", vm.ExportAvailabilityText);
+        Assert.Equal("Exporting HTML report...", vm.ScanReadinessText);
+
+        vm.IsExporting = false;
+
+        Assert.All(exportCanExecute, canExecute => Assert.True(canExecute()));
+    }
+
+    [Fact]
+    public void Score_And_Readiness_Copy_Stay_Compact_For_The_Shell()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+
+        Assert.Equal("Ready for pre-flight", vm.ScoreSubtitle);
+        Assert.Equal("Ready to run local audit checks", vm.ScanReadinessText);
+
+        vm.PreflightPassedCount = 4;
+        vm.PreflightTotalCount = 7;
+
+        Assert.Equal("Pre-flight 4/7 passed", vm.ScoreSubtitle);
+        Assert.Equal("Pre-flight 4/7 passed - ready to scan", vm.ScanReadinessText);
+
+        vm.Checks[0].Status = CheckStatus.Pass;
+
+        Assert.Equal($"1 assessed - {vm.Checks.Count - 1} open", vm.ScoreSubtitle);
+        Assert.Equal("1 assessed - export ready", vm.ScanReadinessText);
+    }
+
+    [Fact]
+    public void Status_Badge_Foreground_Stays_Readable_For_Neutral_Badges()
+    {
+        var check = CheckItemViewModel.FromMetadata(CheckCatalog.All["EP01"]);
+
+        Assert.Equal("BadgeBg", check.StatusBrushKey);
+        Assert.Equal("TextSecondary", check.StatusForegroundBrushKey);
+
+        check.Status = CheckStatus.Pass;
+
+        Assert.Equal("ProgressGood", check.StatusBrushKey);
+        Assert.Equal("WindowBg", check.StatusForegroundBrushKey);
     }
 
     [Fact]

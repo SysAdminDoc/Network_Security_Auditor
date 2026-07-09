@@ -8,7 +8,7 @@ The repo also contains an active .NET 9/WPF C# rewrite under `src/NetworkSecurit
 ![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
 ![PowerShell Version](https://img.shields.io/badge/PowerShell_Version-4.11.0-brightgreen)
-![C%23 Rewrite](https://img.shields.io/badge/C%23_Rewrite-5.2.5-blueviolet)
+![C%23 Rewrite](https://img.shields.io/badge/C%23_Rewrite-5.2.6-blueviolet)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img width="1547" height="1067" alt="image" src="https://github.com/user-attachments/assets/13762ac2-4231-452a-bfd5-a4f3cdfa2691" />
@@ -686,7 +686,7 @@ A separate 100-point scale evaluates specific ransomware defense capabilities ma
 
 ### Compliance Scoring
 
-Each framework profile defines which checks map to which controls. The score represents the percentage of applicable controls that pass or partially pass.
+Each framework profile defines which checks map to which controls. C# compliance summaries now separate met, partial, failed, and not-assessed mapped checks so partial coverage is visible without being counted as fully met.
 
 ---
 

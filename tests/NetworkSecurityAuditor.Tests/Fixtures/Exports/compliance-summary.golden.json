@@ -1,7 +1,7 @@
 {
   "schema_version": "2.1",
   "tool": "NetworkSecurityAuditor",
-  "tool_version": "5.2.5",
+  "tool_version": "5.2.6",
   "timestamp": "2026-07-08T00:00:00Z",
   "host": "HOST01",
   "os": "Windows 11 Enterprise",
@@ -16,8 +16,8 @@
   },
   "counts": {
     "total": 3,
-    "pass": 2,
-    "partial": 0,
+    "pass": 1,
+    "partial": 1,
     "fail": 1,
     "na": 0,
     "critical_failures": 1
@@ -25,15 +25,21 @@
   "category_scores": {
     "Endpoint Security": {
       "total": 3,
-      "passing": 2,
-      "pct": 66.7
+      "met": 1,
+      "partial": 1,
+      "failing": 1,
+      "pct": 33.3
     }
   },
   "framework_scores": {
     "NIST 800-171": {
+      "mapped": 3,
       "total": 3,
-      "passing": 2,
-      "pct": 66.7
+      "met": 1,
+      "partial": 1,
+      "failing": 1,
+      "not_assessed": 0,
+      "pct": 33.3
     }
   },
   "critical_failures": [

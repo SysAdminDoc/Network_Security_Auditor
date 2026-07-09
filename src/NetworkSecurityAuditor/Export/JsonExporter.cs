@@ -140,21 +140,31 @@ public static class JsonExporter
                 .Select(kv => kv.Key)
                 .ToList();
 
-            int total = 0, passing = 0;
+            int assessed = 0, met = 0, partial = 0, failing = 0, notAssessed = 0;
             foreach (var checkId in mappedChecks)
             {
-                if (!statusLookup.TryGetValue(checkId, out var status)) continue;
-                if (status is CheckStatus.NA or CheckStatus.NotAssessed) continue;
-                total++;
-                if (status is CheckStatus.Pass or CheckStatus.Partial)
-                    passing++;
+                if (!statusLookup.TryGetValue(checkId, out var status) || status is CheckStatus.NA or CheckStatus.NotAssessed)
+                {
+                    notAssessed++;
+                    continue;
+                }
+
+                assessed++;
+                if (status == CheckStatus.Pass) met++;
+                else if (status == CheckStatus.Partial) partial++;
+                else if (status == CheckStatus.Fail) failing++;
             }
 
             result[name] = new ComplianceFrameworkSummary
             {
-                TotalControls = total,
-                PassingControls = passing,
-                Coverage = total > 0 ? Math.Round((double)passing / total * 100, 1) : 0
+                MappedControls = mappedChecks.Count,
+                TotalControls = assessed,
+                PassingControls = met,
+                MetControls = met,
+                PartialControls = partial,
+                FailingControls = failing,
+                NotAssessedControls = notAssessed,
+                Coverage = assessed > 0 ? Math.Round((double)met / assessed * 100, 1) : 0
             };
         }
 
@@ -246,8 +256,13 @@ public static class JsonExporter
 
     private sealed class ComplianceFrameworkSummary
     {
+        public int MappedControls { get; set; }
         public int TotalControls { get; set; }
         public int PassingControls { get; set; }
+        public int MetControls { get; set; }
+        public int PartialControls { get; set; }
+        public int FailingControls { get; set; }
+        public int NotAssessedControls { get; set; }
         public double Coverage { get; set; }
     }
 }

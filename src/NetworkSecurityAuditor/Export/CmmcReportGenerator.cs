@@ -145,7 +145,15 @@ public static class CmmcReportGenerator
                     ca.PassingChecks.Add(checkId);
 
                 if (check.Findings.Length > 0)
-                    ca.EvidenceSummary = check.Findings.Length > 200 ? check.Findings[..200] + "..." : check.Findings;
+                {
+                    var evidencePriority = EvidencePriority(check.Status);
+                    if (evidencePriority > ca.EvidencePriority)
+                    {
+                        var summary = check.Findings.Length > 200 ? check.Findings[..200] + "..." : check.Findings;
+                        ca.EvidenceSummary = $"{checkId}: {summary}";
+                        ca.EvidencePriority = evidencePriority;
+                    }
+                }
             }
         }
 
@@ -179,7 +187,9 @@ public static class CmmcReportGenerator
     private static void AppendControlTable(StringBuilder sb, List<ControlAssessment> controls)
     {
         sb.AppendLine("<table>");
-        sb.AppendLine("<tr><th>Control</th><th>Family</th><th>Status</th><th>Weight</th><th>Deduction</th><th>Checks</th><th>Evidence</th></tr>");
+        sb.AppendLine("<caption>CMMC control assessment by NIST 800-171 control</caption>");
+        sb.AppendLine("<thead><tr><th scope=\"col\">Control</th><th scope=\"col\">Family</th><th scope=\"col\">Status</th><th scope=\"col\">Weight</th><th scope=\"col\">Deduction</th><th scope=\"col\">Checks</th><th scope=\"col\">Evidence</th></tr></thead>");
+        sb.AppendLine("<tbody>");
         foreach (var c in controls)
         {
             var statusColor = c.Status switch { "Met" => "#a6e3a1", "Not Met" => "#f38ba8", "Partially Met" => "#f9e2af", _ => "#7f839b" };
@@ -190,8 +200,17 @@ public static class CmmcReportGenerator
             sb.AppendLine($"<td style=\"font-size:12px\">{string.Join(", ", c.CheckIds)}</td>");
             sb.AppendLine($"<td style=\"font-size:12px;color:#b5bcd6;max-width:300px;word-wrap:break-word\">{EscapeHtml(c.EvidenceSummary)}</td></tr>");
         }
+        sb.AppendLine("</tbody>");
         sb.AppendLine("</table>");
     }
+
+    private static int EvidencePriority(CheckStatus status) => status switch
+    {
+        CheckStatus.Fail => 3,
+        CheckStatus.Partial => 2,
+        CheckStatus.Pass => 1,
+        _ => 0
+    };
 
     private static string GetFamily(string controlId)
     {
@@ -239,6 +258,7 @@ public static class CmmcReportGenerator
         .score-label { font-size: 13px; color: #7f839b; text-transform: uppercase; letter-spacing: 1px; }
         .stat-row { padding: 4px 0; font-size: 15px; }
         table { width: 100%; border-collapse: collapse; background: #313244; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+        caption { text-align: left; color: #b5bcd6; font-size: 12px; padding: 0 0 8px; font-weight: 600; }
         th { background: #45475a; color: #cba6f7; text-align: left; padding: 10px 14px; font-size: 13px; text-transform: uppercase; }
         td { padding: 10px 14px; border-top: 1px solid #45475a; font-size: 14px; }
         tr:hover { background: #3b3d50; }
@@ -258,5 +278,6 @@ public static class CmmcReportGenerator
         public List<string> PartialChecks { get; set; } = [];
         public List<string> FailingChecks { get; set; } = [];
         public string EvidenceSummary { get; set; } = "";
+        public int EvidencePriority { get; set; }
     }
 }

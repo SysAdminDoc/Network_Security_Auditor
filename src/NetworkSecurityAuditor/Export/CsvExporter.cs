@@ -28,7 +28,7 @@ public static class CsvExporter
             sb.Append(Escape(check.Category)).Append(',');
             sb.Append(Escape(check.Label)).Append(',');
             sb.Append(Escape(check.Severity.ToString())).Append(',');
-            sb.Append(Escape(check.Status.ToString())).Append(',');
+            sb.Append(Escape(DisplayStatus(check.Status))).Append(',');
             sb.Append(Escape(check.Findings)).Append(',');
             sb.Append(Escape(check.Evidence)).Append(',');
             sb.Append(Escape(check.Notes)).Append(',');
@@ -73,6 +73,13 @@ public static class CsvExporter
 
         return sanitized;
     }
+
+    private static string DisplayStatus(CheckStatus status) => status switch
+    {
+        CheckStatus.NotAssessed => "Not assessed",
+        CheckStatus.NA => "N/A",
+        _ => status.ToString()
+    };
 
     private static bool StartsWithSpreadsheetFormulaTrigger(string value)
     {

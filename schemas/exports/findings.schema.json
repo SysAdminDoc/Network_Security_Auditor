@@ -60,6 +60,22 @@
         }
       }
     },
-    "compliance_frameworks": { "type": "object" }
+    "compliance_frameworks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["mapped_controls", "total_controls", "passing_controls", "met_controls", "partial_controls", "failing_controls", "not_assessed_controls", "coverage"],
+        "properties": {
+          "mapped_controls": { "type": "integer" },
+          "total_controls": { "type": "integer" },
+          "passing_controls": { "type": "integer" },
+          "met_controls": { "type": "integer" },
+          "partial_controls": { "type": "integer" },
+          "failing_controls": { "type": "integer" },
+          "not_assessed_controls": { "type": "integer" },
+          "coverage": { "type": "number" }
+        }
+      }
+    }
   }
 }

@@ -51,12 +51,15 @@ public partial class MainViewModel : ViewModelBase
     public ICollectionView FilteredChecks { get; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActiveFilters), nameof(FilterEmptyStateTitle), nameof(FilterEmptyStateDetail))]
     private string _selectedCategory = "All";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActiveFilters), nameof(IsSearchWatermarkVisible), nameof(FilterEmptyStateTitle), nameof(FilterEmptyStateDetail))]
     private string _searchText = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActiveFilters), nameof(FilterEmptyStateTitle), nameof(FilterEmptyStateDetail))]
     private string _statusFilter = "All";
 
     [ObservableProperty]
@@ -65,9 +68,15 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopScanCommand))]
+    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ExportAvailabilityText))]
     private bool _isScanning;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ScanReadinessText), nameof(ExportAvailabilityText))]
+    private bool _isExporting;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText))]
     private string _scanStatus = "Ready";
 
     [ObservableProperty]
@@ -127,12 +136,26 @@ public partial class MainViewModel : ViewModelBase
     public IReadOnlyList<ExportFormatOption> ExportFormats { get; } = DefaultExportFormats;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExportAvailabilityText))]
     private ExportFormatOption _selectedExportFormat = DefaultExportFormats[0];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExportAvailabilityText))]
     private string _exportOutputFolder = Path.Combine(
         System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments),
         "NetworkSecurityAuditor");
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasVisibleChecks), nameof(HasNoVisibleChecks), nameof(VisibleChecksDisplay), nameof(FilterEmptyStateTitle), nameof(FilterEmptyStateDetail))]
+    private int _visibleCheckCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText))]
+    private int _preflightPassedCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText))]
+    private int _preflightTotalCount;
 
     public MainViewModel() : this(DefaultRunChecksAsync)
     {
@@ -186,27 +209,101 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedCategoryChanged(string value)
     {
-        FilteredChecks.Refresh();
-        SelectedCheck = FilteredChecks.Cast<CheckItemViewModel>().FirstOrDefault();
+        RefreshFilteredChecks();
     }
 
     partial void OnSearchTextChanged(string value)
     {
-        FilteredChecks.Refresh();
-        SelectedCheck = FilteredChecks.Cast<CheckItemViewModel>().FirstOrDefault();
+        RefreshFilteredChecks();
     }
 
     partial void OnStatusFilterChanged(string value)
     {
-        FilteredChecks.Refresh();
-        SelectedCheck = FilteredChecks.Cast<CheckItemViewModel>().FirstOrDefault();
+        RefreshFilteredChecks();
     }
 
     public bool HasAssessedChecks => Checks.Any(c => c.Status is CheckStatus.Pass or CheckStatus.Partial or CheckStatus.Fail);
 
+    public bool HasVisibleChecks => VisibleCheckCount > 0;
+
+    public bool HasNoVisibleChecks => !HasVisibleChecks;
+
+    public bool HasActiveFilters =>
+        SelectedCategory != "All" ||
+        StatusFilter != "All" ||
+        !string.IsNullOrWhiteSpace(SearchText);
+
+    public bool IsSearchWatermarkVisible => string.IsNullOrWhiteSpace(SearchText);
+
+    public string VisibleChecksDisplay => Checks.Count == 0
+        ? "No checks loaded"
+        : $"{VisibleCheckCount}/{Checks.Count} visible";
+
+    public string FilterEmptyStateTitle => Checks.Count == 0
+        ? "No checks loaded"
+        : "No checks match this view";
+
+    public string FilterEmptyStateDetail => HasActiveFilters
+        ? "Clear filters or adjust category and status."
+        : "Load the check catalog to begin.";
+
     public string Grade => HasAssessedChecks ? RiskScoreEngine.GradeFromScore(OverallScore) : "\u2014";
 
     public string OverallScoreDisplay => HasAssessedChecks ? $"{OverallScore}/100" : "Not scanned";
+
+    public string ScoreSubtitle
+    {
+        get
+        {
+            if (IsScanning)
+                return ScanStatus;
+
+            if (HasAssessedChecks)
+                return $"{PassCount + PartialCount + FailCount} assessed - {NotAssessedCount} open";
+
+            return PreflightTotalCount > 0
+                ? $"Pre-flight {PreflightPassedCount}/{PreflightTotalCount} passed"
+                : "Ready for pre-flight";
+        }
+    }
+
+    public string ScanReadinessText
+    {
+        get
+        {
+            if (IsScanning)
+                return ScanStatus;
+
+            if (IsExporting)
+                return $"Exporting {SelectedExportFormat.DisplayName}...";
+
+            if (HasAssessedChecks)
+                return $"{PassCount + PartialCount + FailCount} assessed - export ready";
+
+            return PreflightTotalCount > 0
+                ? $"Pre-flight {PreflightPassedCount}/{PreflightTotalCount} passed - ready to scan"
+                : "Ready to run local audit checks";
+        }
+    }
+
+    public string ExportAvailabilityText
+    {
+        get
+        {
+            if (IsScanning)
+                return "Export pauses while a scan is running.";
+
+            if (IsExporting)
+                return $"Exporting {SelectedExportFormat.DisplayName}...";
+
+            if (string.IsNullOrWhiteSpace(ExportOutputFolder))
+                return "Choose an export folder before exporting.";
+
+            return HasAssessedChecks
+                ? $"Ready to export {SelectedExportFormat.DisplayName}."
+                : "Run a scan or mark at least one check before exporting.";
+        }
+    }
 
     public string GradeBrushKey => HasAssessedChecks ? Grade switch
     {
@@ -249,9 +346,15 @@ public partial class MainViewModel : ViewModelBase
         var results = Services.PreflightChecker.Run(Environment);
         var passed = results.Count(r => r.Passed);
         var lines = results.Select(r => $"{(r.Passed ? "PASS" : "WARN")}  {r.Name}: {r.Detail}");
+        PreflightPassedCount = passed;
+        PreflightTotalCount = results.Count;
         PreflightSummary = $"Pre-flight: {passed}/{results.Count} passed\n{string.Join("\n", lines)}";
         ScanStatus = $"Pre-flight complete: {passed}/{results.Count} checks passed";
         AppendActivity($"Pre-flight complete: {passed}/{results.Count} checks passed");
+        foreach (var line in lines)
+        {
+            AppendActivity(line);
+        }
     }
 
     public void LoadCheckCatalog()
@@ -274,7 +377,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         SelectedCheck = Checks.FirstOrDefault();
-        FilteredChecks.Refresh();
+        RefreshFilteredChecks(preserveSelection: true);
         UpdateScoreCounts();
         AppendActivity($"Catalog loaded: {Checks.Count} checks across {CategorySummaries.Count} categories");
     }
@@ -292,9 +395,7 @@ public partial class MainViewModel : ViewModelBase
         if (e.PropertyName != nameof(CheckItemViewModel.Status)) return;
 
         UpdateScoreCounts();
-        FilteredChecks.Refresh();
-        if (SelectedCheck is null || !FilteredChecks.Cast<CheckItemViewModel>().Contains(SelectedCheck))
-            SelectedCheck = FilteredChecks.Cast<CheckItemViewModel>().FirstOrDefault();
+        RefreshFilteredChecks(preserveSelection: true);
     }
 
     [RelayCommand(CanExecute = nameof(CanStartScan))]
@@ -438,13 +539,19 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    partial void OnIsScanningChanged(bool value) => NotifyExportCommandCanExecuteChanged();
+    partial void OnIsScanningChanged(bool value)
+    {
+        NotifyExportCommandCanExecuteChanged();
+        OnPropertyChanged(nameof(ExportAvailabilityText));
+    }
+
+    partial void OnIsExportingChanged(bool value) => NotifyExportCommandCanExecuteChanged();
 
     partial void OnSelectedExportFormatChanged(ExportFormatOption value) => NotifyExportCommandCanExecuteChanged();
 
     partial void OnExportOutputFolderChanged(string value) => NotifyExportCommandCanExecuteChanged();
 
-    private bool CanExport() => !IsScanning && HasAssessedChecks && !string.IsNullOrWhiteSpace(ExportOutputFolder);
+    private bool CanExport() => !IsScanning && !IsExporting && HasAssessedChecks && !string.IsNullOrWhiteSpace(ExportOutputFolder);
 
     private void NotifyExportCommandCanExecuteChanged()
     {
@@ -496,24 +603,40 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportSelectedAsync()
     {
-        Directory.CreateDirectory(ExportOutputFolder);
-        var baseName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}";
         var option = SelectedExportFormat;
-
-        if (option.IsFolderExport)
+        IsExporting = true;
+        ScanStatus = $"Exporting {option.DisplayName}...";
+        AppendActivity(ScanStatus);
+        try
         {
-            var folder = Path.Combine(ExportOutputFolder, $"{baseName}{option.FileSuffix}");
-            var files = Export.SiemContentPackExporter.ExportAll(folder)
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            ScanStatus = $"SIEM content pack exported: {folder} ({files.Length} files)";
-            AppendActivity(ScanStatus);
-            return;
-        }
+            Directory.CreateDirectory(ExportOutputFolder);
+            var baseName = $"SecurityAudit_{DateTime.Now:yyyy-MM-dd_HHmm}";
 
-        var path = Path.Combine(ExportOutputFolder, $"{baseName}{option.FileSuffix}.{option.Extension}");
-        await WriteExportAsync(option.Kind, path);
-        ScanStatus = $"{option.DisplayName} exported{(PrivacyMode ? " (privacy mode)" : "")}: {path}";
-        AppendActivity($"{option.DisplayName} exported");
+            if (option.IsFolderExport)
+            {
+                var folder = Path.Combine(ExportOutputFolder, $"{baseName}{option.FileSuffix}");
+                var files = Export.SiemContentPackExporter.ExportAll(folder)
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                ScanStatus = $"SIEM content pack exported: {folder} ({files.Length} files)";
+                AppendActivity(ScanStatus);
+                return;
+            }
+
+            var path = Path.Combine(ExportOutputFolder, $"{baseName}{option.FileSuffix}.{option.Extension}");
+            await WriteExportAsync(option.Kind, path);
+            ScanStatus = $"{option.DisplayName} exported{(PrivacyMode ? " (privacy mode)" : "")}: {path}";
+            AppendActivity($"{option.DisplayName} exported");
+        }
+        catch (Exception ex)
+        {
+            var logPath = Services.CrashLogWriter.Write(ex, "ExportSelectedAsync");
+            ScanStatus = $"Export failed. Crash log: {logPath}";
+            AppendActivity($"Export failed: {ex.Message}");
+        }
+        finally
+        {
+            IsExporting = false;
+        }
     }
 
     private async Task WriteExportAsync(ExportFormatKind kind, string path)
@@ -925,10 +1048,33 @@ public partial class MainViewModel : ViewModelBase
         DomainMaturityGrade = dmGrade;
 
         OnPropertyChanged(nameof(HasAssessedChecks));
+        OnPropertyChanged(nameof(ScoreSubtitle));
+        OnPropertyChanged(nameof(ScanReadinessText));
+        OnPropertyChanged(nameof(ExportAvailabilityText));
         OnPropertyChanged(nameof(Grade));
         OnPropertyChanged(nameof(GradeBrushKey));
         OnPropertyChanged(nameof(OverallScoreDisplay));
         NotifyExportCommandCanExecuteChanged();
+    }
+
+    [RelayCommand]
+    private void ClearFilters()
+    {
+        SelectedCategory = "All";
+        SearchText = "";
+        StatusFilter = "All";
+        RefreshFilteredChecks(preserveSelection: true);
+    }
+
+    private void RefreshFilteredChecks(bool preserveSelection = false)
+    {
+        FilteredChecks.Refresh();
+        var visibleChecks = FilteredChecks.Cast<CheckItemViewModel>().ToList();
+        VisibleCheckCount = visibleChecks.Count;
+        if (!preserveSelection || SelectedCheck is null || !visibleChecks.Contains(SelectedCheck))
+        {
+            SelectedCheck = visibleChecks.FirstOrDefault();
+        }
     }
 
     private void AppendActivity(string message)

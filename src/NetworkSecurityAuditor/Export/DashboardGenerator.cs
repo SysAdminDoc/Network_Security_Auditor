@@ -124,7 +124,7 @@ public static class DashboardGenerator
         }
 
         client.ScanTime = ParseTimestamp(client.Timestamp);
-        client.IsStale = client.ScanTime is not null && (DateTimeOffset.UtcNow - client.ScanTime.Value).TotalDays > staleDays;
+        client.IsStale = client.ScanTime is null || (DateTimeOffset.UtcNow - client.ScanTime.Value).TotalDays > staleDays;
         client.StableKey = BuildStableKey(client);
 
         var htmlSibling = Path.ChangeExtension(file, ".html")
@@ -156,6 +156,7 @@ public static class DashboardGenerator
             .summary-stat .value { font-size: 32px; font-weight: 700; }
             .summary-stat .label { font-size: 11px; color: #a6adc8; text-transform: uppercase; letter-spacing: 1px; }
             table { width: 100%; border-collapse: collapse; background: #313244; border-radius: 8px; overflow: hidden; }
+            caption { text-align: left; color: #a6adc8; font-size: 12px; padding: 0 0 8px; font-weight: 600; }
             th { background: #45475a; color: #cba6f7; text-align: left; padding: 10px 14px; font-size: 13px; text-transform: uppercase; }
             td { padding: 10px 14px; border-top: 1px solid #45475a; font-size: 14px; vertical-align: middle; }
             tr:hover { background: #3b3d50; }
@@ -165,6 +166,9 @@ public static class DashboardGenerator
             .trend { width: 96px; height: 24px; overflow: visible; margin-right: 6px; vertical-align: middle; }
             .trend-line { fill: none; stroke: #89b4fa; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
             .trend-data { color: #a6adc8; font-size: 12px; white-space: nowrap; }
+            .empty-state { background: #313244; border: 1px solid #45475a; border-radius: 8px; padding: 28px; margin-bottom: 24px; }
+            .empty-state h2 { color: #cdd6f4; font-size: 18px; margin-bottom: 6px; }
+            .empty-state p { color: #a6adc8; font-size: 14px; }
             .footer { text-align: center; padding: 24px; color: #7f849c; font-size: 12px; margin-top: 32px; }
             a { color: #89b4fa; text-decoration: none; } a:hover { text-decoration: underline; }
             @media (max-width: 768px) { body { padding: 12px; } .summary-bar { flex-direction: column; } table { display: block; overflow-x: auto; } }
@@ -185,30 +189,45 @@ public static class DashboardGenerator
         sb.AppendLine($"<div class=\"summary-stat\"><div class=\"value\"{(staleCount > 0 ? " style=\"color:#f38ba8\"" : "")}>{staleCount}</div><div class=\"label\">Stale Scans</div></div>");
         sb.AppendLine("</div>");
 
-        sb.AppendLine("<table>");
-        sb.AppendLine("<tr><th>Client</th><th>Host</th><th>Score</th><th>Grade</th><th>Trend</th><th>Ransomware</th><th>Critical</th><th>Fails</th><th>Scan Date</th><th>Report</th></tr>");
-
-        foreach (var c in SortDashboardRows(clients))
+        if (clients.Count == 0)
         {
-            var gradeClass = GradeCssClass(c.Grade);
-            var dateDisplay = DisplayDate(c);
-            var staleFlag = c.IsStale ? " <span class=\"stale\">[STALE]</span>" : "";
-            var reportLink = c.ReportPath is not null ? $"<a href=\"{Esc(c.ReportPath)}\">View</a>" : "";
-
-            sb.AppendLine("<tr>");
-            sb.AppendLine($"<td>{Esc(c.Client)}</td>");
-            sb.AppendLine($"<td>{Esc(c.Host)} <span style=\"font-size:11px;color:#a6adc8\">{Esc(c.OS)}</span></td>");
-            sb.AppendLine($"<td>{c.OverallScore}%</td>");
-            sb.AppendLine($"<td class=\"{gradeClass}\" style=\"font-size:20px;font-weight:700\">{Esc(c.Grade)}</td>");
-            sb.AppendLine($"<td>{BuildTrendSparkline(c.Trend)}</td>");
-            sb.AppendLine($"<td>{c.RansomwareScore}%</td>");
-            sb.AppendLine($"<td style=\"color:{(c.CriticalCount > 0 ? "#f38ba8" : "#a6e3a1")}\">{c.CriticalCount}</td>");
-            sb.AppendLine($"<td>{c.FailCount}</td>");
-            sb.AppendLine($"<td>{Esc(dateDisplay)}{staleFlag}</td>");
-            sb.AppendLine($"<td>{reportLink}</td>");
-            sb.AppendLine("</tr>");
+            sb.AppendLine("<section class=\"empty-state\" aria-live=\"polite\">");
+            sb.AppendLine("<h2>No scan exports found</h2>");
+            sb.AppendLine("<p>Place one or more *_findings.json exports in this folder, then regenerate the dashboard.</p>");
+            sb.AppendLine("</section>");
         }
-        sb.AppendLine("</table>");
+        else
+        {
+            sb.AppendLine("<table>");
+            sb.AppendLine("<caption>Latest scan per client and host</caption>");
+            sb.AppendLine("<thead><tr><th scope=\"col\">Client</th><th scope=\"col\">Host</th><th scope=\"col\">Score</th><th scope=\"col\">Grade</th><th scope=\"col\">Trend</th><th scope=\"col\">Ransomware</th><th scope=\"col\">Critical</th><th scope=\"col\">Fails</th><th scope=\"col\">Scan Date</th><th scope=\"col\">Report</th></tr></thead>");
+            sb.AppendLine("<tbody>");
+
+            foreach (var c in SortDashboardRows(clients))
+            {
+                var gradeClass = GradeCssClass(c.Grade);
+                var dateDisplay = DisplayDate(c);
+                var staleFlag = c.IsStale ? " <span class=\"stale\">[STALE]</span>" : "";
+                var reportLink = c.ReportPath is not null
+                    ? $"<a href=\"{Esc(Uri.EscapeDataString(c.ReportPath))}\" aria-label=\"Open report for {Esc(c.Client)} {Esc(c.Host)}\">Open report</a>"
+                    : "";
+
+                sb.AppendLine("<tr>");
+                sb.AppendLine($"<td>{Esc(c.Client)}</td>");
+                sb.AppendLine($"<td>{Esc(c.Host)} <span style=\"font-size:11px;color:#a6adc8\">{Esc(c.OS)}</span></td>");
+                sb.AppendLine($"<td>{c.OverallScore}%</td>");
+                sb.AppendLine($"<td class=\"{gradeClass}\" style=\"font-size:20px;font-weight:700\">{Esc(c.Grade)}</td>");
+                sb.AppendLine($"<td>{BuildTrendSparkline(c.Trend)}</td>");
+                sb.AppendLine($"<td>{c.RansomwareScore}%</td>");
+                sb.AppendLine($"<td style=\"color:{(c.CriticalCount > 0 ? "#f38ba8" : "#a6e3a1")}\">{c.CriticalCount}</td>");
+                sb.AppendLine($"<td>{c.FailCount}</td>");
+                sb.AppendLine($"<td>{Esc(dateDisplay)}{staleFlag}</td>");
+                sb.AppendLine($"<td>{reportLink}</td>");
+                sb.AppendLine("</tr>");
+            }
+            sb.AppendLine("</tbody>");
+            sb.AppendLine("</table>");
+        }
 
         if (duplicateFiles.Count > 0)
         {
@@ -265,7 +284,7 @@ public static class DashboardGenerator
 
     private static string DisplayDate(ClientSummary client) =>
         client.ScanTime?.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-        ?? (string.IsNullOrWhiteSpace(client.Timestamp) ? "N/A" : client.Timestamp);
+        ?? (string.IsNullOrWhiteSpace(client.Timestamp) ? "Missing scan date" : $"Invalid scan date: {client.Timestamp}");
 
     private static string TrendTimestamp(ClientSummary client) =>
         string.IsNullOrWhiteSpace(client.Timestamp) ? client.FileName : client.Timestamp;

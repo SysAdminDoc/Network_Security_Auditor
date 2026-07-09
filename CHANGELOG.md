@@ -2,6 +2,20 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.2.6] - 2026-07-08
+
+### UX
+- Changed: C# GUI now surfaces scan readiness, export availability, filter result counts, search placeholder text, no-results recovery, preflight detail in the console, stable focus states, and screen-reader live scan progress.
+- Fixed: C# GUI selected-format exports now show a busy status, disable duplicate export actions while writing, and surface crash-log-backed failure recovery.
+- Fixed: C# GUI neutral status badges now use readable foreground contrast, and category health cards use explicit Pass/Partial/Fail labels instead of terse color-dependent abbreviations.
+
+### Exports
+- Fixed: C# HTML, JSON, and compliance summary exports now separate Met, Partial, Fail, and Not assessed framework counts instead of counting Partial controls as passing.
+- Fixed: C# HTML reports now include Partial findings in top findings and remediation roadmap sections, use semantic table captions/headers, and render clearer remediation link text.
+- Fixed: C# CMMC reports now choose evidence from the worst mapped check for shared controls and emit semantic control-table markup.
+- Fixed: C# dashboard HTML now has an actionable empty state, marks missing/invalid scan dates as stale, URL-encodes report links, and uses descriptive report link labels.
+- Fixed: C# CSV exports now use friendly human status labels for Not assessed and N/A.
+
 ## [v5.2.5] - 2026-07-08
 
 ### UX
