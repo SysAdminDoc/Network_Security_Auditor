@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net.Mail;
 using System.Text;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
@@ -45,7 +46,7 @@ public static class HtmlReportGenerator
         {
             sb.AppendLine("<div class=\"cover-page\">");
             if (branding.HasLogo)
-                sb.AppendLine($"<img src=\"data:image/png;base64,{EscapeHtml(branding.LogoBase64)}\" alt=\"{EscapeHtml(branding.CompanyName)}\" class=\"cover-logo\" />");
+                sb.AppendLine($"<img src=\"data:image/png;base64,{EscapeHtmlAttribute(branding.LogoBase64)}\" alt=\"{EscapeHtmlAttribute(branding.CompanyName)}\" class=\"cover-logo\" />");
             sb.AppendLine($"<h1 class=\"cover-title\">{EscapeHtml(branding.CompanyName)}</h1>");
             if (branding.Tagline.Length > 0)
                 sb.AppendLine($"<p class=\"cover-tagline\">{EscapeHtml(branding.Tagline)}</p>");
@@ -56,7 +57,7 @@ public static class HtmlReportGenerator
 
         sb.AppendLine("<div class=\"header\">");
         if (branding is { HasLogo: true, ShowCoverPage: false })
-            sb.AppendLine($"<img src=\"data:image/png;base64,{EscapeHtml(branding.LogoBase64)}\" alt=\"\" style=\"height:40px;margin-bottom:12px\" />");
+            sb.AppendLine($"<img src=\"data:image/png;base64,{EscapeHtmlAttribute(branding.LogoBase64)}\" alt=\"\" style=\"height:40px;margin-bottom:12px\" />");
         var h1 = branding?.CompanyName.Length > 0
             ? $"{branding.CompanyName} Security Audit Report"
             : "Network Security Audit Report";
@@ -87,8 +88,10 @@ public static class HtmlReportGenerator
         if (branding is not null && branding.FooterText.Length > 0)
         {
             sb.AppendLine($"<div class=\"footer\">{EscapeHtml(branding.FooterText)}");
-            if (branding.ContactEmail.Length > 0)
-                sb.AppendLine($" | <a href=\"mailto:{EscapeHtml(branding.ContactEmail)}\" style=\"color:#89b4fa\">{EscapeHtml(branding.ContactEmail)}</a>");
+            if (TryBuildMailtoHref(branding.ContactEmail) is { } mailtoHref)
+                sb.AppendLine($" | <a href=\"{EscapeHtmlAttribute(mailtoHref)}\" style=\"color:#89b4fa\">{EscapeHtml(branding.ContactEmail.Trim())}</a>");
+            else if (branding.ContactEmail.Length > 0)
+                sb.AppendLine($" | {EscapeHtml(branding.ContactEmail)}");
             if (branding.ContactPhone.Length > 0)
                 sb.AppendLine($" | {EscapeHtml(branding.ContactPhone)}");
             sb.AppendLine("</div>");
@@ -229,8 +232,8 @@ public static class HtmlReportGenerator
                     : "";
                 sb.AppendLine($"<tr>");
                 sb.AppendLine($"<td class=\"id-cell\">{check.Id}</td>");
-                var safeUrl = check.RemediationUrl is not null && (check.RemediationUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || check.RemediationUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-                    ? $" <a href=\"{EscapeHtml(check.RemediationUrl)}\" aria-label=\"Remediation guidance for {EscapeHtml(check.Id)}\" style=\"color:#89b4fa;font-size:11px\">Remediation guidance</a>" : "";
+                var safeUrl = TryGetHttpHref(check.RemediationUrl) is { } remediationHref
+                    ? $" <a href=\"{EscapeHtmlAttribute(remediationHref)}\" aria-label=\"Remediation guidance for {EscapeHtmlAttribute(check.Id)}\" style=\"color:#89b4fa;font-size:11px\">Remediation guidance</a>" : "";
                 sb.AppendLine($"<td>{EscapeHtml(check.Label)}{safeUrl}</td>");
                 sb.AppendLine($"<td><span class=\"badge severity-{severityClass}\">{check.SeverityLabel}</span></td>");
                 sb.AppendLine($"<td><span class=\"badge status-{statusClass}\">{DisplayStatus(check.Status)}</span></td>");
@@ -285,7 +288,10 @@ public static class HtmlReportGenerator
         sb.AppendLine($"<div><strong>Policy:</strong> {EscapeHtml(import.PolicyId)}</div>");
         sb.AppendLine($"<div><strong>Exported:</strong> {EscapeHtml(import.ExportedAtUtc)}</div>");
         sb.AppendLine($"<div><strong>Status:</strong> {EscapeHtml(import.ImportStatus)} | Pass {summary.Pass} | Fail {summary.Fail} | N/A {summary.NotApplicable} | Error {summary.Error} | Conflict {summary.Conflict} | Unknown {summary.Unknown} | Not licensed {summary.NotLicensed} | Not permitted {summary.NotPermitted}</div>");
-        sb.AppendLine($"<div><a href=\"{EscapeHtml(import.SourceUrl)}\" style=\"color:#89b4fa\">Microsoft Intune STIG audit baseline source</a></div>");
+        if (TryGetHttpHref(import.SourceUrl) is { } sourceHref)
+            sb.AppendLine($"<div><a href=\"{EscapeHtmlAttribute(sourceHref)}\" style=\"color:#89b4fa\">Microsoft Intune STIG audit baseline source</a></div>");
+        else if (!string.IsNullOrWhiteSpace(import.SourceUrl))
+            sb.AppendLine("<div><strong>Source URL:</strong> Omitted because it is not an HTTP(S) URL.</div>");
         sb.AppendLine("</div>");
 
         if (import.Findings.Count == 0)
@@ -366,6 +372,54 @@ public static class HtmlReportGenerator
             .Replace(">", "&gt;")
             .Replace("\"", "&quot;")
             .Replace("\n", "<br>");
+    }
+
+    private static string EscapeHtmlAttribute(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("\"", "&quot;")
+            .Replace("\r", " ")
+            .Replace("\n", " ");
+    }
+
+    private static string? TryGetHttpHref(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return null;
+
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
+            return null;
+
+        return uri.Scheme is "http" or "https" && !string.IsNullOrWhiteSpace(uri.Host)
+            ? uri.AbsoluteUri
+            : null;
+    }
+
+    private static string? TryBuildMailtoHref(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return null;
+
+        var trimmed = email.Trim();
+        if (trimmed.Any(char.IsControl) || trimmed.IndexOfAny(['<', '>', '"', '\'', ' ', '\t', ',', ';']) >= 0)
+            return null;
+
+        try
+        {
+            var address = new MailAddress(trimmed);
+            return string.Equals(address.Address, trimmed, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(address.Host)
+                ? $"mailto:{address.Address}"
+                : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 
     private static string GetCss() => """

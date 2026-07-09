@@ -869,6 +869,68 @@ public class ExportTests
     }
 
     [Fact]
+    public void Html_Branding_Email_Does_Not_Create_Unsafe_Mailto()
+    {
+        var (checks, env) = CreateTestData();
+        var branding = new BrandingConfig
+        {
+            FooterText = "Confidential",
+            ContactEmail = "security@example.com\n<a href=\"javascript:alert(1)\">x</a>"
+        };
+
+        var html = HtmlReportGenerator.Generate(checks, env, 85, "B", 70, "C", branding: branding);
+
+        Assert.DoesNotContain("href=\"mailto:", html);
+        Assert.DoesNotContain("href=\"javascript:", html);
+        Assert.Contains("security@example.com<br>&lt;a href=&quot;javascript:alert(1)&quot;&gt;x&lt;/a&gt;", html);
+    }
+
+    [Fact]
+    public void Html_Intune_Stig_SourceUrl_Requires_Http_Scheme()
+    {
+        var (checks, env) = CreateTestData();
+        var import = new IntuneStigAuditImport
+        {
+            SourceUrl = "javascript:alert(1)",
+            Findings =
+            [
+                new IntuneStigAuditFinding
+                {
+                    DeviceName = "WIN11-01",
+                    SettingId = "setting-001",
+                    ReferenceId = "SV-253275r828909",
+                    Status = "Fail"
+                }
+            ]
+        };
+
+        var html = HtmlReportGenerator.Generate(checks, env, 85, "B", 70, "C", intuneStigAudit: import);
+
+        Assert.DoesNotContain("href=\"javascript:", html);
+        Assert.DoesNotContain("Microsoft Intune STIG audit baseline source", html);
+        Assert.Contains("Source URL:</strong> Omitted because it is not an HTTP(S) URL.", html);
+    }
+
+    [Fact]
+    public void Html_Dynamic_Attributes_Do_Not_Render_Line_Break_Tags()
+    {
+        var (checks, env) = CreateTestData();
+        var branding = new BrandingConfig
+        {
+            CompanyName = "Acme\nSecurity",
+            LogoBase64 = "abc\n123",
+            ShowCoverPage = true
+        };
+
+        var html = HtmlReportGenerator.Generate(checks, env, 85, "B", 70, "C", branding: branding);
+
+        Assert.Contains("alt=\"Acme Security\"", html);
+        Assert.Contains("src=\"data:image/png;base64,abc 123\"", html);
+        Assert.DoesNotContain("alt=\"Acme<br>Security\"", html);
+        Assert.DoesNotContain("src=\"data:image/png;base64,abc<br>123\"", html);
+    }
+
+    [Fact]
     public async Task Dashboard_Escapes_Client_Names()
     {
         var dir = await WriteDashboardFixtureAsync("""

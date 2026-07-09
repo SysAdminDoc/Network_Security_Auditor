@@ -2,6 +2,11 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- Fixed: C# HTML report links now use attribute-safe encoding, only render HTTP(S) external links, and avoid unsafe `mailto:` links from malformed branding email values.
+
 ## [v5.2.7] - 2026-07-09
 
 ### Platform
