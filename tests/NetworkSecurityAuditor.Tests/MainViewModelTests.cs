@@ -16,13 +16,18 @@ public class MainViewModelTests
         vm.StartScanCommand.CanExecuteChanged += (_, _) => startChanges++;
         vm.StopScanCommand.CanExecuteChanged += (_, _) => stopChanges++;
 
-        Assert.True(vm.StartScanCommand.CanExecute(null));
+        Assert.False(vm.StartScanCommand.CanExecute(null));
         Assert.False(vm.StopScanCommand.CanExecute(null));
         Assert.True(vm.CanEditScanOptions);
-        Assert.Contains("Run the Full profile", vm.StartScanHelpText);
+        Assert.Contains("still running", vm.StartScanHelpText);
         Assert.Equal("No scan is currently running.", vm.StopScanHelpText);
         Assert.Contains("Current profile: Full", vm.ScanProfileHelpText);
         Assert.Contains("Redacts host", vm.PrivacyModeHelpText);
+
+        vm.IsEnvironmentReady = true;
+
+        Assert.True(vm.StartScanCommand.CanExecute(null));
+        Assert.Contains("Run the Full profile", vm.StartScanHelpText);
 
         vm.IsScanning = true;
 
@@ -231,13 +236,15 @@ public class MainViewModelTests
         vm.LoadCheckCatalog();
 
         Assert.Equal("Ready for pre-flight", vm.ScoreSubtitle);
-        Assert.Equal("Ready to run local audit checks", vm.ScanReadinessText);
+        Assert.Equal("Preparing the audit workspace", vm.ScanReadinessText);
+        Assert.DoesNotContain(ScanProfileType.Cloud, vm.AvailableProfiles);
 
+        vm.IsEnvironmentReady = true;
         vm.PreflightPassedCount = 4;
         vm.PreflightTotalCount = 7;
 
         Assert.Equal("Pre-flight 4/7 passed", vm.ScoreSubtitle);
-        Assert.Equal("Ready to scan", vm.ScanReadinessText);
+        Assert.Equal("Ready with 3 pre-flight advisories", vm.ScanReadinessText);
         Assert.Equal("ProgressMid", vm.ReadinessBrushKey);
 
         vm.ScanStatus = "Pre-flight complete: 4/7 checks passed";
@@ -333,7 +340,9 @@ public class MainViewModelTests
             return new Dictionary<string, CheckResult>();
         });
         vm.LoadCheckCatalog();
+        vm.IsEnvironmentReady = true;
         vm.SelectedProfile = ScanProfileType.Quick;
+        var userSelection = vm.SelectedCheck;
 
         var scanTask = vm.StartScanCommand.ExecuteAsync(null);
         await secondCheckStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -343,6 +352,7 @@ public class MainViewModelTests
         Assert.Equal("EP02", runningSnapshots[2]);
         Assert.Single(vm.Checks, c => c.IsRunning);
         Assert.True(vm.Checks.Single(c => c.Id == "EP02").IsRunning);
+        Assert.Same(userSelection, vm.SelectedCheck);
 
         vm.StopScanCommand.Execute(null);
         await scanTask.WaitAsync(TimeSpan.FromSeconds(5));
@@ -363,6 +373,7 @@ public class MainViewModelTests
             return Task.FromResult(new Dictionary<string, CheckResult>());
         });
         vm.LoadCheckCatalog();
+        vm.IsEnvironmentReady = true;
         vm.Environment = new EnvironmentInfo { IsDomainJoined = false, ComputerName = "WORKGROUP-PC" };
         vm.SelectedProfile = ScanProfileType.ADOnly;
 
@@ -393,6 +404,7 @@ public class MainViewModelTests
                 });
             }, openedReports.Add);
             vm.LoadCheckCatalog();
+            vm.IsEnvironmentReady = true;
             vm.SelectedProfile = ScanProfileType.Quick;
             vm.ExportOutputFolder = dir;
 
@@ -409,6 +421,31 @@ public class MainViewModelTests
         {
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task StartScan_Failure_Produces_Recoverable_Error_State()
+    {
+        var openedReports = new List<string>();
+        var vm = new MainViewModel((_, _, _, _, startedProgress) =>
+        {
+            startedProgress?.Report(("EP01", 1, 1));
+            throw new InvalidOperationException("Synthetic runner failure");
+        }, openedReports.Add);
+        vm.LoadCheckCatalog();
+        vm.IsEnvironmentReady = true;
+        vm.SelectedProfile = ScanProfileType.Quick;
+
+        await vm.StartScanCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsScanning);
+        Assert.True(vm.StartScanCommand.CanExecute(null));
+        Assert.False(vm.StopScanCommand.CanExecute(null));
+        Assert.Contains("Scan failed", vm.ScanStatus, StringComparison.Ordinal);
+        Assert.Contains(vm.ActivityLog, entry => entry.Contains("Synthetic runner failure", StringComparison.Ordinal));
+        Assert.Contains(vm.ActivityLog, entry => entry.Contains("Crash log:", StringComparison.Ordinal));
+        Assert.Empty(openedReports);
+        Assert.DoesNotContain(vm.Checks, check => check.IsRunning);
     }
 
     [Fact]

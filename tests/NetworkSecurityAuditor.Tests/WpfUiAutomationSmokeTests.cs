@@ -48,7 +48,7 @@ public class WpfUiAutomationSmokeTests
             AssertNamedElement(window, "ScanProgressText", "Scan progress", ControlType.Text);
 
             var startButton = AssertNamedElement(window, "StartScanButton", "Start security scan", ControlType.Button);
-            Assert.True(startButton.Current.IsEnabled);
+            WaitForEnabled(startButton, WindowTimeout);
             var stopButton = AssertNamedElement(window, "StopScanButton", "Stop running scan", ControlType.Button);
             Assert.False(stopButton.Current.IsEnabled);
 
@@ -166,6 +166,20 @@ public class WpfUiAutomationSmokeTests
         }
 
         throw new TimeoutException($"Could not find UI Automation element '{automationId}' within {timeout.TotalSeconds:N0} seconds.");
+    }
+
+    private static void WaitForEnabled(AutomationElement element, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (element.Current.IsEnabled)
+                return;
+
+            Thread.Sleep(100);
+        }
+
+        throw new TimeoutException($"UI Automation element '{element.Current.AutomationId}' did not become enabled within {timeout.TotalSeconds:N0} seconds.");
     }
 
     private static void TryWaitForInputIdle(Process process)

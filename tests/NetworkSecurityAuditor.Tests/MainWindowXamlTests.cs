@@ -160,6 +160,7 @@ public class MainWindowXamlTests
         Assert.Contains("FilterEmptyStateTitle", xaml);
         Assert.Contains("ClearFiltersCommand", xaml);
         Assert.Contains("ScanReadinessText", xaml);
+        Assert.Contains("x:Name=\"ActivityLogScrollViewer\"", xaml);
         Assert.Contains("x:Key=\"InspectorCard\"", theme);
         Assert.Contains("<GridSplitter Grid.Column=\"1\"", xaml);
         Assert.Contains("Width=\"1440\" Height=\"900\"", xaml);
@@ -247,6 +248,7 @@ public class MainWindowXamlTests
 
         Assert.Contains("private async void OnLoaded", source);
         Assert.Contains("await Task.Run(EnvironmentDetector.Detect)", source);
+        Assert.Contains("_viewModel.RunPreflight();", source);
         Assert.DoesNotContain("_viewModel.Environment = EnvironmentDetector.Detect();", source);
     }
 
@@ -261,6 +263,7 @@ public class MainWindowXamlTests
         Assert.Contains("window.Left = -32000;", source);
         Assert.Contains("window.ShowActivated = false;", source);
         Assert.Contains("window.ShowInTaskbar = false;", source);
+        Assert.Contains("window.UpdateLayout();", source);
         Assert.Contains("RenderTargetBitmap", source);
     }
 

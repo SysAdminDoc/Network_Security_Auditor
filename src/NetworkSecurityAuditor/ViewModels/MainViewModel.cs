@@ -90,6 +90,11 @@ public partial class MainViewModel : ViewModelBase
     private bool _isExporting;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartScanCommand))]
+    [NotifyPropertyChangedFor(nameof(ReadinessDisplay), nameof(ReadinessBrushKey), nameof(ScanReadinessText), nameof(StartScanHelpText))]
+    private bool _isEnvironmentReady;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ScanStatusHeadline))]
     private string _scanStatus = "Ready";
 
@@ -154,7 +159,10 @@ public partial class MainViewModel : ViewModelBase
 
     public string[] AvailableThemes { get; } = ["Catppuccin Mocha"];
 
-    public ScanProfileType[] AvailableProfiles { get; } = Enum.GetValues<ScanProfileType>();
+    public ScanProfileType[] AvailableProfiles { get; } = Enum
+        .GetValues<ScanProfileType>()
+        .Where(profile => profile != ScanProfileType.Cloud)
+        .ToArray();
 
     public IReadOnlyList<ExportFormatOption> ExportFormats { get; } = DefaultExportFormats;
 
@@ -305,7 +313,9 @@ public partial class MainViewModel : ViewModelBase
 
     public string StartScanHelpText => IsScanning
         ? "A scan is already running."
-        : $"Run the {SelectedProfile} profile against applicable checks.";
+        : !IsEnvironmentReady
+            ? "Environment detection and pre-flight checks are still running."
+            : $"Run the {SelectedProfile} profile against applicable checks.";
 
     public string StopScanHelpText => IsScanning
         ? "Cancel the running scan after the active check responds."
@@ -318,15 +328,17 @@ public partial class MainViewModel : ViewModelBase
     public string PrivacyModeHelpText =>
         "Redacts host, domain, tenant, client, and user identifiers from exported reports.";
 
-    public string ReadinessDisplay => PreflightTotalCount > 0
-        ? $"{PreflightPassedCount}/{PreflightTotalCount} ready"
-        : "Pre-flight pending";
+    public string ReadinessDisplay => !IsEnvironmentReady
+        ? "Detecting environment"
+        : PreflightTotalCount > 0
+            ? $"{PreflightPassedCount}/{PreflightTotalCount} ready"
+            : "Pre-flight pending";
 
     public string ReadinessBrushKey
     {
         get
         {
-            if (PreflightTotalCount == 0)
+            if (!IsEnvironmentReady || PreflightTotalCount == 0)
                 return "StatusNeutral";
 
             if (PreflightPassedCount == PreflightTotalCount)
@@ -407,12 +419,19 @@ public partial class MainViewModel : ViewModelBase
             if (IsExporting)
                 return $"Exporting {SelectedExportFormat.DisplayName}...";
 
+            if (!IsEnvironmentReady)
+                return "Preparing the audit workspace";
+
             if (HasAssessedChecks)
                 return $"{PassCount + PartialCount + FailCount} assessed - export ready";
 
-            return PreflightTotalCount > 0
+            if (PreflightTotalCount == 0)
+                return "Ready to run local audit checks";
+
+            var advisories = PreflightTotalCount - PreflightPassedCount;
+            return advisories == 0
                 ? "Ready to scan"
-                : "Ready to run local audit checks";
+                : $"Ready with {advisories} pre-flight advisories";
         }
     }
 
@@ -503,6 +522,7 @@ public partial class MainViewModel : ViewModelBase
         {
             AppendActivity(line);
         }
+        IsEnvironmentReady = true;
     }
 
     public void LoadCheckCatalog()
@@ -571,6 +591,7 @@ public partial class MainViewModel : ViewModelBase
         var checkLookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
         var unsupportedProfile = false;
         var noApplicableChecks = false;
+        var scanFailed = false;
 
         var startedProgress = new InlineProgress<(string checkId, int index, int total)>(update =>
         {
@@ -583,7 +604,6 @@ public partial class MainViewModel : ViewModelBase
             if (checkLookup.TryGetValue(update.checkId, out var vm))
             {
                 vm.IsRunning = true;
-                SelectedCheck = vm;
                 ScanStatus = $"Running {update.checkId}: {vm.Label} ({update.index}/{update.total})";
                 AppendActivity($"Running {update.checkId}: {vm.Label}");
             }
@@ -652,12 +672,20 @@ public partial class MainViewModel : ViewModelBase
         {
             // User cancelled
         }
+        catch (Exception ex)
+        {
+            scanFailed = true;
+            var logPath = Services.CrashLogWriter.Write(ex, "StartScanAsync");
+            ScanStatus = $"Scan failed. Review the activity log and crash log: {logPath}";
+            AppendActivity($"Scan failed: {ex.Message}");
+            AppendActivity($"Crash log: {logPath}");
+        }
         finally
         {
             ClearRunningChecks();
             IsScanning = false;
             var total = runningTotal;
-            if (!unsupportedProfile && !noApplicableChecks)
+            if (!unsupportedProfile && !noApplicableChecks && !scanFailed)
             {
                 var scanWasCancelled = _scanCts.Token.IsCancellationRequested;
                 ScanStatus = scanWasCancelled
@@ -713,7 +741,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private bool CanStartScan() => !IsScanning;
+    private bool CanStartScan() => !IsScanning && IsEnvironmentReady;
 
     [RelayCommand(CanExecute = nameof(CanStopScan))]
     private void StopScan()

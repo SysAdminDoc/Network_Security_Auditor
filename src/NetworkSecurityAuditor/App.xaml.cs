@@ -147,6 +147,7 @@ public partial class App : Application
         if (!string.IsNullOrWhiteSpace(directory))
             Directory.CreateDirectory(directory);
 
+        window.UpdateLayout();
         var width = Math.Max(1, (int)Math.Ceiling(window.ActualWidth));
         var height = Math.Max(1, (int)Math.Ceiling(window.ActualHeight));
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);

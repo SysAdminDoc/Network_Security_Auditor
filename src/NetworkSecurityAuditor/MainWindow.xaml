@@ -1057,7 +1057,8 @@
                     </Grid>
 
                     <Border Grid.Row="1" Background="{StaticResource ConsoleBg}">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                        <ScrollViewer x:Name="ActivityLogScrollViewer"
+                                      VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                             <ItemsControl ItemsSource="{Binding ActivityLog}"
                                           Margin="14,8"
