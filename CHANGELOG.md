@@ -13,6 +13,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# IA05 password-policy conversion now handles Active Directory's `long.MinValue` interval sentinel without overflowing and reports it as a never-expiring password age policy.
 - Fixed: C# scan progress now uses AD-filtered applicable check counts, no-data scans report grade `N/A` with exit code 65 instead of a false critical alert, console attachment checks its return value, and version display derives from assembly informational metadata instead of a stale fallback literal.
 - Fixed: C# exporters, GUI export filenames, and saved audit-state remediation dates now use invariant date formatting so non-US host cultures cannot alter machine-readable date contracts.
+- Fixed: C# text artifacts now write through an atomic temp-file-and-move path, PDF export deletes stale targets and avoids undrained stdout, and file-looking `--output` values resolve to their parent directory while client-derived file names remain sanitized.
 
 ### UX
 - Changed: C# GUI now uses a premium security-operations workstation shell with a persistent category progress rail, command/status bar, risk score band, dense virtualized check table, selected-check inspector, and integrated activity console.

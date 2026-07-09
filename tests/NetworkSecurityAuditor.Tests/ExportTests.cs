@@ -100,6 +100,52 @@ public class ExportTests
     }
 
     [Fact]
+    public async Task AtomicFileWriter_Overwrites_Target_And_Cleans_Temp_File()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-atomic-test-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(dir, "report.json");
+        try
+        {
+            await AtomicFileWriter.WriteAllTextAsync(path, "old");
+            await AtomicFileWriter.WriteAllTextAsync(path, "new");
+
+            Assert.Equal("new", await File.ReadAllTextAsync(path));
+            Assert.Empty(Directory.GetFiles(dir, "*.tmp"));
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Export_Writes_Are_Routed_Through_AtomicFileWriter()
+    {
+        var root = FindRepoRoot();
+        var sourceFiles = Directory
+            .GetFiles(Path.Combine(root, "src", "NetworkSecurityAuditor"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !file.EndsWith(Path.Combine("Services", "AtomicFileWriter.cs"), StringComparison.OrdinalIgnoreCase));
+
+        foreach (var file in sourceFiles)
+        {
+            var source = File.ReadAllText(file);
+            Assert.DoesNotContain("File.WriteAllTextAsync", source);
+            Assert.DoesNotContain("File.WriteAllText(", source);
+        }
+    }
+
+    [Fact]
+    public void PdfExporter_Removes_Stale_Target_And_Does_Not_Redirect_Stdout()
+    {
+        var source = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "NetworkSecurityAuditor", "Export", "PdfExporter.cs"));
+
+        Assert.Contains("File.Delete(targetPath)", source);
+        Assert.Contains("RedirectStandardOutput = false", source);
+        Assert.Contains("new FileInfo(targetPath).Length > 0", source);
+    }
+
+    [Fact]
     public void Json_Compliance_Has_Ten_Scored_Frameworks()
     {
         var (checks, env) = CreateTestData();

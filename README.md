@@ -103,7 +103,9 @@ PowerShell so Windows reports the WPF executable's exit code. Missing dashboard
 input folders return 64, and scans with no applicable/scorable checks return
 65 instead of a security-alert exit code. Malformed or unknown headless
 arguments are written as warnings rather than consuming the next switch as a
-value.
+value. `--output` is treated as an output directory; if a file-looking value such
+as `C:\Reports\audit.html` is supplied, the C# rewrite writes its artifact set to
+that file's parent folder.
 
 Build the local C# installable artifact:
 

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using NetworkSecurityAuditor.Services;
 
 namespace NetworkSecurityAuditor.Export;
 
@@ -13,27 +14,27 @@ public static class SiemContentPackExporter
 
         var splunk = ExportSplunk();
         var splunkPath = Path.Combine(outputDir, "splunk_props.conf");
-        File.WriteAllText(splunkPath, splunk);
+        AtomicFileWriter.WriteAllText(splunkPath, splunk);
         files.Add(splunkPath);
 
         var elastic = ExportElastic();
         var elasticPath = Path.Combine(outputDir, "elastic_index_template.json");
-        File.WriteAllText(elasticPath, elastic);
+        AtomicFileWriter.WriteAllText(elasticPath, elastic);
         files.Add(elasticPath);
 
         var sentinel = ExportSentinel();
         var sentinelPath = Path.Combine(outputDir, "sentinel_table.json");
-        File.WriteAllText(sentinelPath, sentinel);
+        AtomicFileWriter.WriteAllText(sentinelPath, sentinel);
         files.Add(sentinelPath);
 
         var wazuh = ExportWazuh();
         var wazuhPath = Path.Combine(outputDir, "wazuh_decoder_rules.xml");
-        File.WriteAllText(wazuhPath, wazuh);
+        AtomicFileWriter.WriteAllText(wazuhPath, wazuh);
         files.Add(wazuhPath);
 
         var mapping = ExportFieldMapping();
         var mappingPath = Path.Combine(outputDir, "field_mapping.json");
-        File.WriteAllText(mappingPath, mapping);
+        AtomicFileWriter.WriteAllText(mappingPath, mapping);
         files.Add(mappingPath);
 
         return string.Join("\n", files);

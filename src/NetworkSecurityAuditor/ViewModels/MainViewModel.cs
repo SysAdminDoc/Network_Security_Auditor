@@ -9,6 +9,7 @@ using NetworkSecurityAuditor.Checks;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Scoring;
+using NetworkSecurityAuditor.Services;
 
 namespace NetworkSecurityAuditor.ViewModels;
 
@@ -743,49 +744,49 @@ public partial class MainViewModel : ViewModelBase
         switch (kind)
         {
             case ExportFormatKind.Html:
-                await File.WriteAllTextAsync(path, Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
                 break;
             case ExportFormatKind.Pdf:
                 await WritePdfExportAsync(path, exportChecks, exportEnv);
                 break;
             case ExportFormatKind.Json:
-                await File.WriteAllTextAsync(path, Export.JsonExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.JsonExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade));
                 break;
             case ExportFormatKind.Csv:
-                await File.WriteAllTextAsync(path, Export.CsvExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.CsvExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
                 break;
             case ExportFormatKind.Jsonl:
-                await File.WriteAllTextAsync(path, Export.JsonlExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.JsonlExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile));
                 break;
             case ExportFormatKind.Sarif:
-                await File.WriteAllTextAsync(path, Export.SarifExporter.Export(exportChecks, exportEnv));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.SarifExporter.Export(exportChecks, exportEnv));
                 break;
             case ExportFormatKind.Navigator:
-                await File.WriteAllTextAsync(path, Export.NavigatorExporter.Export(exportChecks));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.NavigatorExporter.Export(exportChecks));
                 break;
             case ExportFormatKind.DefectDojo:
-                await File.WriteAllTextAsync(path, Export.DefectDojoExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.DefectDojoExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
                 break;
             case ExportFormatKind.Ocsf:
-                await File.WriteAllTextAsync(path, Export.OcsfExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile.ToString()));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.OcsfExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile.ToString()));
                 break;
             case ExportFormatKind.Oscal:
-                await File.WriteAllTextAsync(path, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
                 break;
             case ExportFormatKind.OscalPoam:
-                await File.WriteAllTextAsync(path, Export.OscalPoamExporter.Export(exportChecks, exportEnv));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.OscalPoamExporter.Export(exportChecks, exportEnv));
                 break;
             case ExportFormatKind.Intune:
-                await File.WriteAllTextAsync(path, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));
                 break;
             case ExportFormatKind.ComplianceSummary:
-                await File.WriteAllTextAsync(path, Export.ComplianceSummaryExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.ComplianceSummaryExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
                 break;
             case ExportFormatKind.CmmcHtml:
-                await File.WriteAllTextAsync(path, Export.CmmcReportGenerator.ExportHtml(exportChecks, exportEnv, OverallScore, Grade));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.CmmcReportGenerator.ExportHtml(exportChecks, exportEnv, OverallScore, Grade));
                 break;
             case ExportFormatKind.CmmcJson:
-                await File.WriteAllTextAsync(path, Export.CmmcReportGenerator.ExportJson(exportChecks, exportEnv));
+                await AtomicFileWriter.WriteAllTextAsync(path, Export.CmmcReportGenerator.ExportJson(exportChecks, exportEnv));
                 break;
             default:
                 throw new NotSupportedException($"Export format '{kind}' is not supported.");
@@ -798,7 +799,7 @@ public partial class MainViewModel : ViewModelBase
         var tempHtml = Path.Combine(Path.GetTempPath(), $"nsa_report_{Guid.NewGuid():N}.html");
         try
         {
-            await File.WriteAllTextAsync(tempHtml, html);
+            await AtomicFileWriter.WriteAllTextAsync(tempHtml, html);
             var (success, message) = await Export.PdfExporter.ExportAsync(tempHtml, path);
             if (!success)
                 throw new InvalidOperationException(message);
@@ -823,7 +824,7 @@ public partial class MainViewModel : ViewModelBase
         {
             var (exportChecks, exportEnv) = GetExportData();
             var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
-            await File.WriteAllTextAsync(dialog.FileName, html);
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, html);
             ScanStatus = $"HTML report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -842,7 +843,7 @@ public partial class MainViewModel : ViewModelBase
         {
             var (exportChecks, exportEnv) = GetExportData();
             var json = Export.JsonExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
-            await File.WriteAllTextAsync(dialog.FileName, json);
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, json);
             ScanStatus = $"JSON report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -859,7 +860,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var (exportChecks, exportEnv) = GetExportData();
-            await File.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
             ScanStatus = $"CSV exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -876,7 +877,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var (exportChecks, exportEnv) = GetExportData();
-            await File.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile));
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile));
             ScanStatus = $"JSONL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -893,7 +894,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var (exportChecks, exportEnv) = GetExportData();
-            await File.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(exportChecks, exportEnv));
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(exportChecks, exportEnv));
             ScanStatus = $"SARIF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -910,7 +911,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var (exportChecks, _) = GetExportData();
-            await File.WriteAllTextAsync(dialog.FileName, Export.NavigatorExporter.Export(exportChecks));
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.NavigatorExporter.Export(exportChecks));
             ScanStatus = $"Navigator layer exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -927,7 +928,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var (exportChecks, exportEnv) = GetExportData();
-            await File.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
             ScanStatus = $"DefectDojo exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -944,7 +945,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var (exportChecks, exportEnv) = GetExportData();
-            await File.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile.ToString()));
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile.ToString()));
             ScanStatus = $"OCSF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -961,7 +962,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var (exportChecks, exportEnv) = GetExportData();
-            await File.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
             ScanStatus = $"OSCAL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -978,7 +979,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var (exportChecks, exportEnv) = GetExportData();
-            await File.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
             ScanStatus = $"Compliance summary exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -995,7 +996,7 @@ public partial class MainViewModel : ViewModelBase
         if (dialog.ShowDialog() == true)
         {
             var (exportChecks, exportEnv) = GetExportData();
-            await File.WriteAllTextAsync(dialog.FileName, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));
             ScanStatus = $"Intune exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
         }
     }
@@ -1016,7 +1017,7 @@ public partial class MainViewModel : ViewModelBase
             var tempHtml = Path.Combine(Path.GetTempPath(), $"nsa_report_{Guid.NewGuid():N}.html");
             try
             {
-                await File.WriteAllTextAsync(tempHtml, html);
+                await AtomicFileWriter.WriteAllTextAsync(tempHtml, html);
                 var (success, message) = await Export.PdfExporter.ExportAsync(tempHtml, dialog.FileName);
                 ScanStatus = success
                     ? $"PDF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}"
@@ -1069,7 +1070,7 @@ public partial class MainViewModel : ViewModelBase
                 });
             }
 
-            await File.WriteAllTextAsync(dialog.FileName, state.Serialize());
+            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, state.Serialize());
             ScanStatus = $"State saved: {dialog.FileName}";
         }
     }

@@ -309,6 +309,17 @@ public class CliArgsTests
     }
 
     [Fact]
+    public void ResolveOutputDirectory_Treats_File_Looking_Output_As_Parent_Directory()
+    {
+        var outputFile = Path.Combine(Path.GetTempPath(), "nsa-output", "audit.html");
+        var fallback = Path.Combine(Path.GetTempPath(), "fallback");
+
+        var resolved = App.ResolveOutputDirectory(outputFile, fallback);
+
+        Assert.Equal(Path.GetDirectoryName(Path.GetFullPath(outputFile)), resolved);
+    }
+
+    [Fact]
     public void SafeFileNameSegment_Replaces_Invalid_Path_Characters()
     {
         var segment = App.SafeFileNameSegment(@"ACME:West/Prod", "Client");
@@ -317,6 +328,16 @@ public class CliArgsTests
         Assert.DoesNotContain(Path.AltDirectorySeparatorChar, segment);
         Assert.DoesNotContain(':', segment);
         Assert.StartsWith("ACME", segment);
+    }
+
+    [Fact]
+    public void SafeFileNameSegment_Prevents_Path_Traversal_From_Client_Name()
+    {
+        var segment = App.SafeFileNameSegment(@"..\Client\Prod", "Client");
+
+        Assert.DoesNotContain(Path.DirectorySeparatorChar, segment);
+        Assert.DoesNotContain(Path.AltDirectorySeparatorChar, segment);
+        Assert.Contains("Client", segment);
     }
 
     private static string ReadSourceFile(params string[] segments)

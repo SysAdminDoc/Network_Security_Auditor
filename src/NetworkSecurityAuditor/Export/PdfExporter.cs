@@ -11,6 +11,13 @@ public static class PdfExporter
         if (browserPath is null)
             return (false, "PDF export requires Microsoft Edge or Google Chrome. Neither was found.");
 
+        var targetPath = Path.GetFullPath(pdfPath);
+        var targetDirectory = Path.GetDirectoryName(targetPath);
+        if (!string.IsNullOrWhiteSpace(targetDirectory))
+            Directory.CreateDirectory(targetDirectory);
+        if (File.Exists(targetPath))
+            File.Delete(targetPath);
+
         var htmlUri = new Uri(Path.GetFullPath(htmlPath)).AbsoluteUri;
 
         var psi = new ProcessStartInfo
@@ -20,12 +27,12 @@ public static class PdfExporter
             {
                 "--headless",
                 "--disable-gpu",
-                $"--print-to-pdf={Path.GetFullPath(pdfPath)}",
+                $"--print-to-pdf={targetPath}",
                 htmlUri
             },
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardOutput = true,
+            RedirectStandardOutput = false,
             RedirectStandardError = true
         };
 
@@ -47,8 +54,8 @@ public static class PdfExporter
                 return (false, $"Browser exited with code {process.ExitCode}: {stderr}");
             }
 
-            return File.Exists(pdfPath)
-                ? (true, pdfPath)
+            return File.Exists(targetPath) && new FileInfo(targetPath).Length > 0
+                ? (true, targetPath)
                 : (false, "Browser completed but PDF file was not created.");
         }
         catch (OperationCanceledException)

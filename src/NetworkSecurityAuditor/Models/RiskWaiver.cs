@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NetworkSecurityAuditor.Services;
 
 namespace NetworkSecurityAuditor.Models;
 
@@ -67,6 +68,6 @@ public sealed class WaiverStore
 
     public async Task SaveToFileAsync(string path)
     {
-        await File.WriteAllTextAsync(path, Serialize());
+        await AtomicFileWriter.WriteAllTextAsync(path, Serialize());
     }
 }
