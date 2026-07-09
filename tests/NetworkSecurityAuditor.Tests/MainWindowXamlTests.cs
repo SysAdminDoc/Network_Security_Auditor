@@ -23,8 +23,8 @@ public class MainWindowXamlTests
         Assert.Contains("Text=\"{Binding VisibleChecksDisplay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding StatusFilters}\"", xaml);
         Assert.Contains("IsChecked=\"{Binding PrivacyMode}\"", xaml);
-        Assert.Contains("Text=\"{Binding DomainMaturityGrade}\"", xaml);
-        Assert.Contains("Text=\"{Binding DomainMaturityScore, StringFormat={}{0}/100}\"", xaml);
+        Assert.Contains("Text=\"{Binding DomainMaturityGradeDisplay}\"", xaml);
+        Assert.Contains("Text=\"{Binding DomainMaturityScoreDisplay}\"", xaml);
         Assert.Contains("Command=\"{Binding SaveStateCommand}\"", xaml);
         Assert.Contains("Command=\"{Binding LoadStateCommand}\"", xaml);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml);
@@ -161,6 +161,10 @@ public class MainWindowXamlTests
         Assert.Contains("ClearFiltersCommand", xaml);
         Assert.Contains("ScanReadinessText", xaml);
         Assert.Contains("x:Key=\"InspectorCard\"", theme);
+        Assert.Contains("<GridSplitter Grid.Column=\"1\"", xaml);
+        Assert.Contains("Width=\"1440\" Height=\"900\"", xaml);
+        Assert.Contains("Content=\"Export report\"", xaml);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml);
         Assert.Contains("public ObservableCollection<CategorySummaryViewModel> CategorySummaries { get; }", mainVm);
         Assert.Contains("public ObservableCollection<string> ActivityLog { get; }", mainVm);
     }
@@ -187,6 +191,8 @@ public class MainWindowXamlTests
         Assert.Contains("Property=\"IsKeyboardFocusWithin\" Value=\"True\"", theme);
         Assert.Contains("x:Key=\"AccentSoft\"", theme);
         Assert.Contains("x:Key=\"RailBg\"", theme);
+        Assert.Contains("x:Key=\"ControlBorder\" Color=\"#547489\"", theme);
+        Assert.Contains("Property=\"IsPressed\" Value=\"True\"", theme);
         Assert.Contains("Property=\"ToolTipService.ShowOnDisabled\" Value=\"True\"", theme);
         Assert.DoesNotContain("TargetName=\"ButtonBorder\" Property=\"BorderThickness\" Value=\"1\"", theme);
     }

@@ -133,15 +133,19 @@ public partial class MainViewModel : ViewModelBase
     private int _notAssessedCount;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RansomwareScoreDisplay), nameof(RansomwareGradeDisplay), nameof(RansomwareBrushKey))]
     private int _ransomwareScore;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RansomwareGradeDisplay), nameof(RansomwareBrushKey))]
     private string _ransomwareGrade = "N/A";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DomainMaturityScoreDisplay), nameof(DomainMaturityGradeDisplay), nameof(DomainMaturityBrushKey))]
     private int _domainMaturityScore;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DomainMaturityGradeDisplay), nameof(DomainMaturityBrushKey))]
     private string _domainMaturityGrade = "N/A";
 
     public string[] Categories { get; private set; } = ["All"];
@@ -167,12 +171,12 @@ public partial class MainViewModel : ViewModelBase
     private int _visibleCheckCount;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ReadinessDisplay))]
+    [NotifyPropertyChangedFor(nameof(ReadinessDisplay), nameof(ReadinessBrushKey))]
     [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ScanStatusHeadline))]
     private int _preflightPassedCount;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ReadinessDisplay))]
+    [NotifyPropertyChangedFor(nameof(ReadinessDisplay), nameof(ReadinessBrushKey))]
     [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ScanStatusHeadline))]
     private int _preflightTotalCount;
 
@@ -318,6 +322,32 @@ public partial class MainViewModel : ViewModelBase
         ? $"{PreflightPassedCount}/{PreflightTotalCount} ready"
         : "Pre-flight pending";
 
+    public string ReadinessBrushKey
+    {
+        get
+        {
+            if (PreflightTotalCount == 0)
+                return "StatusNeutral";
+
+            if (PreflightPassedCount == PreflightTotalCount)
+                return "ProgressGood";
+
+            return PreflightPassedCount > 0 ? "ProgressMid" : "ProgressBad";
+        }
+    }
+
+    public string RansomwareGradeDisplay => HasAssessedChecks ? RansomwareGrade : "\u2014";
+
+    public string RansomwareScoreDisplay => HasAssessedChecks ? $"{RansomwareScore}/100" : "Pending";
+
+    public string RansomwareBrushKey => HasAssessedChecks ? GradeBrushFor(RansomwareGrade) : "StatusNeutral";
+
+    public string DomainMaturityGradeDisplay => HasAssessedChecks ? DomainMaturityGrade : "\u2014";
+
+    public string DomainMaturityScoreDisplay => HasAssessedChecks ? $"{DomainMaturityScore}/100" : "Pending";
+
+    public string DomainMaturityBrushKey => HasAssessedChecks ? GradeBrushFor(DomainMaturityGrade) : "StatusNeutral";
+
     public string ScanProgressDisplay => IsScanning || ScanProgressPercent > 0
         ? $"{ScanProgressPercent:0}%"
         : "Idle";
@@ -422,6 +452,16 @@ public partial class MainViewModel : ViewModelBase
         "F" => "ProgressBad",
         _ => "StatusNeutral"
     } : "StatusNeutral";
+
+    private static string GradeBrushFor(string grade) => grade switch
+    {
+        "A" => "ProgressGood",
+        "B" => "GradeB",
+        "C" => "ProgressMid",
+        "D" => "SeverityHigh",
+        "F" => "ProgressBad",
+        _ => "StatusNeutral"
+    };
 
     private EnvironmentInfo _environment = new();
 
@@ -1264,6 +1304,12 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(AssessedChecksDisplay));
         OnPropertyChanged(nameof(OutcomeSummaryDisplay));
         OnPropertyChanged(nameof(RiskPostureLabel));
+        OnPropertyChanged(nameof(RansomwareGradeDisplay));
+        OnPropertyChanged(nameof(RansomwareScoreDisplay));
+        OnPropertyChanged(nameof(RansomwareBrushKey));
+        OnPropertyChanged(nameof(DomainMaturityGradeDisplay));
+        OnPropertyChanged(nameof(DomainMaturityScoreDisplay));
+        OnPropertyChanged(nameof(DomainMaturityBrushKey));
         NotifyExportCommandCanExecuteChanged();
     }
 

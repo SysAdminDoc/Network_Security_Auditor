@@ -5,8 +5,8 @@
         xmlns:models="clr-namespace:NetworkSecurityAuditor.Models"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="Network Security Auditor"
-        Width="1280" Height="760"
-        MinWidth="1100" MinHeight="700"
+        Width="1440" Height="900"
+        MinWidth="1180" MinHeight="760"
         Background="{StaticResource WindowBg}"
         FontFamily="Segoe UI Variable Text, Segoe UI"
         FontSize="13"
@@ -25,20 +25,16 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Margin="0,0,0,14">
+                <Grid Grid.Row="0" Margin="0,0,0,16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel>
-                        <TextBlock Text="SELECTED CHECK"
-                                   Style="{StaticResource SectionLabel}"
-                                   Margin="0,0,0,5" />
+                        <TextBlock Text="SELECTED CHECK" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding Id}"
                                        FontFamily="Cascadia Code, Consolas"
@@ -57,84 +53,80 @@
                             </Border>
                         </StackPanel>
                         <TextBlock Text="{Binding Label}"
-                                   FontSize="18"
+                                   FontSize="20"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextPrimary}"
                                    TextWrapping="Wrap"
-                                   Margin="0,7,0,0" />
+                                   Margin="0,8,0,0" />
                     </StackPanel>
                     <Button Grid.Column="1"
-                            Content="Export"
+                            Content="Export report"
                             Command="{Binding DataContext.ExportSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                             Style="{StaticResource SecondaryButton}"
                             Padding="14,7"
                             Margin="12,0,0,0"
                             VerticalAlignment="Top"
-                            ToolTip="{Binding DataContext.ExportAvailabilityText, RelativeSource={RelativeSource AncestorType=Window}}"
+                            ToolTip="Exports the complete audit using the format selected in Report output."
                             ToolTipService.ShowOnDisabled="True"
                             AutomationProperties.HelpText="{Binding DataContext.ExportAvailabilityText, RelativeSource={RelativeSource AncestorType=Window}}"
                             AutomationProperties.AutomationId="InspectorExportButton"
-                            AutomationProperties.Name="Export selected audit format" />
+                            AutomationProperties.Name="Export current audit report" />
                 </Grid>
 
-                <Grid Grid.Row="1" Margin="0,0,0,14">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="10" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CommandSegment}" Padding="10">
-                        <StackPanel>
-                            <TextBlock Text="CATEGORY" Style="{StaticResource SectionLabel}" />
-                            <TextBlock Text="{Binding Category}"
-                                       Foreground="{StaticResource TextPrimary}"
-                                       Margin="0,4,0,0"
-                                       TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource CommandSegment}" Padding="10">
-                        <Grid>
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,0,6,0">
+                        <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="SEVERITY" Style="{StaticResource SectionLabel}" />
-                                <Border Background="{Binding SeverityBrushKey, Converter={StaticResource ResourceBrush}}"
-                                        CornerRadius="4"
-                                        Padding="8,3"
-                                        HorizontalAlignment="Left"
-                                        Margin="0,4,0,0">
-                                    <TextBlock Text="{Binding SeverityLabel}"
-                                               Foreground="{StaticResource WindowBg}"
-                                               FontSize="10"
-                                               FontWeight="Bold" />
-                                </Border>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-                                <TextBlock Text="EVIDENCE" Style="{StaticResource SectionLabel}" HorizontalAlignment="Right" />
-                                <TextBlock Text="{Binding EvidenceMode}"
-                                           Foreground="{StaticResource TextSecondary}"
-                                           Margin="0,4,0,0"
-                                           HorizontalAlignment="Right" />
-                            </StackPanel>
+                            <Border Grid.Column="0" Style="{StaticResource CommandSegment}" Padding="12">
+                                <StackPanel>
+                                    <TextBlock Text="CATEGORY" Style="{StaticResource SectionLabel}" />
+                                    <TextBlock Text="{Binding Category}"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               Margin="0,5,0,0"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Style="{StaticResource CommandSegment}" Padding="12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="SEVERITY" Style="{StaticResource SectionLabel}" />
+                                        <Border Background="{Binding SeverityBrushKey, Converter={StaticResource ResourceBrush}}"
+                                                CornerRadius="4"
+                                                Padding="8,3"
+                                                HorizontalAlignment="Left"
+                                                Margin="0,5,0,0">
+                                            <TextBlock Text="{Binding SeverityLabel}"
+                                                       Foreground="{StaticResource WindowBg}"
+                                                       FontSize="10"
+                                                       FontWeight="Bold" />
+                                        </Border>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                        <TextBlock Text="EVIDENCE" Style="{StaticResource SectionLabel}" HorizontalAlignment="Right" />
+                                        <TextBlock Text="{Binding EvidenceMode}"
+                                                   Foreground="{StaticResource TextSecondary}"
+                                                   Margin="0,5,0,0"
+                                                   HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                         </Grid>
-                    </Border>
-                </Grid>
 
-                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel>
-                        <TextBlock Text="STATUS" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
+                        <TextBlock Text="ASSESSMENT STATUS" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
                         <ComboBox ItemsSource="{Binding Source={StaticResource CheckStatusValues}}"
                                   SelectedItem="{Binding Status}"
                                   Style="{StaticResource DarkComboBox}"
-                                  Margin="0,0,0,12"
+                                  Margin="0,0,0,14"
                                   AutomationProperties.AutomationId="InspectorStatusSelector"
                                   AutomationProperties.Name="{Binding Id, StringFormat='Status for {0}'}">
                             <ComboBox.ItemTemplate>
@@ -144,108 +136,94 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <TextBlock Text="FINDINGS" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
+                        <TextBlock Text="FINDINGS" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
                         <TextBox Text="{Binding Findings, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource DarkTextBox}"
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
-                                 MinHeight="88"
-                                 MaxHeight="150"
+                                 MinHeight="92"
                                  VerticalScrollBarVisibility="Auto"
-                                 Margin="0,0,0,12"
+                                 Margin="0,0,0,14"
                                  AutomationProperties.AutomationId="InspectorFindingsTextBox"
                                  AutomationProperties.Name="{Binding Id, StringFormat='Findings for {0}'}" />
 
-                        <TextBlock Text="EVIDENCE" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
+                        <TextBlock Text="EVIDENCE" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
                         <TextBox Text="{Binding Evidence}"
                                  Style="{StaticResource DarkTextBox}"
                                  IsReadOnly="True"
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
-                                 MinHeight="108"
-                                 MaxHeight="190"
+                                 MinHeight="112"
                                  VerticalScrollBarVisibility="Auto"
-                                 Margin="0,0,0,12"
+                                 Margin="0,0,0,14"
                                  AutomationProperties.AutomationId="InspectorEvidenceTextBox"
                                  AutomationProperties.Name="{Binding Id, StringFormat='Evidence for {0}'}" />
 
-                        <TextBlock Text="REMEDIATION NOTES" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
+                        <TextBlock Text="REMEDIATION NOTES" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
                         <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource DarkTextBox}"
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
-                                 MinHeight="70"
-                                 MaxHeight="120"
+                                 MinHeight="76"
                                  VerticalScrollBarVisibility="Auto"
-                                 Margin="0,0,0,12"
+                                 Margin="0,0,0,14"
                                  AutomationProperties.AutomationId="InspectorNotesTextBox"
                                  AutomationProperties.Name="{Binding Id, StringFormat='Remediation notes for {0}'}" />
 
-                        <Grid>
+                        <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="10" />
-                                <ColumnDefinition Width="138" />
+                                <ColumnDefinition Width="148" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="ASSIGNEE" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
+                                <TextBlock Text="ASSIGNEE" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
                                 <TextBox Text="{Binding RemediationAssignee, UpdateSourceTrigger=PropertyChanged}"
                                          Style="{StaticResource DarkTextBox}"
                                          AutomationProperties.AutomationId="InspectorAssigneeTextBox"
                                          AutomationProperties.Name="{Binding Id, StringFormat='Remediation assignee for {0}'}" />
                             </StackPanel>
                             <StackPanel Grid.Column="2">
-                                <TextBlock Text="DUE" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
+                                <TextBlock Text="DUE DATE" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
                                 <TextBox Text="{Binding RemediationDueDate, StringFormat={}{0:yyyy-MM-dd}, TargetNullValue='', UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
                                          Style="{StaticResource DarkTextBox}"
                                          ToolTip="Use yyyy-MM-dd. Invalid dates are highlighted and not saved."
                                          AutomationProperties.HelpText="Use yyyy-MM-dd. Invalid dates are highlighted and not saved."
                                          AutomationProperties.AutomationId="InspectorDueDateTextBox"
                                          AutomationProperties.Name="{Binding Id, StringFormat='Remediation due date for {0}'}" />
-                                <TextBlock Text="yyyy-MM-dd"
-                                           Foreground="{StaticResource TextMuted}"
-                                           FontSize="10"
-                                           Margin="0,4,0,0" />
+                                <TextBlock Text="yyyy-MM-dd" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="0,4,0,0" />
                             </StackPanel>
                         </Grid>
+
+                        <Border Background="{StaticResource CommandBg}"
+                                BorderBrush="{StaticResource BorderDim}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="COMPLIANCE MAPPING" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
+                                    <TextBlock Text="{Binding Compliance}" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="14,0,0,0" HorizontalAlignment="Right">
+                                    <TextBlock Text="RUNTIME" Style="{StaticResource SectionLabel}" HorizontalAlignment="Right" />
+                                    <TextBlock Text="{Binding DurationDisplay}" Foreground="{StaticResource TextPrimary}" Margin="0,5,0,0" HorizontalAlignment="Right" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
-
-                <Border Grid.Row="3"
-                        Background="{StaticResource CommandBg}"
-                        BorderBrush="{StaticResource BorderDim}"
-                        BorderThickness="1"
-                        CornerRadius="6"
-                        Padding="12"
-                        Margin="0,14,0,0">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="COMPLIANCE MAPPING"
-                                       Style="{StaticResource SectionLabel}"
-                                       Margin="0,0,0,4" />
-                            <TextBlock Text="{Binding Compliance}"
-                                       Foreground="{StaticResource TextSecondary}"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Margin="14,0,0,0" HorizontalAlignment="Right">
-                            <TextBlock Text="RUNTIME" Style="{StaticResource SectionLabel}" HorizontalAlignment="Right" />
-                            <TextBlock Text="{Binding DurationDisplay}"
-                                       Foreground="{StaticResource TextPrimary}"
-                                       HorizontalAlignment="Right" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
             </Grid>
         </DataTemplate>
     </Window.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="258" />
+            <ColumnDefinition Width="238" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
@@ -285,7 +263,7 @@
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimary}"
                                        TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="Security operations workspace"
+                            <TextBlock Text="Security posture workspace"
                                        FontSize="11"
                                        Foreground="{StaticResource TextMuted}" />
                         </StackPanel>
@@ -431,13 +409,13 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Column="1" Margin="14">
+        <Grid Grid.Column="1" Margin="12">
             <Grid.RowDefinitions>
-                <RowDefinition Height="132" />
-                <RowDefinition Height="118" />
+                <RowDefinition Height="136" />
+                <RowDefinition Height="126" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="132" />
-                <RowDefinition Height="28" />
+                <RowDefinition Height="148" />
+                <RowDefinition Height="26" />
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0"
@@ -446,7 +424,7 @@
                     Margin="0,0,0,10">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="76" />
+                        <RowDefinition Height="80" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
@@ -500,7 +478,7 @@
                             <StackPanel>
                                 <TextBlock Text="ENVIRONMENT READINESS" Style="{StaticResource SectionLabel}" />
                                 <TextBlock Text="{Binding ReadinessDisplay}"
-                                           Foreground="{StaticResource ProgressGood}"
+                                           Foreground="{Binding ReadinessBrushKey, Converter={StaticResource ResourceBrush}}"
                                            FontSize="15"
                                            FontWeight="SemiBold"
                                            Margin="0,5,0,0"
@@ -558,7 +536,7 @@
                             </Grid>
                         </Border>
 
-                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0">
                             <Button Content="Run Scan"
                                     Command="{Binding StartScanCommand}"
                                     Style="{StaticResource AccentButton}"
@@ -649,18 +627,18 @@
             <Border Grid.Row="1" Style="{StaticResource PremiumCard}" Padding="0" Margin="0,0,0,10">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="250" />
+                        <ColumnDefinition Width="292" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="170" />
+                        <ColumnDefinition Width="190" />
                     </Grid.ColumnDefinitions>
 
                     <Border Grid.Column="0" Background="{StaticResource CommandBg}" BorderBrush="{StaticResource BorderDim}" BorderThickness="0,0,1,0" Padding="18,14">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="88" />
+                                <ColumnDefinition Width="94" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Grid Width="76" Height="76" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Grid Width="82" Height="82" HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <Ellipse Stroke="{StaticResource TrackBg}" StrokeThickness="9" />
                                 <Ellipse Stroke="{Binding GradeBrushKey, Converter={StaticResource ResourceBrush}}"
                                          StrokeThickness="9"
@@ -679,9 +657,9 @@
                                            AutomationProperties.Name="Overall security grade" />
                             </Grid>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="RISK SCORE" Style="{StaticResource SectionLabel}" />
+                                <TextBlock Text="SECURITY POSTURE" Style="{StaticResource SectionLabel}" />
                                 <TextBlock Text="{Binding OverallScoreDisplay}"
-                                           FontSize="24"
+                                           FontSize="22"
                                            FontWeight="Bold"
                                            Foreground="{StaticResource TextPrimary}"
                                            TextTrimming="CharacterEllipsis"
@@ -747,11 +725,11 @@
                                 <StackPanel Grid.Column="0">
                                     <TextBlock Text="Ransomware" Style="{StaticResource SectionLabel}" FontSize="10" />
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding RansomwareGrade}"
-                                                   Foreground="{StaticResource GradeB}"
+                                        <TextBlock Text="{Binding RansomwareGradeDisplay}"
+                                                   Foreground="{Binding RansomwareBrushKey, Converter={StaticResource ResourceBrush}}"
                                                    FontWeight="Bold"
                                                    Margin="0,0,5,0" />
-                                        <TextBlock Text="{Binding RansomwareScore, StringFormat={}{0}/100}"
+                                        <TextBlock Text="{Binding RansomwareScoreDisplay}"
                                                    Foreground="{StaticResource TextMuted}"
                                                    FontSize="11"
                                                    VerticalAlignment="Bottom" />
@@ -760,11 +738,11 @@
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="Domain" Style="{StaticResource SectionLabel}" FontSize="10" />
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding DomainMaturityGrade}"
-                                                   Foreground="{StaticResource InfoAccent}"
+                                        <TextBlock Text="{Binding DomainMaturityGradeDisplay}"
+                                                   Foreground="{Binding DomainMaturityBrushKey, Converter={StaticResource ResourceBrush}}"
                                                    FontWeight="Bold"
                                                    Margin="0,0,5,0" />
-                                        <TextBlock Text="{Binding DomainMaturityScore, StringFormat={}{0}/100}"
+                                        <TextBlock Text="{Binding DomainMaturityScoreDisplay}"
                                                    Foreground="{StaticResource TextMuted}"
                                                    FontSize="11"
                                                    VerticalAlignment="Bottom" />
@@ -779,10 +757,11 @@
             <Grid Grid.Row="2" Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="390" />
+                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="420" MinWidth="360" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Style="{StaticResource PremiumCard}" Margin="0,0,10,0" Padding="0">
+                <Border Grid.Column="0" Style="{StaticResource PremiumCard}" Margin="0,0,6,0" Padding="0">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="50" />
@@ -999,7 +978,17 @@
                     </Grid>
                 </Border>
 
-                <Border Grid.Column="1" Style="{StaticResource InspectorCard}">
+                <GridSplitter Grid.Column="1"
+                              Width="6"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              Background="Transparent"
+                              Cursor="SizeWE"
+                              ResizeBehavior="PreviousAndNext"
+                              ToolTip="Drag to resize checks and inspector panels."
+                              AutomationProperties.Name="Resize checks and inspector panels" />
+
+                <Border Grid.Column="2" Style="{StaticResource InspectorCard}">
                     <Grid>
                         <ContentControl Content="{Binding SelectedCheck}"
                                         ContentTemplate="{StaticResource InspectorTemplate}"

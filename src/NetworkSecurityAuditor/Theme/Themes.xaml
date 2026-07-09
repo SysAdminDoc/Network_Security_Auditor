@@ -11,6 +11,7 @@
     <SolidColorBrush x:Key="InputBg" Color="#0a1520" />
     <SolidColorBrush x:Key="BorderDim" Color="#22384a" />
     <SolidColorBrush x:Key="BorderBright" Color="#38566a" />
+    <SolidColorBrush x:Key="ControlBorder" Color="#547489" />
     <SolidColorBrush x:Key="TextMuted" Color="#9aa7bd" />
     <SolidColorBrush x:Key="TextPrimary" Color="#e5e7eb" />
     <SolidColorBrush x:Key="TextSecondary" Color="#c6d0df" />
@@ -20,6 +21,7 @@
     <SolidColorBrush x:Key="OverlayScrim" Color="#aa0f141d" />
     <SolidColorBrush x:Key="Accent" Color="#22d3ee" />
     <SolidColorBrush x:Key="AccentHover" Color="#67e8f9" />
+    <SolidColorBrush x:Key="AccentPressed" Color="#06b6d4" />
     <SolidColorBrush x:Key="AccentSoft" Color="#103647" />
     <SolidColorBrush x:Key="InfoAccent" Color="#60a5fa" />
     <SolidColorBrush x:Key="GradeB" Color="#5eead4" />
@@ -32,6 +34,8 @@
     <SolidColorBrush x:Key="TrackBg" Color="#1c3040" />
     <SolidColorBrush x:Key="SoftWarningBg" Color="#302815" />
     <SolidColorBrush x:Key="SoftDangerBg" Color="#341b26" />
+    <SolidColorBrush x:Key="DisabledSurface" Color="#111f2b" />
+    <SolidColorBrush x:Key="DisabledText" Color="#7f8ca0" />
 
     <!-- Raw Colors for binding -->
     <Color x:Key="WindowBgColor">#08111a</Color>
@@ -42,7 +46,7 @@
 
     <Style x:Key="SectionLabel" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="10.5" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
@@ -52,13 +56,13 @@
         <Setter Property="Background" Value="{StaticResource CardBg}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="Padding" Value="14" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16" />
     </Style>
 
     <Style x:Key="InspectorCard" TargetType="Border" BasedOn="{StaticResource PremiumCard}">
-        <Setter Property="Background" Value="{StaticResource PanelBg}" />
-        <Setter Property="Padding" Value="16" />
+        <Setter Property="Background" Value="{StaticResource CardBg}" />
+        <Setter Property="Padding" Value="18" />
     </Style>
 
     <Style x:Key="CommandSegment" TargetType="Border" BasedOn="{StaticResource PremiumCard}">
@@ -144,9 +148,12 @@
     <Style x:Key="DarkTextBox" TargetType="TextBox">
         <Setter Property="Background" Value="{StaticResource InputBg}" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ControlBorder}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="SelectionBrush" Value="{StaticResource AccentSoft}" />
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
         <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}" />
         <Setter Property="Validation.ErrorTemplate">
             <Setter.Value>
@@ -168,6 +175,15 @@
                 <Setter Property="ToolTip"
                         Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)[0].ErrorContent}" />
             </Trigger>
+            <Trigger Property="IsReadOnly" Value="True">
+                <Setter Property="Background" Value="{StaticResource CommandBg}" />
+                <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{StaticResource DisabledSurface}" />
+                <Setter Property="Foreground" Value="{StaticResource DisabledText}" />
+                <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
+            </Trigger>
         </Style.Triggers>
     </Style>
 
@@ -183,7 +199,7 @@
                         <Border x:Name="Box"
                                 Width="18" Height="18"
                                 Background="{StaticResource InputBg}"
-                                BorderBrush="{StaticResource BorderDim}"
+                                BorderBrush="{StaticResource ControlBorder}"
                                 BorderThickness="1"
                                 CornerRadius="4">
                             <Path x:Name="CheckMark"
@@ -254,7 +270,7 @@
     <Style x:Key="DarkComboBox" TargetType="ComboBox">
         <Setter Property="Background" Value="{StaticResource InputBg}" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ControlBorder}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="10,6" />
         <Setter Property="MinHeight" Value="32" />
@@ -434,6 +450,7 @@
         <Setter Property="Padding" Value="16,8" />
         <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
         <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="MinHeight" Value="36" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
         <Setter Property="Template">
@@ -454,8 +471,14 @@
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource OnAccent}" />
                         </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter Property="Background" Value="{StaticResource AccentPressed}" />
+                        </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.5" />
+                            <Setter Property="Background" Value="{StaticResource DisabledSurface}" />
+                            <Setter Property="Foreground" Value="{StaticResource DisabledText}" />
+                            <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
+                            <Setter Property="Cursor" Value="Arrow" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -469,8 +492,9 @@
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Padding" Value="16,8" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ControlBorder}" />
         <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="MinHeight" Value="36" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
         <Setter Property="Template">
@@ -492,8 +516,15 @@
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource Accent}" />
                         </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter Property="Background" Value="{StaticResource AccentSoft}" />
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource Accent}" />
+                        </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.5" />
+                            <Setter Property="Background" Value="{StaticResource DisabledSurface}" />
+                            <Setter Property="Foreground" Value="{StaticResource DisabledText}" />
+                            <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
+                            <Setter Property="Cursor" Value="Arrow" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -528,6 +559,7 @@
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSoft}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}" />
                             <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">

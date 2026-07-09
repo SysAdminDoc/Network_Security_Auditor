@@ -51,6 +51,12 @@ public class MainViewModelTests
         Assert.False(vm.HasAssessedChecks);
         Assert.Equal("\u2014", vm.Grade);
         Assert.Equal("Not scanned", vm.OverallScoreDisplay);
+        Assert.Equal("\u2014", vm.RansomwareGradeDisplay);
+        Assert.Equal("Pending", vm.RansomwareScoreDisplay);
+        Assert.Equal("StatusNeutral", vm.RansomwareBrushKey);
+        Assert.Equal("\u2014", vm.DomainMaturityGradeDisplay);
+        Assert.Equal("Pending", vm.DomainMaturityScoreDisplay);
+        Assert.Equal("StatusNeutral", vm.DomainMaturityBrushKey);
 
         check.Status = CheckStatus.Pass;
 
@@ -61,6 +67,8 @@ public class MainViewModelTests
         Assert.Equal(100, vm.OverallScore);
         Assert.Equal("100/100", vm.OverallScoreDisplay);
         Assert.Equal("A", vm.Grade);
+        Assert.EndsWith("/100", vm.RansomwareScoreDisplay, StringComparison.Ordinal);
+        Assert.NotEqual("StatusNeutral", vm.RansomwareBrushKey);
 
         check.Status = CheckStatus.Fail;
 
@@ -230,6 +238,7 @@ public class MainViewModelTests
 
         Assert.Equal("Pre-flight 4/7 passed", vm.ScoreSubtitle);
         Assert.Equal("Ready to scan", vm.ScanReadinessText);
+        Assert.Equal("ProgressMid", vm.ReadinessBrushKey);
 
         vm.ScanStatus = "Pre-flight complete: 4/7 checks passed";
 
