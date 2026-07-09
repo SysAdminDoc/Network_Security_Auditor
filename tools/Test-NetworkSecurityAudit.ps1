@@ -457,6 +457,11 @@ if ($scriptText -notmatch 'function Test-BrandingWebsiteUrl' -or
     $scriptText -match 'Website\s+=\s+if\s*\(\$cfg\.website\)') {
     Add-Failure 'Branding config must warn for missing paths and restrict website links to absolute HTTP(S) URLs.'
 }
+if ($scriptText -notmatch 'function Test-BrandingContactEmail' -or
+    $scriptText -notmatch 'Branding contact_email ignored: expected a single plain email address\.' -or
+    $scriptText -match 'ContactEmail\s+=\s+if\s*\(\$cfg\.contact_email\)') {
+    Add-Failure 'Branding config must restrict contact_email to a single plain email address before rendering mailto links.'
+}
 if ($scriptText -notmatch 'findings_truncated' -or $scriptText -notmatch 'findings_original_length' -or $scriptText -notmatch 'evidence_truncated' -or $scriptText -notmatch 'evidence_original_length') {
     Add-Failure 'JSONL truncation must include flags and original lengths.'
 }

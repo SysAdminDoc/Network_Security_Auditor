@@ -315,6 +315,24 @@ function Test-BrandingWebsiteUrl {
     return $uri.Scheme -in @('http', 'https')
 }
 
+function Test-BrandingContactEmail {
+    param([string]$Email)
+
+    if ([string]::IsNullOrWhiteSpace($Email)) { return $false }
+
+    $trimmed = $Email.Trim()
+    foreach ($bad in @("`r", "`n", "`t", ' ', '<', '>', '"', "'", ',', ';')) {
+        if ($trimmed.Contains($bad)) { return $false }
+    }
+
+    try {
+        $address = [System.Net.Mail.MailAddress]::new($trimmed)
+        return $address.Address -ieq $trimmed -and -not [string]::IsNullOrWhiteSpace($address.Host)
+    } catch {
+        return $false
+    }
+}
+
 if ($script:CliBrandingConfig -and (Test-Path $script:CliBrandingConfig -ErrorAction SilentlyContinue)) {
     try {
         $raw = Get-Content $script:CliBrandingConfig -Raw -Encoding UTF8
@@ -345,6 +363,15 @@ if ($script:CliBrandingConfig -and (Test-Path $script:CliBrandingConfig -ErrorAc
                 Write-Warning 'Branding website ignored: expected an absolute http:// or https:// URL.'
             }
         }
+        $contactEmail = ''
+        if ($cfg.contact_email) {
+            $candidateEmail = [string]$cfg.contact_email
+            if (Test-BrandingContactEmail -Email $candidateEmail) {
+                $contactEmail = $candidateEmail.Trim()
+            } else {
+                Write-Warning 'Branding contact_email ignored: expected a single plain email address.'
+            }
+        }
         $script:Branding = @{
             CompanyName  = if ($cfg.company_name) { [string]$cfg.company_name } else { '' }
             Tagline      = if ($cfg.tagline) { [string]$cfg.tagline } else { '' }
@@ -352,7 +379,7 @@ if ($script:CliBrandingConfig -and (Test-Path $script:CliBrandingConfig -ErrorAc
             PrimaryColor = if ($cfg.primary_color -match '^#[0-9a-fA-F]{3,8}$') { $cfg.primary_color } else { '' }
             AccentColor  = if ($cfg.accent_color -match '^#[0-9a-fA-F]{3,8}$') { $cfg.accent_color } else { '' }
             ContactName  = if ($cfg.contact_name) { [string]$cfg.contact_name } else { '' }
-            ContactEmail = if ($cfg.contact_email) { [string]$cfg.contact_email } else { '' }
+            ContactEmail = $contactEmail
             ContactPhone = if ($cfg.contact_phone) { [string]$cfg.contact_phone } else { '' }
             Website      = $website
             FooterText   = if ($cfg.footer_text) { [string]$cfg.footer_text } else { '' }

@@ -6,6 +6,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ### Security
 - Fixed: C# HTML report links now use attribute-safe encoding, only render HTTP(S) external links, and avoid unsafe `mailto:` links from malformed branding email values.
+- Fixed: PowerShell branding configs now reject malformed `contact_email` values before rendering report `mailto:` links.
 
 ### Reliability
 - Fixed: C# CF01 SYSVOL GPP password scanning now honors cancellation, skips oversized preference XML files, and records traversal/read limits instead of reading every matched file unbounded.
