@@ -1,6 +1,7 @@
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.ViewModels;
+using System.Globalization;
 
 namespace NetworkSecurityAuditor.Tests;
 
@@ -353,6 +354,74 @@ public class MainViewModelTests
         Assert.False(vm.IsScanning);
         Assert.Equal(0, vm.ScanProgressPercent);
         Assert.Contains("No checks in the ADOnly profile apply", vm.ScanStatus);
+    }
+
+    [Fact]
+    public void ApplyAuditState_Restores_Profile_And_Clears_Invalid_Due_Date()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+        var check = vm.Checks.Single(c => c.Id == "EP01");
+        check.RemediationDueDate = new DateTime(2026, 7, 9);
+
+        var restored = vm.ApplyAuditState(new AuditState
+        {
+            ScanProfile = "Quick",
+            Theme = "Catppuccin Mocha",
+            Checks =
+            [
+                new CheckState
+                {
+                    Id = "EP01",
+                    Status = CheckStatus.Fail,
+                    Findings = "Loaded finding",
+                    RemediationDueDate = "not-a-date"
+                }
+            ]
+        });
+
+        Assert.Equal(1, restored);
+        Assert.Equal(ScanProfileType.Quick, vm.SelectedProfile);
+        Assert.Equal("Catppuccin Mocha", vm.SelectedTheme);
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.Equal("Loaded finding", check.Findings);
+        Assert.Null(check.RemediationDueDate);
+    }
+
+    [Fact]
+    public void ApplyAuditState_Parses_Due_Date_With_Invariant_Format()
+    {
+        var originalCulture = Thread.CurrentThread.CurrentCulture;
+        var originalUiCulture = Thread.CurrentThread.CurrentUICulture;
+        try
+        {
+            Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");
+            Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("ar-SA");
+
+            var vm = new MainViewModel();
+            vm.LoadCheckCatalog();
+            var check = vm.Checks.Single(c => c.Id == "EP01");
+
+            vm.ApplyAuditState(new AuditState
+            {
+                Checks =
+                [
+                    new CheckState
+                    {
+                        Id = "EP01",
+                        Status = CheckStatus.Partial,
+                        RemediationDueDate = "2026-07-09"
+                    }
+                ]
+            });
+
+            Assert.Equal(new DateTime(2026, 7, 9), check.RemediationDueDate);
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = originalCulture;
+            Thread.CurrentThread.CurrentUICulture = originalUiCulture;
+        }
     }
 
     private static string RunningIds(MainViewModel vm)

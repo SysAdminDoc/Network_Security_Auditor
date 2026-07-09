@@ -1096,23 +1096,7 @@ public partial class MainViewModel : ViewModelBase
                     return;
                 }
 
-                var lookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
-                var restored = 0;
-
-                foreach (var cs in state.Checks)
-                {
-                    if (!lookup.TryGetValue(cs.Id, out var vm)) continue;
-                    vm.Status = cs.Status;
-                    vm.Findings = cs.Findings;
-                    vm.Evidence = cs.Evidence;
-                    vm.Notes = cs.Notes;
-                    vm.RemediationAssignee = cs.RemediationAssignee;
-                    if (DateTime.TryParse(cs.RemediationDueDate, out var due))
-                        vm.RemediationDueDate = due;
-                    restored++;
-                }
-
-                UpdateScoreCounts();
+                var restored = ApplyAuditState(state);
                 ScanStatus = $"State loaded: {restored} checks restored from {Path.GetFileName(dialog.FileName)}";
             }
             catch (Exception ex)
@@ -1121,6 +1105,48 @@ public partial class MainViewModel : ViewModelBase
                 ScanStatus = $"Failed to load state file. Crash log: {logPath}";
             }
         }
+    }
+
+    internal int ApplyAuditState(AuditState state)
+    {
+        if (Enum.TryParse<ScanProfileType>(state.ScanProfile, ignoreCase: true, out var profile))
+            SelectedProfile = profile;
+
+        if (AvailableThemes.Contains(state.Theme, StringComparer.OrdinalIgnoreCase))
+            SelectedTheme = AvailableThemes.First(theme => theme.Equals(state.Theme, StringComparison.OrdinalIgnoreCase));
+
+        var lookup = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+        var restored = 0;
+
+        foreach (var cs in state.Checks)
+        {
+            if (!lookup.TryGetValue(cs.Id, out var vm)) continue;
+            vm.Status = cs.Status;
+            vm.Findings = cs.Findings;
+            vm.Evidence = cs.Evidence;
+            vm.Notes = cs.Notes;
+            vm.RemediationAssignee = cs.RemediationAssignee;
+            vm.RemediationDueDate = ParseStateRemediationDueDate(cs.RemediationDueDate);
+            restored++;
+        }
+
+        UpdateScoreCounts();
+        return restored;
+    }
+
+    private static DateTime? ParseStateRemediationDueDate(string? value)
+    {
+        if (DateTime.TryParseExact(
+            value,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var due))
+        {
+            return due.Date;
+        }
+
+        return null;
     }
 
     private void UpdateScoreCounts()

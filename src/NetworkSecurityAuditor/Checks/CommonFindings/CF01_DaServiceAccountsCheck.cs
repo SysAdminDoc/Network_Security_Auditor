@@ -13,11 +13,18 @@ using NetworkSecurityAuditor.Models;
 public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
 {
     public string Id => "CF01";
+    internal const long MaxGppFileBytes = 1_048_576;
+    internal const int MaxGppFilesToInspect = 5_000;
 
     private static readonly string[] ServiceAccountIndicators =
     [
         "svc", "service", "sql", "backup", "scan", "app", "task",
         "batch", "agent", "monitor", "scheduler", "iis", "exchange"
+    ];
+
+    private static readonly string[] GppPreferenceFiles =
+    [
+        "Groups.xml", "Services.xml", "ScheduledTasks.xml", "DataSources.xml", "Drives.xml"
     ];
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
@@ -48,7 +55,7 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
 
             // 3. Check for GPP password remnants (Groups.xml in SYSVOL)
             ct.ThrowIfCancellationRequested();
-            CheckGppPasswords(env, sb, evidence, ref hasIssue);
+            CheckGppPasswords(env, sb, evidence, ref hasIssue, ct);
 
             // 4. Basic ADCS check
             ct.ThrowIfCancellationRequested();
@@ -200,7 +207,7 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
     }
 
     private static void CheckGppPasswords(EnvironmentInfo env, StringBuilder sb,
-        StringBuilder evidence, ref bool hasIssue)
+        StringBuilder evidence, ref bool hasIssue, CancellationToken ct)
     {
         evidence.AppendLine("\n[GPP Password Check (SYSVOL)]");
 
@@ -214,45 +221,16 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
                 return;
             }
 
-            string[] gppFiles = ["Groups.xml", "Services.xml", "ScheduledTasks.xml",
-                "DataSources.xml", "Drives.xml"];
-
-            int foundCount = 0;
-
-            foreach (string policyDir in Directory.GetDirectories(sysvolPath))
+            var scan = ScanGppPasswordFiles(sysvolPath, ct);
+            foreach (var line in scan.EvidenceLines)
             {
-                string machinePrefs = Path.Combine(policyDir, "Machine", "Preferences");
-                string userPrefs = Path.Combine(policyDir, "User", "Preferences");
-
-                foreach (string prefsDir in new[] { machinePrefs, userPrefs })
-                {
-                    if (!Directory.Exists(prefsDir)) continue;
-
-                    foreach (string gppFile in gppFiles)
-                    {
-                        var files = Directory.GetFiles(prefsDir, gppFile, SearchOption.AllDirectories);
-                        foreach (string file in files)
-                        {
-                            try
-                            {
-                                string content = File.ReadAllText(file);
-                                if (content.Contains("cpassword", StringComparison.OrdinalIgnoreCase) &&
-                                    content.Contains("cpassword=\"\"", StringComparison.OrdinalIgnoreCase) == false)
-                                {
-                                    foundCount++;
-                                    evidence.AppendLine($"  GPP PASSWORD FOUND: {file}");
-                                }
-                            }
-                            catch { /* Access denied */ }
-                        }
-                    }
-                }
+                evidence.AppendLine($"  {line}");
             }
 
-            if (foundCount > 0)
+            if (scan.FoundCount > 0)
             {
                 hasIssue = true;
-                sb.AppendLine($"CRITICAL: {foundCount} GPP file(s) with cpassword found in SYSVOL. " +
+                sb.AppendLine($"CRITICAL: {scan.FoundCount} GPP file(s) with cpassword found in SYSVOL. " +
                     "These passwords are trivially decryptable (MS14-025). Remove immediately.");
             }
             else
@@ -263,6 +241,132 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         catch (Exception ex)
         {
             evidence.AppendLine($"  SYSVOL scan error: {ex.Message}");
+        }
+    }
+
+    internal static GppPasswordScanSummary ScanGppPasswordFiles(
+        string sysvolPoliciesPath,
+        CancellationToken ct)
+    {
+        var summary = new GppPasswordScanSummary();
+
+        foreach (string policyDir in EnumerateDirectoriesSafe(sysvolPoliciesPath, summary, ct))
+        {
+            ct.ThrowIfCancellationRequested();
+
+            string[] preferenceRoots =
+            [
+                Path.Combine(policyDir, "Machine", "Preferences"),
+                Path.Combine(policyDir, "User", "Preferences")
+            ];
+
+            foreach (string prefsDir in preferenceRoots)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!Directory.Exists(prefsDir))
+                    continue;
+
+                foreach (string gppFile in GppPreferenceFiles)
+                {
+                    foreach (string file in EnumerateFilesRecursiveSafe(prefsDir, gppFile, summary, ct))
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        if (summary.InspectedCount >= MaxGppFilesToInspect)
+                        {
+                            summary.Truncated = true;
+                            summary.EvidenceLines.Add($"GPP scan stopped after inspecting {MaxGppFilesToInspect} file(s).");
+                            return summary;
+                        }
+
+                        InspectGppFile(file, summary);
+                    }
+                }
+            }
+        }
+
+        return summary;
+    }
+
+    private static void InspectGppFile(string file, GppPasswordScanSummary summary)
+    {
+        try
+        {
+            var fileInfo = new FileInfo(file);
+            if (fileInfo.Length > MaxGppFileBytes)
+            {
+                summary.SkippedOversizedCount++;
+                summary.EvidenceLines.Add($"Skipped oversized GPP file: {file} ({fileInfo.Length} bytes)");
+                return;
+            }
+
+            summary.InspectedCount++;
+            string content = File.ReadAllText(file);
+            if (content.Contains("cpassword", StringComparison.OrdinalIgnoreCase) &&
+                !content.Contains("cpassword=\"\"", StringComparison.OrdinalIgnoreCase))
+            {
+                summary.FoundCount++;
+                summary.EvidenceLines.Add($"GPP PASSWORD FOUND: {file}");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            summary.SkippedUnreadableCount++;
+            summary.EvidenceLines.Add($"Skipped unreadable GPP file: {file} ({ex.Message})");
+        }
+    }
+
+    private static IEnumerable<string> EnumerateFilesRecursiveSafe(
+        string root,
+        string fileName,
+        GppPasswordScanSummary summary,
+        CancellationToken ct)
+    {
+        var pending = new Stack<string>();
+        pending.Push(root);
+
+        while (pending.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            var current = pending.Pop();
+
+            foreach (var file in EnumerateFilesSafe(current, fileName, summary))
+                yield return file;
+
+            foreach (var directory in EnumerateDirectoriesSafe(current, summary, ct))
+                pending.Push(directory);
+        }
+    }
+
+    private static IEnumerable<string> EnumerateFilesSafe(
+        string directory,
+        string fileName,
+        GppPasswordScanSummary summary)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(directory, fileName).ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            summary.EvidenceLines.Add($"Could not enumerate {directory}: {ex.Message}");
+            return [];
+        }
+    }
+
+    private static IEnumerable<string> EnumerateDirectoriesSafe(
+        string directory,
+        GppPasswordScanSummary summary,
+        CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            return Directory.EnumerateDirectories(directory).ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            summary.EvidenceLines.Add($"Could not enumerate {directory}: {ex.Message}");
+            return [];
         }
     }
 
@@ -308,5 +412,15 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         {
             evidence.AppendLine($"  ADCS query error: {ex.Message}");
         }
+    }
+
+    internal sealed class GppPasswordScanSummary
+    {
+        public int FoundCount { get; set; }
+        public int InspectedCount { get; set; }
+        public int SkippedOversizedCount { get; set; }
+        public int SkippedUnreadableCount { get; set; }
+        public bool Truncated { get; set; }
+        public List<string> EvidenceLines { get; } = [];
     }
 }

@@ -7,6 +7,10 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ### Security
 - Fixed: C# HTML report links now use attribute-safe encoding, only render HTTP(S) external links, and avoid unsafe `mailto:` links from malformed branding email values.
 
+### Reliability
+- Fixed: C# CF01 SYSVOL GPP password scanning now honors cancellation, skips oversized preference XML files, and records traversal/read limits instead of reading every matched file unbounded.
+- Fixed: C# saved audit-state loading now restores the saved scan profile, parses remediation due dates with invariant `yyyy-MM-dd`, and clears invalid due dates instead of preserving stale UI values.
+
 ## [v5.2.7] - 2026-07-09
 
 ### Platform
