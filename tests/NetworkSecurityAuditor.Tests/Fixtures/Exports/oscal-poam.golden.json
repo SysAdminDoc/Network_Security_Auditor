@@ -1,4 +1,4 @@
-﻿{
+{
   "plan-of-action-and-milestones": {
     "uuid": "00000000-0000-0000-0000-000000000010",
     "metadata": {
@@ -16,7 +16,7 @@
         {
           "uuid": "00000000-0000-0000-0000-000000000011",
           "type": "tool",
-          "name": "Network Security Auditor v5.2.8"
+          "name": "Network Security Auditor v5.2.9"
         }
       ]
     },

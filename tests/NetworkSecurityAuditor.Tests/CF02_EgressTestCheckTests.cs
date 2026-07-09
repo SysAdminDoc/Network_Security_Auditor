@@ -41,4 +41,24 @@ public class CF02_EgressTestCheckTests
         Assert.Contains("4 high-risk port(s) are reachable outbound", result.Findings);
         Assert.Contains("OPEN: portquiz.net:445", result.Evidence);
     }
+
+    [Fact]
+    public void Egress_Connector_Does_Not_Abandon_Unobserved_Connect_Tasks()
+    {
+        var source = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "NetworkSecurityAuditor", "Checks", "CommonFindings", "CF02_EgressTestCheck.cs"));
+
+        Assert.Contains("await client.ConnectAsync(host, port, timeoutCts.Token)", source);
+        Assert.DoesNotContain("connectTask.Wait(timeout)", source);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "NetworkSecurityAuditor.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir?.FullName ?? throw new DirectoryNotFoundException("Could not locate NetworkSecurityAuditor.slnx from test output directory.");
+    }
 }

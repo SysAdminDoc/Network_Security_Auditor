@@ -366,6 +366,43 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public async Task StartScan_Generates_And_Opens_Html_Report_When_Complete()
+    {
+        var openedReports = new List<string>();
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-auto-report-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        try
+        {
+            var vm = new MainViewModel((_, _, progress, _, startedProgress) =>
+            {
+                startedProgress?.Report(("EP01", 1, 1));
+                progress?.Report(("EP01", PassingResult("EP01")));
+                return Task.FromResult(new Dictionary<string, CheckResult>
+                {
+                    ["EP01"] = PassingResult("EP01")
+                });
+            }, openedReports.Add);
+            vm.LoadCheckCatalog();
+            vm.SelectedProfile = ScanProfileType.Quick;
+            vm.ExportOutputFolder = dir;
+
+            await vm.StartScanCommand.ExecuteAsync(null);
+
+            var openedReport = Assert.Single(openedReports);
+            Assert.True(File.Exists(openedReport));
+            Assert.StartsWith(dir, openedReport, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("SecurityAudit_", Path.GetFileName(openedReport));
+            Assert.Contains("Report generated and opened", vm.ScanStatus);
+            Assert.Contains(vm.ActivityLog, entry => entry.Contains("HTML report generated and opened", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ApplyAuditState_Restores_Profile_And_Clears_Invalid_Due_Date()
     {
         var vm = new MainViewModel();

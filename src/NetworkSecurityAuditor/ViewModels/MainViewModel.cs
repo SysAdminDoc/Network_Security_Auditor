@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows.Data;
@@ -35,8 +36,13 @@ public partial class MainViewModel : ViewModelBase
         new(ExportFormatKind.CmmcJson, "CMMC JSON", "_cmmc", "json")
     ];
 
+    private static readonly string DefaultExportOutputFolder = Path.Combine(
+        System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments),
+        "NetworkSecurityAuditor");
+
     private CancellationTokenSource? _scanCts;
     private readonly RunChecksAsync _runChecksAsync;
+    private readonly OpenReportFile _openReportFile;
 
     internal delegate Task<Dictionary<string, CheckResult>> RunChecksAsync(
         EnvironmentInfo env,
@@ -44,6 +50,8 @@ public partial class MainViewModel : ViewModelBase
         IProgress<(string checkId, CheckResult result)>? progress,
         CancellationToken ct,
         IProgress<(string checkId, int index, int total)>? startedProgress);
+
+    internal delegate void OpenReportFile(string path);
 
     public ObservableCollection<CheckItemViewModel> Checks { get; } = [];
 
@@ -152,9 +160,7 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ExportAvailabilityText))]
-    private string _exportOutputFolder = Path.Combine(
-        System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments),
-        "NetworkSecurityAuditor");
+    private string _exportOutputFolder = DefaultExportOutputFolder;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasVisibleChecks), nameof(HasNoVisibleChecks), nameof(VisibleChecksDisplay), nameof(FilterEmptyStateTitle), nameof(FilterEmptyStateDetail))]
@@ -174,9 +180,10 @@ public partial class MainViewModel : ViewModelBase
     {
     }
 
-    internal MainViewModel(RunChecksAsync runChecksAsync)
+    internal MainViewModel(RunChecksAsync runChecksAsync, OpenReportFile? openReportFile = null)
     {
         _runChecksAsync = runChecksAsync;
+        _openReportFile = openReportFile ?? OpenReportWithShell;
         FilteredChecks = CollectionViewSource.GetDefaultView(Checks);
         FilteredChecks.Filter = FilterCheck;
     }
@@ -612,18 +619,57 @@ public partial class MainViewModel : ViewModelBase
             var total = runningTotal;
             if (!unsupportedProfile && !noApplicableChecks)
             {
-                ScanStatus = _scanCts.Token.IsCancellationRequested
+                var scanWasCancelled = _scanCts.Token.IsCancellationRequested;
+                ScanStatus = scanWasCancelled
                     ? $"Scan cancelled ({completed}/{total} completed)"
                     : $"Scan complete ({completed}/{total} checks)";
                 AppendActivity(ScanStatus);
-                if (!_scanCts.Token.IsCancellationRequested && total > 0)
+                if (!scanWasCancelled && total > 0)
+                {
                     ScanProgressPercent = 100;
+                    await GenerateAndOpenHtmlReportAsync();
+                }
             }
             _scanCts.Dispose();
             _scanCts = null;
 
             StartScanCommand.NotifyCanExecuteChanged();
             StopScanCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private async Task GenerateAndOpenHtmlReportAsync()
+    {
+        var outputFolder = string.IsNullOrWhiteSpace(ExportOutputFolder)
+            ? DefaultExportOutputFolder
+            : ExportOutputFolder;
+
+        IsExporting = true;
+        ScanStatus = "Generating HTML report...";
+        AppendActivity(ScanStatus);
+
+        try
+        {
+            Directory.CreateDirectory(outputFolder);
+            var reportPath = Path.Combine(
+                outputFolder,
+                $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.html");
+
+            await WriteExportAsync(ExportFormatKind.Html, reportPath);
+            _openReportFile(reportPath);
+
+            ScanStatus = $"Report generated and opened: {reportPath}";
+            AppendActivity("HTML report generated and opened");
+        }
+        catch (Exception ex)
+        {
+            var logPath = Services.CrashLogWriter.Write(ex, "GenerateAndOpenHtmlReportAsync");
+            ScanStatus = $"Report generation or opening failed. Crash log: {logPath}";
+            AppendActivity($"Report open failed: {ex.Message}");
+        }
+        finally
+        {
+            IsExporting = false;
         }
     }
 
@@ -809,6 +855,16 @@ public partial class MainViewModel : ViewModelBase
             default:
                 throw new NotSupportedException($"Export format '{kind}' is not supported.");
         }
+    }
+
+    private static void OpenReportWithShell(string path)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = path,
+            UseShellExecute = true
+        };
+        Process.Start(psi);
     }
 
     private async Task WritePdfExportAsync(string path, IEnumerable<CheckItemViewModel> exportChecks, EnvironmentInfo exportEnv)

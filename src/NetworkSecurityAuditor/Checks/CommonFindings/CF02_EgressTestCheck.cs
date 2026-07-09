@@ -13,7 +13,7 @@ public sealed class CF02_EgressTestCheck : ISecurityCheck
 {
     private const string EgressTestHost = "portquiz.net";
     private const int ControlPort = 80;
-    private readonly Func<string, int, TimeSpan, bool> _tcpConnect;
+    private readonly Func<string, int, TimeSpan, CancellationToken, Task<bool>> _tcpConnect;
 
     public string Id => "CF02";
 
@@ -33,19 +33,21 @@ public sealed class CF02_EgressTestCheck : ISecurityCheck
 
     public CF02_EgressTestCheck(Func<string, int, TimeSpan, bool>? tcpConnect = null)
     {
-        _tcpConnect = tcpConnect ?? TestTcpConnect;
+        _tcpConnect = tcpConnect is null
+            ? TestTcpConnectAsync
+            : (host, port, timeout, _) => Task.FromResult(tcpConnect(host, port, timeout));
     }
 
-    public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
+    public async Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
         if (options.NoInternet)
         {
-            return Task.FromResult(new CheckResult
+            return new CheckResult
             {
                 Status = CheckStatus.NA,
                 Findings = "Egress filtering test skipped (NoInternet flag is set).",
                 Evidence = $"NoInternet=true @ {DateTime.Now:yyyy-MM-dd HH:mm}"
-            });
+            };
         }
 
         try
@@ -62,14 +64,14 @@ public sealed class CF02_EgressTestCheck : ISecurityCheck
             evidence.AppendLine($"  Test method: TCP connect to {EgressTestHost} with {timeout.TotalSeconds:0}-second timeout");
             evidence.AppendLine($"  Control: {EgressTestHost}:{ControlPort}");
 
-            if (!_tcpConnect(EgressTestHost, ControlPort, timeout))
+            if (!await _tcpConnect(EgressTestHost, ControlPort, timeout, ct))
             {
-                return Task.FromResult(new CheckResult
+                return new CheckResult
                 {
                     Status = CheckStatus.NA,
                     Findings = "Egress filtering test could not reach the control port on the outbound test service. Filtering cannot be confirmed.",
                     Evidence = evidence.AppendLine("  Control connection failed; high-risk port results not attempted.").ToString().TrimEnd()
-                });
+                };
             }
 
             evidence.AppendLine("  Control connection succeeded; high-risk port failures are counted as filtered.");
@@ -79,7 +81,7 @@ public sealed class CF02_EgressTestCheck : ISecurityCheck
                 ct.ThrowIfCancellationRequested();
                 testedPorts++;
 
-                bool reachable = _tcpConnect(EgressTestHost, port, timeout);
+                var reachable = await _tcpConnect(EgressTestHost, port, timeout, ct);
 
                 if (reachable)
                 {
@@ -114,26 +116,41 @@ public sealed class CF02_EgressTestCheck : ISecurityCheck
                 : openPorts > 0 ? CheckStatus.Partial
                 : CheckStatus.Pass;
 
-            return Task.FromResult(new CheckResult
+            return new CheckResult
             {
                 Status = status,
                 Findings = sb.ToString().TrimEnd(),
                 Evidence = evidence.ToString().TrimEnd()
-            });
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            return Task.FromResult(CheckResult.FromError(Id, ex));
+            return CheckResult.FromError(Id, ex);
         }
     }
 
-    private static bool TestTcpConnect(string host, int port, TimeSpan timeout)
+    private static async Task<bool> TestTcpConnectAsync(string host, int port, TimeSpan timeout, CancellationToken ct)
     {
         try
         {
             using var client = new TcpClient();
-            var connectTask = client.ConnectAsync(host, port);
-            return connectTask.Wait(timeout);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(timeout);
+
+            await client.ConnectAsync(host, port, timeoutCts.Token).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

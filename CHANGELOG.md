@@ -2,6 +2,12 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## [v5.2.9 / v4.11.2] - 2026-07-09
+
+### Reliability
+- Fixed: C# GUI scans now generate and open the HTML report automatically after successful completion, with crash-log-backed status feedback if report writing or shell launch fails.
+- Fixed: C# CF02 egress checks now await and cancel TCP connect attempts instead of abandoning timed-out socket tasks that can surface as unobserved exceptions after a scan.
+
 ## [v5.2.8 / v4.11.2] - 2026-07-09
 
 ### Security

@@ -1,4 +1,4 @@
-﻿{
+{
   "assessment-results": {
     "uuid": "00000000-0000-0000-0000-000000000001",
     "metadata": {
@@ -16,7 +16,7 @@
         {
           "uuid": "00000000-0000-0000-0000-000000000002",
           "type": "tool",
-          "name": "Network Security Auditor v5.2.8"
+          "name": "Network Security Auditor v5.2.9"
         }
       ]
     },
