@@ -137,6 +137,8 @@ public class MainWindowXamlTests
         Assert.Contains("Command=\"{Binding ExportSelectedCommand}\"", xaml);
         Assert.DoesNotContain("Command=\"{Binding ExportHtmlCommand}\"", xaml);
         Assert.Contains("ExportFormatKind.SiemContentPack", mainVm);
+        Assert.Contains("ExportFormatKind.OscalPoam", mainVm);
+        Assert.Contains("OSCAL POA&M JSON", mainVm);
         Assert.Contains("ExportFormatKind.CmmcHtml", mainVm);
         Assert.Contains("ExportFormatKind.CmmcJson", mainVm);
         Assert.Contains("public enum ExportFormatKind", exportOption);

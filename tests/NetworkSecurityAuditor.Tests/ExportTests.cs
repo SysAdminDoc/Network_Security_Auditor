@@ -390,6 +390,76 @@ public class ExportTests
     }
 
     [Fact]
+    public void Oscal_Poam_Links_Risks_Tasks_And_Finding_UUIDs()
+    {
+        var metas = CheckCatalog.All.Values.Take(3).ToArray();
+        var failedCheck = CheckItemViewModel.FromMetadata(metas[0]);
+        failedCheck.Status = CheckStatus.Fail;
+        failedCheck.Findings = "Privileged access review failed";
+        failedCheck.Notes = "Reduce stale privileged access.";
+        failedCheck.RemediationAssignee = "Alice Owner";
+        failedCheck.RemediationDueDate = new DateTime(2026, 8, 15);
+
+        var partialCheck = CheckItemViewModel.FromMetadata(metas[1]);
+        partialCheck.Status = CheckStatus.Partial;
+        partialCheck.Findings = "Backup evidence is incomplete";
+
+        var waivedCheck = CheckItemViewModel.FromMetadata(metas[2]);
+        waivedCheck.Status = CheckStatus.Fail;
+        waivedCheck.Findings = "Legacy exception remains open";
+
+        var checks = new ObservableCollection<CheckItemViewModel> { failedCheck, partialCheck, waivedCheck };
+        var env = new EnvironmentInfo { ComputerName = "HOST01", OSCaption = "Windows 11", IsDomainJoined = true };
+        var waivers = new Dictionary<string, RiskWaiver>(StringComparer.OrdinalIgnoreCase)
+        {
+            [waivedCheck.Id] = new()
+            {
+                CheckId = waivedCheck.Id,
+                Justification = "Operational requirement",
+                ApprovedBy = "Risk Owner",
+                ApprovedDate = new DateTime(2026, 7, 1),
+                ExpirationDate = new DateTime(2026, 12, 31)
+            }
+        };
+
+        var json = OscalPoamExporter.Export(checks, env, waivers);
+        using var doc = JsonDocument.Parse(json);
+        var poam = doc.RootElement.GetProperty("plan-of-action-and-milestones");
+        var risks = poam.GetProperty("risks").EnumerateArray().ToArray();
+        var items = poam.GetProperty("poam-items").EnumerateArray().ToArray();
+
+        Assert.Equal(3, risks.Length);
+        Assert.Equal(3, items.Length);
+
+        var failedRisk = risks.Single(r => GetProp(r, "check-id") == failedCheck.Id);
+        var failedItem = items.Single(i => GetProp(i, "check-id") == failedCheck.Id);
+        Assert.Equal(failedRisk.GetProperty("uuid").GetString(), failedItem.GetProperty("related-risks")[0].GetProperty("risk-uuid").GetString());
+        Assert.Equal(GetProp(failedRisk, "finding-uuid"), GetProp(failedItem, "finding-uuid"));
+        Assert.Equal("Alice Owner", GetProp(failedItem, "remediation-owner"));
+        Assert.Equal("2026-08-15", GetProp(failedItem, "remediation-due-date"));
+
+        var partialRisk = risks.Single(r => GetProp(r, "check-id") == partialCheck.Id);
+        Assert.Equal("partial", GetProp(partialRisk, "finding-status"));
+
+        var waivedRisk = risks.Single(r => GetProp(r, "check-id") == waivedCheck.Id);
+        var waivedItem = items.Single(i => GetProp(i, "check-id") == waivedCheck.Id);
+        Assert.Equal("accepted", waivedRisk.GetProperty("status").GetString());
+        Assert.Equal("active", GetProp(waivedRisk, "waiver-status"));
+        Assert.Equal("Operational requirement", GetProp(waivedRisk, "waiver-justification"));
+        Assert.Equal("active", GetProp(waivedItem, "waiver-status"));
+
+        using var secondDoc = JsonDocument.Parse(OscalPoamExporter.Export(checks, env, waivers));
+        var secondRisks = secondDoc.RootElement
+            .GetProperty("plan-of-action-and-milestones")
+            .GetProperty("risks")
+            .EnumerateArray()
+            .ToArray();
+        var secondFailedRisk = secondRisks.Single(r => GetProp(r, "check-id") == failedCheck.Id);
+        Assert.Equal(failedRisk.GetProperty("uuid").GetString(), secondFailedRisk.GetProperty("uuid").GetString());
+        Assert.Equal(GetProp(failedRisk, "finding-uuid"), GetProp(secondFailedRisk, "finding-uuid"));
+    }
+
+    [Fact]
     public void Sarif_Has_Schema_And_Version()
     {
         var (checks, env) = CreateTestData();
@@ -854,4 +924,13 @@ public class ExportTests
           ]
         }
         """;
+
+    private static string GetProp(JsonElement element, string name)
+    {
+        return element.GetProperty("props")
+            .EnumerateArray()
+            .Single(prop => prop.GetProperty("name").GetString() == name)
+            .GetProperty("value")
+            .GetString()!;
+    }
 }

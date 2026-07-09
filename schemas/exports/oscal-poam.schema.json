@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/oscal-poam.schema.json",
+  "title": "Network Security Auditor OSCAL POA&M export",
+  "type": "object",
+  "required": ["plan-of-action-and-milestones"],
+  "properties": {
+    "plan-of-action-and-milestones": {
+      "type": "object",
+      "required": ["uuid", "metadata", "system-id", "risks", "poam-items"],
+      "properties": {
+        "uuid": { "type": "string" },
+        "metadata": {
+          "type": "object",
+          "required": ["title", "last-modified", "version", "oscal-version", "roles", "parties"]
+        },
+        "system-id": {
+          "type": "object",
+          "required": ["identifier-type", "id"]
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "title", "description", "statement", "status", "props"]
+          }
+        },
+        "poam-items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "title", "description", "props", "related-risks"]
+          }
+        }
+      }
+    }
+  }
+}

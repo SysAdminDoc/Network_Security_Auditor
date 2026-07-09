@@ -1,0 +1,61 @@
+{
+  "plan-of-action-and-milestones": {
+    "uuid": "00000000-0000-0000-0000-000000000010",
+    "metadata": {
+      "title": "Security POA&M - HOST01",
+      "last-modified": "2026-07-09T00:00:00Z",
+      "version": "1.0.0",
+      "oscal-version": "1.1.3",
+      "roles": [
+        {
+          "id": "assessor",
+          "title": "Security Assessor"
+        }
+      ],
+      "parties": [
+        {
+          "uuid": "00000000-0000-0000-0000-000000000011",
+          "type": "tool",
+          "name": "Network Security Auditor v5.2.6"
+        }
+      ]
+    },
+    "system-id": {
+      "identifier-type": "https://sysadmindoc.github.io/network-security-auditor/system-id/computer-name",
+      "id": "HOST01"
+    },
+    "risks": [
+      {
+        "uuid": "00000000-0000-0000-0000-000000000012",
+        "title": "[IA01] Privileged account hygiene",
+        "description": "Privileged users need review",
+        "statement": "IA01 is fail on HOST01.",
+        "status": "open",
+        "props": [
+          {
+            "name": "finding-uuid",
+            "value": "00000000-0000-0000-0000-000000000013"
+          }
+        ]
+      }
+    ],
+    "poam-items": [
+      {
+        "uuid": "00000000-0000-0000-0000-000000000014",
+        "title": "Remediate IA01: Privileged account hygiene",
+        "description": "Reduce stale privileged access.",
+        "props": [
+          {
+            "name": "risk-uuid",
+            "value": "00000000-0000-0000-0000-000000000012"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "00000000-0000-0000-0000-000000000012"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -38,7 +38,7 @@ public static class OscalExporter
             if (check.Status == CheckStatus.NotAssessed) continue;
             var mapping = FrameworkMappings.All.GetValueOrDefault(check.Id);
 
-            var obsUuid = Guid.NewGuid().ToString();
+            var obsUuid = OscalIds.Observation(env, check);
             observations.Add(new
             {
                 uuid = obsUuid,
@@ -79,7 +79,7 @@ public static class OscalExporter
 
                 findings.Add(new
                 {
-                    uuid = Guid.NewGuid().ToString(),
+                    uuid = OscalIds.Finding(env, check),
                     title = $"[{check.Id}] {check.Label}",
                     description = check.Findings,
                     target = new
@@ -103,7 +103,7 @@ public static class OscalExporter
                 {
                     risks.Add(new
                     {
-                        uuid = Guid.NewGuid().ToString(),
+                        uuid = OscalIds.Risk(env, check),
                         title = $"Risk: {check.Label}",
                         description = check.Findings,
                         status = "open",

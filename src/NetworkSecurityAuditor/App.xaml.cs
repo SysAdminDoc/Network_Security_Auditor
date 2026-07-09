@@ -381,6 +381,7 @@ public partial class App : Application
             options.Client);
         var exportEnv = PrivacyExportSanitizer.RedactEnvironment(env, redactor);
         var exportChecks = PrivacyExportSanitizer.RedactChecks(checkVms, redactor);
+        var exportWaivers = PrivacyExportSanitizer.RedactActiveWaivers(waiverStore, redactor);
         var exportClient = redactor.Redact(options.Client);
         var exportAuditor = redactor.Redact(options.Auditor);
         if (args.PrivacyMode)
@@ -460,6 +461,13 @@ public partial class App : Application
             var oscalPath = Path.Combine(outputDir, $"{baseName}_oscal.json");
             await File.WriteAllTextAsync(oscalPath, OscalExporter.Export(exportChecks, exportEnv, score, grade));
             Console.WriteLine($"  OSCAL: {oscalPath}");
+        }
+
+        if (args.ExportOscalPoam)
+        {
+            var oscalPoamPath = Path.Combine(outputDir, $"{baseName}_oscal_poam.json");
+            await File.WriteAllTextAsync(oscalPoamPath, OscalPoamExporter.Export(exportChecks, exportEnv, exportWaivers));
+            Console.WriteLine($"  OSCAL POA&M: {oscalPoamPath}");
         }
 
         if (args.ExportIntune)
@@ -643,6 +651,8 @@ public partial class App : Application
                 result.ExportOcsf = true;
             else if (arg.Equals("--export-oscal", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportOSCAL", StringComparison.OrdinalIgnoreCase))
                 result.ExportOscal = true;
+            else if (arg.Equals("--export-oscal-poam", StringComparison.OrdinalIgnoreCase) || arg.Equals("--export-poam", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportOscalPoam", StringComparison.OrdinalIgnoreCase))
+                result.ExportOscalPoam = true;
             else if (arg.Equals("--export-intune", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportIntune", StringComparison.OrdinalIgnoreCase))
                 result.ExportIntune = true;
             else if (arg.Equals("--export-siem", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportSIEM", StringComparison.OrdinalIgnoreCase))
@@ -662,6 +672,7 @@ public partial class App : Application
                 result.ExportNavigator = true;
                 result.ExportOcsf = true;
                 result.ExportOscal = true;
+                result.ExportOscalPoam = true;
                 result.ExportIntune = true;
                 result.ExportComplianceSummary = true;
                 result.ExportSiem = true;
@@ -691,6 +702,7 @@ public partial class App : Application
         public bool ExportNavigator;
         public bool ExportOcsf;
         public bool ExportOscal;
+        public bool ExportOscalPoam;
         public bool ExportIntune;
         public bool ExportSiem;
         public bool ExportCmmc;

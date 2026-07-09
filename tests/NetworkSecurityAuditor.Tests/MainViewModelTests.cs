@@ -272,6 +272,13 @@ public class MainViewModelTests
             var cmmcHtml = Assert.Single(Directory.GetFiles(dir, "*_cmmc.html"));
             Assert.Contains("CMMC Level 2 Self-Assessment Report", await File.ReadAllTextAsync(cmmcHtml));
 
+            vm.Checks[0].Status = CheckStatus.Fail;
+            vm.Checks[0].Notes = "Owner accepted remediation tracking.";
+            vm.SelectedExportFormat = vm.ExportFormats.Single(f => f.Kind == ExportFormatKind.OscalPoam);
+            await vm.ExportSelectedCommand.ExecuteAsync(null);
+            var poamJson = Assert.Single(Directory.GetFiles(dir, "*_oscal_poam.json"));
+            Assert.Contains("\"plan-of-action-and-milestones\"", await File.ReadAllTextAsync(poamJson));
+
             vm.SelectedExportFormat = vm.ExportFormats.Single(f => f.Kind == ExportFormatKind.SiemContentPack);
             await vm.ExportSelectedCommand.ExecuteAsync(null);
             var siemDir = Assert.Single(Directory.GetDirectories(dir, "*_siem_pack"));

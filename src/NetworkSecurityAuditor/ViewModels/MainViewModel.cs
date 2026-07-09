@@ -25,6 +25,7 @@ public partial class MainViewModel : ViewModelBase
         new(ExportFormatKind.DefectDojo, "DefectDojo JSON", "_defectdojo", "json"),
         new(ExportFormatKind.Ocsf, "OCSF JSONL", "_ocsf", "jsonl"),
         new(ExportFormatKind.Oscal, "OSCAL JSON", "_oscal", "json"),
+        new(ExportFormatKind.OscalPoam, "OSCAL POA&M JSON", "_oscal_poam", "json"),
         new(ExportFormatKind.Intune, "Intune JSON", "_intune", "json"),
         new(ExportFormatKind.ComplianceSummary, "Compliance summary JSON", "_summary", "json"),
         new(ExportFormatKind.SiemContentPack, "SIEM content pack", "_siem_pack", "", IsFolderExport: true),
@@ -758,6 +759,9 @@ public partial class MainViewModel : ViewModelBase
                 break;
             case ExportFormatKind.Oscal:
                 await File.WriteAllTextAsync(path, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                break;
+            case ExportFormatKind.OscalPoam:
+                await File.WriteAllTextAsync(path, Export.OscalPoamExporter.Export(exportChecks, exportEnv));
                 break;
             case ExportFormatKind.Intune:
                 await File.WriteAllTextAsync(path, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));

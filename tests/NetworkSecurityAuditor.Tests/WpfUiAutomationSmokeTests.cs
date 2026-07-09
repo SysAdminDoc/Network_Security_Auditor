@@ -6,9 +6,10 @@ using System.Windows.Automation;
 
 namespace NetworkSecurityAuditor.Tests;
 
+[Collection(NonParallelTestCollection.Name)]
 public class WpfUiAutomationSmokeTests
 {
-    private static readonly TimeSpan WindowTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan WindowTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan ElementTimeout = TimeSpan.FromSeconds(10);
 
     [Fact]

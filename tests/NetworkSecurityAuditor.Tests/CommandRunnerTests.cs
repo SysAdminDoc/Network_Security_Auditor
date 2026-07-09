@@ -2,6 +2,7 @@ namespace NetworkSecurityAuditor.Tests;
 
 using NetworkSecurityAuditor.Services;
 
+[Collection(NonParallelTestCollection.Name)]
 public sealed class CommandRunnerTests
 {
     [Fact]

@@ -12,6 +12,7 @@ public enum ExportFormatKind
     DefectDojo,
     Ocsf,
     Oscal,
+    OscalPoam,
     Intune,
     ComplianceSummary,
     SiemContentPack,

@@ -87,12 +87,14 @@ dotnet run --project .\src\NetworkSecurityAuditor
 ```
 
 The C# GUI export panel writes the selected format to one output folder and
-includes SIEM content packs plus CMMC HTML/JSON self-assessment exports.
+includes SIEM content packs, CMMC HTML/JSON self-assessment exports, and OSCAL
+POA&M remediation exports.
 
 Run the C# silent mode:
 
 ```powershell
 .\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --profile Full --output C:\Reports
+.\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --profile Full --output C:\Reports --export-oscal-poam
 ```
 
 Build the local C# installable artifact:
@@ -441,9 +443,10 @@ Automatic platform detection and field population:
 | ATT&CK Navigator | `*_navigator.json` | MITRE ATT&CK Navigator v4.5 layer with technique scoring |
 | OCSF | `*_ocsf.jsonl` | OCSF v1.8.0 Security Finding events for vendor-neutral SIEM/MDR |
 | OSCAL | `*_oscal.json` | NIST OSCAL v1.2.2 assessment results for GRC and FedRAMP |
+| OSCAL POA&M | `*_oscal_poam.json` | OSCAL plan of action and milestones risks/tasks linked to finding UUIDs, waiver status, owner, due date, and remediation text |
 
-Machine-readable contract schemas for JSON, JSONL, OCSF, OSCAL, Intune,
-compliance summary, dashboard aggregate rows, and SIEM field mappings are
+Machine-readable contract schemas for JSON, JSONL, OCSF, OSCAL, OSCAL POA&M,
+Intune, compliance summary, dashboard aggregate rows, and SIEM field mappings are
 committed under `schemas/exports` and covered by xUnit golden fixture tests.
 
 Reports and exports label each check as `Automated`, `Heuristic`, `Checklist`,

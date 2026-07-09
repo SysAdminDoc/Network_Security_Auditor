@@ -84,4 +84,29 @@ public static class PrivacyExportSanitizer
 
         return redacted;
     }
+
+    public static IReadOnlyDictionary<string, RiskWaiver> RedactActiveWaivers(
+        WaiverStore? waiverStore,
+        PrivacyRedactor redactor)
+    {
+        if (waiverStore is null)
+            return new Dictionary<string, RiskWaiver>(StringComparer.OrdinalIgnoreCase);
+
+        var waivers = new Dictionary<string, RiskWaiver>(StringComparer.OrdinalIgnoreCase);
+        foreach (var waiver in waiverStore.Waivers.Where(w => w.IsActive))
+        {
+            waivers[waiver.CheckId] = redactor.IsEnabled
+                ? new RiskWaiver
+                {
+                    CheckId = waiver.CheckId,
+                    Justification = redactor.Redact(waiver.Justification),
+                    ApprovedBy = redactor.Redact(waiver.ApprovedBy),
+                    ApprovedDate = waiver.ApprovedDate,
+                    ExpirationDate = waiver.ExpirationDate
+                }
+                : waiver;
+        }
+
+        return waivers;
+    }
 }

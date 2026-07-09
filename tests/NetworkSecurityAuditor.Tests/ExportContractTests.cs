@@ -17,6 +17,7 @@ public class ExportContractTests
         yield return ["compliance-summary.schema.json", "compliance-summary.golden.json"];
         yield return ["ocsf-compliance-finding.schema.json", "ocsf-compliance-finding.golden.json"];
         yield return ["oscal-assessment-results.schema.json", "oscal-assessment-results.golden.json"];
+        yield return ["oscal-poam.schema.json", "oscal-poam.golden.json"];
         yield return ["dashboard-client-row.schema.json", "dashboard-client-row.golden.json"];
         yield return ["siem-field-mapping.schema.json", "siem-field-mapping.golden.json"];
     }
@@ -66,6 +67,9 @@ public class ExportContractTests
         ValidateJsonDocument(
             "oscal-assessment-results.schema.json",
             OscalExporter.Export(checks, env, 85, "B"));
+        ValidateJsonDocument(
+            "oscal-poam.schema.json",
+            OscalPoamExporter.Export(checks, env));
 
         var siemDir = Path.Combine(Path.GetTempPath(), "nsa-siem-contract-" + Guid.NewGuid().ToString("N"));
         try

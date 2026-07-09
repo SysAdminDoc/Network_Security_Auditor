@@ -128,6 +128,7 @@ public class CliArgsTests
         Assert.True(args.ExportNavigator);
         Assert.True(args.ExportOcsf);
         Assert.True(args.ExportOscal);
+        Assert.True(args.ExportOscalPoam);
         Assert.True(args.ExportIntune);
         Assert.True(args.ExportComplianceSummary);
         Assert.True(args.ExportSiem);
@@ -138,10 +139,11 @@ public class CliArgsTests
     [Fact]
     public void Individual_Export_Flags()
     {
-        var args = App.ParseArgs(["--export-csv", "--export-sarif", "--export-pdf"]);
+        var args = App.ParseArgs(["--export-csv", "--export-sarif", "--export-pdf", "--export-oscal-poam"]);
         Assert.True(args.ExportCsv);
         Assert.True(args.ExportSarif);
         Assert.True(args.ExportPdf);
+        Assert.True(args.ExportOscalPoam);
         Assert.False(args.ExportJsonl);
         Assert.False(args.ExportOcsf);
     }

@@ -17,6 +17,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# GUI neutral status badges now use readable foreground contrast, and category health cards use explicit Pass/Partial/Fail labels instead of terse color-dependent abbreviations.
 
 ### Exports
+- Added: C# GUI and silent mode can now emit OSCAL POA&M JSON with remediation tasks linked to stable OSCAL finding UUIDs, active waiver metadata, owners, due dates, and remediation text.
 - Fixed: C# HTML, JSON, and compliance summary exports now separate Met, Partial, Fail, and Not assessed framework counts instead of counting Partial controls as passing.
 - Fixed: C# HTML reports now include Partial findings in top findings and remediation roadmap sections, use semantic table captions/headers, and render clearer remediation link text.
 - Fixed: C# CMMC reports now choose evidence from the worst mapped check for shared controls and emit semantic control-table markup.
