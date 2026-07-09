@@ -2,10 +2,10 @@
 
 Windows security assessment tooling for MSPs, consultants, and internal administrators. The production artifact is `NetworkSecurityAudit.ps1`, a single-file PowerShell 5.1 tool with 69 automated checks, 11 compliance frameworks, MITRE ATT&CK and MITRE D3FEND mappings, multi-tier reports, and RMM-friendly headless deployment.
 
-The repo also contains an active .NET 9/WPF C# rewrite under `src/NetworkSecurityAuditor`. The rewrite is locally buildable and test-covered, but the PowerShell script remains the production path for workflows not yet ported to C#.
+The repo also contains an active .NET 10/WPF C# rewrite under `src/NetworkSecurityAuditor`. The rewrite is locally buildable and test-covered, but the PowerShell script remains the production path for workflows not yet ported to C#.
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
-![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)
+![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
 ![PowerShell Version](https://img.shields.io/badge/PowerShell_Version-4.11.0-brightgreen)
 ![C%23 Rewrite](https://img.shields.io/badge/C%23_Rewrite-5.2.6-blueviolet)
@@ -104,9 +104,9 @@ Build the local C# installable artifact:
 The release tool cleans `artifacts/csharp-release`, runs the xUnit suite,
 publishes the C# rewrite, signs `.exe`/`.dll` files when a local code-signing
 certificate is available, then writes
-`artifacts/csharp-release/release/NetworkSecurityAuditor-csharp-v<version>-windows-net9.zip`,
+`artifacts/csharp-release/release/NetworkSecurityAuditor-csharp-v<version>-windows-net10.zip`,
 `SHA256SUMS.txt`, and `release-manifest.json`. Users install the C# preview by
-unzipping that package on Windows with the .NET 9 Desktop Runtime installed and
+unzipping that package on Windows with the .NET 10 Desktop Runtime installed and
 running `NetworkSecurityAuditor.exe`.
 
 ### Multi-Client Dashboard
@@ -712,7 +712,7 @@ tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
 tools/NetworkSecurityAudit.Tests.ps1        # Pester v5 quality-gate suite
 tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
 tools/Publish-CSharpRelease.ps1             # Local C# zip/checksum/signing artifact flow
-src/NetworkSecurityAuditor/                 # .NET 9 WPF rewrite
+src/NetworkSecurityAuditor/                 # .NET 10 WPF rewrite
 src/NetworkSecurityAuditor/Data/BenchmarkMetadata.json # C# benchmark/lifecycle source manifest
 tests/NetworkSecurityAuditor.Tests/         # xUnit tests for the C# rewrite
 publish/NetworkSecurityAuditor/             # Local publish output, generated and not committed

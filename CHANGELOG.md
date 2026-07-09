@@ -4,6 +4,9 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ## [v5.2.6] - 2026-07-08
 
+### Platform
+- Changed: C# rewrite now targets .NET 10 (`net10.0-windows`), refreshes compatible package pins, and emits `windows-net10` release artifacts with `.NET 10 Desktop Runtime` install metadata.
+
 ### UX
 - Changed: C# GUI now uses a premium security-operations workstation shell with a persistent category progress rail, command/status bar, risk score band, dense virtualized check table, selected-check inspector, and integrated activity console.
 - Fixed: C# GUI startup now loads the check catalog before slower environment detection completes, giving the first-run shell immediate structure and avoiding a blank workspace during preflight.

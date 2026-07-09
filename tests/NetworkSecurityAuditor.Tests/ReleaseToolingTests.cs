@@ -16,6 +16,8 @@ public class ReleaseToolingTests
         Assert.Contains("Get-Sha256Hex -Path $zipPath", script);
         Assert.Contains("SHA256SUMS.txt", script);
         Assert.Contains("release-manifest.json", script);
+        Assert.Contains("windows-net10", script);
+        Assert.DoesNotContain("windows-net9", script);
         Assert.Contains("NetworkSecurityAuditor.exe", script);
     }
 
@@ -26,8 +28,9 @@ public class ReleaseToolingTests
 
         Assert.Contains(".\\tools\\Publish-CSharpRelease.ps1", readme);
         Assert.Contains("NetworkSecurityAuditor-csharp-v", readme);
+        Assert.Contains("windows-net10", readme);
         Assert.Contains("SHA256SUMS.txt", readme);
-        Assert.Contains(".NET 9 Desktop Runtime", readme);
+        Assert.Contains(".NET 10 Desktop Runtime", readme);
     }
 
     private static string ReadSourceFile(params string[] segments)

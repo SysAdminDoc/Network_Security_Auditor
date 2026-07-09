@@ -160,7 +160,7 @@ Invoke-Checked dotnet @(
 )
 
 $version = Get-ProjectVersion
-$packageName = "NetworkSecurityAuditor-csharp-v$version-windows-net9"
+$packageName = "NetworkSecurityAuditor-csharp-v$version-windows-net10"
 $zipPath = Join-Path $releaseDir "$packageName.zip"
 $checksumPath = Join-Path $releaseDir 'SHA256SUMS.txt'
 $manifestPath = Join-Path $releaseDir 'release-manifest.json'
@@ -209,9 +209,9 @@ $manifest = [ordered]@{
     git_commit = [string]$commit
     install = [ordered]@{
         package = [System.IO.Path]::GetFileName($zipPath)
-        instructions = 'Unzip the package on Windows with .NET 9 Desktop Runtime installed, then run NetworkSecurityAuditor.exe.'
+        instructions = 'Unzip the package on Windows with .NET 10 Desktop Runtime installed, then run NetworkSecurityAuditor.exe.'
         entrypoint = 'NetworkSecurityAuditor.exe'
-        framework = '.NET 9 Desktop Runtime'
+        framework = '.NET 10 Desktop Runtime'
     }
     signing = $signing
     artifacts = @(
