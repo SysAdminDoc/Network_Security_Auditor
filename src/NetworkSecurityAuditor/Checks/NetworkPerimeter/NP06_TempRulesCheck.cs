@@ -3,6 +3,7 @@ namespace NetworkSecurityAuditor.Checks.NetworkPerimeter;
 using System.Management;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// NP06 - Temporary Firewall Rules: Check firewall rules for stale/temporary indicators --
@@ -119,19 +120,11 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
     {
         try
         {
-            var psi = new System.Diagnostics.ProcessStartInfo("netsh", "advfirewall firewall show rule name=all")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc is null) return;
-
-            using var registration = ct.Register(() => { try { proc.Kill(); } catch { } });
-            string output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(30_000);
+            string output = CommandRunner.RunForOutput(
+                "netsh",
+                "advfirewall firewall show rule name=all",
+                TimeSpan.FromSeconds(30),
+                ct);
 
             evidence.AppendLine("  [Parsed from netsh output]");
 
