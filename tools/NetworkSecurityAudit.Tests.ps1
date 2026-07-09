@@ -592,6 +592,39 @@ Describe 'Fleet orchestration safeguards' {
         $script:FleetBlock | Should -Match 'if \(\$using:fleetNoInternet\) \{ \$childParams\.NoInternet = \$true \}'
     }
 
+    It 'validates fleet concurrency and timeout ranges at the parameter boundary' {
+        $script:Text | Should -Match '\[ValidateRange\(1,64\)\]\s*\[int\]\$ThrottleLimit'
+        $script:Text | Should -Match '\[ValidateRange\(1,86400\)\]\s*\[int\]\$PerHostTimeout'
+    }
+
+    It 'forwards fleet child scan options without using dead session options' {
+        $script:FleetBlock | Should -Not -Match '\$sessionOpts'
+        $script:FleetBlock | Should -Match '\$fleetChildOptions\s*=\s*\[ordered\]@\{'
+        $script:FleetBlock | Should -Match '\$childParams\.Auditor\s*=\s*\$childOptions\.Auditor'
+        $script:FleetBlock | Should -Match '\$childParams\.ReportTier\s*=\s*\$childOptions\.ReportTier'
+        foreach ($switchName in 'PrivacyMode','ExportCSV','ExportJSONL','ExportSARIF','ExportPDF','ExportNavigator','ExportOCSF','ExportOSCAL','ExportSIEM') {
+            $script:FleetBlock | Should -Match ([regex]::Escape("'$switchName'"))
+        }
+    }
+
+    It 'uses unique remote temp artifacts and best-effort timeout cleanup' {
+        $script:FleetBlock | Should -Match 'NetworkSecurityAudit_fleet_\$runId'
+        $script:FleetBlock | Should -Match 'function Invoke-FleetRemoteTempCleanup'
+        $script:FleetBlock | Should -Match 'Invoke-FleetRemoteTempCleanup -ComputerName \$target -RunId \$meta\.RemoteRunId'
+        $script:FleetBlock | Should -Not -Match 'Join-Path \$env:TEMP ''NetworkSecurityAudit_fleet\.ps1'''
+        $script:FleetBlock | Should -Not -Match 'Join-Path \$env:TEMP "SecurityAudit_fleet\.html"'
+    }
+
+    It 'classifies timeouts by stopped job state and preserves zero-score hosts in aggregates' {
+        $script:FleetBlock | Should -Match '\$meta\.Job\.PSEndTime'
+        $script:FleetBlock | Should -Match '\$timedOut\s*=\s*\$meta\.Job\.State -eq ''Stopped'''
+        $script:FleetBlock | Should -Not -Match '\$timedOut\s*=\s*\$elapsed -ge \$PerHostTimeout'
+        $script:FleetBlock | Should -Match 'has_score\s*=\s*\$false'
+        $script:FleetBlock | Should -Match '\$scoredFleetResults'
+        $script:FleetBlock | Should -Match 'hosts_scored'
+        $script:FleetBlock | Should -Not -Match '\.score -gt 0'
+    }
+
     It 'forwards fleet and v4.11 switches during elevation or fails clearly for credentials' {
         $script:ElevationBlock | Should -Match 'Credential cannot be forwarded through a UAC relaunch'
         foreach ($token in '-ExportSIEM','-BrandingConfig','-TargetsCsv','-ThrottleLimit','-PerHostTimeout','-Remediate','-RemediateDryRun','-RemediateChecks','-BenchmarkImportPath') {

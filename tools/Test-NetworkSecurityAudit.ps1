@@ -412,6 +412,34 @@ if ($scriptText -notmatch '\$fleetSafeColumns\s*=' -or
     $scriptText -notmatch 'Quotes are not allowed in fleet CSV fields') {
     Add-Failure 'Fleet TargetsCsv values must reject embedded double quotes before building child scan parameters.'
 }
+if ($scriptText -notmatch '\[ValidateRange\(1,64\)\]\s*\[int\]\$ThrottleLimit' -or
+    $scriptText -notmatch '\[ValidateRange\(1,86400\)\]\s*\[int\]\$PerHostTimeout') {
+    Add-Failure 'Fleet ThrottleLimit and PerHostTimeout must reject zero and negative values at the parameter boundary.'
+}
+if ($scriptText -match '\$sessionOpts' -or
+    $scriptText -notmatch '\$fleetChildOptions\s*=\s*\[ordered\]@\{' -or
+    $scriptText -notmatch 'PrivacyMode' -or
+    $scriptText -notmatch 'ExportSIEM' -or
+    $scriptText -notmatch '\$childParams\.Auditor' -or
+    $scriptText -notmatch '\$childParams\.ReportTier') {
+    Add-Failure 'Fleet child scans must forward privacy, auditor, report-tier, and export switches without dead session option code.'
+}
+if ($scriptText -notmatch 'NetworkSecurityAudit_fleet_\$runId' -or
+    $scriptText -notmatch 'function Invoke-FleetRemoteTempCleanup' -or
+    $scriptText -notmatch 'Invoke-FleetRemoteTempCleanup -ComputerName \$target -RunId \$meta\.RemoteRunId' -or
+    $scriptText -match 'Join-Path \$env:TEMP ''NetworkSecurityAudit_fleet\.ps1''' -or
+    $scriptText -match 'Join-Path \$env:TEMP "SecurityAudit_fleet\.html"') {
+    Add-Failure 'Fleet remote scans must use unique temp names and best-effort cleanup for timeout/failure paths.'
+}
+if ($scriptText -notmatch '\$meta\.Job\.PSEndTime' -or
+    $scriptText -notmatch '\$timedOut\s*=\s*\$meta\.Job\.State -eq ''Stopped''' -or
+    $scriptText -match '\$timedOut\s*=\s*\$elapsed -ge \$PerHostTimeout' -or
+    $scriptText -notmatch 'has_score\s*=\s*\$false' -or
+    $scriptText -notmatch '\$scoredFleetResults' -or
+    $scriptText -notmatch 'hosts_scored' -or
+    $scriptText -match '\.score -gt 0') {
+    Add-Failure 'Fleet summaries must classify only stopped jobs as timed out and include 0 percent scored hosts in aggregates.'
+}
 if ($scriptText -notmatch '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterText\)\s*\{\s*\[System\.Net\.WebUtility\]::HtmlEncode\(\$script:Branding\.FooterText\)\s*\}' -or
     $scriptText -match '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterText\)\s*\{\s*\$script:Branding\.FooterText\s*\}') {
     Add-Failure 'HTML report branded subtitle must HTML-encode Branding.FooterText.'
@@ -422,6 +450,12 @@ if ($scriptText -notmatch 'function Test-BrandingLogoDataUri' -or
     $scriptText -notmatch 'Test-BrandingLogoDataUri -LogoData \$candidateLogoData' -or
     $scriptText -notmatch 'Get-BrandingLogoMime -Extension') {
     Add-Failure 'Branding logos must validate logo_base64 data URIs and whitelist logo_path MIME types before HTML rendering.'
+}
+if ($scriptText -notmatch 'function Test-BrandingWebsiteUrl' -or
+    $scriptText -notmatch 'Branding website ignored: expected an absolute http:// or https:// URL\.' -or
+    $scriptText -notmatch 'Branding config not found:' -or
+    $scriptText -match 'Website\s+=\s+if\s*\(\$cfg\.website\)') {
+    Add-Failure 'Branding config must warn for missing paths and restrict website links to absolute HTTP(S) URLs.'
 }
 if ($scriptText -notmatch 'findings_truncated' -or $scriptText -notmatch 'findings_original_length' -or $scriptText -notmatch 'evidence_truncated' -or $scriptText -notmatch 'evidence_original_length') {
     Add-Failure 'JSONL truncation must include flags and original lengths.'

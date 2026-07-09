@@ -320,8 +320,8 @@ Every check maps to one or more controls across 11 frameworks. Framework-specifi
 | **CMMC** | Level 2 (v2.0) | 69 checks |
 | **HIPAA** | Security Rule | 49 checks |
 | **PCI-DSS** | v4.0.1 | 51 checks |
-| **ACSC Essential Eight** | Maturity Model | 25 checks |
-| **Cyber Essentials** | UK NCSC v3.3 | 35 checks |
+| **ACSC Essential Eight** | Maturity Model | 28 checks |
+| **Cyber Essentials** | UK NCSC v3.3 | 37 checks |
 | **SOC 2** | Type II (Trust Criteria) | 67 checks |
 | **ISO 27001** | :2022 (Annex A) | 69 checks |
 | **DISA STIG** | Windows Server/Client | 69 checks |
@@ -499,6 +499,7 @@ Optional for full coverage:
 - RMM field writes are limited to the configured RMM integration paths documented below.
 - Use `-NoRmmWrite` in silent mode when reports should be generated without updating RMM fields.
 - Use `-NoRegistryWrite` when registry-backed RMM/cache writes should be suppressed while command-based RMM integrations remain available.
+- `-BrandingConfig` warns when the file is missing, accepts logo data only as a supported `data:image/...;base64` URI or supported image path, and only renders website links when they are absolute `http://` or `https://` URLs.
 - The script does not auto-update or replace itself.
 - In sensitive environments, download the script first, inspect it, and verify the checksum before running.
 
@@ -645,8 +646,8 @@ so a cloud scan cannot be mistaken for endpoint/domain coverage.
 | **HIPAA** | 49 | ~30 min | Healthcare compliance |
 | **PCI** | 51 | ~35 min | Payment card compliance |
 | **CMMC** | 69 | ~60 min | Defense contractor compliance |
-| **E8** | 25 | ~25 min | ACSC Essential Eight maturity indicators |
-| **CyberEssentials** | 35 | ~35 min | UK NCSC Cyber Essentials technical controls |
+| **E8** | PowerShell: 28; C#: 25 | ~25 min | ACSC Essential Eight maturity indicators |
+| **CyberEssentials** | PowerShell: 37; C#: 35 | ~35 min | UK NCSC Cyber Essentials technical controls |
 | **SOC 2** | 67 | ~50 min | Service organization compliance |
 | **ISO 27001** | 69 | ~60 min | International standard compliance |
 | **STIG** | 69 | ~60 min | DISA STIG for DoD/government |
@@ -683,6 +684,16 @@ $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfil
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 6am
 Register-ScheduledTask -TaskName "WeeklySecurityAudit" -Action $action -Trigger $trigger -RunLevel Highest -User "SYSTEM"
 ```
+
+### Remote Fleet Scans
+
+`-TargetsCsv` runs silent-mode audits across many hosts with bounded concurrency:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Tools\NetworkSecurityAudit.ps1" -Silent -TargetsCsv "C:\Reports\targets.csv" -ThrottleLimit 8 -PerHostTimeout 900 -PrivacyMode -ReportTier Executive -Auditor "MSP Security"
+```
+
+`-ThrottleLimit` accepts 1-64 and `-PerHostTimeout` accepts 1-86400 seconds. Fleet child scans inherit privacy, auditor, report-tier, and optional export switches. Remote runs use unique temp artifact names and best-effort cleanup before returning the per-host JSON to the aggregate `fleet_summary.csv` and `fleet_summary.json`.
 
 ---
 

@@ -92,7 +92,9 @@ param(
     [int]$HistoryRetentionDays = 365,
     [string]$BrandingConfig = '',
     [string]$TargetsCsv = '',
+    [ValidateRange(1,64)]
     [int]$ThrottleLimit = 5,
+    [ValidateRange(1,86400)]
     [int]$PerHostTimeout = 600,
     [PSCredential]$Credential = $null,
     [switch]$Remediate,
@@ -302,6 +304,17 @@ function Get-BrandingLogoMime {
     }
 }
 
+function Test-BrandingWebsiteUrl {
+    param([string]$Url)
+
+    if ([string]::IsNullOrWhiteSpace($Url)) { return $false }
+
+    $uri = $null
+    if (-not [System.Uri]::TryCreate($Url, [System.UriKind]::Absolute, [ref]$uri)) { return $false }
+
+    return $uri.Scheme -in @('http', 'https')
+}
+
 if ($script:CliBrandingConfig -and (Test-Path $script:CliBrandingConfig -ErrorAction SilentlyContinue)) {
     try {
         $raw = Get-Content $script:CliBrandingConfig -Raw -Encoding UTF8
@@ -323,6 +336,15 @@ if ($script:CliBrandingConfig -and (Test-Path $script:CliBrandingConfig -ErrorAc
                 Write-Warning 'Branding logo_path ignored: unsupported image extension.'
             }
         }
+        $website = ''
+        if ($cfg.website) {
+            $candidateWebsite = [string]$cfg.website
+            if (Test-BrandingWebsiteUrl -Url $candidateWebsite) {
+                $website = $candidateWebsite
+            } else {
+                Write-Warning 'Branding website ignored: expected an absolute http:// or https:// URL.'
+            }
+        }
         $script:Branding = @{
             CompanyName  = if ($cfg.company_name) { [string]$cfg.company_name } else { '' }
             Tagline      = if ($cfg.tagline) { [string]$cfg.tagline } else { '' }
@@ -332,13 +354,15 @@ if ($script:CliBrandingConfig -and (Test-Path $script:CliBrandingConfig -ErrorAc
             ContactName  = if ($cfg.contact_name) { [string]$cfg.contact_name } else { '' }
             ContactEmail = if ($cfg.contact_email) { [string]$cfg.contact_email } else { '' }
             ContactPhone = if ($cfg.contact_phone) { [string]$cfg.contact_phone } else { '' }
-            Website      = if ($cfg.website) { [string]$cfg.website } else { '' }
+            Website      = $website
             FooterText   = if ($cfg.footer_text) { [string]$cfg.footer_text } else { '' }
             CoverPage    = if ($null -ne $cfg.cover_page) { [bool]$cfg.cover_page } else { $false }
         }
     } catch {
         Write-Warning "Branding config parse failed: $_"
     }
+} elseif ($script:CliBrandingConfig) {
+    Write-Warning "Branding config not found: $script:CliBrandingConfig"
 }
 
 # ── Remote Fleet Scan Mode (NSA-006) ────────────────────────────────────────
@@ -393,6 +417,28 @@ if ($Silent.IsPresent -and $TargetsCsv) {
         return $safe
     }
 
+    function Invoke-FleetRemoteTempCleanup {
+        param(
+            [string]$ComputerName,
+            [string]$RunId,
+            [PSCredential]$Credential
+        )
+
+        if (-not $ComputerName -or -not $RunId) { return }
+
+        try {
+            $cleanupParams = @{ ComputerName = $ComputerName; ErrorAction = 'SilentlyContinue' }
+            if ($Credential) { $cleanupParams['Credential'] = $Credential }
+            Invoke-Command @cleanupParams -ScriptBlock {
+                param($rid)
+                Get-ChildItem -Path (Join-Path $env:TEMP "NetworkSecurityAudit_fleet_$rid*") -File -ErrorAction SilentlyContinue |
+                    Remove-Item -Force -ErrorAction SilentlyContinue
+            } -ArgumentList $RunId | Out-Null
+        } catch {
+            # Best effort only; the per-host result records the timeout/failure separately.
+        }
+    }
+
     $scriptContent = Get-Content $PSCommandPath -Raw
     $fleetOutDir = if ($OutputPath) { Split-Path $OutputPath -Parent } else { [Environment]::GetFolderPath('Desktop') }
     if (-not $fleetOutDir -or -not (Test-Path $fleetOutDir)) { $fleetOutDir = $env:TEMP }
@@ -400,12 +446,23 @@ if ($Silent.IsPresent -and $TargetsCsv) {
     New-Item -Path $fleetDir -ItemType Directory -Force | Out-Null
     Write-Host "[Fleet Mode] Output directory: $fleetDir"
 
+    $fleetChildOptions = [ordered]@{
+        Auditor = $Auditor
+        ReportTier = $ReportTier
+        PrivacyMode = $PrivacyMode.IsPresent
+        ExportCSV = $ExportCSV.IsPresent
+        ExportJSONL = $ExportJSONL.IsPresent
+        ExportSARIF = $ExportSARIF.IsPresent
+        ExportPDF = $ExportPDF.IsPresent
+        ExportNavigator = $ExportNavigator.IsPresent
+        ExportOCSF = $ExportOCSF.IsPresent
+        ExportOSCAL = $ExportOSCAL.IsPresent
+        ExportSIEM = $ExportSIEM.IsPresent
+    }
+
     $fleetResults = [System.Collections.Generic.List[object]]::new()
     $hostQueue = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
     foreach ($h in $fleetHosts) { $hostQueue.Enqueue($h) }
-
-    $sessionOpts = @{}
-    if ($Credential) { $sessionOpts['Credential'] = $Credential }
 
     $jobs = @{}
     $completed = 0
@@ -419,6 +476,7 @@ if ($Silent.IsPresent -and $TargetsCsv) {
                 $hostTags   = if ($hostRow.PSObject.Properties['Tags']) { $hostRow.Tags } else { '' }
                 $safeTarget = Get-FleetSafeName $target
                 $localJsonPath = Join-Path $fleetDir "${safeTarget}_findings.json"
+                $fleetRunId = [guid]::NewGuid().ToString('N')
                 Write-Host "[Fleet Mode] [$($completed + $jobs.Count + 1)/$($fleetHosts.Count)] Starting: $target" -ForegroundColor Cyan
 
                 $fleetNoInternet = $NoInternet.IsPresent
@@ -437,6 +495,12 @@ if ($Silent.IsPresent -and $TargetsCsv) {
                             NoRegistryWrite = $true
                             NoElevate = $true
                         }
+                        $childOptions = $using:fleetChildOptions
+                        if ($childOptions.Auditor) { $childParams.Auditor = $childOptions.Auditor }
+                        if ($childOptions.ReportTier) { $childParams.ReportTier = $childOptions.ReportTier }
+                        foreach ($switchName in @('PrivacyMode','ExportCSV','ExportJSONL','ExportSARIF','ExportPDF','ExportNavigator','ExportOCSF','ExportOSCAL','ExportSIEM')) {
+                            if ($childOptions[$switchName]) { $childParams[$switchName] = $true }
+                        }
                         if ($using:fleetNoInternet) { $childParams.NoInternet = $true }
                         & $using:PSCommandPath @childParams *>&1 | Out-String
                     }
@@ -449,52 +513,69 @@ if ($Silent.IsPresent -and $TargetsCsv) {
                         $remoteClient = $using:hostClient
                         $remoteNoInternet = $using:fleetNoInternet
                         $remoteCredential = $using:Credential
+                        $remoteChildOptions = $using:fleetChildOptions
+                        $remoteRunId = $using:fleetRunId
                         $sessParams = @{ ComputerName = $remoteTarget; ErrorAction = 'Stop' }
                         if ($remoteCredential) { $sessParams['Credential'] = $remoteCredential }
                         $session = New-PSSession @sessParams
                         try {
                             $remoteResult = Invoke-Command -Session $session -ScriptBlock {
-                                param($sc, $p, $ro, $c, $ni)
-                                $tmpScript = Join-Path $env:TEMP 'NetworkSecurityAudit_fleet.ps1'
-                                $sc | Set-Content $tmpScript -Encoding UTF8
-                                $tmpOut = Join-Path $env:TEMP "SecurityAudit_fleet.html"
-                                $childParams = @{
-                                    Silent = $true
-                                    ScanProfile = $p
-                                    ReadOnly = [bool]$ro
-                                    Client = $c
-                                    OutputPath = $tmpOut
-                                    ExportJSON = $true
-                                    NoRmmWrite = $true
-                                    NoRegistryWrite = $true
-                                    NoElevate = $true
+                                param($sc, $p, $ro, $c, $ni, $options, $runId)
+                                $tmpPrefix = Join-Path $env:TEMP "NetworkSecurityAudit_fleet_$runId"
+                                $tmpScript = "$tmpPrefix.ps1"
+                                $tmpOut = "$tmpPrefix.html"
+                                try {
+                                    $sc | Set-Content $tmpScript -Encoding UTF8
+                                    $childParams = @{
+                                        Silent = $true
+                                        ScanProfile = $p
+                                        ReadOnly = [bool]$ro
+                                        Client = $c
+                                        OutputPath = $tmpOut
+                                        ExportJSON = $true
+                                        NoRmmWrite = $true
+                                        NoRegistryWrite = $true
+                                        NoElevate = $true
+                                    }
+                                    if ($options.Auditor) { $childParams.Auditor = $options.Auditor }
+                                    if ($options.ReportTier) { $childParams.ReportTier = $options.ReportTier }
+                                    foreach ($switchName in @('PrivacyMode','ExportCSV','ExportJSONL','ExportSARIF','ExportPDF','ExportNavigator','ExportOCSF','ExportOSCAL','ExportSIEM')) {
+                                        if ($options[$switchName]) { $childParams[$switchName] = $true }
+                                    }
+                                    if ($ni) { $childParams.NoInternet = $true }
+                                    $auditOutput = & $tmpScript @childParams *>&1 | Out-String
+                                    $jsonPath = $tmpOut -replace '\.html$', '_findings.json'
+                                    $jsonText = if (Test-Path $jsonPath) { Get-Content $jsonPath -Raw } else { '{}' }
+                                    [pscustomobject]@{ Json = $jsonText; Output = $auditOutput }
+                                } finally {
+                                    Get-ChildItem -Path (Join-Path $env:TEMP "NetworkSecurityAudit_fleet_$runId*") -File -ErrorAction SilentlyContinue |
+                                        Remove-Item -Force -ErrorAction SilentlyContinue
                                 }
-                                if ($ni) { $childParams.NoInternet = $true }
-                                $auditOutput = & $tmpScript @childParams *>&1 | Out-String
-                                $jsonPath = $tmpOut -replace '\.html$', '_findings.json'
-                                $jsonText = if (Test-Path $jsonPath) { Get-Content $jsonPath -Raw } else { '{}' }
-                                [pscustomobject]@{ Json = $jsonText; Output = $auditOutput }
-                            } -ArgumentList $remoteScriptContent, $remoteProfile, $remoteReadOnly, $remoteClient, $remoteNoInternet
+                            } -ArgumentList $remoteScriptContent, $remoteProfile, $remoteReadOnly, $remoteClient, $remoteNoInternet, $remoteChildOptions, $remoteRunId
                             $remotePayload = @($remoteResult)[-1]
                             @{ Success = $true; Target = $remoteTarget; Json = $remotePayload.Json; Output = $remotePayload.Output }
                         } finally { Remove-PSSession $session -ErrorAction SilentlyContinue }
                     }
                 }
-                $jobs[$target] = @{ Job = $job; Client = $hostClient; Site = $hostSite; Tags = $hostTags; JsonPath = $localJsonPath; StartTime = Get-Date }
+                $jobs[$target] = @{ Job = $job; Client = $hostClient; Site = $hostSite; Tags = $hostTags; JsonPath = $localJsonPath; StartTime = Get-Date; RemoteRunId = $(if ($target -eq 'localhost' -or $target -eq $env:COMPUTERNAME -or $target -eq '127.0.0.1') { '' } else { $fleetRunId }) }
             }
         }
         $done = @($jobs.GetEnumerator() | Where-Object { $_.Value.Job.State -in 'Completed','Failed','Stopped' })
         foreach ($d in $done) {
             $target = $d.Key; $meta = $d.Value
-            $elapsed = ((Get-Date) - $meta.StartTime).TotalSeconds
-            $timedOut = $elapsed -ge $PerHostTimeout
+            $jobEndTime = if ($meta.Job.PSEndTime) { $meta.Job.PSEndTime } else { Get-Date }
+            $elapsed = ($jobEndTime - $meta.StartTime).TotalSeconds
+            $timedOut = $meta.Job.State -eq 'Stopped'
             $result = [ordered]@{
                 host = $target; client = $meta.Client; site = $meta.Site; tags = $meta.Tags
                 status = 'Unknown'; grade = ''; score = 0; ransomware_score = 0
-                fail_count = 0; critical_count = 0; skipped = 0; error = ''; duration_seconds = [math]::Round($elapsed, 1)
+                has_score = $false; fail_count = 0; critical_count = 0; skipped = 0; error = ''; duration_seconds = [math]::Round($elapsed, 1)
             }
             try {
-                if ($timedOut) { Stop-Job $meta.Job -ErrorAction SilentlyContinue; throw "Timed out after ${PerHostTimeout}s" }
+                if ($timedOut) {
+                    if ($meta.RemoteRunId) { Invoke-FleetRemoteTempCleanup -ComputerName $target -RunId $meta.RemoteRunId -Credential $Credential }
+                    throw "Timed out after ${PerHostTimeout}s"
+                }
                 $output = Receive-Job $meta.Job -ErrorAction Stop
                 if ($target -eq 'localhost' -or $target -eq $env:COMPUTERNAME -or $target -eq '127.0.0.1') {
                     $localJson = $meta.JsonPath
@@ -502,7 +583,10 @@ if ($Silent.IsPresent -and $TargetsCsv) {
                         $parsed = Get-Content $localJson -Raw | ConvertFrom-Json
                         $result.status = 'Completed'
                         $result.grade = $parsed.score.grade
-                        $result.score = $parsed.score.overall
+                        if ($null -ne $parsed.score.overall) {
+                            $result.score = $parsed.score.overall
+                            $result.has_score = $true
+                        }
                         $result.ransomware_score = $parsed.score.ransomware.score
                         $result.fail_count = $parsed.findings_count.fail
                         $result.critical_count = @($parsed.findings | Where-Object { $_.status -eq 'Fail' -and $_.severity -eq 'Critical' }).Count
@@ -515,7 +599,10 @@ if ($Silent.IsPresent -and $TargetsCsv) {
                         $parsed = $remoteJson | ConvertFrom-Json
                         $result.status = 'Completed'
                         $result.grade = $parsed.score.grade
-                        $result.score = $parsed.score.overall
+                        if ($null -ne $parsed.score.overall) {
+                            $result.score = $parsed.score.overall
+                            $result.has_score = $true
+                        }
                         $result.ransomware_score = $parsed.score.ransomware.score
                         $result.fail_count = $parsed.findings_count.fail
                         $result.critical_count = @($parsed.findings | Where-Object { $_.status -eq 'Fail' -and $_.severity -eq 'Critical' }).Count
@@ -537,6 +624,7 @@ if ($Silent.IsPresent -and $TargetsCsv) {
             $age = ((Get-Date) - $running.Value.StartTime).TotalSeconds
             if ($age -ge $PerHostTimeout -and $running.Value.Job.State -eq 'Running') {
                 Stop-Job $running.Value.Job -ErrorAction SilentlyContinue
+                if ($running.Value.RemoteRunId) { Invoke-FleetRemoteTempCleanup -ComputerName $running.Key -RunId $running.Value.RemoteRunId -Credential $Credential }
             }
         }
     }
@@ -544,6 +632,7 @@ if ($Silent.IsPresent -and $TargetsCsv) {
     $aggCsvPath = Join-Path $fleetDir 'fleet_summary.csv'
     $fleetResults | ForEach-Object { [PSCustomObject]$_ } | Export-Csv $aggCsvPath -NoTypeInformation -Encoding UTF8
     $aggJsonPath = Join-Path $fleetDir 'fleet_summary.json'
+    $scoredFleetResults = @($fleetResults | Where-Object { $_.status -eq 'Completed' -and $_.has_score })
     $aggData = [ordered]@{
         schema_version = $script:SchemaVersion
         tool = $script:ProductShortName; tool_version = $script:ProductVersion
@@ -555,9 +644,10 @@ if ($Silent.IsPresent -and $TargetsCsv) {
         hosts_completed = @($fleetResults | Where-Object { $_.status -eq 'Completed' }).Count
         hosts_failed = @($fleetResults | Where-Object { $_.status -eq 'Failed' }).Count
         hosts_timedout = @($fleetResults | Where-Object { $_.status -eq 'TimedOut' }).Count
-        avg_score = [math]::Round(($fleetResults | Where-Object { $_.status -eq 'Completed' -and $_.score -gt 0 } | Measure-Object -Property score -Average).Average, 1)
-        worst_host = ($fleetResults | Where-Object { $_.status -eq 'Completed' -and $_.score -gt 0 } | Sort-Object score | Select-Object -First 1).host
-        best_host = ($fleetResults | Where-Object { $_.status -eq 'Completed' -and $_.score -gt 0 } | Sort-Object score -Descending | Select-Object -First 1).host
+        hosts_scored = $scoredFleetResults.Count
+        avg_score = if ($scoredFleetResults.Count -gt 0) { [math]::Round(($scoredFleetResults | Measure-Object -Property score -Average).Average, 1) } else { $null }
+        worst_host = if ($scoredFleetResults.Count -gt 0) { ($scoredFleetResults | Sort-Object score | Select-Object -First 1).host } else { '' }
+        best_host = if ($scoredFleetResults.Count -gt 0) { ($scoredFleetResults | Sort-Object score -Descending | Select-Object -First 1).host } else { '' }
         results = @($fleetResults)
     }
     $aggData | ConvertTo-Json -Depth 5 | Set-Content $aggJsonPath -Encoding UTF8
@@ -572,7 +662,10 @@ if ($Silent.IsPresent -and $TargetsCsv) {
     Write-Host "  Summary JSON: $aggJsonPath"
     Write-Host "  Per-host JSONs: $fleetDir"
     Write-Host "============================================" -ForegroundColor Cyan
-    $fleetExitCode = if ($aggData.hosts_failed -gt 0 -or $aggData.hosts_timedout -gt 0) { 2 } elseif ($aggData.avg_score -lt 60) { 1 } else { 0 }
+    if ($aggData.hosts_scored -eq 0) {
+        Write-Host "[Fleet Mode] ERROR: No completed hosts produced a scorable findings JSON." -ForegroundColor Red
+    }
+    $fleetExitCode = if ($aggData.hosts_failed -gt 0 -or $aggData.hosts_timedout -gt 0) { 2 } elseif ($aggData.hosts_scored -eq 0) { 1 } elseif ($aggData.avg_score -lt 60) { 1 } else { 0 }
     exit $fleetExitCode
 }
 

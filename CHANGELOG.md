@@ -4,6 +4,9 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ## [v5.2.6] - 2026-07-08
 
+### Security
+- Fixed: PowerShell fleet mode now validates throttle/timeout ranges, forwards privacy/auditor/report/export options to child scans, uses unique remote temp artifacts with cleanup, includes 0% scored hosts in aggregates, and warns on invalid branding config paths or website URLs.
+
 ### Platform
 - Changed: C# rewrite now targets .NET 10 (`net10.0-windows`), refreshes compatible package pins, and emits `windows-net10` release artifacts with `.NET 10 Desktop Runtime` install metadata.
 - Added: C# release tool now emits a CycloneDX SBOM, includes package/license inventory and .NET runtime support metadata in the release manifest, and covers the SBOM in `SHA256SUMS.txt`.
