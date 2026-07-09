@@ -320,8 +320,8 @@ Every check maps to one or more controls across 11 frameworks. Framework-specifi
 | **CMMC** | Level 2 (v2.0) | 69 checks |
 | **HIPAA** | Security Rule | 49 checks |
 | **PCI-DSS** | v4.0.1 | 51 checks |
-| **ACSC Essential Eight** | Maturity Model | 28 checks |
-| **Cyber Essentials** | UK NCSC v3.3 | 37 checks |
+| **ACSC Essential Eight** | Maturity Model | 25 checks |
+| **Cyber Essentials** | UK NCSC v3.3 | 35 checks |
 | **SOC 2** | Type II (Trust Criteria) | 67 checks |
 | **ISO 27001** | :2022 (Annex A) | 69 checks |
 | **DISA STIG** | Windows Server/Client | 69 checks |
@@ -645,8 +645,8 @@ so a cloud scan cannot be mistaken for endpoint/domain coverage.
 | **HIPAA** | 49 | ~30 min | Healthcare compliance |
 | **PCI** | 51 | ~35 min | Payment card compliance |
 | **CMMC** | 69 | ~60 min | Defense contractor compliance |
-| **E8** | 28 | ~25 min | ACSC Essential Eight maturity indicators |
-| **CyberEssentials** | 37 | ~35 min | UK NCSC Cyber Essentials technical controls |
+| **E8** | 25 | ~25 min | ACSC Essential Eight maturity indicators |
+| **CyberEssentials** | 35 | ~35 min | UK NCSC Cyber Essentials technical controls |
 | **SOC 2** | 67 | ~50 min | Service organization compliance |
 | **ISO 27001** | 69 | ~60 min | International standard compliance |
 | **STIG** | 69 | ~60 min | DISA STIG for DoD/government |

@@ -46,7 +46,7 @@ public static class RiskScoreEngine
         if (assessedWeight <= 0)
             return (0, "N/A");
 
-        int score = (int)Math.Round(weightedTotal / assessedWeight);
+        int score = (int)Math.Round(weightedTotal / assessedWeight, MidpointRounding.AwayFromZero);
         return (score, GradeFromScore(score));
     }
 

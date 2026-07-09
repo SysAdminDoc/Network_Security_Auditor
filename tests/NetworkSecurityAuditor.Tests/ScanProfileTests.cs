@@ -90,4 +90,30 @@ public class ScanProfileTests
             Assert.Equal(distinct.Length, ids.Length);
         }
     }
+
+    [Theory]
+    [InlineData(ScanProfileType.E8, "E8")]
+    [InlineData(ScanProfileType.CyberEssentials, "CyberEssentials")]
+    public void Framework_Profile_Membership_Matches_Framework_Mapping_Column(
+        ScanProfileType profile,
+        string frameworkProperty)
+    {
+        static string? SelectMapping(ComplianceMapping mapping, string property) => property switch
+        {
+            "E8" => mapping.E8,
+            "CyberEssentials" => mapping.CyberEssentials,
+            _ => null
+        };
+
+        var expected = FrameworkMappings.All
+            .Where(kv => SelectMapping(kv.Value, frameworkProperty) is not null)
+            .Select(kv => kv.Key)
+            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var actual = ScanProfiles.Resolve(profile)
+            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.Equal(expected, actual);
+    }
 }

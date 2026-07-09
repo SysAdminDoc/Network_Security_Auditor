@@ -643,7 +643,7 @@ public static class CheckCatalog
             Label = "Egress filtering",
             Hint = "Check firewall outbound/egress rules. If a default Allow All outbound rule exists with no restrictions, flag it. At minimum, restrict outbound to ports 80/443 plus documented needs.",
             Severity = Severity.High,
-            Weight = 8,
+            Weight = 7,
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5, PR.DS-5, DE.CM-1 | CIS Control 4.4, 4.5, 9.3 | HIPAA 164.312(e)(1)",

@@ -51,7 +51,9 @@ public static class RansomwareReadinessEngine
             }
         }
 
-        int score = totalWeight > 0 ? (int)Math.Round(totalScore / (totalWeight * 100) * 100) : 0;
+        int score = totalWeight > 0
+            ? (int)Math.Round(totalScore / (totalWeight * 100) * 100, MidpointRounding.AwayFromZero)
+            : 0;
         string grade = score switch
         {
             >= 90 => "A",

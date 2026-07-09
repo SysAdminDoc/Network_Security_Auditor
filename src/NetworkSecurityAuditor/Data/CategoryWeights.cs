@@ -22,7 +22,6 @@ public static class CategoryWeights
             ["Network Architecture"] = 0.9,  // Infrastructure design
             ["Backup & Recovery"]    = 1.1,  // Resilience
             ["Common Findings"]      = 1.0,  // Frequent issues
-            ["Physical Security"]    = 0.7,  // Softer controls
             ["Policies & Standards"] = 0.7   // Administrative controls
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
@@ -54,7 +53,6 @@ public static class CategoryWeights
             ["Backup & Recovery"]    = "#eab308",  // Yellow 500
             ["Logging & Monitoring"] = "#f97316",  // Orange 500
             ["Network Architecture"] = "#06b6d4",  // Cyan 500
-            ["Physical Security"]    = "#ec4899",  // Pink 500
             ["Common Findings"]      = "#ef4444",  // Red 500
             ["Policies & Standards"] = "#8b5cf6"   // Violet 500
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);

@@ -241,6 +241,26 @@ public class CheckCatalogTests
         Assert.DoesNotContain("CF03", e8Ids);
     }
 
+    [Fact]
+    public void Check_Weights_Match_Severity_Point_Values()
+    {
+        foreach (var check in CheckCatalog.All.Values)
+        {
+            Assert.Equal((int)check.Severity, check.Weight);
+        }
+    }
+
+    [Fact]
+    public void Category_Weights_And_Accents_Only_Reference_Live_Check_Categories()
+    {
+        var categories = CheckCatalog.All.Values
+            .Select(check => check.Category)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.All(CategoryWeights.Weights.Keys, category => Assert.Contains(category, categories));
+        Assert.All(CategoryWeights.CategoryAccents.Keys, category => Assert.Contains(category, categories));
+    }
+
     [Theory]
     [InlineData("NP04", "DNS filtering", "DNS", "T1071.004", "T1190", "Network Traffic Filtering", "3.13.1, 3.13.15", "SC-20, SC-21, SC-22")]
     [InlineData("NP06", "Temporary firewall rules", "firewall", "T1133", "T1071.001", "Inbound/Outbound Port Restriction", "3.13.1, 3.13.6", "SC-7, SC-7(4), CM-7")]

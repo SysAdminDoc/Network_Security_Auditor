@@ -106,6 +106,58 @@ public class ScoringTests
         Assert.Equal(44, score);
     }
 
+    [Fact]
+    public void RiskScore_Rounds_Midpoints_Away_From_Zero()
+    {
+        var checks = new ObservableCollection<CheckItemViewModel>
+        {
+            new()
+            {
+                Id = "ROUND1",
+                Label = "Round pass",
+                Category = "Rounding",
+                Severity = Severity.Low,
+                Weight = 177,
+                RiskTier = RiskTier.ReadOnly,
+                EvidenceMode = EvidenceMode.Automated,
+                Status = CheckStatus.Pass
+            },
+            new()
+            {
+                Id = "ROUND2",
+                Label = "Round fail",
+                Category = "Rounding",
+                Severity = Severity.Low,
+                Weight = 23,
+                RiskTier = RiskTier.ReadOnly,
+                EvidenceMode = EvidenceMode.Automated,
+                Status = CheckStatus.Fail
+            }
+        };
+
+        var (score, _) = RiskScoreEngine.Calculate(checks);
+
+        Assert.Equal(89, score);
+    }
+
+    [Fact]
+    public void Scoring_Engines_Use_AwayFromZero_Rounding()
+    {
+        var root = FindRepoRoot();
+        var files = new[]
+        {
+            Path.Combine(root, "src", "NetworkSecurityAuditor", "Scoring", "RiskScoreEngine.cs"),
+            Path.Combine(root, "src", "NetworkSecurityAuditor", "Scoring", "RansomwareReadinessEngine.cs"),
+            Path.Combine(root, "src", "NetworkSecurityAuditor", "Scoring", "DomainMaturityEngine.cs")
+        };
+
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+            Assert.Contains("MidpointRounding.AwayFromZero", source);
+        }
+    }
+
     [Theory]
     [InlineData(95, "A")]
     [InlineData(90, "A")]
@@ -170,5 +222,16 @@ public class ScoringTests
 
         Assert.Equal(0, score);
         Assert.Equal("N/A", grade);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "NetworkSecurityAuditor.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir?.FullName ?? throw new DirectoryNotFoundException("Could not locate NetworkSecurityAuditor.slnx from test output directory.");
     }
 }

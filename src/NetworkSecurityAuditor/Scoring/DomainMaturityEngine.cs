@@ -50,7 +50,7 @@ public static class DomainMaturityEngine
             }
 
             var domainPct = possible > 0 ? earned / possible * 100 : 0;
-            domainScores[i] = (int)Math.Round(domainPct);
+            domainScores[i] = (int)Math.Round(domainPct, MidpointRounding.AwayFromZero);
             if (possible > 0)
             {
                 totalWeighted += domainPct * weight;
@@ -58,7 +58,9 @@ public static class DomainMaturityEngine
             }
         }
 
-        var score = assessedWeight > 0 ? (int)Math.Round(totalWeighted / assessedWeight) : 0;
+        var score = assessedWeight > 0
+            ? (int)Math.Round(totalWeighted / assessedWeight, MidpointRounding.AwayFromZero)
+            : 0;
         var grade = RiskScoreEngine.GradeFromScore(score);
         return (score, grade, domainScores);
     }

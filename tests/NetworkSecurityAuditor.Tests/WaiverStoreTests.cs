@@ -124,6 +124,38 @@ public class WaiverStoreTests
     }
 
     [Fact]
+    public void ExpirationDate_UnspecifiedKind_Uses_DateOnly_Semantics()
+    {
+        var waiver = new RiskWaiver
+        {
+            CheckId = "EP01",
+            Justification = "expires today",
+            ApprovedBy = "admin",
+            ApprovedDate = DateTime.UtcNow.AddDays(-1),
+            ExpirationDate = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Unspecified)
+        };
+
+        Assert.False(waiver.IsExpired);
+        Assert.True(waiver.IsActive);
+    }
+
+    [Fact]
+    public void ExpirationDate_UnspecifiedKind_Yesterday_Is_Expired()
+    {
+        var waiver = new RiskWaiver
+        {
+            CheckId = "EP01",
+            Justification = "expired yesterday",
+            ApprovedBy = "admin",
+            ApprovedDate = DateTime.UtcNow.AddDays(-2),
+            ExpirationDate = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-1), DateTimeKind.Unspecified)
+        };
+
+        Assert.True(waiver.IsExpired);
+        Assert.False(waiver.IsActive);
+    }
+
+    [Fact]
     public void Remove_Waiver()
     {
         var store = new WaiverStore();

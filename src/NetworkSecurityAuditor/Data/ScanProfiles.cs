@@ -82,7 +82,7 @@ public static class ScanProfiles
             [ScanProfileType.E8] = new[]
             {
                 "EP01", "EP04", "EP07", "EP09", "EP10",
-                "IA01", "IA02", "IA03", "IA06", "IA09", "IA10", "IA12",
+                "IA03", "IA06", "IA09", "IA10", "IA12",
                 "CF01", "CF07",
                 "BR01", "BR02", "BR03", "BR04", "BR05", "BR06", "BR07", "BR08",
                 "LM02", "LM03", "LM08",
@@ -92,7 +92,7 @@ public static class ScanProfiles
             [ScanProfileType.CyberEssentials] = new[]
             {
                 "NP01", "NP02", "NP03", "NP04", "NP05", "NP06", "NP09", "NP10",
-                "IA01", "IA02", "IA03", "IA04", "IA05", "IA06", "IA07", "IA08", "IA09", "IA10", "IA11", "IA12",
+                "IA03", "IA04", "IA05", "IA06", "IA07", "IA08", "IA09", "IA10", "IA11", "IA12",
                 "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08", "EP09", "EP10",
                 "CF01", "CF02", "CF04", "CF05", "CF06", "CF07", "CF08"
             },

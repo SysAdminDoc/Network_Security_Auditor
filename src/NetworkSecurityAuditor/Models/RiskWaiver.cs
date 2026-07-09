@@ -14,10 +14,21 @@ public sealed class RiskWaiver
     public DateTime? ExpirationDate { get; set; }
 
     [JsonIgnore]
-    public bool IsExpired => ExpirationDate.HasValue && ExpirationDate.Value < DateTime.UtcNow;
+    public bool IsExpired => ExpirationDate.HasValue &&
+        ToUtcDate(ExpirationDate.Value) < DateOnly.FromDateTime(DateTime.UtcNow);
 
     [JsonIgnore]
     public bool IsActive => !IsExpired;
+
+    internal static DateOnly ToUtcDate(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Local => DateOnly.FromDateTime(value.ToUniversalTime()),
+            DateTimeKind.Utc => DateOnly.FromDateTime(value),
+            _ => DateOnly.FromDateTime(value.Date)
+        };
+    }
 }
 
 public sealed class WaiverStore
