@@ -111,7 +111,15 @@ public partial class App : Application
 
     private async Task CaptureWindowAndShutdownAsync(Window window, string path)
     {
-        await Task.Delay(TimeSpan.FromSeconds(5));
+        var readinessDeadline = DateTime.UtcNow.AddSeconds(30);
+        while (window.DataContext is MainViewModel viewModel &&
+               !viewModel.IsEnvironmentReady &&
+               DateTime.UtcNow < readinessDeadline)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+
+        await Task.Delay(TimeSpan.FromMilliseconds(750));
         try
         {
             await window.Dispatcher.InvokeAsync(
@@ -150,6 +158,9 @@ public partial class App : Application
         window.UpdateLayout();
         var width = Math.Max(1, (int)Math.Ceiling(window.ActualWidth));
         var height = Math.Max(1, (int)Math.Ceiling(window.ActualHeight));
+        var warmupBitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        warmupBitmap.Render(window);
+        window.UpdateLayout();
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(window);
 

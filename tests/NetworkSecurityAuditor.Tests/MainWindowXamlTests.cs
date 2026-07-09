@@ -165,6 +165,9 @@ public class MainWindowXamlTests
         Assert.Contains("<GridSplitter Grid.Column=\"1\"", xaml);
         Assert.Contains("Width=\"1440\" Height=\"900\"", xaml);
         Assert.Contains("Content=\"Export report\"", xaml);
+        Assert.Contains("Content=\"Save state\"", xaml);
+        Assert.Contains("Content=\"Load state\"", xaml);
+        Assert.Contains("x:Name=\"FocusBorder\"", xaml);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml);
         Assert.Contains("public ObservableCollection<CategorySummaryViewModel> CategorySummaries { get; }", mainVm);
         Assert.Contains("public ObservableCollection<string> ActivityLog { get; }", mainVm);

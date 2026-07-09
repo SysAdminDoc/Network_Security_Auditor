@@ -21,6 +21,7 @@ public class MainViewModelTests
         Assert.True(vm.CanEditScanOptions);
         Assert.Contains("still running", vm.StartScanHelpText);
         Assert.Equal("No scan is currently running.", vm.StopScanHelpText);
+        Assert.Equal("StatusNeutral", vm.ScanProgressBrushKey);
         Assert.Contains("Current profile: Full", vm.ScanProfileHelpText);
         Assert.Contains("Redacts host", vm.PrivacyModeHelpText);
 
@@ -37,6 +38,7 @@ public class MainViewModelTests
         Assert.Equal("A scan is already running.", vm.StartScanHelpText);
         Assert.Contains("Cancel the running scan", vm.StopScanHelpText);
         Assert.Contains("locked", vm.ScanProfileHelpText);
+        Assert.Equal("Accent", vm.ScanProgressBrushKey);
         Assert.True(startChanges > 0);
         Assert.True(stopChanges > 0);
     }

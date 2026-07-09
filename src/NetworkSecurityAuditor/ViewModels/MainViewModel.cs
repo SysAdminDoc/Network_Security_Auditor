@@ -81,7 +81,7 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopScanCommand))]
-    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ExportAvailabilityText), nameof(ScanProgressDisplay), nameof(ScanStatusHeadline))]
+    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ExportAvailabilityText), nameof(ScanProgressDisplay), nameof(ScanStatusHeadline), nameof(ScanProgressBrushKey))]
     [NotifyPropertyChangedFor(nameof(CanEditScanOptions), nameof(StartScanHelpText), nameof(StopScanHelpText), nameof(ScanProfileHelpText))]
     private bool _isScanning;
 
@@ -99,7 +99,7 @@ public partial class MainViewModel : ViewModelBase
     private string _scanStatus = "Ready";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ScanProgressDisplay), nameof(ScanStatusHeadline))]
+    [NotifyPropertyChangedFor(nameof(ScanProgressDisplay), nameof(ScanStatusHeadline), nameof(ScanProgressBrushKey))]
     private double _scanProgressPercent;
 
     [ObservableProperty]
@@ -364,6 +364,10 @@ public partial class MainViewModel : ViewModelBase
         ? $"{ScanProgressPercent:0}%"
         : "Idle";
 
+    public string ScanProgressBrushKey => IsScanning || ScanProgressPercent > 0
+        ? "Accent"
+        : "StatusNeutral";
+
     public string ScanStatusHeadline
     {
         get
@@ -395,7 +399,7 @@ public partial class MainViewModel : ViewModelBase
         get
         {
             if (!HasAssessedChecks)
-                return "Not scanned";
+                return "Awaiting assessment";
 
             return Grade switch
             {
