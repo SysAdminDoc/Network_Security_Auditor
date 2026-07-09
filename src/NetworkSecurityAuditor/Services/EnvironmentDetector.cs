@@ -89,24 +89,26 @@ public static class EnvironmentDetector
 
     private static void DetectModules(EnvironmentInfo env)
     {
+        var moduleRoot = Path.Combine(GetWindowsDirectory(), "System32", "WindowsPowerShell", "v1.0", "Modules");
+
         // Active Directory PowerShell module (RSAT)
-        env.HasAD = File.Exists(@"C:\Windows\System32\WindowsPowerShell\v1.0\Modules\ActiveDirectory\ActiveDirectory.psd1")
-                  || File.Exists(@"C:\Windows\System32\WindowsPowerShell\v1.0\Modules\ActiveDirectory\Microsoft.ActiveDirectory.Management.dll");
+        env.HasAD = File.Exists(Path.Combine(moduleRoot, "ActiveDirectory", "ActiveDirectory.psd1"))
+                  || File.Exists(Path.Combine(moduleRoot, "ActiveDirectory", "Microsoft.ActiveDirectory.Management.dll"));
 
         // DNS Server module
-        env.HasDNS = File.Exists(@"C:\Windows\System32\WindowsPowerShell\v1.0\Modules\DnsServer\DnsServer.psd1");
+        env.HasDNS = File.Exists(Path.Combine(moduleRoot, "DnsServer", "DnsServer.psd1"));
 
         // Group Policy module
-        env.HasGPO = File.Exists(@"C:\Windows\System32\WindowsPowerShell\v1.0\Modules\GroupPolicy\GroupPolicy.psd1");
+        env.HasGPO = File.Exists(Path.Combine(moduleRoot, "GroupPolicy", "GroupPolicy.psd1"));
 
         // Windows Defender (check WMI availability)
         env.HasDefender = CheckDefenderAvailable();
 
         // SMB module
-        env.HasSMB = File.Exists(@"C:\Windows\System32\WindowsPowerShell\v1.0\Modules\SmbShare\SmbShare.psd1");
+        env.HasSMB = File.Exists(Path.Combine(moduleRoot, "SmbShare", "SmbShare.psd1"));
 
         // BitLocker module
-        env.HasBitLocker = File.Exists(@"C:\Windows\System32\WindowsPowerShell\v1.0\Modules\BitLocker\BitLocker.psd1")
+        env.HasBitLocker = File.Exists(Path.Combine(moduleRoot, "BitLocker", "BitLocker.psd1"))
                          || RegistryHelper.KeyExists(@"HKLM\SOFTWARE\Microsoft\BitLocker");
 
         // AppLocker
@@ -167,12 +169,17 @@ public static class EnvironmentDetector
             using var proc = Process.Start(psi);
             if (proc is null) return;
 
-            string output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(5000);
+            var outputTask = proc.StandardOutput.ReadToEndAsync();
+            if (!proc.WaitForExit(5000))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                return;
+            }
+
+            string output = outputTask.GetAwaiter().GetResult();
 
             env.AzureADJoined = output.Contains("AzureAdJoined : YES", StringComparison.OrdinalIgnoreCase);
-            env.IntuneManaged = output.Contains("IsDeviceManaged : YES", StringComparison.OrdinalIgnoreCase)
-                             || output.Contains("EnrollmentType :", StringComparison.OrdinalIgnoreCase);
+            env.IntuneManaged = IsIntuneManagedFromDsregOutput(output);
 
             // Extract tenant name
             foreach (var line in output.Split('\n'))
@@ -224,7 +231,46 @@ public static class EnvironmentDetector
 
         // Legacy (Microsoft) LAPS CSE
         env.HasLegacyLAPS = RegistryHelper.KeyExists(@"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{97E2CA7B-B657-4FF7-A6DB-30B73D4A349E}")
-                         || File.Exists(@"C:\Program Files\LAPS\CSE\AdmPwd.dll");
+                         || File.Exists(Path.Combine(GetProgramFilesDirectory(), "LAPS", "CSE", "AdmPwd.dll"));
+    }
+
+    internal static bool IsIntuneManagedFromDsregOutput(string output)
+    {
+        foreach (var rawLine in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = rawLine.Split(':', 2);
+            if (parts.Length != 2)
+                continue;
+
+            var key = parts[0].Trim();
+            var value = parts[1].Trim();
+            if (key.Equals("IsDeviceManaged", StringComparison.OrdinalIgnoreCase) &&
+                value.Equals("YES", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (key.Equals("EnrollmentType", StringComparison.OrdinalIgnoreCase) &&
+                value.Length > 0 &&
+                !value.Equals("none", StringComparison.OrdinalIgnoreCase) &&
+                !value.Equals("unknown", StringComparison.OrdinalIgnoreCase) &&
+                !value.Equals("0", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string GetWindowsDirectory()
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        if (!string.IsNullOrWhiteSpace(windows)) return windows;
+        return Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows";
+    }
+
+    private static string GetProgramFilesDirectory()
+    {
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (!string.IsNullOrWhiteSpace(programFiles)) return programFiles;
+        return Environment.GetEnvironmentVariable("ProgramFiles") ?? @"C:\Program Files";
     }
 
     private static string DetectPSVersion()
