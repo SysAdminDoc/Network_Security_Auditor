@@ -1,6 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.NetworkArchitecture;
 
+using System.IO;
 using System.Text;
+using System.Xml.Linq;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Services;
 
@@ -14,13 +16,14 @@ public sealed class NA03_WirelessCheck : ISecurityCheck
 
     private static readonly HashSet<string> InsecureAuth = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Open", "WEP", "Shared", "WPA-Personal", "WPA-Enterprise"
+        "OPEN", "WEP", "SHARED", "WPA", "WPAPSK", "WPAPERSONAL", "WPAENTERPRISE"
     };
 
     private static readonly HashSet<string> SecureAuth = new(StringComparer.OrdinalIgnoreCase)
     {
-        "WPA2-Personal", "WPA2-Enterprise", "WPA3-Personal", "WPA3-Enterprise",
-        "WPA3SAE", "OWE"
+        "WPA2", "WPA2PSK", "WPA3", "WPA3SAE", "WPA3ENT", "WPA3ENT192",
+        "WPA2PERSONAL", "WPA2ENTERPRISE", "WPA3PERSONAL", "WPA3ENTERPRISE",
+        "OWE", "ENHANCEDOPEN"
     };
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
@@ -52,33 +55,28 @@ public sealed class NA03_WirelessCheck : ISecurityCheck
             // 2. Check each profile for security settings
             evidence.AppendLine("\n[Profile Security Details]");
 
-            foreach (string profile in profiles)
+            foreach (var details in profiles)
             {
                 ct.ThrowIfCancellationRequested();
                 totalProfiles++;
 
-                var details = GetProfileDetails(profile, evidence, ct);
-
                 if (details.Authentication != null)
                 {
-                    if (InsecureAuth.Contains(details.Authentication) ||
-                        details.Authentication.Contains("Open", StringComparison.OrdinalIgnoreCase) ||
-                        details.Authentication.Contains("WEP", StringComparison.OrdinalIgnoreCase))
+                    var assessment = AssessAuthentication(details.Authentication);
+                    if (assessment == WirelessAuthenticationAssessment.Insecure)
                     {
                         hasInsecure = true;
                         insecureProfiles++;
-                        sb.AppendLine($"CRITICAL: Profile \"{profile}\" uses insecure authentication: {details.Authentication}" +
+                        sb.AppendLine($"CRITICAL: Profile \"{details.Name}\" uses insecure authentication: {details.Authentication}" +
                             (details.Cipher != null ? $" / {details.Cipher}" : ""));
                     }
-                    else if (SecureAuth.Any(s =>
-                        details.Authentication.Contains(s, StringComparison.OrdinalIgnoreCase)))
+                    else if (assessment == WirelessAuthenticationAssessment.Secure)
                     {
                         secureProfiles++;
                     }
                     else
                     {
-                        // Unknown auth type, report it
-                        sb.AppendLine($"INFO: Profile \"{profile}\" uses authentication: {details.Authentication}");
+                        sb.AppendLine($"INFO: Profile \"{details.Name}\" uses authentication: {details.Authentication}");
                     }
                 }
             }
@@ -105,28 +103,67 @@ public sealed class NA03_WirelessCheck : ISecurityCheck
         }
     }
 
-    private static List<string> GetWirelessProfiles(StringBuilder evidence, CancellationToken ct)
+    private static List<ProfileDetails> GetWirelessProfiles(StringBuilder evidence, CancellationToken ct)
     {
-        var profiles = new List<string>();
         evidence.AppendLine("[Wireless Profiles]");
+        var exportedProfiles = GetWirelessProfilesFromExportedXml(evidence, ct);
+        if (exportedProfiles.Count > 0)
+            return exportedProfiles;
+
+        return GetWirelessProfilesFromNetshText(evidence, ct);
+    }
+
+    private static List<ProfileDetails> GetWirelessProfilesFromExportedXml(StringBuilder evidence, CancellationToken ct)
+    {
+        var profiles = new List<ProfileDetails>();
+        var tempDir = Path.Combine(Path.GetTempPath(), $"nsa-wlan-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var output = RunCommand("netsh", $"wlan export profile folder=\"{tempDir}\"", ct);
+            evidence.AppendLine(output.Length > 2000 ? output[..2000] + "\n  ...(truncated)" : output);
+
+            foreach (var file in Directory.EnumerateFiles(tempDir, "*.xml"))
+            {
+                var details = ParseExportedProfileXml(File.ReadAllText(file));
+                if (details is null)
+                    continue;
+
+                profiles.Add(details);
+                evidence.AppendLine($"  \"{details.Name}\": Auth={details.Authentication ?? "N/A"}, " +
+                    $"Cipher={details.Cipher ?? "N/A"}, Mode={details.ConnectionMode ?? "N/A"}");
+            }
+        }
+        catch (Exception ex)
+        {
+            evidence.AppendLine($"  XML export unavailable: {ex.Message}");
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, recursive: true);
+            }
+            catch { }
+        }
+
+        return profiles;
+    }
+
+    private static List<ProfileDetails> GetWirelessProfilesFromNetshText(StringBuilder evidence, CancellationToken ct)
+    {
+        var profiles = new List<ProfileDetails>();
 
         try
         {
             string output = RunCommand("netsh", "wlan show profiles", ct);
             evidence.AppendLine(output.Length > 2000 ? output[..2000] + "\n  ...(truncated)" : output);
 
-            foreach (var line in output.Split('\n'))
+            foreach (var profileName in ParseProfileNamesFromNetshOutput(output))
             {
-                string trimmed = line.Trim();
-                // Format: "    All User Profile     : ProfileName"
-                int colonIdx = trimmed.IndexOf(':');
-                if (colonIdx >= 0 &&
-                    trimmed.Contains("Profile", StringComparison.OrdinalIgnoreCase))
-                {
-                    string profileName = trimmed[(colonIdx + 1)..].Trim();
-                    if (!string.IsNullOrWhiteSpace(profileName))
-                        profiles.Add(profileName);
-                }
+                profiles.Add(GetProfileDetails(profileName, evidence, ct));
             }
         }
         catch (Exception ex)
@@ -137,9 +174,31 @@ public sealed class NA03_WirelessCheck : ISecurityCheck
         return profiles;
     }
 
+    internal static IReadOnlyList<string> ParseProfileNamesFromNetshOutput(string output)
+    {
+        var profiles = new List<string>();
+        foreach (var line in output.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            var colonIdx = trimmed.IndexOf(':');
+            if (colonIdx < 0)
+                continue;
+
+            var label = trimmed[..colonIdx].Trim();
+            if (!label.Contains("Profile", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var profileName = trimmed[(colonIdx + 1)..].Trim();
+            if (!string.IsNullOrWhiteSpace(profileName))
+                profiles.Add(profileName);
+        }
+
+        return profiles;
+    }
+
     private static ProfileDetails GetProfileDetails(string profileName, StringBuilder evidence, CancellationToken ct)
     {
-        var details = new ProfileDetails();
+        var details = new ProfileDetails { Name = profileName };
 
         try
         {
@@ -185,10 +244,71 @@ public sealed class NA03_WirelessCheck : ISecurityCheck
         return CommandRunner.RunForOutput(fileName, arguments, TimeSpan.FromSeconds(15), ct);
     }
 
-    private sealed class ProfileDetails
+    internal static ProfileDetails? ParseExportedProfileXml(string xml)
     {
+        var doc = XDocument.Parse(xml);
+        var root = doc.Root;
+        if (root is null)
+            return null;
+
+        XNamespace ns = root.Name.Namespace;
+        var name = root.Element(ns + "name")?.Value.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+
+        var authEncryption = root
+            .Element(ns + "MSM")
+            ?.Element(ns + "security")
+            ?.Element(ns + "authEncryption");
+
+        return new ProfileDetails
+        {
+            Name = name,
+            Authentication = authEncryption?.Element(ns + "authentication")?.Value.Trim(),
+            Cipher = authEncryption?.Element(ns + "encryption")?.Value.Trim(),
+            ConnectionMode = root.Element(ns + "connectionMode")?.Value.Trim()
+        };
+    }
+
+    internal static WirelessAuthenticationAssessment AssessAuthentication(string? authentication)
+    {
+        if (string.IsNullOrWhiteSpace(authentication))
+            return WirelessAuthenticationAssessment.Unknown;
+
+        var normalized = NormalizeAuthentication(authentication);
+        if (InsecureAuth.Contains(normalized))
+            return WirelessAuthenticationAssessment.Insecure;
+
+        if (SecureAuth.Contains(normalized))
+            return WirelessAuthenticationAssessment.Secure;
+
+        return WirelessAuthenticationAssessment.Unknown;
+    }
+
+    private static string NormalizeAuthentication(string authentication)
+    {
+        var sb = new StringBuilder(authentication.Length);
+        foreach (var ch in authentication)
+        {
+            if (char.IsLetterOrDigit(ch))
+                sb.Append(char.ToUpperInvariant(ch));
+        }
+
+        return sb.ToString();
+    }
+
+    internal sealed class ProfileDetails
+    {
+        public string Name { get; set; } = "";
         public string? Authentication { get; set; }
         public string? Cipher { get; set; }
         public string? ConnectionMode { get; set; }
+    }
+
+    internal enum WirelessAuthenticationAssessment
+    {
+        Secure,
+        Insecure,
+        Unknown
     }
 }

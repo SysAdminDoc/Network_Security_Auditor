@@ -55,9 +55,7 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
 
             // Max password age (stored as negative 100-nanosecond intervals)
             long maxPwdAgeTicks = GetLongProperty(rootEntry, "maxPwdAge");
-            int maxPwdAgeDays = maxPwdAgeTicks != 0
-                ? (int)(Math.Abs(maxPwdAgeTicks) / TimeSpan.TicksPerDay)
-                : 0;
+            int maxPwdAgeDays = ConvertDirectoryIntervalToWholeUnits(maxPwdAgeTicks, TimeSpan.TicksPerDay);
             evidence.AppendLine($"  maxPwdAge = {maxPwdAgeTicks} ({maxPwdAgeDays} days)");
 
             if (maxPwdAgeDays == 0)
@@ -122,9 +120,7 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
 
             // Lockout duration
             long lockoutDurTicks = GetLongProperty(rootEntry, "lockoutDuration");
-            int lockoutDurMin = lockoutDurTicks != 0
-                ? (int)(Math.Abs(lockoutDurTicks) / TimeSpan.TicksPerMinute)
-                : 0;
+            int lockoutDurMin = ConvertDirectoryIntervalToWholeUnits(lockoutDurTicks, TimeSpan.TicksPerMinute);
             evidence.AppendLine($"  lockoutDuration = {lockoutDurTicks} ({lockoutDurMin} min)");
             if (lockoutThreshold > 0)
             {
@@ -206,5 +202,15 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
             return ActiveDirectoryValueConverter.GetLargeIntegerValue(val);
         }
         catch { return 0; }
+    }
+
+    internal static int ConvertDirectoryIntervalToWholeUnits(long intervalTicks, long ticksPerUnit)
+    {
+        if (intervalTicks == 0 || intervalTicks == long.MinValue || ticksPerUnit <= 0)
+            return 0;
+
+        var absoluteTicks = intervalTicks < 0 ? -intervalTicks : intervalTicks;
+        var units = absoluteTicks / ticksPerUnit;
+        return units > int.MaxValue ? int.MaxValue : (int)units;
     }
 }

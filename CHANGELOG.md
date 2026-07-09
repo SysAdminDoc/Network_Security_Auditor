@@ -9,6 +9,8 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Added: C# release tool now emits a CycloneDX SBOM, includes package/license inventory and .NET runtime support metadata in the release manifest, and covers the SBOM in `SHA256SUMS.txt`.
 - Fixed: C# environment detection now parses Intune enrollment state correctly, prevents `dsregcmd` stdout deadlocks with timeout cleanup, and derives Windows/LAPS paths from the host environment instead of hardcoded `C:` locations.
 - Fixed: C# headless argument parsing now warns on missing or unknown flags, keeps following switches from being consumed as values, supports `-NoElevate` and `-ExportDefectDojo`, preserves the elevated relaunch working directory, and returns exit code 64 for missing dashboard input folders.
+- Fixed: C# NA03 wireless checks now prefer invariant exported WLAN profile XML and exact normalized authentication classification, avoiding English `netsh` label dependence and substring false positives.
+- Fixed: C# IA05 password-policy conversion now handles Active Directory's `long.MinValue` interval sentinel without overflowing and reports it as a never-expiring password age policy.
 
 ### UX
 - Changed: C# GUI now uses a premium security-operations workstation shell with a persistent category progress rail, command/status bar, risk score band, dense virtualized check table, selected-check inspector, and integrated activity console.
