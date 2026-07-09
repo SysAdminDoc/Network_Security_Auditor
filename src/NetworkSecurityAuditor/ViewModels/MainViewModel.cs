@@ -46,6 +46,8 @@ public partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<CategorySummaryViewModel> CategorySummaries { get; } = [];
 
+    public ObservableCollection<CategorySummaryViewModel> CategoryRailItems { get; } = [];
+
     public ObservableCollection<string> ActivityLog { get; } = [];
 
     public ICollectionView FilteredChecks { get; }
@@ -68,21 +70,23 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopScanCommand))]
-    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ExportAvailabilityText))]
+    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ExportAvailabilityText), nameof(ScanProgressDisplay), nameof(ScanStatusHeadline))]
     private bool _isScanning;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ScanReadinessText), nameof(ExportAvailabilityText))]
+    [NotifyPropertyChangedFor(nameof(ScanReadinessText), nameof(ExportAvailabilityText), nameof(ScanStatusHeadline))]
     private bool _isExporting;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText))]
+    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ScanStatusHeadline))]
     private string _scanStatus = "Ready";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ScanProgressDisplay), nameof(ScanStatusHeadline))]
     private double _scanProgressPercent;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProfileSummary))]
     private ScanProfileType _selectedProfile = ScanProfileType.Full;
 
     [ObservableProperty]
@@ -92,16 +96,19 @@ public partial class MainViewModel : ViewModelBase
     private string _selectedTheme = "Catppuccin Mocha";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Grade), nameof(GradeBrushKey), nameof(OverallScoreDisplay))]
+    [NotifyPropertyChangedFor(nameof(Grade), nameof(GradeBrushKey), nameof(OverallScoreDisplay), nameof(RiskPostureLabel))]
     private int _overallScore;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AssessedCount), nameof(AssessedChecksDisplay), nameof(OutcomeSummaryDisplay))]
     private int _passCount;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AssessedCount), nameof(AssessedChecksDisplay), nameof(OutcomeSummaryDisplay))]
     private int _failCount;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AssessedCount), nameof(AssessedChecksDisplay), nameof(OutcomeSummaryDisplay))]
     private int _partialCount;
 
     [ObservableProperty]
@@ -150,11 +157,13 @@ public partial class MainViewModel : ViewModelBase
     private int _visibleCheckCount;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText))]
+    [NotifyPropertyChangedFor(nameof(ReadinessDisplay))]
+    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ScanStatusHeadline))]
     private int _preflightPassedCount;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText))]
+    [NotifyPropertyChangedFor(nameof(ReadinessDisplay))]
+    [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ScanStatusHeadline))]
     private int _preflightTotalCount;
 
     public MainViewModel() : this(DefaultRunChecksAsync)
@@ -267,6 +276,69 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    public int AssessedCount => PassCount + PartialCount + FailCount;
+
+    public string AssessedChecksDisplay => Checks.Count == 0
+        ? "0 / 0"
+        : $"{AssessedCount} / {Checks.Count}";
+
+    public string OutcomeSummaryDisplay => $"{PassCount} pass - {PartialCount} partial - {FailCount} fail";
+
+    public string ProfileSummary => $"{SelectedProfile} profile";
+
+    public string ReadinessDisplay => PreflightTotalCount > 0
+        ? $"{PreflightPassedCount}/{PreflightTotalCount} ready"
+        : "Pre-flight pending";
+
+    public string ScanProgressDisplay => IsScanning || ScanProgressPercent > 0
+        ? $"{ScanProgressPercent:0}%"
+        : "Idle";
+
+    public string ScanStatusHeadline
+    {
+        get
+        {
+            if (IsScanning)
+                return ScanProgressPercent > 0 ? $"Scanning {ScanProgressPercent:0}%" : "Scanning";
+
+            if (IsExporting)
+                return "Exporting report";
+
+            if (ScanStatus.StartsWith("Pre-flight complete:", StringComparison.OrdinalIgnoreCase))
+                return "Ready";
+
+            if (ScanStatus.Contains(" exported", StringComparison.OrdinalIgnoreCase))
+                return "Export complete";
+
+            if (ScanStatus.StartsWith("State loaded", StringComparison.OrdinalIgnoreCase))
+                return "State loaded";
+
+            if (ScanStatus.StartsWith("State saved", StringComparison.OrdinalIgnoreCase))
+                return "State saved";
+
+            return CompactStatus(ScanStatus, 30);
+        }
+    }
+
+    public string RiskPostureLabel
+    {
+        get
+        {
+            if (!HasAssessedChecks)
+                return "Not scanned";
+
+            return Grade switch
+            {
+                "A" => "Strong posture",
+                "B" => "Managed risk",
+                "C" => "Moderate risk",
+                "D" => "High risk",
+                "F" => "Critical risk",
+                _ => "Unknown"
+            };
+        }
+    }
+
     public string ScanReadinessText
     {
         get
@@ -281,9 +353,17 @@ public partial class MainViewModel : ViewModelBase
                 return $"{PassCount + PartialCount + FailCount} assessed - export ready";
 
             return PreflightTotalCount > 0
-                ? $"Pre-flight {PreflightPassedCount}/{PreflightTotalCount} passed - ready to scan"
+                ? "Ready to scan"
                 : "Ready to run local audit checks";
         }
+    }
+
+    private static string CompactStatus(string value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
+            return string.IsNullOrWhiteSpace(value) ? "Ready" : value;
+
+        return value[..Math.Max(0, maxLength - 3)].TrimEnd() + "...";
     }
 
     public string ExportAvailabilityText
@@ -362,6 +442,7 @@ public partial class MainViewModel : ViewModelBase
         DetachCheckStatusHandlers();
         Checks.Clear();
         CategorySummaries.Clear();
+        CategoryRailItems.Clear();
         foreach (var meta in CheckCatalog.All.Values.OrderBy(m => m.Id))
         {
             var check = CheckItemViewModel.FromMetadata(meta);
@@ -371,9 +452,12 @@ public partial class MainViewModel : ViewModelBase
 
         Categories = ["All", .. CheckCatalog.Categories];
         OnPropertyChanged(nameof(Categories));
+        CategoryRailItems.Add(new CategorySummaryViewModel { Name = "All" });
         foreach (var category in CheckCatalog.Categories)
         {
-            CategorySummaries.Add(new CategorySummaryViewModel { Name = category });
+            var summary = new CategorySummaryViewModel { Name = category };
+            CategorySummaries.Add(summary);
+            CategoryRailItems.Add(summary);
         }
 
         SelectedCheck = Checks.FirstOrDefault();
@@ -1036,6 +1120,11 @@ public partial class MainViewModel : ViewModelBase
             summary.Update(Checks);
         }
 
+        foreach (var summary in CategoryRailItems.Where(s => s.Name.Equals("All", StringComparison.OrdinalIgnoreCase)))
+        {
+            summary.Update(Checks);
+        }
+
         var (score, _) = RiskScoreEngine.Calculate(Checks);
         OverallScore = score;
 
@@ -1054,6 +1143,10 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(Grade));
         OnPropertyChanged(nameof(GradeBrushKey));
         OnPropertyChanged(nameof(OverallScoreDisplay));
+        OnPropertyChanged(nameof(AssessedCount));
+        OnPropertyChanged(nameof(AssessedChecksDisplay));
+        OnPropertyChanged(nameof(OutcomeSummaryDisplay));
+        OnPropertyChanged(nameof(RiskPostureLabel));
         NotifyExportCommandCanExecuteChanged();
     }
 

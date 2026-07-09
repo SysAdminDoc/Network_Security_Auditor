@@ -386,7 +386,7 @@ Every HTML report can include up to three tiers, each targeting a different audi
 Full WPF interface with:
 
 - **Catppuccin Mocha dark theme** in the C# rewrite; the legacy PowerShell WPF artifact retains the seven-theme selector
-- **Categorized tab navigation** with scan progress per category
+- **Security-operations workstation shell** with a persistent category progress rail, command/status bar, risk score band, dense virtualized check table, selected-check inspector, and integrated activity console
 - **Per-check controls** — status dropdown, findings, evidence, notes, remediation assignment/due date/status
 - **Live risk score dashboard** updated as checks complete
 - **Pre-flight connectivity check** before scanning (ping, WinRM, AD module, SMB, DNS, elevation, Defender)

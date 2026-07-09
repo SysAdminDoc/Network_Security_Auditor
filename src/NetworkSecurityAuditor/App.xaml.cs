@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using NetworkSecurityAuditor.Checks;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Export;
@@ -88,13 +89,8 @@ public partial class App : Application
             RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
             var screenshotWindow = CreateMainWindow(args);
             MainWindow = screenshotWindow;
-            screenshotWindow.ContentRendered += async (_, _) =>
-            {
-                await Task.Delay(TimeSpan.FromSeconds(5));
-                SaveWindowScreenshot(screenshotWindow, args.RenderScreenshotPath);
-                Shutdown(0);
-            };
             screenshotWindow.Show();
+            _ = CaptureWindowAndShutdownAsync(screenshotWindow, args.RenderScreenshotPath);
             return;
         }
 
@@ -102,6 +98,21 @@ public partial class App : Application
         var window = CreateMainWindow(args);
         MainWindow = window;
         window.Show();
+    }
+
+    private async Task CaptureWindowAndShutdownAsync(Window window, string path)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(5));
+        try
+        {
+            await window.Dispatcher.InvokeAsync(
+                () => SaveWindowScreenshot(window, path),
+                DispatcherPriority.Render);
+        }
+        finally
+        {
+            Shutdown(0);
+        }
     }
 
     private static MainWindow CreateMainWindow(CliArgs args)

@@ -2,15 +2,15 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- Catppuccin Mocha-inspired premium dark surface system -->
-    <SolidColorBrush x:Key="WindowBg" Color="#0f141d" />
-    <SolidColorBrush x:Key="RailBg" Color="#0a0f17" />
-    <SolidColorBrush x:Key="PanelBg" Color="#151c28" />
-    <SolidColorBrush x:Key="CardBg" Color="#1b2332" />
-    <SolidColorBrush x:Key="CardHoverBg" Color="#232d3f" />
-    <SolidColorBrush x:Key="SurfaceBg" Color="#222b3a" />
-    <SolidColorBrush x:Key="InputBg" Color="#101722" />
-    <SolidColorBrush x:Key="BorderDim" Color="#334155" />
-    <SolidColorBrush x:Key="BorderBright" Color="#4b5870" />
+    <SolidColorBrush x:Key="WindowBg" Color="#08111a" />
+    <SolidColorBrush x:Key="RailBg" Color="#071018" />
+    <SolidColorBrush x:Key="PanelBg" Color="#0d1a25" />
+    <SolidColorBrush x:Key="CardBg" Color="#10202d" />
+    <SolidColorBrush x:Key="CardHoverBg" Color="#142a3a" />
+    <SolidColorBrush x:Key="SurfaceBg" Color="#172a38" />
+    <SolidColorBrush x:Key="InputBg" Color="#0a1520" />
+    <SolidColorBrush x:Key="BorderDim" Color="#22384a" />
+    <SolidColorBrush x:Key="BorderBright" Color="#38566a" />
     <SolidColorBrush x:Key="TextMuted" Color="#9aa7bd" />
     <SolidColorBrush x:Key="TextPrimary" Color="#e5e7eb" />
     <SolidColorBrush x:Key="TextSecondary" Color="#c6d0df" />
@@ -18,27 +18,33 @@
     <SolidColorBrush x:Key="BadgeBg" Color="#273244" />
     <SolidColorBrush x:Key="OnAccent" Color="#f8fafc" />
     <SolidColorBrush x:Key="OverlayScrim" Color="#aa0f141d" />
-    <SolidColorBrush x:Key="Accent" Color="#8b5cf6" />
-    <SolidColorBrush x:Key="AccentHover" Color="#a78bfa" />
-    <SolidColorBrush x:Key="AccentSoft" Color="#2d2542" />
-    <SolidColorBrush x:Key="InfoAccent" Color="#38bdf8" />
-    <SolidColorBrush x:Key="GradeB" Color="#94e2d5" />
+    <SolidColorBrush x:Key="Accent" Color="#22d3ee" />
+    <SolidColorBrush x:Key="AccentHover" Color="#67e8f9" />
+    <SolidColorBrush x:Key="AccentSoft" Color="#103647" />
+    <SolidColorBrush x:Key="InfoAccent" Color="#60a5fa" />
+    <SolidColorBrush x:Key="GradeB" Color="#5eead4" />
     <SolidColorBrush x:Key="SeverityHigh" Color="#fab387" />
     <SolidColorBrush x:Key="ProgressGood" Color="#a6e3a1" />
     <SolidColorBrush x:Key="ProgressMid" Color="#f9e2af" />
     <SolidColorBrush x:Key="ProgressBad" Color="#f38ba8" />
+    <SolidColorBrush x:Key="ConsoleBg" Color="#09151f" />
+    <SolidColorBrush x:Key="CommandBg" Color="#0c1b27" />
+    <SolidColorBrush x:Key="TrackBg" Color="#1c3040" />
+    <SolidColorBrush x:Key="SoftWarningBg" Color="#302815" />
+    <SolidColorBrush x:Key="SoftDangerBg" Color="#341b26" />
 
     <!-- Raw Colors for binding -->
-    <Color x:Key="WindowBgColor">#0f141d</Color>
-    <Color x:Key="PanelBgColor">#151c28</Color>
-    <Color x:Key="SurfaceBgColor">#222b3a</Color>
-    <Color x:Key="AccentColor">#8b5cf6</Color>
+    <Color x:Key="WindowBgColor">#08111a</Color>
+    <Color x:Key="PanelBgColor">#0d1a25</Color>
+    <Color x:Key="SurfaceBgColor">#172a38</Color>
+    <Color x:Key="AccentColor">#22d3ee</Color>
     <Color x:Key="TextPrimaryColor">#e5e7eb</Color>
 
     <Style x:Key="SectionLabel" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
         <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
     </Style>
 
@@ -46,13 +52,23 @@
         <Setter Property="Background" Value="{StaticResource CardBg}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="14" />
     </Style>
 
     <Style x:Key="InspectorCard" TargetType="Border" BasedOn="{StaticResource PremiumCard}">
         <Setter Property="Background" Value="{StaticResource PanelBg}" />
         <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style x:Key="CommandSegment" TargetType="Border" BasedOn="{StaticResource PremiumCard}">
+        <Setter Property="Background" Value="{StaticResource CommandBg}" />
+        <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <Style x:Key="MetricCard" TargetType="Border" BasedOn="{StaticResource PremiumCard}">
+        <Setter Property="Background" Value="{StaticResource PanelBg}" />
+        <Setter Property="Padding" Value="16,12" />
     </Style>
 
     <!-- ScrollBar Style -->
@@ -130,7 +146,7 @@
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="Padding" Value="8,5" />
         <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}" />
         <Setter Property="Validation.ErrorTemplate">
             <Setter.Value>
@@ -236,7 +252,7 @@
     </Style>
 
     <Style x:Key="DarkComboBox" TargetType="ComboBox">
-        <Setter Property="Background" Value="{StaticResource SurfaceBg}" />
+        <Setter Property="Background" Value="{StaticResource InputBg}" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
         <Setter Property="BorderThickness" Value="1" />
@@ -413,10 +429,10 @@
     <!-- Button Style -->
     <Style x:Key="AccentButton" TargetType="Button">
         <Setter Property="Background" Value="{StaticResource Accent}" />
-        <Setter Property="Foreground" Value="{StaticResource OnAccent}" />
+        <Setter Property="Foreground" Value="{StaticResource WindowBg}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Padding" Value="16,8" />
-        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
@@ -436,7 +452,7 @@
                             <Setter Property="Background" Value="{StaticResource AccentHover}" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource TextPrimary}" />
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource OnAccent}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.5" />
@@ -449,11 +465,11 @@
 
     <!-- Secondary Button -->
     <Style x:Key="SecondaryButton" TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource SurfaceBg}" />
+        <Setter Property="Background" Value="{StaticResource InputBg}" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Padding" Value="16,8" />
-        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderDim}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
@@ -470,7 +486,8 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="{StaticResource BorderDim}" />
+                            <Setter Property="Background" Value="{StaticResource SurfaceBg}" />
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource BorderBright}" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource Accent}" />

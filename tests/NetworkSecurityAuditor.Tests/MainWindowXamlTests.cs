@@ -29,7 +29,7 @@ public class MainWindowXamlTests
         Assert.Contains("Command=\"{Binding LoadStateCommand}\"", xaml);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml);
         Assert.Contains("Content=\"{Binding SelectedCheck}\"", xaml);
-        Assert.Contains("ItemsSource=\"{Binding CategorySummaries}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding CategoryRailItems}\"", xaml);
         Assert.Contains("Text=\"{Binding NotApplicableCount, StringFormat=N/A: {0}}\"", xaml);
         Assert.Contains("Text=\"{Binding NotAssessedCount, StringFormat=Not assessed: {0}}\"", xaml);
     }
@@ -42,7 +42,7 @@ public class MainWindowXamlTests
         Assert.Contains("Text=\"{Binding OverallScoreDisplay}\"", xaml);
         Assert.Contains("Text=\"{Binding ScoreSubtitle}\"", xaml);
         Assert.DoesNotContain("Path=\"OverallScore\" StringFormat=\"{}{0}/100\"", xaml);
-        Assert.DoesNotContain("<TextBlock Text=\"{Binding ScanStatus}\"", xaml);
+        Assert.Contains("Text=\"{Binding ScanProgressDisplay}\"", xaml);
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class MainWindowXamlTests
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
         var exportOption = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "ExportFormatOption.cs");
 
-        Assert.Contains("Text=\"Export\"", xaml);
+        Assert.Contains("Content=\"Export\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding ExportFormats}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedExportFormat}\"", xaml);
         Assert.Contains("Text=\"{Binding ExportOutputFolder, UpdateSourceTrigger=PropertyChanged}\"", xaml);
@@ -149,10 +149,11 @@ public class MainWindowXamlTests
         var theme = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
 
-        Assert.Contains("Category health summary cards", xaml);
+        Assert.Contains("Category progress navigation", xaml);
         Assert.Contains("Selected check evidence and remediation inspector", xaml);
-        Assert.Contains("Scan Console", xaml);
+        Assert.Contains("Activity Console", xaml);
         Assert.Contains("ActivityLog", xaml);
+        Assert.Contains("CategoryRailItems", xaml);
         Assert.Contains("TargetDisplay", xaml);
         Assert.Contains("FilterEmptyStateTitle", xaml);
         Assert.Contains("ClearFiltersCommand", xaml);
@@ -197,9 +198,9 @@ public class MainWindowXamlTests
         Assert.Contains("AutomationProperties.Name=\"Scan progress\"", xaml);
         Assert.Contains("AutomationProperties.Name=\"No matching checks\"", xaml);
         Assert.Contains("AutomationProperties.Name=\"Filtered check count\"", xaml);
-        Assert.Contains("Fail {0}", xaml);
-        Assert.Contains("Partial {0}", xaml);
-        Assert.Contains("Pass {0}", xaml);
+        Assert.Contains("Fail: {0}", xaml);
+        Assert.Contains("Partial: {0}", xaml);
+        Assert.Contains("Pass: {0}", xaml);
     }
 
     [Fact]

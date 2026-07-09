@@ -20,8 +20,8 @@ public partial class MainWindow : Window
     {
         Loaded -= OnLoaded;
         _viewModel.ScanStatus = "Detecting environment...";
-        _viewModel.Environment = await Task.Run(EnvironmentDetector.Detect);
         _viewModel.LoadCheckCatalog();
+        _viewModel.Environment = await Task.Run(EnvironmentDetector.Detect);
         _viewModel.RunPreflight();
     }
 }

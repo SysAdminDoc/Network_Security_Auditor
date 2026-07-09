@@ -219,7 +219,11 @@ public class MainViewModelTests
         vm.PreflightTotalCount = 7;
 
         Assert.Equal("Pre-flight 4/7 passed", vm.ScoreSubtitle);
-        Assert.Equal("Pre-flight 4/7 passed - ready to scan", vm.ScanReadinessText);
+        Assert.Equal("Ready to scan", vm.ScanReadinessText);
+
+        vm.ScanStatus = "Pre-flight complete: 4/7 checks passed";
+
+        Assert.Equal("Ready", vm.ScanStatusHeadline);
 
         vm.Checks[0].Status = CheckStatus.Pass;
 

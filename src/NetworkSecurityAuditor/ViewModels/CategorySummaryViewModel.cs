@@ -11,6 +11,7 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ScoreDisplay))]
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
     [NotifyPropertyChangedFor(nameof(HealthBrushKey))]
+    [NotifyPropertyChangedFor(nameof(HealthLabel))]
     private int _score;
 
     [ObservableProperty]
@@ -21,18 +22,21 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(AssessedCount))]
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
     [NotifyPropertyChangedFor(nameof(HealthBrushKey))]
+    [NotifyPropertyChangedFor(nameof(HealthLabel))]
     private int _passCount;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AssessedCount))]
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
     [NotifyPropertyChangedFor(nameof(HealthBrushKey))]
+    [NotifyPropertyChangedFor(nameof(HealthLabel))]
     private int _partialCount;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AssessedCount))]
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
     [NotifyPropertyChangedFor(nameof(HealthBrushKey))]
+    [NotifyPropertyChangedFor(nameof(HealthLabel))]
     private int _failCount;
 
     [ObservableProperty]
@@ -57,11 +61,21 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
                 ? "ProgressMid"
                 : "ProgressGood";
 
+    public string HealthLabel => AssessedCount == 0
+        ? "Open"
+        : FailCount > 0
+            ? "Review"
+            : PartialCount > 0
+                ? "Partial"
+                : "Clear";
+
     public void Update(IEnumerable<CheckItemViewModel> checks)
     {
-        var categoryChecks = checks
-            .Where(c => c.Category.Equals(Name, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var categoryChecks = Name.Equals("All", StringComparison.OrdinalIgnoreCase)
+            ? checks.ToList()
+            : checks
+                .Where(c => c.Category.Equals(Name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
         Total = categoryChecks.Count;
         PassCount = categoryChecks.Count(c => c.Status == CheckStatus.Pass);
@@ -88,5 +102,6 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
         });
 
         Score = (int)Math.Round(earned / possible * 100, MidpointRounding.AwayFromZero);
+        OnPropertyChanged(nameof(HealthLabel));
     }
 }
