@@ -12,6 +12,8 @@
     <SolidColorBrush x:Key="BorderDim" Color="#22384a" />
     <SolidColorBrush x:Key="BorderBright" Color="#38566a" />
     <SolidColorBrush x:Key="ControlBorder" Color="#547489" />
+    <SolidColorBrush x:Key="ScrollThumb" Color="#6f8da0" />
+    <SolidColorBrush x:Key="FocusRing" Color="#f8fafc" />
     <SolidColorBrush x:Key="TextMuted" Color="#9aa7bd" />
     <SolidColorBrush x:Key="TextPrimary" Color="#e5e7eb" />
     <SolidColorBrush x:Key="TextSecondary" Color="#c6d0df" />
@@ -77,11 +79,13 @@
 
     <!-- ScrollBar Style -->
     <Style x:Key="DarkScrollBarThumb" TargetType="Thumb">
+        <Setter Property="MinWidth" Value="24" />
+        <Setter Property="MinHeight" Value="24" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Border x:Name="ThumbBorder"
-                            Background="{StaticResource BorderDim}"
+                            Background="{StaticResource ScrollThumb}"
                             CornerRadius="6" />
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -110,7 +114,8 @@
 
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="{StaticResource PanelBg}" />
-        <Setter Property="Foreground" Value="{StaticResource BorderDim}" />
+        <Setter Property="Foreground" Value="{StaticResource ScrollThumb}" />
+        <Setter Property="Width" Value="24" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollBar">
@@ -134,6 +139,8 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="Orientation" Value="Horizontal">
                             <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
+                            <Setter Property="Width" Value="Auto" />
+                            <Setter Property="Height" Value="24" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45" />
@@ -191,6 +198,7 @@
     <Style x:Key="DarkCheckBox" TargetType="CheckBox">
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
         <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="MinHeight" Value="32" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
@@ -219,7 +227,8 @@
                             <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Accent}" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Accent}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource FocusRing}" />
+                            <Setter TargetName="Box" Property="BorderThickness" Value="2" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Box" Property="Background" Value="{StaticResource Accent}" />
@@ -469,7 +478,8 @@
                             <Setter Property="Background" Value="{StaticResource AccentHover}" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource OnAccent}" />
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource WindowBg}" />
+                            <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter Property="Background" Value="{StaticResource AccentPressed}" />

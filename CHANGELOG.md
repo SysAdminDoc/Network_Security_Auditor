@@ -2,6 +2,16 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## Unreleased
+
+### Accessibility
+- Fixed: Check and category list items now announce meaningful security content instead of view-model class names, and live readiness, progress, export, filtered-count, grade, and persistence regions expose their changing values.
+- Changed: Scrollbar thumbs and keyboard focus boundaries now meet component-contrast targets, with larger scrollbar and privacy-toggle hit areas plus automated WPF token-contrast coverage.
+- Added: Invalid remediation dates now expose a persistent, assertive inline validation message in addition to visual error styling.
+
+### UX
+- Fixed: Category progress treats not-applicable checks as completed and never labels a partially completed category as clear.
+
 ## [v5.3.1 / v4.11.2] - 2026-07-09
 
 ### UX

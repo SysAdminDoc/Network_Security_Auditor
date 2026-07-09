@@ -19,6 +19,7 @@ public partial class CheckItemViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(StatusBrushKey))]
     [NotifyPropertyChangedFor(nameof(StatusForegroundBrushKey))]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
+    [NotifyPropertyChangedFor(nameof(AccessibilitySummary))]
     private CheckStatus _status = CheckStatus.NotAssessed;
 
     [ObservableProperty]
@@ -41,6 +42,7 @@ public partial class CheckItemViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DurationDisplay))]
+    [NotifyPropertyChangedFor(nameof(AccessibilitySummary))]
     private double _durationMs;
 
     public string StatusLabel => Status switch
@@ -53,6 +55,9 @@ public partial class CheckItemViewModel : ViewModelBase
     public string DurationDisplay => DurationMs > 0
         ? $"{DurationMs:0} ms"
         : "--";
+
+    public string AccessibilitySummary =>
+        $"{Id}. {SeverityLabel.ToLowerInvariant()} severity. {Label}. Category {Category}. Status {StatusLabel.ToLowerInvariant()}. Runtime {(DurationMs > 0 ? DurationDisplay : "not run")}.";
 
     public string StatusBrushKey => Status switch
     {

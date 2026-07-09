@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:NetworkSecurityAuditor.ViewModels"
         xmlns:models="clr-namespace:NetworkSecurityAuditor.Models"
+        xmlns:a11y="clr-namespace:NetworkSecurityAuditor.Accessibility"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="Network Security Auditor"
         Width="1440" Height="900"
@@ -185,13 +186,24 @@
                             </StackPanel>
                             <StackPanel Grid.Column="2">
                                 <TextBlock Text="DUE DATE" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
-                                <TextBox Text="{Binding RemediationDueDate, StringFormat={}{0:yyyy-MM-dd}, TargetNullValue='', UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
+                                <TextBox x:Name="InspectorDueDateInput"
+                                         Text="{Binding RemediationDueDate, StringFormat={}{0:yyyy-MM-dd}, TargetNullValue='', UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
                                          Style="{StaticResource DarkTextBox}"
                                          ToolTip="Use yyyy-MM-dd. Invalid dates are highlighted and not saved."
                                          AutomationProperties.HelpText="Use yyyy-MM-dd. Invalid dates are highlighted and not saved."
                                          AutomationProperties.AutomationId="InspectorDueDateTextBox"
-                                         AutomationProperties.Name="{Binding Id, StringFormat='Remediation due date for {0}'}" />
+                                         AutomationProperties.Name="{Binding Id, StringFormat='Remediation due date for {0}'}"
+                                         AutomationProperties.ItemStatus="{Binding (Validation.Errors)[0].ErrorContent, RelativeSource={RelativeSource Self}}" />
                                 <TextBlock Text="yyyy-MM-dd" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="0,4,0,0" />
+                                <TextBlock Text="{Binding (Validation.Errors)[0].ErrorContent, ElementName=InspectorDueDateInput}"
+                                           Foreground="{StaticResource ProgressBad}"
+                                           FontSize="10"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"
+                                           Visibility="{Binding (Validation.HasError), ElementName=InspectorDueDateInput, Converter={StaticResource BoolToVis}}"
+                                           AutomationProperties.LiveSetting="Assertive"
+                                           AutomationProperties.Name="{Binding (Validation.Errors)[0].ErrorContent, ElementName=InspectorDueDateInput}"
+                                           a11y:LiveRegion.Announcement="{Binding (Validation.Errors)[0].ErrorContent, ElementName=InspectorDueDateInput}" />
                             </StackPanel>
                         </Grid>
 
@@ -297,6 +309,7 @@
                          AutomationProperties.Name="Category progress navigation">
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding AccessibilitySummary}" />
                             <Setter Property="Padding" Value="0" />
                             <Setter Property="Margin" Value="0,0,0,6" />
                             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -391,7 +404,7 @@
                                        Foreground="{StaticResource TextPrimary}"
                                        FontWeight="SemiBold"
                                        AutomationProperties.AutomationId="FilteredCheckCount"
-                                       AutomationProperties.Name="Filtered check count" />
+                                       AutomationProperties.Name="{Binding VisibleChecksDisplay, StringFormat='Filtered checks: {0}'}" />
                             <TextBlock Text="{Binding OutcomeSummaryDisplay}"
                                        Foreground="{StaticResource TextMuted}"
                                        FontSize="11"
@@ -490,7 +503,8 @@
                                            ToolTip="{Binding PreflightSummary}"
                                            AutomationProperties.LiveSetting="Polite"
                                            AutomationProperties.AutomationId="ScanReadinessStatus"
-                                           AutomationProperties.Name="Scan readiness" />
+                                           AutomationProperties.Name="{Binding ScanReadinessText, StringFormat='Scan readiness: {0}'}"
+                                           a11y:LiveRegion.Announcement="{Binding ScanReadinessText}" />
                             </StackPanel>
                         </Border>
 
@@ -514,7 +528,8 @@
                                                FontSize="11"
                                                AutomationProperties.LiveSetting="Polite"
                                                AutomationProperties.AutomationId="ScanProgressText"
-                                               AutomationProperties.Name="Scan progress" />
+                                               AutomationProperties.Name="{Binding ScanProgressDisplay, StringFormat='Scan progress: {0}'}"
+                                               a11y:LiveRegion.Announcement="{Binding ScanProgressDisplay}" />
                                 </StackPanel>
                                 <Grid Grid.Column="1" Width="52" Height="52" Margin="14,0,0,0">
                                     <Ellipse Stroke="{StaticResource TrackBg}" StrokeThickness="7" />
@@ -660,7 +675,7 @@
                                            FontWeight="Bold"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
-                                           AutomationProperties.Name="Overall security grade" />
+                                           AutomationProperties.Name="{Binding Grade, StringFormat='Overall security grade: {0}'}" />
                             </Grid>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="SECURITY POSTURE" Style="{StaticResource SectionLabel}" />
@@ -846,6 +861,7 @@
                             </ListBox.ItemsPanel>
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding AccessibilitySummary}" />
                                     <Setter Property="Padding" Value="0" />
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                     <Setter Property="Background" Value="Transparent" />
@@ -1102,7 +1118,7 @@
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"
                            AutomationProperties.AutomationId="ExportAvailabilityText"
-                           AutomationProperties.Name="Export availability" />
+                           AutomationProperties.Name="{Binding ExportAvailabilityText}" />
                 <TextBlock Grid.Column="1"
                            Text="{Binding StatePersistenceText}"
                            Foreground="{Binding StatePersistenceBrushKey, Converter={StaticResource ResourceBrush}}"
@@ -1110,7 +1126,8 @@
                            Margin="18,0,18,0"
                            AutomationProperties.LiveSetting="Polite"
                            AutomationProperties.AutomationId="StatePersistenceStatus"
-                           AutomationProperties.Name="Assessment save status" />
+                           AutomationProperties.Name="{Binding StatePersistenceText, StringFormat='Assessment save status: {0}'}"
+                           a11y:LiveRegion.Announcement="{Binding StatePersistenceText}" />
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <TextBlock Foreground="{StaticResource ProgressGood}" FontSize="12" Margin="0,0,12,0"
                                Text="{Binding PassCount, StringFormat=Pass: {0}}" />

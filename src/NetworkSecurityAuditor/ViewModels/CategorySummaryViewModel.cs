@@ -12,10 +12,15 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
     [NotifyPropertyChangedFor(nameof(HealthBrushKey))]
     [NotifyPropertyChangedFor(nameof(HealthLabel))]
+    [NotifyPropertyChangedFor(nameof(AccessibilitySummary))]
     private int _score;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
+    [NotifyPropertyChangedFor(nameof(CompletedCount))]
+    [NotifyPropertyChangedFor(nameof(CompletionDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthLabel))]
+    [NotifyPropertyChangedFor(nameof(AccessibilitySummary))]
     private int _total;
 
     [ObservableProperty]
@@ -23,6 +28,9 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
     [NotifyPropertyChangedFor(nameof(HealthBrushKey))]
     [NotifyPropertyChangedFor(nameof(HealthLabel))]
+    [NotifyPropertyChangedFor(nameof(CompletedCount))]
+    [NotifyPropertyChangedFor(nameof(CompletionDisplay))]
+    [NotifyPropertyChangedFor(nameof(AccessibilitySummary))]
     private int _passCount;
 
     [ObservableProperty]
@@ -30,6 +38,9 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
     [NotifyPropertyChangedFor(nameof(HealthBrushKey))]
     [NotifyPropertyChangedFor(nameof(HealthLabel))]
+    [NotifyPropertyChangedFor(nameof(CompletedCount))]
+    [NotifyPropertyChangedFor(nameof(CompletionDisplay))]
+    [NotifyPropertyChangedFor(nameof(AccessibilitySummary))]
     private int _partialCount;
 
     [ObservableProperty]
@@ -37,21 +48,36 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
     [NotifyPropertyChangedFor(nameof(HealthBrushKey))]
     [NotifyPropertyChangedFor(nameof(HealthLabel))]
+    [NotifyPropertyChangedFor(nameof(CompletedCount))]
+    [NotifyPropertyChangedFor(nameof(CompletionDisplay))]
+    [NotifyPropertyChangedFor(nameof(AccessibilitySummary))]
     private int _failCount;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
+    [NotifyPropertyChangedFor(nameof(CompletedCount))]
+    [NotifyPropertyChangedFor(nameof(CompletionDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthLabel))]
+    [NotifyPropertyChangedFor(nameof(AccessibilitySummary))]
     private int _notApplicableCount;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AssessedDisplay))]
+    [NotifyPropertyChangedFor(nameof(CompletedCount))]
+    [NotifyPropertyChangedFor(nameof(CompletionDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthLabel))]
+    [NotifyPropertyChangedFor(nameof(AccessibilitySummary))]
     private int _notAssessedCount;
 
     public int AssessedCount => PassCount + PartialCount + FailCount;
 
+    public int CompletedCount => AssessedCount + NotApplicableCount;
+
     public string ScoreDisplay => AssessedCount > 0 ? $"{Score}%" : "--";
 
-    public string AssessedDisplay => $"{AssessedCount}/{Total}";
+    public string AssessedDisplay => $"{CompletedCount}/{Total}";
+
+    public string CompletionDisplay => $"{CompletedCount} of {Total} completed";
 
     public string HealthBrushKey => AssessedCount == 0
         ? "StatusNeutral"
@@ -61,13 +87,20 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
                 ? "ProgressMid"
                 : "ProgressGood";
 
-    public string HealthLabel => AssessedCount == 0
-        ? "Open"
-        : FailCount > 0
-            ? "Review"
-            : PartialCount > 0
-                ? "Partial"
-                : "Clear";
+    public string HealthLabel => Total > 0 && NotApplicableCount == Total
+        ? "Not applicable"
+        : CompletedCount == 0
+            ? "Open"
+            : CompletedCount < Total
+                ? "In progress"
+                : FailCount > 0
+                    ? "Review"
+                    : PartialCount > 0
+                        ? "Partial"
+                        : "Clear";
+
+    public string AccessibilitySummary =>
+        $"{Name}. {CompletionDisplay}. {HealthLabel}. {(AssessedCount > 0 ? $"Score {Score} percent" : "Score not available")}.";
 
     public void Update(IEnumerable<CheckItemViewModel> checks)
     {

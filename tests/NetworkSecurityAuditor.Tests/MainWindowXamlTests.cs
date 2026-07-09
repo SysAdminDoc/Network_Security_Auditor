@@ -209,9 +209,12 @@ public class MainWindowXamlTests
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
 
         Assert.Contains("AutomationProperties.LiveSetting=\"Polite\"", xaml);
-        Assert.Contains("AutomationProperties.Name=\"Scan progress\"", xaml);
+        Assert.Contains("AutomationProperties.Name=\"{Binding ScanProgressDisplay, StringFormat='Scan progress: {0}'}\"", xaml);
         Assert.Contains("AutomationProperties.Name=\"No matching checks\"", xaml);
-        Assert.Contains("AutomationProperties.Name=\"Filtered check count\"", xaml);
+        Assert.Contains("AutomationProperties.Name=\"{Binding VisibleChecksDisplay, StringFormat='Filtered checks: {0}'}\"", xaml);
+        Assert.Contains("Value=\"{Binding AccessibilitySummary}\"", xaml);
+        Assert.Contains("a11y:LiveRegion.Announcement=\"{Binding ScanReadinessText}\"", xaml);
+        Assert.Contains("AutomationProperties.ItemStatus=\"{Binding (Validation.Errors)[0].ErrorContent, RelativeSource={RelativeSource Self}}\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"CategoryRail\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"ScanProfileSelector\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"StartScanButton\"", xaml);
@@ -296,6 +299,9 @@ public class MainWindowXamlTests
         Assert.Contains("ControlTemplate TargetType=\"ComboBox\"", xaml);
         Assert.Contains("x:Name=\"PART_Popup\"", xaml);
         Assert.Contains("TargetType=\"ScrollBar\"", xaml);
+        Assert.Contains("x:Key=\"ScrollThumb\" Color=\"#6f8da0\"", xaml);
+        Assert.Contains("Property=\"MinHeight\" Value=\"24\"", xaml);
+        Assert.Contains("Property=\"MinHeight\" Value=\"32\"", xaml);
         Assert.Contains("ControlTemplate TargetType=\"ToolTip\"", xaml);
         Assert.Contains("ControlTemplate TargetType=\"ContextMenu\"", xaml);
     }

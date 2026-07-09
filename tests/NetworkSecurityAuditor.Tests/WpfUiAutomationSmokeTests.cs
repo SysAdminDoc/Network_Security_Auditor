@@ -44,8 +44,8 @@ public class WpfUiAutomationSmokeTests
             AssertNamedElement(window, "CategoryRail", "Category progress navigation", ControlType.List);
             AssertNamedElement(window, "PrivacyModeToggle", "Privacy mode", ControlType.CheckBox);
             AssertNamedElement(window, "ScanProfileSelector", "Scan profile selector", ControlType.ComboBox);
-            AssertNamedElement(window, "ScanReadinessStatus", "Scan readiness", ControlType.Text);
-            AssertNamedElement(window, "ScanProgressText", "Scan progress", ControlType.Text);
+            AssertElementNameStartsWith(window, "ScanReadinessStatus", "Scan readiness: ", ControlType.Text);
+            AssertElementNameStartsWith(window, "ScanProgressText", "Scan progress: ", ControlType.Text);
 
             var startButton = AssertNamedElement(window, "StartScanButton", "Start security scan", ControlType.Button);
             WaitForEnabled(startButton, WindowTimeout);
@@ -67,7 +67,10 @@ public class WpfUiAutomationSmokeTests
 
             AssertNamedElement(window, "StatusFilter", "Status filter", ControlType.ComboBox);
             AssertNamedElement(window, "CheckSearchBox", "Search checks", ControlType.Edit);
-            AssertNamedElement(window, "FilteredChecksList", "Filtered security checks", ControlType.List);
+            var filteredChecks = AssertNamedElement(window, "FilteredChecksList", "Filtered security checks", ControlType.List);
+            AssertListContainsReadableItem(filteredChecks, "BR01");
+            var categoryRail = WaitForElement(window, "CategoryRail", ElementTimeout);
+            AssertListContainsReadableItem(categoryRail, "All.");
             AssertElementNameStartsWith(window, "InspectorStatusSelector", "Status for ", ControlType.ComboBox);
             AssertElementNameStartsWith(window, "InspectorFindingsTextBox", "Findings for ", ControlType.Edit);
             AssertElementNameStartsWith(window, "InspectorEvidenceTextBox", "Evidence for ", ControlType.Edit);
@@ -75,8 +78,8 @@ public class WpfUiAutomationSmokeTests
             AssertElementNameStartsWith(window, "InspectorAssigneeTextBox", "Remediation assignee for ", ControlType.Edit);
             AssertElementNameStartsWith(window, "InspectorDueDateTextBox", "Remediation due date for ", ControlType.Edit);
             AssertNamedElement(window, "ActivityLogList", "Scan activity log");
-            AssertNamedElement(window, "ExportAvailabilityText", "Export availability", ControlType.Text);
-            AssertNamedElement(window, "StatePersistenceStatus", "Assessment save status", ControlType.Text);
+            AssertElementNameStartsWith(window, "ExportAvailabilityText", "Run a scan", ControlType.Text);
+            AssertElementNameStartsWith(window, "StatePersistenceStatus", "Assessment save status: ", ControlType.Text);
         }
         finally
         {
@@ -107,6 +110,15 @@ public class WpfUiAutomationSmokeTests
         Assert.StartsWith(expectedPrefix, element.Current.Name, StringComparison.Ordinal);
         Assert.Equal(expectedControlType, element.Current.ControlType);
         return element;
+    }
+
+    private static void AssertListContainsReadableItem(AutomationElement list, string expectedContent)
+    {
+        var itemCondition = new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem);
+        var items = list.FindAll(TreeScope.Descendants, itemCondition).Cast<AutomationElement>().ToArray();
+        Assert.NotEmpty(items);
+        Assert.Contains(items, item => item.Current.Name.Contains(expectedContent, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(items, item => item.Current.Name.Contains("NetworkSecurityAuditor.ViewModels", StringComparison.Ordinal));
     }
 
     private static AutomationElement WaitForMainWindow(Process process, TimeSpan timeout)
