@@ -8,9 +8,9 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>NetworkSecurityAuditor</RootNamespace>
     <AssemblyName>NetworkSecurityAuditor</AssemblyName>
-    <Version>5.2.7</Version>
-    <AssemblyVersion>5.2.7.0</AssemblyVersion>
-    <FileVersion>5.2.7.0</FileVersion>
+    <Version>5.2.8</Version>
+    <AssemblyVersion>5.2.8.0</AssemblyVersion>
+    <FileVersion>5.2.8.0</FileVersion>
     <ApplicationIcon>..\..\icon.ico</ApplicationIcon>
   </PropertyGroup>
 

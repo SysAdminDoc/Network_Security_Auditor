@@ -1,4 +1,4 @@
-namespace NetworkSecurityAuditor.Tests;
+﻿namespace NetworkSecurityAuditor.Tests;
 
 public class ReleaseToolingTests
 {
@@ -46,7 +46,7 @@ public class ReleaseToolingTests
 
         Assert.Contains("AssemblyInformationalVersionAttribute", source);
         Assert.DoesNotContain("?? \"5.", source);
-        Assert.Equal("5.2.7", VersionInfo.Version);
+        Assert.Equal("5.2.8", VersionInfo.Version);
     }
 
     [Fact]

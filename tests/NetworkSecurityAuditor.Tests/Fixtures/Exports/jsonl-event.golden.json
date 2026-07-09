@@ -1,7 +1,7 @@
-{
+﻿{
   "event_type": "security_finding",
   "tool": "NetworkSecurityAuditor",
-  "tool_version": "5.2.7",
+  "tool_version": "5.2.8",
   "timestamp": "2026-07-08T00:00:00Z",
   "host": "HOST01",
   "os": "Windows 11 Enterprise",

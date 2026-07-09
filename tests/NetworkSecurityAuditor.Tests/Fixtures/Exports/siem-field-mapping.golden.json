@@ -1,6 +1,6 @@
-{
+﻿{
   "tool": "NetworkSecurityAuditor",
-  "version": "5.2.7",
+  "version": "5.2.8",
   "source_format": "JSONL (one event per finding)",
   "source_file_pattern": "*_siem.jsonl",
   "fields": [

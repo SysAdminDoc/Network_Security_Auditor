@@ -1,4 +1,4 @@
-{
+﻿{
   "class_uid": 2003,
   "class_name": "Compliance Finding",
   "category_uid": 2,
@@ -17,7 +17,7 @@
     "version": "1.4.0",
     "product": {
       "name": "Network Security Auditor",
-      "version": "5.2.7",
+      "version": "5.2.8",
       "vendor_name": "SysAdminDoc"
     }
   },
