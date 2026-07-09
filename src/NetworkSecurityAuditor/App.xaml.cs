@@ -48,7 +48,8 @@ public partial class App : Application
                     {
                         FileName = exePath,
                         UseShellExecute = true,
-                        Verb = "runas"
+                        Verb = "runas",
+                        WorkingDirectory = System.Environment.CurrentDirectory
                     };
                     foreach (var arg in e.Args)
                         psi.ArgumentList.Add(arg);
@@ -64,6 +65,13 @@ public partial class App : Application
         {
             AttachConsole(-1);
             Console.Error.WriteLine("WARNING: Headless mode is running without elevation; checks requiring administrator rights may return limited evidence.");
+        }
+
+        if (_headlessMode && args.ParseWarnings.Count > 0)
+        {
+            AttachConsole(-1);
+            foreach (var warning in args.ParseWarnings)
+                Console.Error.WriteLine($"WARNING: {warning}");
         }
 
         if (args.Dashboard)
@@ -237,7 +245,7 @@ public partial class App : Application
         if (!Directory.Exists(inputDir))
         {
             Console.WriteLine($"  ERROR: Input directory not found: {inputDir}");
-            return 1;
+            return (int)ExitCode.InputPathUnavailable;
         }
 
         Console.WriteLine($"  Input: {inputDir}");
@@ -603,55 +611,85 @@ public partial class App : Application
 
             if (arg.Equals("--dashboard", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Dashboard", StringComparison.OrdinalIgnoreCase))
                 result.Dashboard = true;
-            else if ((arg.Equals("--input-dir", StringComparison.OrdinalIgnoreCase) || arg.Equals("-InputDir", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
-                result.InputDir = args[++i];
-            else if ((arg.Equals("--stale-days", StringComparison.OrdinalIgnoreCase) || arg.Equals("-StaleDays", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
+            else if (arg.Equals("--input-dir", StringComparison.OrdinalIgnoreCase) || arg.Equals("-InputDir", StringComparison.OrdinalIgnoreCase))
             {
-                if (int.TryParse(args[++i], out var sd))
+                if (TryReadValue(args, ref i, arg, result, out var value))
+                    result.InputDir = value;
+            }
+            else if (arg.Equals("--stale-days", StringComparison.OrdinalIgnoreCase) || arg.Equals("-StaleDays", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryReadValue(args, ref i, arg, result, out var value) && int.TryParse(value, out var sd))
                     result.StaleDays = sd;
+                else if (i < args.Length && !result.ParseWarnings.Contains($"{arg} requires a value."))
+                    result.ParseWarnings.Add($"{arg} must be an integer.");
             }
             else if (arg.Equals("--silent", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Silent", StringComparison.OrdinalIgnoreCase))
                 result.Silent = true;
-            else if (arg.Equals("--no-elevate", StringComparison.OrdinalIgnoreCase))
+            else if (arg.Equals("--no-elevate", StringComparison.OrdinalIgnoreCase) || arg.Equals("-NoElevate", StringComparison.OrdinalIgnoreCase))
                 result.NoElevate = true;
             else if (arg.Equals("--uia-background", StringComparison.OrdinalIgnoreCase))
                 result.UiaBackground = true;
-            else if (arg.Equals("--render-screenshot", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            else if (arg.Equals("--render-screenshot", StringComparison.OrdinalIgnoreCase))
             {
-                result.UiaBackground = true;
-                result.RenderScreenshotPath = args[++i];
+                if (TryReadValue(args, ref i, arg, result, out var value))
+                {
+                    result.UiaBackground = true;
+                    result.RenderScreenshotPath = value;
+                }
             }
             else if (arg.Equals("--no-internet", StringComparison.OrdinalIgnoreCase) || arg.Equals("-NoInternet", StringComparison.OrdinalIgnoreCase))
                 result.NoInternet = true;
             else if (arg.Equals("--privacy", StringComparison.OrdinalIgnoreCase) || arg.Equals("-PrivacyMode", StringComparison.OrdinalIgnoreCase))
                 result.PrivacyMode = true;
-            else if ((arg.Equals("--profile", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ScanProfile", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
+            else if (arg.Equals("--profile", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ScanProfile", StringComparison.OrdinalIgnoreCase))
             {
-                if (Enum.TryParse<ScanProfileType>(args[++i], true, out var profile))
+                if (TryReadValue(args, ref i, arg, result, out var value) && Enum.TryParse<ScanProfileType>(value, true, out var profile))
                     result.ScanProfile = profile;
+                else if (i < args.Length && !result.ParseWarnings.Contains($"{arg} requires a value."))
+                    result.ParseWarnings.Add($"{arg} must be a valid scan profile.");
             }
-            else if ((arg.Equals("--output", StringComparison.OrdinalIgnoreCase) || arg.Equals("-OutputPath", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
-                result.OutputPath = args[++i];
-            else if ((arg.Equals("--client", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Client", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
-                result.Client = args[++i];
-            else if ((arg.Equals("--auditor", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Auditor", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
-                result.Auditor = args[++i];
-            else if ((arg.Equals("--report-tier", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ReportTier", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
+            else if (arg.Equals("--output", StringComparison.OrdinalIgnoreCase) || arg.Equals("-OutputPath", StringComparison.OrdinalIgnoreCase))
             {
-                if (Enum.TryParse<ReportTier>(args[++i], true, out var rt))
-                    result.ReportTier = rt;
+                if (TryReadValue(args, ref i, arg, result, out var value))
+                    result.OutputPath = value;
             }
-            else if ((arg.Equals("--waivers", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Waivers", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
-                result.WaiversPath = args[++i];
-            else if ((arg.Equals("--branding", StringComparison.OrdinalIgnoreCase) || arg.Equals("-BrandingConfig", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
-                result.BrandingPath = args[++i];
-            else if ((arg.Equals("--intune-stig-import", StringComparison.OrdinalIgnoreCase) || arg.Equals("-IntuneStigImportPath", StringComparison.OrdinalIgnoreCase)) && i + 1 < args.Length)
-                result.IntuneStigImportPath = args[++i];
+            else if (arg.Equals("--client", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Client", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryReadValue(args, ref i, arg, result, out var value))
+                    result.Client = value;
+            }
+            else if (arg.Equals("--auditor", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Auditor", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryReadValue(args, ref i, arg, result, out var value))
+                    result.Auditor = value;
+            }
+            else if (arg.Equals("--report-tier", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ReportTier", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryReadValue(args, ref i, arg, result, out var value) && Enum.TryParse<ReportTier>(value, true, out var rt))
+                    result.ReportTier = rt;
+                else if (i < args.Length && !result.ParseWarnings.Contains($"{arg} requires a value."))
+                    result.ParseWarnings.Add($"{arg} must be a valid report tier.");
+            }
+            else if (arg.Equals("--waivers", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Waivers", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryReadValue(args, ref i, arg, result, out var value))
+                    result.WaiversPath = value;
+            }
+            else if (arg.Equals("--branding", StringComparison.OrdinalIgnoreCase) || arg.Equals("-BrandingConfig", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryReadValue(args, ref i, arg, result, out var value))
+                    result.BrandingPath = value;
+            }
+            else if (arg.Equals("--intune-stig-import", StringComparison.OrdinalIgnoreCase) || arg.Equals("-IntuneStigImportPath", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryReadValue(args, ref i, arg, result, out var value))
+                    result.IntuneStigImportPath = value;
+            }
             else if (arg.Equals("--export-csv", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportCSV", StringComparison.OrdinalIgnoreCase))
                 result.ExportCsv = true;
             else if (arg.Equals("--export-jsonl", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportJSONL", StringComparison.OrdinalIgnoreCase))
                 result.ExportJsonl = true;
-            else if (arg.Equals("--export-defectdojo", StringComparison.OrdinalIgnoreCase))
+            else if (arg.Equals("--export-defectdojo", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportDefectDojo", StringComparison.OrdinalIgnoreCase))
                 result.ExportDefectDojo = true;
             else if (arg.Equals("--export-sarif", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportSARIF", StringComparison.OrdinalIgnoreCase))
                 result.ExportSarif = true;
@@ -689,10 +727,30 @@ public partial class App : Application
                 result.ExportCmmc = true;
                 result.ExportPdf = true;
             }
+            else if (LooksLikeFlag(arg))
+            {
+                result.ParseWarnings.Add($"Unknown argument ignored: {arg}");
+            }
         }
 
         return result;
     }
+
+    private static bool TryReadValue(string[] args, ref int index, string optionName, CliArgs result, out string value)
+    {
+        value = "";
+        if (index + 1 >= args.Length || LooksLikeFlag(args[index + 1]))
+        {
+            result.ParseWarnings.Add($"{optionName} requires a value.");
+            return false;
+        }
+
+        value = args[++index];
+        return true;
+    }
+
+    private static bool LooksLikeFlag(string value) =>
+        value.StartsWith("-", StringComparison.Ordinal);
 
     internal sealed class CliArgs
     {
@@ -726,5 +784,6 @@ public partial class App : Application
         public string WaiversPath = "";
         public string BrandingPath = "";
         public string IntuneStigImportPath = "";
+        public List<string> ParseWarnings = [];
     }
 }

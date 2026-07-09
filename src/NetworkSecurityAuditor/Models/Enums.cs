@@ -73,5 +73,6 @@ public enum ExitCode
     Green = 0,
     ImmediateAlert = 1,
     ReviewNeeded = 2,
-    ComplianceAlert = 3
+    ComplianceAlert = 3,
+    InputPathUnavailable = 64
 }

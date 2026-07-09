@@ -98,6 +98,11 @@ Run the C# silent mode:
 .\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --profile Full --output C:\Reports --intune-stig-import C:\Exports\stig-audit.json --export-oscal --export-csv
 ```
 
+Use `Start-Process -Wait -PassThru` when automating C# headless runs from
+PowerShell so Windows reports the WPF executable's exit code. Missing dashboard
+input folders return 64; malformed or unknown headless arguments are written as
+warnings rather than consuming the next switch as a value.
+
 Build the local C# installable artifact:
 
 ```powershell

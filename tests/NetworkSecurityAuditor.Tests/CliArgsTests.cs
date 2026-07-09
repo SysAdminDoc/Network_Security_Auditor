@@ -27,6 +27,13 @@ public class CliArgsTests
     }
 
     [Fact]
+    public void NoElevate_PowerShell_Alias_Parsed()
+    {
+        var args = App.ParseArgs(["-NoElevate"]);
+        Assert.True(args.NoElevate);
+    }
+
+    [Fact]
     public void NoInternet_Flag_Parsed()
     {
         var args = App.ParseArgs(["--no-internet"]);
@@ -146,8 +153,9 @@ public class CliArgsTests
     [Fact]
     public void Individual_Export_Flags()
     {
-        var args = App.ParseArgs(["--export-csv", "--export-sarif", "--export-pdf", "--export-oscal-poam"]);
+        var args = App.ParseArgs(["--export-csv", "--export-sarif", "--export-pdf", "--export-oscal-poam", "-ExportDefectDojo"]);
         Assert.True(args.ExportCsv);
+        Assert.True(args.ExportDefectDojo);
         Assert.True(args.ExportSarif);
         Assert.True(args.ExportPdf);
         Assert.True(args.ExportOscalPoam);
@@ -156,10 +164,42 @@ public class CliArgsTests
     }
 
     [Fact]
-    public void Unknown_Flags_Ignored()
+    public void Unknown_Flags_Are_Warned_And_Known_Flags_Still_Parse()
     {
         var args = App.ParseArgs(["--unknown", "--silent", "--bogus"]);
         Assert.True(args.Silent);
+        Assert.Contains("Unknown argument ignored: --unknown", args.ParseWarnings);
+        Assert.Contains("Unknown argument ignored: --bogus", args.ParseWarnings);
+    }
+
+    [Fact]
+    public void Value_Flag_Does_Not_Consume_Following_Flag()
+    {
+        var args = App.ParseArgs(["--client", "--export-csv"]);
+
+        Assert.Equal("", args.Client);
+        Assert.True(args.ExportCsv);
+        Assert.Contains("--client requires a value.", args.ParseWarnings);
+    }
+
+    [Fact]
+    public void Last_Position_Value_Flag_Adds_Warning()
+    {
+        var args = App.ParseArgs(["--output"]);
+
+        Assert.Equal("", args.OutputPath);
+        Assert.Contains("--output requires a value.", args.ParseWarnings);
+    }
+
+    [Fact]
+    public void Invalid_Enum_Value_Adds_Warning_And_Keeps_Default()
+    {
+        var args = App.ParseArgs(["--profile", "UnknownProfile", "--report-tier", "UnknownTier"]);
+
+        Assert.Equal(ScanProfileType.Full, args.ScanProfile);
+        Assert.Equal(ReportTier.All, args.ReportTier);
+        Assert.Contains("--profile must be a valid scan profile.", args.ParseWarnings);
+        Assert.Contains("--report-tier must be a valid report tier.", args.ParseWarnings);
     }
 
     [Fact]
@@ -225,6 +265,23 @@ public class CliArgsTests
     }
 
     [Fact]
+    public void Dashboard_Missing_Input_Uses_Distinct_Exit_Code()
+    {
+        Assert.Equal(64, (int)ExitCode.InputPathUnavailable);
+
+        var source = ReadSourceFile("src", "NetworkSecurityAuditor", "App.xaml.cs");
+        Assert.Contains("return (int)ExitCode.InputPathUnavailable;", source);
+    }
+
+    [Fact]
+    public void Elevated_Relaunch_Preserves_Working_Directory()
+    {
+        var source = ReadSourceFile("src", "NetworkSecurityAuditor", "App.xaml.cs");
+
+        Assert.Contains("WorkingDirectory = System.Environment.CurrentDirectory", source);
+    }
+
+    [Fact]
     public async Task Headless_Exception_Returns_Alert_ExitCode_And_Writes_Error()
     {
         using var errorWriter = new StringWriter();
@@ -260,5 +317,24 @@ public class CliArgsTests
         Assert.DoesNotContain(Path.AltDirectorySeparatorChar, segment);
         Assert.DoesNotContain(':', segment);
         Assert.StartsWith("ACME", segment);
+    }
+
+    private static string ReadSourceFile(params string[] segments)
+    {
+        var pathSegments = new string[segments.Length + 1];
+        pathSegments[0] = FindRepoRoot();
+        Array.Copy(segments, 0, pathSegments, 1, segments.Length);
+        return File.ReadAllText(Path.Combine(pathSegments));
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "NetworkSecurityAuditor.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir?.FullName ?? throw new DirectoryNotFoundException("Could not locate NetworkSecurityAuditor.slnx from test output directory.");
     }
 }
