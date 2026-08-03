@@ -1442,51 +1442,22 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 
 ### P3 — Medium / Low
 
-**Checks**
-- [ ] P3 — NA03 wireless netsh parse is English-locale-dependent + substring `Contains` false matches. `NA03:20-24,73-77`.
-- [ ] P3 — IA05 `Math.Abs(maxPwdAgeTicks)` throws `OverflowException` on `long.MinValue` ("never" sentinel) -> NA. `IA05:59,126`. Use unchecked negation / handle MinValue.
-
 **App / services**
-- [ ] P3 — `IntuneManaged` true whenever the label `"EnrollmentType :"` appears regardless of value (`= none` still true). `EnvironmentDetector.cs:174-175`.
-- [ ] P3 — `dsregcmd` `ReadToEnd()` blocks before `WaitForExit(5000)` -> dead timeout, process never killed, handle leak. `EnvironmentDetector.cs:170-171`.
-- [ ] P3 — Value-taking flags consume a following flag as their value (`--client --export-csv`); last-position value flag silently ignored; unknown flags silently ignored. `App.xaml.cs:405-439`.
-- [ ] P3 — Alias inconsistency: `--no-elevate` has no `-NoElevate`; `--export-defectdojo` has no `-ExportDefectDojo`. `App.xaml.cs:414-415,444-445`.
-- [ ] P3 — Elevated relaunch (`runas`) doesn't preserve working directory -> relative `--output`/`--waivers`/`--branding` resolve under system32. `App.xaml.cs:38-47`.
-- [ ] P3 — Dashboard "input dir not found" exits 1, colliding with `ExitCode.ImmediateAlert`. `App.xaml.cs:90` vs `Enums.cs:71-77`. Use a distinct code (64+).
-- [ ] P3 — Progress denominators use `profileIds.Length` even when AD checks are filtered -> silent output ends at "[58/70]" looking aborted. `App.xaml.cs:163`, `MainViewModel.cs:223-228`, `CheckRunner.cs:103-104`.
-- [ ] P3 — All-N/A run reports 0%/"F"/exit 1 ("no data" == "critical"). `App.xaml.cs:351-353`, `RiskScoreEngine.cs:35`. Distinct handling when `possible == 0`.
-- [ ] P3 — Hardcoded `C:\Windows`/`C:\Program Files\LAPS` break on non-C: SystemRoot. `EnvironmentDetector.cs:93-110,227`. Use `Environment.GetFolderPath`.
-- [ ] P3 — `VersionInfo.cs:8` duplicates the csproj `"5.2.4"` literal (stale in null-assembly path). Derive from `AssemblyInformationalVersion`.
-- [ ] P3 — `AttachConsole(-1)` return unchecked; output interleaves with the shell prompt; document that exit codes need `Start-Process -Wait`. `App.xaml.cs:79,119`.
-
-**Export**
-- [ ] P3 — Culture-sensitive calendar date formatting across exporters (no `CultureInfo.InvariantCulture` on `ToString("yyyy-MM-dd")`, RemediationDueDate, timestamps). DefectDojoExporter:68/95, JsonExporter:77, HtmlReportGenerator:52/63/197, DashboardGenerator:147/166, CmmcReportGenerator:43, MainViewModel:533.
-- [ ] P3 — Privacy-mode GUI export copy drops `DurationMs` (0 for every finding). `MainViewModel.cs:255-272`.
-- [ ] P3 — CMMC control `EvidenceSummary` is whatever check iterated last, regardless of status. `CmmcReportGenerator.cs:147-148`.
-- [ ] P3 — PdfExporter redirects stdout without draining (pipe-deadlock risk) and `File.Exists` passes on a stale PDF from a prior run. `PdfExporter.cs:28,39-52`. Delete target before launch; don't redirect (or drain).
-- [ ] P3 — No atomic writes: every artifact uses `File.WriteAllTextAsync` (open-truncate) -> partial/corrupt files on mid-write failure. All export call sites. Fix: write `.tmp` then `File.Move(..., overwrite:true)`.
-- [ ] P3 — `--output` dir-vs-file ambiguity + raw `--client` in filename (`\`,`:`,`..\`). `App.xaml.cs:234-239`. Sanitize.
 
 **Data / scoring / models**
-- [ ] P3 — NP05 `Weight=8` with `Severity.High(=7)` — sole Weight!=Severity outlier (legacy carryover; double-counted by RiskScoreEngine). `CheckCatalog.cs:645-646`.
-- [ ] P3 — "Physical Security" weight+accent for a category with zero checks (dead fossil behind the PS mapping drift). `CategoryWeights.cs:25,57`. Remove.
-- [ ] P3 — E8/CyberEssentials profile membership inconsistent with framework columns (IA01/IA02 in E8/CE profiles but no E8/CE column; NA03 has an E8 column but isn't in the E8 profile). `FrameworkMappings.cs:14-37,453` vs `ScanProfiles.cs:82-90`.
-- [ ] P3 — Banker's rounding at grade boundaries (`Math.Round` ToEven; 89.5->90 but 88.5->88). RiskScoreEngine:35, RansomwareReadinessEngine:54, DomainMaturityEngine:52/56. Use `MidpointRounding.AwayFromZero`.
-- [ ] P3 — Waiver expiry compares unspecified-kind JSON `DateTime` against `DateTime.UtcNow` (flips by UTC offset). `Models/RiskWaiver.cs:16`. Normalize to UTC date / `DateOnly`.
 
 **Legacy PS1**
-- [ ] P3 — Successful fleet results discarded as TimedOut (wall-clock checked at processing time, not completion). `NetworkSecurityAudit.ps1:363-374`. Use `$meta.Job.PSEndTime - StartTime`; only `Stopped` = timeout.
-- [ ] P3 — Sensitive audit residue (full findings/SIEM/CSV) left in each remote host's TEMP with fixed filenames; `Stop-Job` doesn't kill the remote process. `NetworkSecurityAudit.ps1:346-353`. Unique temp names + `finally { Remove-Item }` + best-effort remote cleanup.
-- [ ] P3 — No validation on `-ThrottleLimit` / `-PerHostTimeout` (`0`/negative -> busy-loop or instant timeout). `NetworkSecurityAudit.ps1:95-96,322,415`. `[ValidateRange(1,64)]` / `[ValidateRange(1,86400)]`.
-- [ ] P3 — Fleet aggregate math: `score -gt 0` filter excludes real 0%/grade-F hosts from `avg_score`/`worst_host`; all-blank CSV -> `exit 1` for a fleet that scanned nothing. `NetworkSecurityAudit.ps1:435-437`. Track a `has_score` flag; error when count 0.
-- [ ] P3 — Branding `website` href not scheme-validated (`javascript:` survives HtmlEncode). `NetworkSecurityAudit.ps1:11154,11821`. Require `^https?://`.
-- [ ] P3 — Fleet child scans silently ignore `-PrivacyMode`/`-Auditor`/`-ReportTier`/`-Export*` (privacy fleet produces unredacted per-host JSON). `NetworkSecurityAudit.ps1:335,349`. Forward the flags.
-- [ ] P3 — Dead `$sessionOpts` (built with credential, never used). `NetworkSecurityAudit.ps1:316-317`. Delete.
-- [ ] P3 — Branding config fail-silent: missing `-BrandingConfig` path ignored with no warning; raw base64 without `data:` prefix embedded -> broken `<img>`. `NetworkSecurityAudit.ps1:257,262-263`.
 
 **GUI microcopy / a11y (P3)**
-- [ ] P3 — Status dropdown shows raw enum names "NotAssessed"/"NA" (friendly labels exist in `StatusFilters`). `MainWindow.xaml:15-19,226-231`.
-- [ ] P3 — "…not implemented in the C# rewrite yet… Use the PowerShell artifact" leaks porting history to users. `MainViewModel.cs:200`, `App.xaml.cs:146-147`.
-- [ ] P3 — Status bar "N/A: {n}" lumps `NA` and `NotAssessed` (reads "N/A: 69" at launch). `MainViewModel.cs:587`, `MainWindow.xaml:371`.
-- [ ] P3 — No keyboard-focus visuals in custom templates (`AccentButton`/`SecondaryButton`/`DarkListBoxItem` lack `IsKeyboardFocused`). `Themes.xaml:51-139`.
-- [ ] P3 — Card input fields (Findings/Evidence/Notes/Assignee/DatePicker x69) have no `AutomationProperties.Name` for screen readers. `MainWindow.xaml:257-315`.
+
+## Research-Driven Additions
+
+### P0
+
+### P1
+
+### P2
+
+- [ ] P2 — Add live enterprise validation harness for AD, Intune, and PSRemoting paths
+  Why: Domain controller, Intune import/export, and remote fleet-scan behavior could not be exercised end-to-end on this machine without enterprise targets or credentials.
+  Where: `src/NetworkSecurityAuditor/Checks/`, `src/NetworkSecurityAuditor/Services/IntuneStigAuditImporter.cs`, `NetworkSecurityAudit.ps1`, `tests/NetworkSecurityAuditor.Tests/`
