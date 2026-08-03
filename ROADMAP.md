@@ -1457,7 +1457,3 @@ Items completed in v5.2.0: OSCAL UUID fix, CSV quoting fix, version centralizati
 ### P1
 
 ### P2
-
-- [ ] P2 — Add live enterprise validation harness for AD, Intune, and PSRemoting paths
-  Why: Domain controller, Intune import/export, and remote fleet-scan behavior could not be exercised end-to-end on this machine without enterprise targets or credentials.
-  Where: `src/NetworkSecurityAuditor/Checks/`, `src/NetworkSecurityAuditor/Services/IntuneStigAuditImporter.cs`, `NetworkSecurityAudit.ps1`, `tests/NetworkSecurityAuditor.Tests/`

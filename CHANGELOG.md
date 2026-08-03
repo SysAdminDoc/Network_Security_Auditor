@@ -2,7 +2,7 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
-## Unreleased
+## [v5.3.2 / v4.11.3] - 2026-08-03
 
 ### Accessibility
 - Fixed: Check and category list items now announce meaningful security content instead of view-model class names, and live readiness, progress, export, filtered-count, grade, and persistence regions expose their changing values.
@@ -11,6 +11,9 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ### UX
 - Fixed: Category progress treats not-applicable checks as completed and never labels a partially completed category as clear.
+
+### Maintenance
+- Finalized the actionable roadmap. Live enterprise validation for AD, Intune, and PSRemoting remains documented in the blocked queue because it requires external targets or credentials.
 
 ## [v5.3.1 / v4.11.2] - 2026-07-09
 

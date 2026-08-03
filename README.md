@@ -7,11 +7,11 @@ The repo also contains an active .NET 10/WPF C# rewrite under `src/NetworkSecuri
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11%2FServer-0078D4?logo=windows)
-![PowerShell Version](https://img.shields.io/badge/PowerShell_Version-4.11.2-brightgreen)
-![C%23 Rewrite](https://img.shields.io/badge/C%23_Rewrite-5.3.1-blueviolet)
+![PowerShell Version](https://img.shields.io/badge/PowerShell_Version-4.11.3-brightgreen)
+![C%23 Rewrite](https://img.shields.io/badge/C%23_Rewrite-5.3.2-blueviolet)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-![Network Security Auditor v5.3.1 premium workstation](https://github.com/SysAdminDoc/Network_Security_Auditor/releases/download/v5.3.1/network-security-auditor-v5.3.1.png)
+![Network Security Auditor v5.3.2 premium workstation](https://github.com/SysAdminDoc/Network_Security_Auditor/releases/download/v5.3.2/network-security-auditor-v5.3.2.png)
 
 The C# workstation uses a resizable checks-and-inspector layout, live environment readiness, neutral unscanned posture states, accessible focus treatment, assessment save-status feedback, and a persistent activity console. Scans remain disabled until environment detection and pre-flight checks finish.
 
