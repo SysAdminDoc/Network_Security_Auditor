@@ -2,7 +2,10 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
-## [v5.3.2 / v4.11.3] - 2026-08-03
+## [v5.3.3 / v4.11.4] - 2026-08-09
+
+### Maintenance
+- Synchronized release metadata after draining the actionable roadmap. Enterprise AD, Intune, and PSRemoting validation remains documented in the blocked queue because it requires external targets or credentials.
 
 ### Accessibility
 - Fixed: Check and category list items now announce meaningful security content instead of view-model class names, and live readiness, progress, export, filtered-count, grade, and persistence regions expose their changing values.
