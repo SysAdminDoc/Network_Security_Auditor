@@ -41,6 +41,10 @@
     Dashboard mode: maximum bytes accepted from one JSON input file. Default: 10 MiB.
 .PARAMETER DashboardMaxTotalBytes
     Dashboard mode: maximum combined bytes accepted from JSON input files. Default: 100 MiB.
+.PARAMETER BenchmarkMaxFileBytes
+    Benchmark import: maximum bytes read from one external benchmark file. Default: 25 MiB.
+.PARAMETER BenchmarkMaxRows
+    Benchmark import: maximum CSV, JSON, or checklist records accepted from one file. Default: 10000.
 .PARAMETER CloudAssessmentPath
     Optional Maester or CISA ScubaGear JSON/CSV report path(s) to import into the combined cloud posture summary.
 .PARAMETER Client
@@ -96,6 +100,10 @@ param(
     [long]$DashboardMaxFileBytes = 10MB,
     [ValidateRange(1024, 10737418240)]
     [long]$DashboardMaxTotalBytes = 100MB,
+    [ValidateRange(1024, 1073741824)]
+    [long]$BenchmarkMaxFileBytes = 25MB,
+    [ValidateRange(1, 1000000)]
+    [int]$BenchmarkMaxRows = 10000,
     [string]$HistoryPath = '',
     [string]$BaselinePath = '',
     [switch]$NoHistory,
@@ -226,6 +234,8 @@ if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
         if ($DashboardMaxFiles -ne 2000) { $argList += '-DashboardMaxFiles'; $argList += $DashboardMaxFiles }
         if ($DashboardMaxFileBytes -ne 10MB) { $argList += '-DashboardMaxFileBytes'; $argList += $DashboardMaxFileBytes }
         if ($DashboardMaxTotalBytes -ne 100MB) { $argList += '-DashboardMaxTotalBytes'; $argList += $DashboardMaxTotalBytes }
+        if ($BenchmarkMaxFileBytes -ne 25MB) { $argList += '-BenchmarkMaxFileBytes'; $argList += $BenchmarkMaxFileBytes }
+        if ($BenchmarkMaxRows -ne 10000) { $argList += '-BenchmarkMaxRows'; $argList += $BenchmarkMaxRows }
         foreach ($cloudPath in @($CloudAssessmentPath)) { if ($cloudPath) { $argList += '-CloudAssessmentPath'; $argList += "`"$cloudPath`"" } }
         if ($BrandingConfig) { $argList += '-BrandingConfig'; $argList += "`"$BrandingConfig`"" }
         if ($TargetsCsv) { $argList += '-TargetsCsv'; $argList += "`"$TargetsCsv`"" }
@@ -12239,9 +12249,13 @@ $(if($reportBranding){
             $html += "<div style='display:flex;align-items:center;gap:12px;margin-bottom:8px'>"
             $html += "<span style='font-size:15px;font-weight:600;color:#e2e8f0'>$([System.Net.WebUtility]::HtmlEncode($bmSource))</span>"
             $html += "<span style='font-size:22px;font-weight:700;color:$bmColor'>${bmScore}%</span>"
+            $bmStatus = if ($bm.status) { [string]$bm.status } else { 'Imported' }
+            $bmStatusColor = if ($bmStatus -eq 'Imported') { '#86efac' } elseif ($bmStatus -eq 'Empty') { '#facc15' } else { '#fca5a5' }
+            $html += "<span style='color:$bmStatusColor;font-size:11px;font-weight:600'>$([System.Net.WebUtility]::HtmlEncode($bmStatus))</span>"
             $html += "<span style='color:#94a3b8;font-size:11px'>$($bm.summary.pass) pass | $($bm.summary.fail) fail | $($bm.summary.warning) warning | $($bm.summary.not_applicable) N/A of $($bm.summary.total) checks</span></div>`n"
             if ($bm.benchmark) { $html += "<div style='color:#c4b5fd;font-size:11px;margin-bottom:4px'>Benchmark: $([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $bm.benchmark)))$(if($bm.version){" v$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $bm.version)))"})</div>`n" }
             $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>File: $([System.Net.WebUtility]::HtmlEncode($bmSourceFile))</div>`n"
+            if ($bm.import_error) { $html += "<div style='color:#fca5a5;font-size:11px;margin-bottom:6px'>Import diagnostic: $([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $bm.import_error)))</div>`n" }
             $failedBm = @($bm.findings | Where-Object { $_.status -eq 'Fail' })
             if ($failedBm.Count -gt 0) {
                 $html += "<table style='margin-top:8px'><tr><th>ID</th><th>Status</th><th>Severity</th><th>Name</th><th>Expected</th><th>Actual</th></tr>`n"
@@ -12952,6 +12966,10 @@ function Export-FindingsJSON {
                 [ordered]@{
                     source = if ($privacyFlag) { Get-RedactedIdentity ([string]$_.source) 'SOURCE' } else { $_.source }
                     source_file = if ($privacyFlag) { Get-RedactedIdentity ([string]$_.source_file) 'PATH' } else { $_.source_file }
+                    status = $_.status
+                    import_error = ConvertTo-RedactedText $_.import_error
+                    skipped_reason = ConvertTo-RedactedText $_.skipped_reason
+                    limits = if ($privacyFlag) { ConvertTo-PrivacySafeObject $_.limits } else { $_.limits }
                     benchmark = ConvertTo-RedactedText $_.benchmark
                     version = ConvertTo-RedactedText $_.version; timestamp = $_.timestamp
                     summary = if ($privacyFlag) { ConvertTo-PrivacySafeObject $_.summary } else { $_.summary }
@@ -14100,65 +14118,166 @@ function Export-SIEMContentPack {
 $script:BenchmarkImports = [System.Collections.Generic.List[object]]::new()
 function Import-BenchmarkResults {
     [CmdletBinding()]
-    param([string]$Path)
-    if (-not (Test-Path $Path)) { Write-Warning "Benchmark file not found: $Path"; return $null }
-    $ext = [System.IO.Path]::GetExtension($Path).ToLower()
-    $fileName = [System.IO.Path]::GetFileName($Path)
-    $content = Get-Content $Path -Raw -Encoding UTF8
-
+    param(
+        [string]$Path,
+        [ValidateRange(1024, 1073741824)]
+        [long]$MaxFileBytes = 25MB,
+        [ValidateRange(1, 1000000)]
+        [int]$MaxRows = 10000
+    )
+    $fileName = if ($Path) { [System.IO.Path]::GetFileName($Path) } else { '' }
     $result = [ordered]@{
-        source = 'Unknown'; source_file = $fileName; path = $Path
+        source = 'Unknown'; source_file = $fileName; path = $Path; status = 'Skipped'; import_error = ''; skipped_reason = ''
+        limits = [ordered]@{ max_file_bytes = $MaxFileBytes; max_rows = $MaxRows }
         timestamp = (Get-Date -Format 'o'); benchmark = ''; version = ''
         findings = [System.Collections.Generic.List[object]]::new()
         summary = [ordered]@{ total = 0; pass = 0; fail = 0; warning = 0; not_applicable = 0; manual = 0; error = 0 }
     }
 
-    if ($ext -eq '.csv') {
-        $csv = Import-Csv $Path -ErrorAction Stop
-        $cols = $csv | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
-        if ('TestResult' -in $cols -and 'ID' -in $cols -and 'Name' -in $cols) {
-            $result.source = 'HardeningKitty'
-            $result.benchmark = if ('Category' -in $cols -and $csv.Count -gt 0) { $csv[0].Category } else { 'Windows Hardening' }
-            foreach ($row in $csv) {
-                $status = switch ($row.TestResult) {
-                    'Passed' { 'Pass' } 'Failed' { 'Fail' } 'Warning' { 'Warning' }
-                    'Not Applicable' { 'N/A' } default { $row.TestResult }
-                }
-                $entry = [ordered]@{
-                    id = $row.ID; name = $row.Name; status = $status
-                    category = if ($row.PSObject.Properties['Category']) { $row.Category } else { '' }
-                    severity = if ($row.PSObject.Properties['Severity']) { $row.Severity } else { 'Medium' }
-                    expected = if ($row.PSObject.Properties['Recommended']) { $row.Recommended } else { '' }
-                    actual   = if ($row.PSObject.Properties['CurrentValue']) { $row.CurrentValue } else { '' }
-                    registry = if ($row.PSObject.Properties['RegistryPath']) { $row.RegistryPath } else { '' }
-                }
-                $result.findings.Add($entry)
-                switch ($status) { 'Pass' { $result.summary.pass++ } 'Fail' { $result.summary.fail++ } 'Warning' { $result.summary.warning++ } 'N/A' { $result.summary.not_applicable++ } default { $result.summary.error++ } }
-            }
-        } elseif ('Setting' -in $cols -and 'Result' -in $cols) {
-            $result.source = 'PolicyAnalyzer'
-            $result.benchmark = 'Microsoft Security Baseline'
-            foreach ($row in $csv) {
-                $status = switch -Wildcard ($row.Result) {
-                    'Match*' { 'Pass' } 'Mismatch*' { 'Fail' } 'Not Configured*' { 'Warning' }
-                    'N/A*' { 'N/A' } default { 'Warning' }
-                }
-                $entry = [ordered]@{
-                    id = ''; name = $row.Setting; status = $status
-                    category = if ($row.PSObject.Properties['PolicyArea']) { $row.PolicyArea } else { '' }
-                    severity = 'Medium'
-                    expected = if ($row.PSObject.Properties['BaselineValue']) { $row.BaselineValue } else { '' }
-                    actual   = if ($row.PSObject.Properties['LocalValue']) { $row.LocalValue } else { '' }
-                    registry = if ($row.PSObject.Properties['RegistryPath']) { $row.RegistryPath } else { '' }
-                }
-                $result.findings.Add($entry)
-                switch ($status) { 'Pass' { $result.summary.pass++ } 'Fail' { $result.summary.fail++ } 'Warning' { $result.summary.warning++ } 'N/A' { $result.summary.not_applicable++ } }
-            }
+    function Set-BenchmarkImportError {
+        param([string]$Reason, [string]$Status = 'Error')
+        $result.status = $Status
+        $result.import_error = $Reason
+        if ($Status -eq 'Skipped') { $result.skipped_reason = $Reason }
+        if ($Status -eq 'Error') { $result.summary.error++ }
+        Write-Warning "Benchmark import skipped '$fileName': $Reason"
+    }
+
+    function Get-BenchmarkPropertyValue {
+        param($Object, [string[]]$Names)
+        if ($null -eq $Object) { return $null }
+        foreach ($name in $Names) {
+            $property = $Object.PSObject.Properties[$name]
+            if ($property) { return $property.Value }
         }
-    } elseif ($ext -in '.xml', '.ckl') {
-        if ($content -match '<CHECKLIST>') {
-            $result.source = 'DISA_STIG_CKL'
-            try {
+        return $null
+    }
+
+    function Get-BenchmarkText {
+        param($Object, [string[]]$Names)
+        $value = Get-BenchmarkPropertyValue -Object $Object -Names $Names
+        if ($null -eq $value) { return '' }
+        return [string]$value
+    }
+
+    function Convert-BenchmarkStatus {
+        param([string]$Value)
+        $normalizedValue = if ($null -eq $Value) { '' } else { $Value.Trim() }
+        switch -Wildcard ($normalizedValue) {
+            'Passed' { return 'Pass' }
+            'Pass' { return 'Pass' }
+            'Compliant*' { return 'Pass' }
+            'NotAFinding' { return 'Pass' }
+            'Failed' { return 'Fail' }
+            'Fail' { return 'Fail' }
+            'NonCompliant*' { return 'Fail' }
+            'Open' { return 'Fail' }
+            'Warning*' { return 'Warning' }
+            'Warn*' { return 'Warning' }
+            'Not Applicable' { return 'N/A' }
+            'Not_Applicable' { return 'N/A' }
+            'N/A' { return 'N/A' }
+            'Manual*' { return 'Manual' }
+            'Not Reviewed' { return 'Manual' }
+            'Not_Reviewed' { return 'Manual' }
+            default { return 'Warning' }
+        }
+    }
+
+    function Add-BenchmarkFinding {
+        param($Row, [string]$ResultField, [string]$IdField, [string]$NameField)
+        $rawStatus = Get-BenchmarkText -Object $Row -Names @($ResultField, 'Result', 'result', 'Status', 'status', 'TestResult')
+        $status = Convert-BenchmarkStatus $rawStatus
+        $entry = [ordered]@{
+            id = Get-BenchmarkText -Object $Row -Names @($IdField, 'ID', 'id', 'TestId', 'test_id', 'RuleId', 'rule_id')
+            name = Get-BenchmarkText -Object $Row -Names @($NameField, 'Name', 'name', 'Title', 'title', 'label')
+            status = $status
+            category = Get-BenchmarkText -Object $Row -Names @('Category', 'category', 'PolicyArea', 'policy_area')
+            severity = if (Get-BenchmarkText -Object $Row -Names @('Severity', 'severity')) { Get-BenchmarkText -Object $Row -Names @('Severity', 'severity') } else { 'Medium' }
+            expected = Get-BenchmarkText -Object $Row -Names @('Recommended', 'recommended', 'BaselineValue', 'baseline_value', 'Fix_Text', 'expected')
+            actual = Get-BenchmarkText -Object $Row -Names @('CurrentValue', 'current_value', 'LocalValue', 'local_value', 'FINDING_DETAILS', 'actual', 'evidence')
+            registry = Get-BenchmarkText -Object $Row -Names @('RegistryPath', 'registry_path', 'registry')
+        }
+        $result.findings.Add($entry)
+        switch ($status) {
+            'Pass' { $result.summary.pass++ }
+            'Fail' { $result.summary.fail++ }
+            'Warning' { $result.summary.warning++ }
+            'N/A' { $result.summary.not_applicable++ }
+            'Manual' { $result.summary.manual++ }
+            default { $result.summary.error++ }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        Set-BenchmarkImportError -Reason 'file was not found' -Status 'Skipped'
+        return $result
+    }
+
+    try {
+        $fileInfo = Get-Item -LiteralPath $Path -ErrorAction Stop
+        if ([long]$fileInfo.Length -gt $MaxFileBytes) {
+            Set-BenchmarkImportError -Reason "file size $($fileInfo.Length) bytes exceeds limit $MaxFileBytes" -Status 'Skipped'
+            return $result
+        }
+        $content = [System.IO.File]::ReadAllText($fileInfo.FullName, [System.Text.Encoding]::UTF8)
+    } catch {
+        Set-BenchmarkImportError -Reason "unable to read file: $($_.Exception.Message)"
+        return $result
+    }
+    if ([string]::IsNullOrWhiteSpace($content)) {
+        Set-BenchmarkImportError -Reason 'file is empty' -Status 'Skipped'
+        return $result
+    }
+
+    $ext = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
+    try {
+        if ($ext -eq '.csv') {
+            $lineCount = [System.Text.RegularExpressions.Regex]::Matches($content, "`n").Count + 1
+            if ($lineCount -gt ($MaxRows + 1)) {
+                Set-BenchmarkImportError -Reason "CSV contains more than $MaxRows data rows" -Status 'Skipped'
+                return $result
+            }
+            $csv = @(ConvertFrom-Csv -InputObject $content -ErrorAction Stop)
+            if ($csv.Count -gt $MaxRows) {
+                Set-BenchmarkImportError -Reason "CSV contains more than $MaxRows data rows" -Status 'Skipped'
+                return $result
+            }
+            if ($csv.Count -eq 0) {
+                Set-BenchmarkImportError -Reason 'CSV contains no data rows' -Status 'Skipped'
+                return $result
+            }
+            $cols = @($csv[0].PSObject.Properties | Select-Object -ExpandProperty Name)
+            if ('TestResult' -in $cols -and 'ID' -in $cols -and 'Name' -in $cols) {
+                $result.source = 'HardeningKitty'
+                $result.benchmark = if ('Category' -in $cols) { Get-BenchmarkText -Object $csv[0] -Names @('Category') } else { 'Windows Hardening' }
+                foreach ($row in $csv) { Add-BenchmarkFinding -Row $row -ResultField 'TestResult' -IdField 'ID' -NameField 'Name' }
+            } elseif ('Setting' -in $cols -and 'Result' -in $cols) {
+                $result.source = 'PolicyAnalyzer'
+                $result.benchmark = 'Microsoft Security Baseline'
+                foreach ($row in $csv) { Add-BenchmarkFinding -Row $row -ResultField 'Result' -IdField 'Setting' -NameField 'Setting' }
+            } else {
+                Set-BenchmarkImportError -Reason 'CSV columns do not match a supported HardeningKitty or Policy Analyzer shape' -Status 'Skipped'
+                return $result
+            }
+        } elseif ($ext -eq '.json') {
+            $json = $content | ConvertFrom-Json -ErrorAction Stop
+            $rows = if ($json -is [array]) { @($json) } elseif ($json.PSObject.Properties['results']) { @($json.results) } elseif ($json.PSObject.Properties['findings']) { @($json.findings) } else { @($json) }
+            if ($rows.Count -gt $MaxRows) {
+                Set-BenchmarkImportError -Reason "JSON contains more than $MaxRows records" -Status 'Skipped'
+                return $result
+            }
+            $result.source = 'JSON'
+            $result.benchmark = Get-BenchmarkText -Object $json -Names @('benchmark', 'Benchmark', 'title', 'Title')
+            foreach ($row in $rows) { Add-BenchmarkFinding -Row $row -ResultField 'status' -IdField 'id' -NameField 'name' }
+        } elseif ($ext -in '.xml', '.ckl') {
+            $vulnerabilityCount = [System.Text.RegularExpressions.Regex]::Matches($content, '<VULN(?:\s|>)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase).Count
+            if ($vulnerabilityCount -gt $MaxRows) {
+                Set-BenchmarkImportError -Reason "checklist contains more than $MaxRows vulnerabilities" -Status 'Skipped'
+                return $result
+            }
+            if ($content -match '<CHECKLIST>') {
+                $result.source = 'DISA_STIG_CKL'
                 $xml = [xml]$content
                 $stigs = $xml.CHECKLIST.STIGS.iSTIG
                 if ($stigs) {
@@ -14168,38 +14287,46 @@ function Import-BenchmarkResults {
                     $verNode = $headerData | Where-Object { $_.SID_NAME -eq 'version' }
                     $result.version = if ($verNode) { $verNode.SID_DATA } else { '' }
                     foreach ($vuln in $stigs.VULN) {
-                        $attrs = @{}
-                        foreach ($sd in $vuln.STIG_DATA) { $attrs[$sd.VULN_ATTRIBUTE] = $sd.ATTRIBUTE_DATA }
-                        $status = switch ($vuln.STATUS) {
-                            'NotAFinding' { 'Pass' } 'Open' { 'Fail' } 'Not_Applicable' { 'N/A' }
-                            'Not_Reviewed' { 'Manual' } default { $vuln.STATUS }
+                        $row = [pscustomobject]@{ Vuln_Num = ''; Rule_Title = ''; STATUS = $vuln.STATUS; Severity = ''; IA_Controls = ''; Fix_Text = ''; FINDING_DETAILS = $vuln.FINDING_DETAILS }
+                        foreach ($sd in $vuln.STIG_DATA) {
+                            switch ($sd.VULN_ATTRIBUTE) {
+                                'Vuln_Num' { $row.Vuln_Num = $sd.ATTRIBUTE_DATA }
+                                'Rule_Title' { $row.Rule_Title = $sd.ATTRIBUTE_DATA }
+                                'Severity' { $row.Severity = $sd.ATTRIBUTE_DATA }
+                                'IA_Controls' { $row.IA_Controls = $sd.ATTRIBUTE_DATA }
+                                'Fix_Text' { $row.Fix_Text = $sd.ATTRIBUTE_DATA }
+                            }
                         }
-                        $entry = [ordered]@{
-                            id = $attrs['Vuln_Num']; name = $attrs['Rule_Title']; status = $status
-                            category = $attrs['IA_Controls']; severity = $attrs['Severity']
-                            expected = $attrs['Fix_Text']; actual = $vuln.FINDING_DETAILS
-                            registry = ''
-                        }
-                        $result.findings.Add($entry)
-                        switch ($status) { 'Pass' { $result.summary.pass++ } 'Fail' { $result.summary.fail++ } 'N/A' { $result.summary.not_applicable++ } 'Manual' { $result.summary.manual++ } default { $result.summary.warning++ } }
+                        Add-BenchmarkFinding -Row $row -ResultField 'STATUS' -IdField 'Vuln_Num' -NameField 'Rule_Title'
                     }
                 }
-            } catch { $result.source = 'DISA_STIG_CKL'; $result.summary.error++ }
-        } elseif ($content -match 'TestResult|Benchmark') {
-            $result.source = 'XCCDF'
-            $result.benchmark = 'XCCDF Benchmark'
+            } elseif ($content -match 'TestResult|Benchmark') {
+                $result.source = 'XCCDF'
+                $result.benchmark = 'XCCDF Benchmark'
+            } else {
+                Set-BenchmarkImportError -Reason 'XML is not a supported DISA CKL or XCCDF result' -Status 'Skipped'
+                return $result
+            }
+        } else {
+            Set-BenchmarkImportError -Reason "unsupported file extension '$ext'" -Status 'Skipped'
+            return $result
         }
+    } catch {
+        Set-BenchmarkImportError -Reason "malformed $ext input: $($_.Exception.Message)"
+        return $result
     }
 
     $result.summary.total = $result.findings.Count
+    if ($result.status -eq 'Skipped') { $result.status = if ($result.findings.Count -gt 0) { 'Imported' } else { 'Empty' } }
+    if ($result.status -eq 'Unknown') { $result.status = 'Imported' }
     return $result
 }
 
 $script:CliBenchmarkPaths = @($BenchmarkImportPath | Where-Object { $_ })
 if ($script:CliBenchmarkPaths.Count -gt 0) {
     foreach ($bPath in $script:CliBenchmarkPaths) {
-        $imported = Import-BenchmarkResults -Path $bPath
-        if ($imported -and $imported.findings.Count -gt 0) {
+        $imported = Import-BenchmarkResults -Path $bPath -MaxFileBytes $BenchmarkMaxFileBytes -MaxRows $BenchmarkMaxRows
+        if ($imported) {
             $script:BenchmarkImports.Add($imported)
         }
     }
@@ -14385,7 +14512,7 @@ if ($script:SilentMode) {
     Write-Host "[Silent Mode]   Read-only:   $($script:ReadOnlyMode)"
     Write-Host "[Silent Mode]   Internet:    $(if($script:CliNoInternet){'Disabled (-NoInternet)'}else{'Enabled (KEV download, DNS probes)'})"
     if ($script:BenchmarkImports.Count -gt 0) {
-        Write-Host "[Silent Mode]   Benchmarks:  $($script:BenchmarkImports.Count) imported ($($script:BenchmarkImports | ForEach-Object { "$($_.source): $($_.summary.total) checks" }))"
+        Write-Host "[Silent Mode]   Benchmarks:  $($script:BenchmarkImports.Count) source(s) ($($script:BenchmarkImports | ForEach-Object { "$($_.source): $($_.status), $($_.summary.total) checks$(if($_.import_error){" - $($_.import_error)"})" }))"
     }
     if ($skippedByProfile -gt 0) { Write-Host "[Silent Mode]   Skipped:     $skippedByProfile checks (not in profile)" }
     if ($skippedByRisk -gt 0)    { Write-Host "[Silent Mode]   Skipped:     $skippedByRisk checks (risk tier 3, read-only mode)" }

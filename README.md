@@ -600,6 +600,12 @@ review dates, supported OS/builds, check coverage, and stale-review windows.
 -PrivacyMode         Redact hostnames, IPs, and identities in all exports
 -CloudAssessmentPath Path(s) to Maester or CISA ScubaGear JSON results
                      to import and include in reports
+-BenchmarkImportPath Path(s) to HardeningKitty/Policy Analyzer CSV,
+                     DISA CKL/XCCDF XML, or supported benchmark JSON
+-BenchmarkMaxFileBytes Maximum bytes read from one benchmark file.
+                     Default: 25 MiB
+-BenchmarkMaxRows    Maximum benchmark records accepted per file.
+                     Default: 10000
 -Dashboard           Generate a static multi-client rollup dashboard from a
                      folder of findings JSON exports, then exit (no scan,
                      no elevation, no host changes)

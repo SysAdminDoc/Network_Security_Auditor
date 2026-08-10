@@ -577,6 +577,54 @@ Describe 'Saved timestamp validation' {
     }
 }
 
+Describe 'Benchmark import bounds and diagnostics' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Import-BenchmarkResults' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+    }
+
+    It 'imports valid benchmark rows and records the import contract' {
+        $path = Join-Path ([IO.Path]::GetTempPath()) ('nsa-benchmark-' + [guid]::NewGuid().ToString('N') + '.csv')
+        try {
+            @(
+                'ID,Name,TestResult,Category,Recommended,CurrentValue'
+                'HK01,Firewall,Passed,Endpoint,Enabled,Enabled'
+                'HK02,SMB,Failed,Network,Required,Disabled'
+            ) | Set-Content -LiteralPath $path -Encoding UTF8
+            $import = Import-BenchmarkResults -Path $path -MaxFileBytes 4096 -MaxRows 10
+            $import.status | Should -Be 'Imported'
+            $import.source | Should -Be 'HardeningKitty'
+            $import.findings.Count | Should -Be 2
+            $import.limits.max_rows | Should -Be 10
+            $import.summary.fail | Should -Be 1
+        }
+        finally {
+            if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It 'returns bounded diagnostics for oversized and malformed external files' {
+        $oversized = Join-Path ([IO.Path]::GetTempPath()) ('nsa-benchmark-large-' + [guid]::NewGuid().ToString('N') + '.csv')
+        $malformed = Join-Path ([IO.Path]::GetTempPath()) ('nsa-benchmark-bad-' + [guid]::NewGuid().ToString('N') + '.json')
+        try {
+            Set-Content -LiteralPath $oversized -Value ("ID,Name,TestResult`nHK01,Firewall," + ('x' * 1600)) -Encoding UTF8
+            Set-Content -LiteralPath $malformed -Value '{"results":' -Encoding UTF8
+            $sizeResult = Import-BenchmarkResults -Path $oversized -MaxFileBytes 1024 -MaxRows 10
+            $badResult = Import-BenchmarkResults -Path $malformed -MaxFileBytes 4096 -MaxRows 10
+            $sizeResult.status | Should -Be 'Skipped'
+            $sizeResult.skipped_reason | Should -Match 'exceeds limit'
+            $badResult.status | Should -Be 'Error'
+            $badResult.import_error | Should -Match 'malformed \.json input'
+        }
+        finally {
+            foreach ($path in $oversized, $malformed) {
+                if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+            }
+        }
+    }
+}
+
 Describe 'Write gate behavior (real functions via AST)' {
     BeforeAll {
         # Extract the actual function bodies from the script and load them in
@@ -779,7 +827,7 @@ Describe 'Fleet orchestration safeguards' {
 
     It 'forwards fleet and v4.11 switches during elevation or fails clearly for credentials' {
         $script:ElevationBlock | Should -Match 'Credential cannot be forwarded through a UAC relaunch'
-        foreach ($token in '-ExportSIEM','-BrandingConfig','-TargetsCsv','-ThrottleLimit','-PerHostTimeout','-Remediate','-RemediateDryRun','-RemediateChecks','-BenchmarkImportPath') {
+        foreach ($token in '-ExportSIEM','-BrandingConfig','-TargetsCsv','-ThrottleLimit','-PerHostTimeout','-Remediate','-RemediateDryRun','-RemediateChecks','-BenchmarkImportPath','-BenchmarkMaxFileBytes','-BenchmarkMaxRows') {
             $script:ElevationBlock | Should -Match ([regex]::Escape($token))
         }
     }
