@@ -24,6 +24,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: Intune STIG imports tolerate provider casing differences, malformed rows, and duplicate or blank CSV headers while surfacing bounded import warnings.
 - Fixed: Existing dotted output directories are preserved by the C# CLI instead of being mistaken for file paths.
 - Fixed: PowerShell benchmark imports now bound file bytes and record counts, isolate malformed or unsupported sources, and preserve per-file diagnostics in reports and structured output.
+- Fixed: PowerShell cloud-assessment imports now retain explicit missing, malformed, unsupported, empty, and unrecognized-source diagnostics in reports and structured exports instead of silently dropping them.
 
 ### Performance
 - Fixed: PowerShell dashboard imports now enforce configurable file-count, per-file-byte, and total-byte budgets and show bounded skip diagnostics in the dashboard.

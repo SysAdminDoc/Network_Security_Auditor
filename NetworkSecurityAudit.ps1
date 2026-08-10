@@ -2095,23 +2095,76 @@ function Invoke-CloudProfileAssessment {
 function Import-CloudAssessment {
     param([string[]]$Paths)
     $results = @()
+
+    function New-CloudImportDiagnostic {
+        param(
+            [string]$Path,
+            [string]$Status,
+            [string]$Reason,
+            [string]$Shape = 'Unknown'
+        )
+        [ordered]@{
+            Source = 'Unknown'
+            Path = $Path
+            TenantId = ''
+            TenantName = ''
+            Timestamp = ''
+            ImportStatus = $Status
+            ImportError = $Reason
+            InputShape = $Shape
+            TotalTests = 0
+            Passed = 0
+            Failed = 0
+            Skipped = 0
+            NotLicensed = 0
+            NotPermitted = 0
+            NotConfigured = 0
+            Errors = 0
+            Other = 0
+            Unavailable = 0
+            StatusBreakdown = [ordered]@{
+                Pass = 0; Fail = 0; NotLicensed = 0; NotPermitted = 0
+                NotConfigured = 0; Skipped = 0; Error = 0; Other = 0
+            }
+            Score = 0
+            Findings = @()
+            SecureScore = $null
+            ImplementedChecks = @()
+            ManifestVersion = ''
+        }
+    }
+
     foreach ($p in $Paths) {
-        if (-not (Test-Path $p)) { continue }
-        $ext = [System.IO.Path]::GetExtension($p).ToLower()
+        if ([string]::IsNullOrWhiteSpace($p) -or -not (Test-Path -LiteralPath $p -PathType Leaf)) {
+            $results += New-CloudImportDiagnostic -Path $p -Status 'Skipped' -Reason 'file was not found'
+            continue
+        }
+        $ext = [System.IO.Path]::GetExtension($p).ToLowerInvariant()
         try {
-            $raw = Get-Content $p -Raw -Encoding UTF8 -EA Stop
+            $raw = Get-Content -LiteralPath $p -Raw -Encoding UTF8 -EA Stop
             if ($ext -eq '.json') {
                 $data = $raw | ConvertFrom-Json -EA Stop
-                if ($data.PSObject.Properties['Results'] -and $data.PSObject.Properties['TenantId']) {
-                    $statusSummary = Get-CloudAssessmentStatusSummary -Items @($data.Results) -StatusSelector { param($x) $x.Result }
+                $resultsProperty = if ($data) { @($data.PSObject.Properties | Where-Object { $_.Name -ieq 'Results' }) | Select-Object -First 1 } else { $null }
+                $tenantIdProperty = if ($data) { @($data.PSObject.Properties | Where-Object { $_.Name -ieq 'TenantId' }) | Select-Object -First 1 } else { $null }
+                $reportSummaryProperty = if ($data) { @($data.PSObject.Properties | Where-Object { $_.Name -ieq 'ReportSummary' }) | Select-Object -First 1 } else { $null }
+                if ($resultsProperty -and $tenantIdProperty) {
+                    $sourceRows = @($resultsProperty.Value)
+                    if ($sourceRows.Count -eq 0) {
+                        $results += New-CloudImportDiagnostic -Path $p -Status 'Skipped' -Reason 'Maester Results array is empty' -Shape 'Maester'
+                        continue
+                    }
+                    $statusSummary = Get-CloudAssessmentStatusSummary -Items $sourceRows -StatusSelector { param($x) $x.Result }
                     $statusCounts = $statusSummary.Counts
                     $results += [ordered]@{
                         Source = 'Maester'
                         Path = $p
-                        TenantId = $data.TenantId
+                        TenantId = $tenantIdProperty.Value
                         TenantName = if ($data.PSObject.Properties['TenantName']) { $data.TenantName } else { '' }
-                        Timestamp = if ($data.PSObject.Properties['ExecutedAt']) { $data.ExecutedAt } else { (Get-Item $p).LastWriteTime.ToString('o') }
-                        TotalTests = @($data.Results).Count
+                        Timestamp = if ($data.PSObject.Properties['ExecutedAt']) { $data.ExecutedAt } else { (Get-Item -LiteralPath $p).LastWriteTime.ToString('o') }
+                        ImportStatus = 'Imported'
+                        ImportError = ''
+                        InputShape = 'Maester'
+                        TotalTests = $sourceRows.Count
                         Passed = $statusCounts.Pass
                         Failed = $statusCounts.Fail
                         Skipped = $statusCounts.Skipped
@@ -2123,7 +2176,7 @@ function Import-CloudAssessment {
                         Unavailable = $statusSummary.Unavailable
                         StatusBreakdown = $statusCounts
                         Score = 0
-                        Findings = @($data.Results | Where-Object { (Convert-CloudAssessmentStatus $_.Result) -ne 'Pass' -and (Convert-CloudAssessmentStatus $_.Result) -ne 'Skipped' } | ForEach-Object {
+                        Findings = @($sourceRows | Where-Object { (Convert-CloudAssessmentStatus $_.Result) -ne 'Pass' -and (Convert-CloudAssessmentStatus $_.Result) -ne 'Skipped' } | ForEach-Object {
                             [ordered]@{ TestId = $_.TestId; Name = $_.Name; Result = $_.Result; Status = (Convert-CloudAssessmentStatus $_.Result); Category = $_.Category; Remediation = $_.Remediation }
                         })
                     }
@@ -2131,8 +2184,13 @@ function Import-CloudAssessment {
                     $assessed = $r.Passed + $r.Failed
                     if ($assessed -gt 0) { $r.Score = [math]::Round($r.Passed / $assessed * 100) }
                 }
-                elseif ($data -is [array] -or ($data.PSObject.Properties['ReportSummary'])) {
-                    $items = if ($data.PSObject.Properties['ReportSummary']) { @($data.Results) } else { @($data) }
+                elseif ($data -is [array] -or $reportSummaryProperty) {
+                    $dataResultsProperty = if ($data -and $data -isnot [array]) { @($data.PSObject.Properties | Where-Object { $_.Name -ieq 'Results' }) | Select-Object -First 1 } else { $null }
+                    $items = if ($dataResultsProperty) { @($dataResultsProperty.Value) } elseif ($data -is [array]) { @($data) } else { @() }
+                    if ($items.Count -eq 0) {
+                        $results += New-CloudImportDiagnostic -Path $p -Status 'Skipped' -Reason 'ScubaGear report contains no result records' -Shape 'ScubaGear'
+                        continue
+                    }
                     $statusSummary = Get-CloudAssessmentStatusSummary -Items $items -StatusSelector { param($x) $x.Result }
                     $statusCounts = $statusSummary.Counts
                     $results += [ordered]@{
@@ -2140,7 +2198,10 @@ function Import-CloudAssessment {
                         Path = $p
                         TenantId = ''
                         TenantName = ''
-                        Timestamp = (Get-Item $p).LastWriteTime.ToString('o')
+                        Timestamp = (Get-Item -LiteralPath $p).LastWriteTime.ToString('o')
+                        ImportStatus = 'Imported'
+                        ImportError = ''
+                        InputShape = 'ScubaGear'
                         TotalTests = $items.Count
                         Passed = $statusCounts.Pass
                         Failed = $statusCounts.Fail
@@ -2161,8 +2222,18 @@ function Import-CloudAssessment {
                     $assessed = $r.Passed + $r.Failed
                     if ($assessed -gt 0) { $r.Score = [math]::Round($r.Passed / $assessed * 100) }
                 }
+                else {
+                    $results += New-CloudImportDiagnostic -Path $p -Status 'Skipped' -Reason 'JSON does not match the supported Maester or ScubaGear result shape'
+                }
             }
-        } catch { }
+            else {
+                $results += New-CloudImportDiagnostic -Path $p -Status 'Skipped' -Reason "unsupported cloud assessment extension '$ext'"
+            }
+        } catch {
+            $message = $_.Exception.Message
+            if ($message.Length -gt 500) { $message = $message.Substring(0, 500) + '...' }
+            $results += New-CloudImportDiagnostic -Path $p -Status 'Error' -Reason "malformed $ext cloud assessment: $message"
+        }
     }
     return $results
 }
@@ -12205,6 +12276,10 @@ $(if($reportBranding){
             $html += "<div style='display:flex;align-items:center;gap:12px;margin-bottom:8px'>"
             $html += "<span style='font-size:15px;font-weight:600;color:#e2e8f0'>$($imp.Source)</span>"
             $html += "<span style='font-size:22px;font-weight:700;color:$impColor'>$($imp.Score)%</span>"
+            $cloudImportStatus = if ($imp.ImportStatus) { [string]$imp.ImportStatus } else { 'Imported' }
+            $cloudStatusColor = if ($cloudImportStatus -eq 'Imported') { '#86efac' } else { '#fca5a5' }
+            $html += "<span style='color:$cloudStatusColor;font-size:11px;font-weight:600'>$([System.Net.WebUtility]::HtmlEncode($cloudImportStatus))</span>"
+            if ($imp.ImportError) { $html += "<div style='color:#fca5a5;font-size:11px;margin-bottom:6px'>Import diagnostic: $([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $imp.ImportError)))</div>" }
             $html += "<span style='color:#94a3b8;font-size:11px'>$($imp.Passed) passed | $($imp.Failed) failed | $($imp.Skipped) skipped | $($imp.Unavailable) unavailable of $($imp.TotalTests) tests</span></div>`n"
             if ($imp.StatusBreakdown) {
                 $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>Unavailable: NotLicensed=$($imp.StatusBreakdown.NotLicensed) | NotPermitted=$($imp.StatusBreakdown.NotPermitted) | NotConfigured=$($imp.StatusBreakdown.NotConfigured) | Error=$($imp.StatusBreakdown.Error) | Other=$($imp.StatusBreakdown.Other)</div>`n"
@@ -12918,6 +12993,9 @@ function Export-FindingsJSON {
             @($script:CloudAssessmentImports | ForEach-Object {
                 [ordered]@{
                     source     = $_.Source
+                    import_status = if ($_.ImportStatus) { $_.ImportStatus } else { 'Imported' }
+                    import_error = ConvertTo-RedactedText $_.ImportError
+                    input_shape = if ($_.InputShape) { $_.InputShape } else { '' }
                     tenant_id  = Get-RedactedIdentity $_.TenantId 'TENANT'
                     tenant     = Get-RedactedIdentity $_.TenantName 'TENANT'
                     timestamp  = $_.Timestamp

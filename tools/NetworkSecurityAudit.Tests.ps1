@@ -262,6 +262,32 @@ Describe 'Cloud assessment import semantics' {
             Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue
         }
     }
+
+    It 'returns explicit diagnostics for missing, malformed, unsupported, and unrecognized inputs' {
+        $unknown = Join-Path ([System.IO.Path]::GetTempPath()) ("nsa-cloud-unknown-{0}.json" -f ([guid]::NewGuid().ToString('N')))
+        $malformed = Join-Path ([System.IO.Path]::GetTempPath()) ("nsa-cloud-malformed-{0}.json" -f ([guid]::NewGuid().ToString('N')))
+        $unsupported = Join-Path ([System.IO.Path]::GetTempPath()) ("nsa-cloud-unsupported-{0}.txt" -f ([guid]::NewGuid().ToString('N')))
+        $missing = Join-Path ([System.IO.Path]::GetTempPath()) ("nsa-cloud-missing-{0}.json" -f ([guid]::NewGuid().ToString('N')))
+        try {
+            '{"provider":"unknown"}' | Set-Content -LiteralPath $unknown -Encoding UTF8
+            '{"Results":' | Set-Content -LiteralPath $malformed -Encoding UTF8
+            'not a cloud report' | Set-Content -LiteralPath $unsupported -Encoding UTF8
+            $imports = @(Import-CloudAssessment -Paths @($unknown, $malformed, $unsupported, $missing))
+
+            $imports.Count | Should -Be 4
+            @($imports | Where-Object ImportStatus -eq 'Skipped').Count | Should -Be 3
+            @($imports | Where-Object ImportStatus -eq 'Error').Count | Should -Be 1
+            ($imports | Where-Object Path -eq $unknown).ImportError | Should -Match 'supported Maester or ScubaGear'
+            ($imports | Where-Object Path -eq $malformed).ImportError | Should -Match 'malformed \.json cloud assessment'
+            ($imports | Where-Object Path -eq $unsupported).ImportError | Should -Match 'unsupported cloud assessment extension'
+            ($imports | Where-Object Path -eq $missing).ImportError | Should -Be 'file was not found'
+        }
+        finally {
+            foreach ($path in $unknown, $malformed, $unsupported) {
+                if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+            }
+        }
+    }
 }
 
 Describe 'Graph wrapper offline fixtures' {
