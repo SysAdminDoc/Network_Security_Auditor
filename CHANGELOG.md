@@ -26,6 +26,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: PowerShell benchmark imports now bound file bytes and record counts, isolate malformed or unsupported sources, and preserve per-file diagnostics in reports and structured output.
 - Fixed: PowerShell cloud-assessment imports now retain explicit missing, malformed, unsupported, empty, and unrecognized-source diagnostics in reports and structured exports instead of silently dropping them.
 - Fixed: PowerShell `-TrendDays` now validates its range and filters dashboard trend points while retaining the latest scan and full source history.
+- Fixed: Fleet timeout cleanup now runs as a bounded remoting job with a short grace period, removes duplicate cleanup calls, and records cleanup failure separately from the host audit result.
 
 ### Performance
 - Fixed: PowerShell dashboard imports now enforce configurable file-count, per-file-byte, and total-byte budgets and show bounded skip diagnostics in the dashboard.

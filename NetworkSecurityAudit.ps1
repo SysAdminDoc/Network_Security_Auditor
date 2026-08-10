@@ -541,21 +541,37 @@ if ($Silent.IsPresent -and $TargetsCsv) {
         param(
             [string]$ComputerName,
             [string]$RunId,
-            [PSCredential]$Credential
+            [PSCredential]$Credential,
+            [ValidateRange(1, 60)]
+            [int]$TimeoutSeconds = 5
         )
 
-        if (-not $ComputerName -or -not $RunId) { return }
+        if (-not $ComputerName -or -not $RunId) { return @{ Success = $true; Status = 'NotRequested'; Error = '' } }
 
+        $cleanupJob = $null
         try {
-            $cleanupParams = @{ ComputerName = $ComputerName; ErrorAction = 'SilentlyContinue' }
+            $cleanupParams = @{ ComputerName = $ComputerName; ErrorAction = 'Stop'; AsJob = $true }
             if ($Credential) { $cleanupParams['Credential'] = $Credential }
-            Invoke-Command @cleanupParams -ScriptBlock {
+            try {
+                $cleanupParams['SessionOption'] = New-PSSessionOption -OpenTimeout ($TimeoutSeconds * 1000) -OperationTimeout ($TimeoutSeconds * 1000)
+            } catch { }
+            $cleanupJob = Invoke-Command @cleanupParams -ScriptBlock {
                 param($rid)
                 Get-ChildItem -Path (Join-Path $env:TEMP "NetworkSecurityAudit_fleet_$rid*") -File -ErrorAction SilentlyContinue |
                     Remove-Item -Force -ErrorAction SilentlyContinue
-            } -ArgumentList $RunId | Out-Null
+            } -ArgumentList $RunId
+            if (-not $cleanupJob) { return @{ Success = $false; Status = 'Failed'; Error = 'Cleanup job was not created.' } }
+            $finished = Wait-Job -Job $cleanupJob -Timeout $TimeoutSeconds
+            if (-not $finished) {
+                Stop-Job -Job $cleanupJob -ErrorAction SilentlyContinue
+                return @{ Success = $false; Status = 'TimedOut'; Error = "Cleanup exceeded ${TimeoutSeconds}s grace period." }
+            }
+            Receive-Job -Job $cleanupJob -ErrorAction SilentlyContinue | Out-Null
+            return @{ Success = ($cleanupJob.State -eq 'Completed'); Status = if ($cleanupJob.State -eq 'Completed') { 'Succeeded' } else { 'Failed' }; Error = if ($cleanupJob.State -ne 'Completed') { 'Remote cleanup job ended in state ' + $cleanupJob.State } else { '' } }
         } catch {
-            # Best effort only; the per-host result records the timeout/failure separately.
+            return @{ Success = $false; Status = 'Failed'; Error = $_.Exception.Message }
+        } finally {
+            if ($cleanupJob) { Remove-Job -Job $cleanupJob -Force -ErrorAction SilentlyContinue }
         }
     }
 
@@ -689,11 +705,15 @@ if ($Silent.IsPresent -and $TargetsCsv) {
             $result = [ordered]@{
                 host = $target; client = $meta.Client; site = $meta.Site; tags = $meta.Tags
                 status = 'Unknown'; grade = ''; score = 0; ransomware_score = 0
-                has_score = $false; fail_count = 0; critical_count = 0; skipped = 0; error = ''; artifact_base = $meta.ArtifactBase; duration_seconds = [math]::Round($elapsed, 1)
+                has_score = $false; fail_count = 0; critical_count = 0; skipped = 0; error = ''; cleanup_status = 'NotRequested'; cleanup_error = ''; artifact_base = $meta.ArtifactBase; duration_seconds = [math]::Round($elapsed, 1)
             }
             try {
                 if ($timedOut) {
-                    if ($meta.RemoteRunId) { Invoke-FleetRemoteTempCleanup -ComputerName $target -RunId $meta.RemoteRunId -Credential $Credential }
+                    if ($meta.RemoteRunId) {
+                        $cleanup = Invoke-FleetRemoteTempCleanup -ComputerName $target -RunId $meta.RemoteRunId -Credential $Credential
+                        $result.cleanup_status = $cleanup.Status
+                        $result.cleanup_error = $cleanup.Error
+                    }
                     throw "Timed out after ${PerHostTimeout}s"
                 }
                 $output = Receive-Job $meta.Job -ErrorAction Stop
@@ -740,7 +760,7 @@ if ($Silent.IsPresent -and $TargetsCsv) {
             $jobs.Remove($target)
             $completed++
             $statusColor = switch ($result.status) { 'Completed' { 'Green' } 'TimedOut' { 'Yellow' } default { 'Red' } }
-            Write-Host "[Fleet Mode] [$completed/$($fleetHosts.Count)] $target : $($result.status) $(if($result.grade){"Grade=$($result.grade) Score=$($result.score)%"}) $(if($result.error){"($($result.error))"})" -ForegroundColor $statusColor
+            Write-Host "[Fleet Mode] [$completed/$($fleetHosts.Count)] $target : $($result.status) $(if($result.grade){"Grade=$($result.grade) Score=$($result.score)%"}) $(if($result.cleanup_status -ne 'NotRequested'){"Cleanup=$($result.cleanup_status)"}) $(if($result.error){"($($result.error))"})" -ForegroundColor $statusColor
             $fleetResults.Add($result)
         }
         if ($jobs.Count -gt 0 -and $done.Count -eq 0) { Start-Sleep -Milliseconds 500 }
@@ -748,7 +768,6 @@ if ($Silent.IsPresent -and $TargetsCsv) {
             $age = ((Get-Date) - $running.Value.StartTime).TotalSeconds
             if ($age -ge $PerHostTimeout -and $running.Value.Job.State -eq 'Running') {
                 Stop-Job $running.Value.Job -ErrorAction SilentlyContinue
-                if ($running.Value.RemoteRunId) { Invoke-FleetRemoteTempCleanup -ComputerName $running.Key -RunId $running.Value.RemoteRunId -Credential $Credential }
             }
         }
     }
@@ -761,7 +780,7 @@ if ($Silent.IsPresent -and $TargetsCsv) {
             tags = Get-FleetPrivacyIdentity $_.tags 'TAGS'
             status = $_.status; grade = $_.grade; score = $_.score; ransomware_score = $_.ransomware_score
             has_score = $_.has_score; fail_count = $_.fail_count; critical_count = $_.critical_count; skipped = $_.skipped
-            error = Convert-FleetPrivacyText $_.error; artifact_base = $_.artifact_base; duration_seconds = $_.duration_seconds
+            error = Convert-FleetPrivacyText $_.error; cleanup_status = $_.cleanup_status; cleanup_error = Convert-FleetPrivacyText $_.cleanup_error; artifact_base = $_.artifact_base; duration_seconds = $_.duration_seconds
         }
     })
     $aggCsvPath = Join-Path $fleetDir 'fleet_summary.csv'

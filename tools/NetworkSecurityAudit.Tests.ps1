@@ -861,10 +861,14 @@ Describe 'Fleet orchestration safeguards' {
         }
     }
 
-    It 'uses unique remote temp artifacts and best-effort timeout cleanup' {
+    It 'uses unique remote temp artifacts and bounded timeout cleanup' {
         $script:FleetBlock | Should -Match 'NetworkSecurityAudit_fleet_\$runId'
         $script:FleetBlock | Should -Match 'function Invoke-FleetRemoteTempCleanup'
         $script:FleetBlock | Should -Match 'Invoke-FleetRemoteTempCleanup -ComputerName \$target -RunId \$meta\.RemoteRunId'
+        $script:FleetBlock | Should -Match 'AsJob\s*=\s*\$true'
+        $script:FleetBlock | Should -Match 'Wait-Job -Job \$cleanupJob -Timeout \$TimeoutSeconds'
+        $script:FleetBlock | Should -Match 'cleanup_status'
+        $script:FleetBlock | Should -Not -Match 'Invoke-FleetRemoteTempCleanup -ComputerName \$running\.Key'
         $script:FleetBlock | Should -Not -Match 'Join-Path \$env:TEMP ''NetworkSecurityAudit_fleet\.ps1'''
         $script:FleetBlock | Should -Not -Match 'Join-Path \$env:TEMP "SecurityAudit_fleet\.html"'
     }
