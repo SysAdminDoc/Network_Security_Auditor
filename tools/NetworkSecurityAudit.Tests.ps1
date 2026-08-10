@@ -532,6 +532,35 @@ Describe 'Multi-client dashboard output safety' {
             if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
         }
     }
+
+    It 'bounds dashboard input and surfaces skipped-file reasons' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('nsa-dashboard-limits-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        try {
+            $valid = [ordered]@{
+                export_type = 'structured_findings'
+                timestamp = (Get-Date).ToString('o')
+                client = 'Bounded Client'
+                target = 'HOST01'
+                score = [ordered]@{ overall = 80; grade = 'B'; ransomware = [ordered]@{ score = 80; grade = 'B' } }
+                findings = @()
+                compliance_frameworks = [ordered]@{}
+                tool_version = 'test'
+            }
+            $valid | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $root '01_valid_findings.json') -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $root '02_oversized_findings.json') -Value ('{' + ('x' * 1200) + '}') -Encoding UTF8
+            $outPath = Join-Path $root 'dashboard.html'
+
+            Export-MultiClientDashboard -SourceDir $root -OutPath $outPath -MaxFiles 10 -MaxFileBytes 1024 -MaxTotalBytes 4096 | Should -Be $outPath
+            $html = Get-Content -LiteralPath $outPath -Raw
+            $html | Should -Match 'Skipped input files'
+            $html | Should -Match '02_oversized_findings\.json'
+            $html | Should -Match 'per-file limit'
+        }
+        finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
 }
 
 Describe 'Saved timestamp validation' {

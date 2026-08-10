@@ -133,9 +133,16 @@ fleet or RMM output share:
 
 # Flag scans older than 14 days as stale
 .\NetworkSecurityAudit.ps1 -Dashboard -InputDir "C:\MSP\ScanArchive" -StaleDays 14
+
+# Override dashboard input budgets when the archive is intentionally larger
+.\NetworkSecurityAudit.ps1 -Dashboard -InputDir "C:\MSP\ScanArchive" `
+    -DashboardMaxFiles 5000 -DashboardMaxFileBytes 20971520 -DashboardMaxTotalBytes 536870912
 ```
 
-The dashboard shows each client's latest grade/score, ransomware readiness,
+Dashboard mode defaults to 2,000 JSON files, 10 MiB per file, and 100 MiB total
+input. Files that exceed a budget or are malformed are skipped with the reason
+listed in the dashboard; valid files within the budget are still included. The
+dashboard shows each client's latest grade/score, ransomware readiness,
 critical-finding count, compliance-framework coverage, a per-client score trend,
 and a stale-scan flag, with a critical-findings-by-category rollup. It links back
 to each client's individual HTML report when one sits next to its JSON, writes a

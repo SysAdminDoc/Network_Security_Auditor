@@ -35,6 +35,12 @@
     Do not auto-relaunch with UAC elevation when the process is not already Administrator.
 .PARAMETER NoRegistryWrite
     In silent mode, skip registry-backed RMM/cache writes while allowing command-based RMM integrations.
+.PARAMETER DashboardMaxFiles
+    Dashboard mode: maximum JSON input files to inspect. Default: 2000.
+.PARAMETER DashboardMaxFileBytes
+    Dashboard mode: maximum bytes accepted from one JSON input file. Default: 10 MiB.
+.PARAMETER DashboardMaxTotalBytes
+    Dashboard mode: maximum combined bytes accepted from JSON input files. Default: 100 MiB.
 .PARAMETER CloudAssessmentPath
     Optional Maester or CISA ScubaGear JSON/CSV report path(s) to import into the combined cloud posture summary.
 .PARAMETER Client
@@ -84,6 +90,12 @@ param(
     [switch]$Dashboard,
     [string]$InputDir = '',
     [int]$StaleDays = 30,
+    [ValidateRange(1, 100000)]
+    [int]$DashboardMaxFiles = 2000,
+    [ValidateRange(1024, 1073741824)]
+    [long]$DashboardMaxFileBytes = 10MB,
+    [ValidateRange(1024, 10737418240)]
+    [long]$DashboardMaxTotalBytes = 100MB,
     [string]$HistoryPath = '',
     [string]$BaselinePath = '',
     [switch]$NoHistory,
@@ -211,6 +223,9 @@ if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
         if ($AlertPreview) { $argList += '-AlertPreview' }
         if ($TrendDays -ne 90) { $argList += '-TrendDays'; $argList += $TrendDays }
         if ($HistoryRetentionDays -ne 365) { $argList += '-HistoryRetentionDays'; $argList += $HistoryRetentionDays }
+        if ($DashboardMaxFiles -ne 2000) { $argList += '-DashboardMaxFiles'; $argList += $DashboardMaxFiles }
+        if ($DashboardMaxFileBytes -ne 10MB) { $argList += '-DashboardMaxFileBytes'; $argList += $DashboardMaxFileBytes }
+        if ($DashboardMaxTotalBytes -ne 100MB) { $argList += '-DashboardMaxTotalBytes'; $argList += $DashboardMaxTotalBytes }
         foreach ($cloudPath in @($CloudAssessmentPath)) { if ($cloudPath) { $argList += '-CloudAssessmentPath'; $argList += "`"$cloudPath`"" } }
         if ($BrandingConfig) { $argList += '-BrandingConfig'; $argList += "`"$BrandingConfig`"" }
         if ($TargetsCsv) { $argList += '-TargetsCsv'; $argList += "`"$TargetsCsv`"" }
@@ -1003,23 +1018,60 @@ function Export-MultiClientDashboard {
         [string]$SourceDir,
         [string]$OutPath,
         [int]$StaleAfterDays = 30,
-        [string]$CsvPath = ''
+        [string]$CsvPath = '',
+        [ValidateRange(1, 100000)]
+        [int]$MaxFiles = 2000,
+        [ValidateRange(1024, 1073741824)]
+        [long]$MaxFileBytes = 10MB,
+        [ValidateRange(1024, 10737418240)]
+        [long]$MaxTotalBytes = 100MB
     )
     function Convert-DashHtml { param([string]$s) if ($null -eq $s) { return '' }; ($s -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;' -replace "'",'&#39;') }
 
-    if (-not (Test-Path -LiteralPath $SourceDir)) {
+    if (-not (Test-Path -LiteralPath $SourceDir -PathType Container)) {
         Write-Host "[Dashboard] Source directory not found: $SourceDir" -ForegroundColor Red
         return $null
     }
     Write-Host "[Dashboard] Scanning '$SourceDir' for structured findings exports..." -ForegroundColor Cyan
-    $jsonFiles = @(Get-ChildItem -LiteralPath $SourceDir -Recurse -Filter '*.json' -File -EA SilentlyContinue)
     $records = New-Object System.Collections.Generic.List[object]
-    $parsed = 0; $skipped = 0
-    foreach ($jf in $jsonFiles) {
+    $skipDetails = New-Object System.Collections.Generic.List[string]
+    $jsonFileCount = 0; $acceptedBytes = [long]0; $parsed = 0; $skipped = 0
+    foreach ($jf in Get-ChildItem -LiteralPath $SourceDir -Recurse -Filter '*.json' -File -EA SilentlyContinue) {
+        $jsonFileCount++
+        if ($jsonFileCount -gt $MaxFiles) {
+            $skipped++
+            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): file-count limit of $MaxFiles reached") }
+            continue
+        }
+        $fileBytes = [long]0
+        try { $fileBytes = [long]$jf.Length } catch {
+            $skipped++
+            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): unable to read file size") }
+            continue
+        }
+        if ($fileBytes -gt $MaxFileBytes) {
+            $skipped++
+            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): $fileBytes bytes exceeds per-file limit of $MaxFileBytes") }
+            continue
+        }
+        if ($acceptedBytes -gt ($MaxTotalBytes - $fileBytes)) {
+            $skipped++
+            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): total input byte limit of $MaxTotalBytes would be exceeded") }
+            continue
+        }
+        $acceptedBytes += $fileBytes
         try {
             $doc = Get-Content -LiteralPath $jf.FullName -Raw -EA Stop | ConvertFrom-Json -EA Stop
-        } catch { $skipped++; continue }
-        if (-not $doc -or $doc.export_type -ne 'structured_findings') { $skipped++; continue }
+        } catch {
+            $skipped++
+            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): invalid JSON") }
+            continue
+        }
+        if (-not $doc -or $doc.export_type -ne 'structured_findings') {
+            $skipped++
+            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): not a structured findings export") }
+            continue
+        }
         $parsed++
         $ts = $null
         if ($doc.timestamp) { try { $ts = [datetime]$doc.timestamp } catch { $ts = $null } }
@@ -1072,7 +1124,8 @@ function Export-MultiClientDashboard {
     }
 
     if ($records.Count -eq 0) {
-        Write-Host "[Dashboard] No structured findings exports found ($($jsonFiles.Count) JSON files scanned, $skipped skipped)." -ForegroundColor Yellow
+        Write-Host "[Dashboard] No structured findings exports found ($jsonFileCount JSON files scanned, $skipped skipped; limits: $MaxFiles files/$MaxFileBytes bytes per file/$MaxTotalBytes total bytes)." -ForegroundColor Yellow
+        foreach ($detail in $skipDetails) { Write-Host "[Dashboard] Skipped: $detail" -ForegroundColor Yellow }
         return $null
     }
 
@@ -1139,6 +1192,14 @@ function Export-MultiClientDashboard {
     }
     if ($catCritical.Count -eq 0) { [void]$catHtml.Append("<div class='sub'>No critical failures across the latest scans.</div>") }
 
+    $limitHtml = New-Object System.Text.StringBuilder
+    if ($skipDetails.Count -gt 0) {
+        [void]$limitHtml.Append("<div class='panel'><h2>Skipped input files</h2><div class='sub'>Limits: $MaxFiles files, $MaxFileBytes bytes per file, $MaxTotalBytes total bytes. $skipped file(s) were not included.</div><ul>")
+        foreach ($detail in $skipDetails) { [void]$limitHtml.Append("<li>$(Convert-DashHtml $detail)</li>") }
+        if ($skipped -gt $skipDetails.Count) { [void]$limitHtml.Append("<li>$(Convert-DashHtml ([string]($skipped - $skipDetails.Count) + ' additional skipped file(s)'))</li>") }
+        [void]$limitHtml.Append('</ul></div>')
+    }
+
     $html = @"
 <!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
 <title>$($script:ProductName) - Multi-Client Dashboard</title>
@@ -1178,12 +1239,13 @@ footer{color:var(--sub);font-size:11px;margin-top:24px;text-align:center}
 <table><thead><tr><th>Client / Target</th><th>Grade</th><th>Score</th><th>Ransomware</th><th>Criticals</th><th>Frameworks</th><th>Cloud</th><th>Trend</th><th>Last Scan</th><th>Freshness</th></tr></thead>
 <tbody>$($rowsHtml.ToString())</tbody></table></div>
 <div class='panel'><h2>Critical Findings by Category (across latest scans)</h2>$($catHtml.ToString())</div>
+$($limitHtml.ToString())
 <footer>Generated by $($script:ProductName) v$($script:ProductVersion). Aggregate scores only - no finding evidence or notes are embedded.</footer>
 </div></body></html>
 "@
 
     $html | Set-Content -LiteralPath $OutPath -Encoding UTF8
-    Write-Host "[Dashboard] Wrote dashboard: $OutPath ($totalClients clients, $($records.Count) scans, $skipped non-matching files skipped)" -ForegroundColor Green
+    Write-Host "[Dashboard] Wrote dashboard: $OutPath ($totalClients clients, $($records.Count) scans, $skipped files skipped; limits: $MaxFiles files/$MaxFileBytes bytes per file/$MaxTotalBytes total bytes)" -ForegroundColor Green
 
     if ($CsvPath) {
         $csvRows = $latestRows | ForEach-Object {
@@ -1214,7 +1276,7 @@ if ($Dashboard) {
     $dashCsv = $dashOut -replace '\.html$','.csv'
     Write-Host ""
     Write-Host "$($script:ProductName) v$($script:ProductVersion) - Dashboard Mode" -ForegroundColor Cyan
-    $written = Export-MultiClientDashboard -SourceDir $dashSrc -OutPath $dashOut -StaleAfterDays $StaleDays -CsvPath $dashCsv
+    $written = Export-MultiClientDashboard -SourceDir $dashSrc -OutPath $dashOut -StaleAfterDays $StaleDays -CsvPath $dashCsv -MaxFiles $DashboardMaxFiles -MaxFileBytes $DashboardMaxFileBytes -MaxTotalBytes $DashboardMaxTotalBytes
     if ($written) { exit 0 } else { exit 1 }
 }
 

@@ -24,6 +24,9 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: Intune STIG imports tolerate provider casing differences, malformed rows, and duplicate or blank CSV headers while surfacing bounded import warnings.
 - Fixed: Existing dotted output directories are preserved by the C# CLI instead of being mistaken for file paths.
 
+### Performance
+- Fixed: PowerShell dashboard imports now enforce configurable file-count, per-file-byte, and total-byte budgets and show bounded skip diagnostics in the dashboard.
+
 ### Testing
 - Added: Export contract tests now enforce the schema validation keywords used by committed contracts, including dynamic maps, references, composition, and negative fixtures.
 
