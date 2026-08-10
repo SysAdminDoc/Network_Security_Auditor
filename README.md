@@ -619,7 +619,8 @@ review dates, supported OS/builds, check coverage, and stale-review windows.
 -BaselinePath        Explicit baseline snapshot to compare this run against.
                      Default: the history folder's latest snapshot
 -NoHistory           Disable continuous delta/history entirely
--TrendDays           Trend window in days for history reporting. Default: 90
+-TrendDays           Dashboard/history trend window in days (1-3650).
+                     Default: 90
 -AlertPreview        Print the delta alert/webhook payload (never sends it)
 -HistoryRetentionDays Prune snapshot files older than this. 0 = keep all.
                      Default: 365

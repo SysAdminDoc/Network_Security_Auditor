@@ -587,6 +587,34 @@ Describe 'Multi-client dashboard output safety' {
             if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
         }
     }
+
+    It 'applies the requested trend window while retaining the latest scan' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('nsa-dashboard-trend-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        try {
+            $base = [ordered]@{
+                export_type = 'structured_findings'
+                client = 'Trend Client'
+                target = 'HOST01'
+                score = [ordered]@{ overall = 70; grade = 'C'; ransomware = [ordered]@{ score = 70; grade = 'C' } }
+                findings = @()
+                compliance_frameworks = [ordered]@{}
+                tool_version = 'test'
+            }
+            $old = [ordered]@{} + $base; $old.timestamp = (Get-Date).AddDays(-60).ToString('o'); $old.score = [ordered]@{ overall = 55; grade = 'D'; ransomware = [ordered]@{ score = 55; grade = 'D' } }
+            $new = [ordered]@{} + $base; $new.timestamp = (Get-Date).AddDays(-2).ToString('o')
+            $old | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $root '01_old_findings.json') -Encoding UTF8
+            $new | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $root '02_new_findings.json') -Encoding UTF8
+            $outPath = Join-Path $root 'dashboard.html'
+
+            Export-MultiClientDashboard -SourceDir $root -OutPath $outPath -TrendWindowDays 30 | Should -Be $outPath
+            $html = Get-Content -LiteralPath $outPath -Raw
+            $html | Should -Match '2 scans / 1 in 30d trend'
+        }
+        finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
 }
 
 Describe 'Saved timestamp validation' {

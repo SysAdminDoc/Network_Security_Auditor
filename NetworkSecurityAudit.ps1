@@ -107,6 +107,7 @@ param(
     [string]$HistoryPath = '',
     [string]$BaselinePath = '',
     [switch]$NoHistory,
+    [ValidateRange(1, 3650)]
     [int]$TrendDays = 90,
     [switch]$AlertPreview,
     [int]$HistoryRetentionDays = 365,
@@ -1029,6 +1030,8 @@ function Export-MultiClientDashboard {
         [string]$OutPath,
         [int]$StaleAfterDays = 30,
         [string]$CsvPath = '',
+        [ValidateRange(1, 3650)]
+        [int]$TrendWindowDays = 90,
         [ValidateRange(1, 100000)]
         [int]$MaxFiles = 2000,
         [ValidateRange(1024, 1073741824)]
@@ -1145,9 +1148,13 @@ function Export-MultiClientDashboard {
     foreach ($g in $byClient) {
         $ordered = @($g.Group | Sort-Object { if ($_.Timestamp) { $_.Timestamp } else { [datetime]::MinValue } })
         $latest = $ordered[-1]
-        $trend = @($ordered | ForEach-Object { $_.ScorePct })
+        $trendCutoff = (Get-Date).AddDays(-$TrendWindowDays)
+        $trendRecords = @($ordered | Where-Object { -not $_.Timestamp -or $_.Timestamp -ge $trendCutoff })
+        $trend = @($trendRecords | ForEach-Object { $_.ScorePct })
+        if ($trend.Count -eq 0) { $trend = @($latest.ScorePct) }
         $latest | Add-Member -NotePropertyName Trend -NotePropertyValue $trend -Force
         $latest | Add-Member -NotePropertyName ScanCount -NotePropertyValue $g.Count -Force
+        $latest | Add-Member -NotePropertyName TrendCount -NotePropertyValue $trendRecords.Count -Force
         $latestRows.Add($latest)
     }
     $latestRows = @($latestRows | Sort-Object ScorePct)
@@ -1192,7 +1199,7 @@ function Export-MultiClientDashboard {
         # mini trend bars
         $trendBars = ''
         foreach ($tp in $r.Trend) { $h = [math]::Max(2,[int]($tp * 0.28)); $tc = Get-ScoreColor $tp; $trendBars += "<span class='tbar' style='height:${h}px;background:$tc' title='$tp%'></span>" }
-        [void]$rowsHtml.Append("<tr><td>$clientCell<div class='sub'>$(Convert-DashHtml $r.Target)</div></td><td style='color:$gColor;font-weight:700'>$gradeText</td><td style='color:$sColor;font-weight:700'>$($r.ScorePct)%</td><td>$($r.RansomScore)% ($ransomGradeText)</td><td style='color:$(if($r.Critical -gt 0){'#f38ba8'}else{'#a6e3a1'});font-weight:700'>$($r.Critical)</td><td>$fwCell</td><td>$cloudCell</td><td><div class='trend'>$trendBars</div><div class='sub'>$($r.ScanCount) scans</div></td><td>$lastScan</td><td>$staleBadge</td></tr>")
+        [void]$rowsHtml.Append("<tr><td>$clientCell<div class='sub'>$(Convert-DashHtml $r.Target)</div></td><td style='color:$gColor;font-weight:700'>$gradeText</td><td style='color:$sColor;font-weight:700'>$($r.ScorePct)%</td><td>$($r.RansomScore)% ($ransomGradeText)</td><td style='color:$(if($r.Critical -gt 0){'#f38ba8'}else{'#a6e3a1'});font-weight:700'>$($r.Critical)</td><td>$fwCell</td><td>$cloudCell</td><td><div class='trend'>$trendBars</div><div class='sub'>$($r.ScanCount) scans / $($r.TrendCount) in ${TrendWindowDays}d trend</div></td><td>$lastScan</td><td>$staleBadge</td></tr>")
     }
 
     $catHtml = New-Object System.Text.StringBuilder
@@ -1286,7 +1293,7 @@ if ($Dashboard) {
     $dashCsv = $dashOut -replace '\.html$','.csv'
     Write-Host ""
     Write-Host "$($script:ProductName) v$($script:ProductVersion) - Dashboard Mode" -ForegroundColor Cyan
-    $written = Export-MultiClientDashboard -SourceDir $dashSrc -OutPath $dashOut -StaleAfterDays $StaleDays -CsvPath $dashCsv -MaxFiles $DashboardMaxFiles -MaxFileBytes $DashboardMaxFileBytes -MaxTotalBytes $DashboardMaxTotalBytes
+    $written = Export-MultiClientDashboard -SourceDir $dashSrc -OutPath $dashOut -StaleAfterDays $StaleDays -CsvPath $dashCsv -TrendWindowDays $TrendDays -MaxFiles $DashboardMaxFiles -MaxFileBytes $DashboardMaxFileBytes -MaxTotalBytes $DashboardMaxTotalBytes
     if ($written) { exit 0 } else { exit 1 }
 }
 
