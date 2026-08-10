@@ -515,6 +515,7 @@ Optional for full coverage:
 - Internet access is limited to documented lookup/probe paths such as the CISA KEV catalog, DNS filtering tests, and egress checks.
 - Use `-NoInternet` to skip public internet downloads, external DNS tests, and outbound egress probes.
 - Reports and structured exports are written to the selected output folder. No report data is uploaded by the script.
+- Each export batch writes a deterministic `*_data-handling.json` sidecar (or `data-handling.json` inside a C# SIEM pack) that declares privacy mode, identity strategy, field classifications, source-path policy, artifact names, and secret fields excluded. Normal mode explicitly reports that identities are present; `-PrivacyMode`/`--privacy` reports pseudonymization and redaction.
 - RMM field writes are limited to the configured RMM integration paths documented below.
 - Use `-NoRmmWrite` in silent mode when reports should be generated without updating RMM fields.
 - Use `-NoRegistryWrite` when registry-backed RMM/cache writes should be suppressed while command-based RMM integrations remain available.

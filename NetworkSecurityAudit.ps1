@@ -12696,13 +12696,21 @@ function Invoke-AutoExport {
     try { $null = Export-FindingsCSV -OutPath "${basePath}.csv"; Write-Log "Auto-export CSV" 'INFO' } catch {}
     try { $null = Export-ComplianceSummary -OutPath "${basePath}_summary.json"; Write-Log "Auto-export compliance summary" 'INFO' } catch {}
     try { $null = Export-RunLogJSONL -OutPath "${basePath}_runlog.jsonl"; Write-Log "Auto-export run log JSONL" 'INFO' } catch {}
+    try {
+        $autoArtifacts = @("${basePath}.html", "${basePath}_findings.json", "${basePath}.csv", "${basePath}_summary.json", "${basePath}_runlog.jsonl") | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+        $null = Export-DataHandlingManifest -OutPath "${basePath}_data-handling.json" -ArtifactPaths $autoArtifacts -PrivacyMode $script:CliPrivacyMode
+        Write-Log "Auto-export data-handling manifest" 'INFO'
+    } catch { Write-Log "Auto-export data-handling manifest failed: $_" 'WARN' }
     return $outFile
 }
 
 $el['btnExportHTML'].Add_Click({
     $dlg=New-Object Microsoft.Win32.SaveFileDialog; $dlg.Filter='HTML|*.html'; $dlg.FileName="Audit_$($el['txtClient'].Text -replace '\s','_')_$(Get-Date -Format 'yyyyMMdd').html"
     if($dlg.ShowDialog()){
-        try { Export-HTMLReport $dlg.FileName -OpenAfter }
+        try {
+            Export-HTMLReport $dlg.FileName -OpenAfter
+            Export-DataHandlingManifest -OutPath "$($dlg.FileName).data-handling.json" -ArtifactPaths @($dlg.FileName) -PrivacyMode $script:CliPrivacyMode | Out-Null
+        }
         catch { $el['StatusText'].Text = "HTML export failed: $($_.Exception.Message)"; Write-Log "HTML export failed: $_" 'ERROR' }
     }
 })
@@ -12719,6 +12727,7 @@ $el['btnExportJSON'].Add_Click({
                 2 { Export-FindingsJSONL -OutPath $dlg.FileName; $el['StatusText'].Text = "JSONL (SIEM) exported: $($dlg.FileName)" }
                 3 { Export-ComplianceSummary -OutPath $dlg.FileName; $el['StatusText'].Text = "Compliance summary exported: $($dlg.FileName)" }
             }
+            Export-DataHandlingManifest -OutPath "$($dlg.FileName).data-handling.json" -ArtifactPaths @($dlg.FileName) -PrivacyMode $script:CliPrivacyMode | Out-Null
         } catch {
             $el['StatusText'].Text = "Export failed: $($_.Exception.Message)"
             Write-Log "JSON export failed: $_" 'ERROR'
@@ -12733,6 +12742,7 @@ $el['btnExportCSV'].Add_Click({
     if ($dlg.ShowDialog()) {
         try {
             Export-FindingsCSV -OutPath $dlg.FileName
+            Export-DataHandlingManifest -OutPath "$($dlg.FileName).data-handling.json" -ArtifactPaths @($dlg.FileName) -PrivacyMode $script:CliPrivacyMode | Out-Null
             $el['StatusText'].Text = "CSV exported: $($dlg.FileName)"
         } catch {
             $el['StatusText'].Text = "CSV export failed: $($_.Exception.Message)"
@@ -14044,6 +14054,41 @@ function Export-PDF {
     return $null
 }
 
+function Export-DataHandlingManifest {
+    param(
+        [string]$OutPath,
+        [string[]]$ArtifactPaths = @(),
+        [bool]$PrivacyMode = $false
+    )
+
+    $payload = [ordered]@{
+        schema_version = '1.0'
+        policy_version = '1.0'
+        generated_at_utc = (Get-Date).ToUniversalTime().ToString('o')
+        privacy_mode = $PrivacyMode
+        identity_strategy = if ($PrivacyMode) { 'sha256-pseudonym' } else { 'present' }
+        source_path_policy = if ($PrivacyMode) { 'redacted' } else { 'included only where required by the export format' }
+        field_classifications = [ordered]@{
+            identity = 'tenant-sensitive'
+            host_and_domain = 'tenant-sensitive'
+            findings_and_evidence = 'technical-sensitive'
+            source_paths = 'restricted'
+            credentials_and_tokens = 'secret-excluded'
+            scores_and_status = 'operational'
+        }
+        secret_fields_excluded = @('access_token','refresh_token','client_secret','password','private_key','authorization')
+        artifacts = @($ArtifactPaths | Where-Object { $_ } | ForEach-Object { [System.IO.Path]::GetFileName($_) } | Sort-Object -Unique)
+        redaction = [ordered]@{
+            hostnames = if ($PrivacyMode) { 'pseudonymized' } else { 'present' }
+            domains = if ($PrivacyMode) { 'pseudonymized' } else { 'present' }
+            tenant_and_user_identifiers = if ($PrivacyMode) { 'pseudonymized' } else { 'present' }
+            secrets = 'removed'
+        }
+    }
+    $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutPath -Encoding UTF8
+    return $OutPath
+}
+
 # ── Phase 5G: MITRE ATT&CK Navigator Layer Export ─────────────────────────
 function Export-AttackNavigator {
     param([string]$OutPath, [string]$ClientName = '')
@@ -15079,6 +15124,18 @@ if ($script:SilentMode) {
         $null = Export-ComplianceSummary -OutPath $summaryOut -ClientName $clientName -AuditorName $auditorName
         Write-Host "[Silent Mode] Compliance summary: $summaryOut" -ForegroundColor Green
     } catch { Write-Host "[Silent Mode] Compliance summary export failed: $_" -ForegroundColor Yellow; $summaryOut = '' }
+
+    $exportArtifacts = @($outFile, $jsonFindingsOut, $jsonlOut, $runLogOut, $csvOut, $sarifOut, $intuneOut, $pdfOut, $ocsfOut, $oscalOut, $navOut, $summaryOut)
+    if ($siemDir -and (Test-Path -LiteralPath $siemDir -PathType Container)) {
+        $exportArtifacts += @(Get-ChildItem -LiteralPath $siemDir -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object FullName)
+    }
+    $dataHandlingPath = "${basePath}_data-handling.json"
+    try {
+        $null = Export-DataHandlingManifest -OutPath $dataHandlingPath -ArtifactPaths @($exportArtifacts | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }) -PrivacyMode $script:CliPrivacyMode
+        Write-Host "[Silent Mode] Data-handling manifest: $dataHandlingPath" -ForegroundColor Green
+    } catch {
+        Write-Host "[Silent Mode] Data-handling manifest FAILED: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
 
     $riskData = Get-RiskScore
     $rwData = Get-RansomwareScore

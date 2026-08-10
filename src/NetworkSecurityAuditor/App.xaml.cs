@@ -626,6 +626,17 @@ public partial class App : Application
             Console.WriteLine(pdfOk ? $"  PDF: {pdfPath}" : $"  PDF: {pdfMsg}");
         }
 
+        var dataHandlingPath = Path.Combine(outputDir, $"{baseName}_data-handling.json");
+        var dataHandlingArtifacts = Directory
+            .EnumerateFiles(outputDir, $"{baseName}*", SearchOption.TopDirectoryOnly)
+            .Where(path => !path.Equals(dataHandlingPath, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var siemDirectory = Path.Combine(outputDir, $"{baseName}_siem_configs");
+        if (Directory.Exists(siemDirectory))
+            dataHandlingArtifacts.AddRange(Directory.EnumerateFiles(siemDirectory, "*", SearchOption.AllDirectories));
+        await DataHandlingManifestWriter.WriteAsync(dataHandlingPath, args.PrivacyMode, dataHandlingArtifacts);
+        Console.WriteLine($"  Data-handling manifest: {dataHandlingPath}");
+
         Console.WriteLine();
 
         var exitCode = ExitCode.Green;

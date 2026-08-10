@@ -591,6 +591,25 @@ Describe 'Privacy redaction coverage' {
     }
 }
 
+Describe 'Data-handling manifest coverage' {
+    It 'emits a deterministic privacy disclosure sidecar for silent exports' {
+        $script:Text | Should -Match 'function Export-DataHandlingManifest'
+        $script:Text | Should -Match 'policy_version\s*=\s*''1\.0'''
+        $script:Text | Should -Match 'field_classifications'
+        $script:Text | Should -Match 'secret_fields_excluded'
+        $script:Text | Should -Match 'identity_strategy'
+        $script:Text | Should -Match 'source_path_policy'
+        $script:Text | Should -Match 'data-handling\.json'
+        $script:Text | Should -Match 'GetFileName\(\$_\)'
+    }
+
+    It 'never writes raw tenant, user, or token values into the manifest payload' {
+        $manifestBlock = Get-Block $script:Text 'function Export-DataHandlingManifest' '# ── Phase 5G'
+        $manifestBlock | Should -Not -Match '\$script:Env\.TenantName|\$env:USERNAME|access_token\s*=|client_secret\s*='
+        $manifestBlock | Should -Match 'credentials_and_tokens\s*=\s*''secret-excluded'''
+    }
+}
+
 Describe 'Multi-client dashboard output safety' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)

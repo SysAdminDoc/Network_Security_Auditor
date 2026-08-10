@@ -965,6 +965,10 @@ public partial class MainViewModel : ViewModelBase
                 var folder = Path.Combine(ExportOutputFolder, $"{baseName}{option.FileSuffix}");
                 var files = Export.SiemContentPackExporter.ExportAll(folder)
                     .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                await Export.DataHandlingManifestWriter.WriteAsync(
+                    Path.Combine(folder, "data-handling.json"),
+                    PrivacyMode,
+                    files);
                 ScanStatus = $"SIEM content pack exported: {folder} ({files.Length} files)";
                 AppendActivity(ScanStatus);
                 return;
@@ -972,6 +976,10 @@ public partial class MainViewModel : ViewModelBase
 
             var path = Path.Combine(ExportOutputFolder, $"{baseName}{option.FileSuffix}.{option.Extension}");
             await WriteExportAsync(option.Kind, path);
+            await Export.DataHandlingManifestWriter.WriteAsync(
+                Export.DataHandlingManifestWriter.SidecarPath(path),
+                PrivacyMode,
+                [path]);
             ScanStatus = $"{option.DisplayName} exported{(PrivacyMode ? " (privacy mode)" : "")}: {path}";
             AppendActivity($"{option.DisplayName} exported");
         });
