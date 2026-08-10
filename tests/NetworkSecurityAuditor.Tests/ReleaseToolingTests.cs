@@ -1,5 +1,7 @@
 ﻿namespace NetworkSecurityAuditor.Tests;
 
+using System.Diagnostics;
+
 public class ReleaseToolingTests
 {
     [Fact]
@@ -8,6 +10,9 @@ public class ReleaseToolingTests
         var script = ReadSourceFile("tools", "Publish-CSharpRelease.ps1");
 
         Assert.Contains("Remove-Item -LiteralPath $resolvedArtifactsDir -Recurse -Force", script);
+        Assert.Contains("Assert-ReleaseArtifactsPath", script);
+        Assert.Contains("$artifactsRootWithSeparator", script);
+        Assert.Contains("FileAttributes]::ReparsePoint", script);
         Assert.Contains("'test', $solutionPath", script);
         Assert.Contains("'publish'", script);
         Assert.Contains("Set-AuthenticodeSignature", script);
@@ -24,6 +29,56 @@ public class ReleaseToolingTests
         Assert.Contains("windows-net10", script);
         Assert.DoesNotContain("windows-net9", script);
         Assert.Contains("NetworkSecurityAuditor.exe", script);
+    }
+
+    [Theory]
+    [InlineData(".")]
+    [InlineData("artifacts")]
+    [InlineData("src")]
+    [InlineData("tests")]
+    [InlineData("tools")]
+    [InlineData("..")]
+    public void Csharp_Release_Tool_Rejects_Dangerous_Artifact_Directories(string relativePath)
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var repoRoot = FindRepoRoot();
+        var scriptPath = Path.Combine(repoRoot, "tools", "Publish-CSharpRelease.ps1");
+        var markerPath = Path.Combine(repoRoot, "src", "NetworkSecurityAuditor", "NetworkSecurityAuditor.csproj");
+        var markerBefore = File.ReadAllBytes(markerPath);
+        var targetPath = Path.GetFullPath(Path.Combine(repoRoot, relativePath));
+
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo("powershell.exe")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                WorkingDirectory = repoRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            },
+        };
+        process.StartInfo.ArgumentList.Add("-NoProfile");
+        process.StartInfo.ArgumentList.Add("-NonInteractive");
+        process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
+        process.StartInfo.ArgumentList.Add("Bypass");
+        process.StartInfo.ArgumentList.Add("-File");
+        process.StartInfo.ArgumentList.Add(scriptPath);
+        process.StartInfo.ArgumentList.Add("-ArtifactsDir");
+        process.StartInfo.ArgumentList.Add(targetPath);
+        process.StartInfo.ArgumentList.Add("-SkipTests");
+        process.StartInfo.ArgumentList.Add("-SkipSigning");
+
+        Assert.True(process.Start(), "Failed to launch the release script.");
+        Assert.True(process.WaitForExit(30_000), $"Release validation did not stop for '{relativePath}'.");
+
+        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        Assert.NotEqual(0, process.ExitCode);
+        Assert.Contains("Refusing", output, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(markerBefore, File.ReadAllBytes(markerPath));
     }
 
     [Fact]

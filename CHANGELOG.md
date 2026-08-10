@@ -2,6 +2,11 @@
 
 All notable changes to Network_Security_Auditor will be documented in this file.
 
+## Unreleased
+
+### Security
+- Fixed: C# release artifact cleanup now rejects repository roots, source directories, and reparse-point paths before any recursive deletion.
+
 ## [v5.3.3 / v4.11.4] - 2026-08-09
 
 ### Maintenance

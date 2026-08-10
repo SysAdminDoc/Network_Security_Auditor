@@ -39,6 +39,46 @@ function Assert-UnderRepo {
     }
 }
 
+function Assert-ReleaseArtifactsPath {
+    param([string]$Path)
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    Assert-UnderRepo $fullPath
+
+    $artifactsRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'artifacts'))
+    $artifactsRootWithSeparator = $artifactsRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    if ($fullPath.Equals($repoRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+        $fullPath.Equals($artifactsRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+        -not $fullPath.StartsWith($artifactsRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean release artifacts outside a dedicated artifacts child directory: $fullPath"
+    }
+
+    $existingPath = $fullPath
+    while (-not [string]::IsNullOrWhiteSpace($existingPath)) {
+        if (Test-Path -LiteralPath $existingPath) {
+            $existingItem = Get-Item -LiteralPath $existingPath -Force
+            if (($existingItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Refusing to clean a release artifact path containing a reparse point: $existingPath"
+            }
+
+            if ($existingPath.Equals($fullPath, [System.StringComparison]::OrdinalIgnoreCase) -and -not $existingItem.PSIsContainer) {
+                throw "Release artifact path must be a directory: $fullPath"
+            }
+
+            break
+        }
+
+        $parentPath = Split-Path -LiteralPath $existingPath -Parent
+        if ([string]::IsNullOrWhiteSpace($parentPath) -or $parentPath.Equals($existingPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            break
+        }
+
+        $existingPath = $parentPath
+    }
+
+    return $fullPath
+}
+
 $resolvedArtifactsDir = Resolve-RepoPath $ArtifactsDir
 
 function Invoke-Checked {
@@ -353,7 +393,7 @@ function Write-CycloneDxSbom {
     $bom | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
-Assert-UnderRepo $resolvedArtifactsDir
+$resolvedArtifactsDir = Assert-ReleaseArtifactsPath $resolvedArtifactsDir
 
 if (Test-Path -LiteralPath $resolvedArtifactsDir) {
     Remove-Item -LiteralPath $resolvedArtifactsDir -Recurse -Force
