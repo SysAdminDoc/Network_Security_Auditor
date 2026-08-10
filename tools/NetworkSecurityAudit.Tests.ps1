@@ -187,6 +187,23 @@ Describe 'External export version contracts' {
     }
 }
 
+Describe 'Diagnostics profile' {
+    It 'exposes a non-invasive diagnostics switch and bounded outputs' {
+        $script:Text | Should -Match '\[switch\]\$DiagnosticsOnly'
+        $script:Text | Should -Match '\$script:CliDiagnosticsOnly\s*=\s*\$DiagnosticsOnly\.IsPresent'
+        $script:Text | Should -Match 'function Export-DiagnosticsReport'
+        $script:Text | Should -Match 'NetworkSecurityAudit_diagnostics\.json'
+        $script:Text | Should -Match 'NetworkSecurityAudit_diagnostics\.txt'
+        $script:Text | Should -Match 'exit 67'
+        $script:Text | Should -Match 'Graph authentication readiness'
+    }
+
+    It 'does not include raw host, domain, or user identifiers in the diagnostics payload' {
+        $diagnosticBlock = Get-Block $script:Text 'function Export-DiagnosticsReport' '# ── Launch'
+        $diagnosticBlock | Should -Not -Match '\$env:COMPUTERNAME|\$env:USERNAME|DomainName|TenantName|ClientName|AuditorName'
+    }
+}
+
 Describe 'Export serialization' {
     It 'serializes a representative finding object to valid JSON' {
         $sample = [ordered]@{

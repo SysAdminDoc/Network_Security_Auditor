@@ -75,5 +75,7 @@ public enum ExitCode
     ReviewNeeded = 2,
     ComplianceAlert = 3,
     InputPathUnavailable = 64,
-    NoScorableChecks = 65
+    NoScorableChecks = 65,
+    DiagnosticsDegraded = 66,
+    DiagnosticsBlocked = 67
 }

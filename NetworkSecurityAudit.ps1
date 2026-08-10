@@ -33,6 +33,8 @@
     Skip public internet downloads, DNS filter tests, and outbound probe checks.
 .PARAMETER NoElevate
     Do not auto-relaunch with UAC elevation when the process is not already Administrator.
+.PARAMETER DiagnosticsOnly
+    Emit a bounded human-readable and JSON readiness report without running audit checks or persisting identities, tokens, or credentials.
 .PARAMETER NoRegistryWrite
     In silent mode, skip registry-backed RMM/cache writes while allowing command-based RMM integrations.
 .PARAMETER DashboardMaxFiles
@@ -88,6 +90,7 @@ param(
     [switch]$NoRmmWrite,
     [switch]$NoInternet,
     [switch]$NoElevate,
+    [switch]$DiagnosticsOnly,
     [switch]$NoRegistryWrite,
     [switch]$WriteManifestOnly,
     [string[]]$CloudAssessmentPath = @(),
@@ -197,7 +200,7 @@ $script:ProductSubtitle = "Windows Security Assessment Tool v$($script:ProductVe
 $script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 $script:ElevationSkipped = (-not $script:IsAdmin -and $NoElevate.IsPresent)
 # Dashboard mode only reads JSON files and writes HTML/CSV; never elevate for it.
-if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
+if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard -and -not $DiagnosticsOnly) {
     try {
         if ($TargetsCsv -and $Credential) {
             Write-Host "[Elevation] ERROR: -Credential cannot be forwarded through a UAC relaunch. Re-run from an elevated shell, use -NoElevate, or omit -Credential." -ForegroundColor Red
@@ -224,6 +227,7 @@ if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
         if ($PrivacyMode) { $argList += '-PrivacyMode' }
         if ($NoRmmWrite)   { $argList += '-NoRmmWrite' }
         if ($NoInternet)   { $argList += '-NoInternet' }
+        if ($DiagnosticsOnly) { $argList += '-DiagnosticsOnly' }
         if ($NoRegistryWrite) { $argList += '-NoRegistryWrite' }
         if ($WriteManifestOnly) { $argList += '-WriteManifestOnly' }
         if ($HistoryPath)  { $argList += '-HistoryPath'; $argList += "`"$HistoryPath`"" }
@@ -257,7 +261,7 @@ if (-not $script:IsAdmin -and -not $NoElevate -and -not $Dashboard) {
 if (-not (Test-Path variable:script:ElevationFailed)) { $script:ElevationFailed = $false }
 
 # ── Store CLI config in script scope ─────────────────────────────────────────
-$script:SilentMode  = $Silent.IsPresent
+$script:SilentMode  = $Silent.IsPresent -or $DiagnosticsOnly.IsPresent
 $script:CliProfile  = $ScanProfile
 $script:CliOutput   = $OutputPath
 $script:CliReport   = $ReportTier
@@ -277,6 +281,7 @@ $script:CliPrivacyMode = $PrivacyMode.IsPresent
 $script:CliNoRmmWrite  = $NoRmmWrite.IsPresent
 $script:CliNoInternet  = $NoInternet.IsPresent
 $script:CliNoElevate   = $NoElevate.IsPresent
+$script:CliDiagnosticsOnly = $DiagnosticsOnly.IsPresent
 $script:CliNoRegistryWrite = $NoRegistryWrite.IsPresent
 $script:CliWriteManifestOnly = $WriteManifestOnly.IsPresent
 $script:CliHistoryPath  = $HistoryPath
@@ -14552,6 +14557,116 @@ function Enable-AuditPolicies {
     return @{ Success=($failed -eq 0); Configured=$configured; Failed=$failed; Message="$configured policies configured, $failed failed" }
 }
 
+function Export-DiagnosticsReport {
+    param([string]$OutputDirectory)
+
+    $checks = [System.Collections.Generic.List[object]]::new()
+    function Add-DiagnosticCheck {
+        param([string]$Id, [string]$Name, [string]$Status, [string]$Detail, [string]$Remediation)
+        $checks.Add([ordered]@{
+            id = $Id
+            name = $Name
+            status = $Status
+            detail = $Detail
+            remediation = $Remediation
+        }) | Out-Null
+    }
+
+    $adminStatus = if ($script:Env.IsAdmin) { 'Ready' } else { 'Degraded' }
+    Add-DiagnosticCheck 'elevation' 'Administrator elevation' $adminStatus `
+        $(if ($script:Env.IsAdmin) { 'The process is elevated.' } else { 'The process is not elevated; administrator-only checks may be incomplete.' }) `
+        $(if ($script:Env.IsAdmin) { 'None.' } else { 'Run the diagnostic or audit from an elevated PowerShell when administrator-only evidence is required.' })
+
+    $domainReady = $script:Env.IsDomainJoined -and $script:Env.HasAD
+    Add-DiagnosticCheck 'domain' 'Domain and Active Directory readiness' $(if ($domainReady) { 'Ready' } else { 'Degraded' }) `
+        $(if ($script:Env.IsDomainJoined) { if ($script:Env.HasAD) { 'The host is domain-joined and Active Directory tooling is available.' } else { 'The host is domain-joined but the Active Directory module is unavailable.' } } else { 'The host is not domain-joined; AD checks are expected to be skipped.' }) `
+        $(if ($domainReady) { 'None.' } else { 'Install RSAT Active Directory tools when domain checks are required.' })
+
+    $moduleReady = $script:Env.HasAD -or $script:Env.HasBitLocker -or $script:Env.HasSMB
+    Add-DiagnosticCheck 'modules' 'Windows capability modules' $(if ($moduleReady) { 'Ready' } else { 'Degraded' }) `
+        "AD=$($script:Env.HasAD); BitLocker=$($script:Env.HasBitLocker); SMB=$($script:Env.HasSMB)." `
+        $(if ($moduleReady) { 'None.' } else { 'Install the Windows capabilities required by the selected check profile.' })
+
+    Add-DiagnosticCheck 'winrm' 'WinRM readiness' $(if ($script:Env.WinRMRunning) { 'Ready' } else { 'Degraded' }) `
+        $(if ($script:Env.WinRMRunning) { 'WinRM is running.' } else { 'WinRM is not running; remote checks may be unavailable.' }) `
+        $(if ($script:Env.WinRMRunning) { 'None.' } else { 'Enable and authorize WinRM only when remote checks are explicitly required.' })
+
+    Add-DiagnosticCheck 'defender' 'Defender capability' $(if ($script:Env.HasDefender) { 'Ready' } else { 'Degraded' }) `
+        $(if ($script:Env.HasDefender) { 'Defender cmdlets are available.' } else { 'Defender cmdlets are unavailable; endpoint protection evidence may be limited.' }) `
+        $(if ($script:Env.HasDefender) { 'None.' } else { 'Verify Defender or the supported endpoint protection integration.' })
+
+    $outputReady = Test-Path -LiteralPath $OutputDirectory -PathType Container
+    Add-DiagnosticCheck 'output' 'Output path readiness' $(if ($outputReady) { 'Ready' } else { 'Blocked' }) `
+        $(if ($outputReady) { 'The diagnostics output directory exists.' } else { 'The diagnostics output directory does not exist.' }) `
+        $(if ($outputReady) { 'None.' } else { 'Create the output directory or choose an existing local directory.' })
+
+    $browser = $null
+    foreach ($candidate in @(
+        "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+        "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+        "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe",
+        "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+        "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+        "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe")) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { $browser = $candidate; break }
+    }
+    Add-DiagnosticCheck 'pdf' 'PDF browser discovery' $(if ($browser) { 'Ready' } else { 'Degraded' }) `
+        $(if ($browser) { 'A supported Edge or Chrome executable was found.' } else { 'No supported Edge or Chrome executable was found; PDF export will be unavailable.' }) `
+        $(if ($browser) { 'None.' } else { 'Install Microsoft Edge or Google Chrome, or use HTML/JSON exports.' })
+
+    Add-DiagnosticCheck 'imports' 'Import safety limits' 'Ready' `
+        "Dashboard=$DashboardMaxFiles files/$([math]::Round($DashboardMaxTotalBytes / 1MB)) MiB total; benchmark=$BenchmarkMaxRows rows/$([math]::Round($BenchmarkMaxFileBytes / 1MB)) MiB per file; cloud imports are bounded by source parsers." `
+        'None. Limits are enforced before parsing.'
+
+    $internetStatus = if ($script:CliNoInternet) { 'Degraded' } else { 'Ready' }
+    Add-DiagnosticCheck 'internet' 'Internet and cache state' $internetStatus `
+        $(if ($script:CliNoInternet) { 'Internet access was explicitly disabled; external lookups are unavailable in this run.' } else { 'Internet access is permitted by command-line policy; diagnostics make no network request.' }) `
+        $(if ($script:CliNoInternet) { 'Remove -NoInternet only when external evidence is approved.' } else { 'None.' })
+
+    $graphConfigured = [bool](Get-Command Connect-MgGraph -ErrorAction SilentlyContinue) -and ($script:CloudPermissionManifest.Count -gt 0)
+    Add-DiagnosticCheck 'graph' 'Microsoft Graph authentication readiness' $(if ($graphConfigured) { 'Degraded' } else { 'Blocked' }) `
+        $(if ($graphConfigured) { 'Graph tooling and the permission manifest are present, but no token or tenant credential was inspected.' } else { 'Graph authentication tooling is not configured in this process.' }) `
+        $(if ($graphConfigured) { 'Use an approved delegated/app-only Graph configuration before running the Cloud profile.' } else { 'Install/configure the Microsoft Graph authentication path or use offline cloud imports.' })
+
+    $payload = [ordered]@{
+        schema_version = '1.0'
+        tool_version = $script:ProductVersion
+        generated_at_utc = (Get-Date).ToUniversalTime().ToString('o')
+        runtime = "PowerShell $($script:Env.PSVersion)"
+        os_caption = $script:Env.OSCaption
+        is_admin = [bool]$script:Env.IsAdmin
+        is_domain_joined = [bool]$script:Env.IsDomainJoined
+        azure_ad_joined = [bool]$script:Env.AzureADJoined
+        intune_managed = [bool]$script:Env.IntuneManaged
+        checks = @($checks)
+    }
+    if (-not (Test-Path -LiteralPath $OutputDirectory -PathType Container)) { New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null }
+    $jsonPath = Join-Path $OutputDirectory 'NetworkSecurityAudit_diagnostics.json'
+    $textPath = Join-Path $OutputDirectory 'NetworkSecurityAudit_diagnostics.txt'
+    $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+    $text = @(
+        "Network Security Auditor diagnostics v$($script:ProductVersion)"
+        "Generated (UTC): $($payload.generated_at_utc)"
+        "Runtime: $($payload.runtime)"
+        "OS: $($payload.os_caption)"
+        "Administrator: $($payload.is_admin)"
+        "Domain joined: $($payload.is_domain_joined)"
+        "Azure AD joined: $($payload.azure_ad_joined)"
+        "Intune managed: $($payload.intune_managed)"
+        ''
+    )
+    foreach ($check in @($checks)) {
+        $text += "[$($check.status)] $($check.name) ($($check.id))"
+        $text += "  $($check.detail)"
+        $text += "  Remediation: $($check.remediation)"
+    }
+    $text -join [Environment]::NewLine | Set-Content -LiteralPath $textPath -Encoding UTF8
+    Write-Host "[Diagnostics] JSON: $jsonPath" -ForegroundColor Green
+    Write-Host "[Diagnostics] Text: $textPath" -ForegroundColor Green
+    foreach ($check in @($checks)) { Write-Host "[Diagnostics] [$($check.status)] $($check.name): $($check.detail)" }
+    return @{ Report = $payload; JsonPath = $jsonPath; TextPath = $textPath; HasBlocked = @($checks | Where-Object status -eq 'Blocked').Count -gt 0; HasDegraded = @($checks | Where-Object status -eq 'Degraded').Count -gt 0 }
+}
+
 # ── Launch ───────────────────────────────────────────────────────────────────
 $el['StatusText'].Text = "Initializing turnkey setup..."
 
@@ -14575,6 +14690,16 @@ if ($script:SilentMode) {
     # In silent mode: skip GUI, run scans synchronously, export, exit
     Write-Host "[Silent Mode] $($script:ProductDisplayName)" -ForegroundColor Cyan
     Write-Host "[Silent Mode] Profile: $($script:CliProfile) | ReadOnly: $($script:ReadOnlyMode) | Report: $($script:CliReport) | NoInternet: $($script:CliNoInternet)"
+
+    if ($script:CliDiagnosticsOnly) {
+        $diagnosticsOutput = if ($script:CliOutput) {
+            if ([System.IO.Path]::HasExtension($script:CliOutput)) { Split-Path -Parent ([System.IO.Path]::GetFullPath($script:CliOutput)) } else { [System.IO.Path]::GetFullPath($script:CliOutput) }
+        } else { [Environment]::GetFolderPath('Desktop') }
+        $diagnostics = Export-DiagnosticsReport -OutputDirectory $diagnosticsOutput
+        if ($diagnostics.HasBlocked) { exit 67 }
+        if ($diagnostics.HasDegraded) { exit 66 }
+        exit 0
+    }
 
     # Auto-populate fields
     $clientName = if ($script:CliClient) { $script:CliClient }

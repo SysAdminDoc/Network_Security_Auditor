@@ -18,6 +18,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: PowerShell action buttons and severity badges now choose a foreground that remains readable across normal and hover states, with automated WCAG contrast coverage for all seven themes.
 
 ### Reliability
+- Added a non-invasive diagnostics profile to both delivery surfaces. It emits bounded text/JSON readiness reports for elevation, Windows capabilities, output paths, PDF discovery, import limits, internet policy, and Graph configuration without persisting identities or credentials.
 - Fixed: Individual C# saves and exports now share busy-state gating, contextual failure reporting, crash-log capture, and cleanup; closing the window cancels active scans within a bounded shutdown period.
 - Fixed: PDF export discovers validated per-user Edge/Chrome installations and safely resolves executable candidates from rooted PATH entries.
 - Fixed: Crash logs now redact common secret, path, and identity data and retain only bounded, locked rotating archives.

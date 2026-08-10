@@ -12,6 +12,16 @@ public class CliArgsTests
         Assert.True(args.Silent);
     }
 
+    [Theory]
+    [InlineData("--diagnose")]
+    [InlineData("--diagnostics-only")]
+    [InlineData("-DiagnosticsOnly")]
+    public void Diagnostics_Flags_Parsed(string flag)
+    {
+        var args = App.ParseArgs([flag]);
+        Assert.True(args.DiagnosticsOnly);
+    }
+
     [Fact]
     public void Dashboard_Flag_Parsed()
     {

@@ -67,6 +67,9 @@ The tool auto-elevates to admin, detects your environment (domain/workgroup/hybr
 
 # Full scan with all export formats
 .\NetworkSecurityAudit.ps1 -Silent -ExportJSON -ExportCSV -ExportJSONL
+
+# Non-invasive readiness diagnostics (text + JSON, no audit checks)
+.\NetworkSecurityAudit.ps1 -DiagnosticsOnly -NoElevate -OutputPath "C:\Reports"
 ```
 
 ### C# Rewrite Preview
@@ -89,6 +92,15 @@ dotnet run --project .\src\NetworkSecurityAuditor
 The C# GUI export panel writes the selected format to one output folder and
 includes SIEM content packs, CMMC HTML/JSON self-assessment exports, and OSCAL
 POA&M remediation exports.
+
+Both delivery surfaces support a headless diagnostics profile. Use
+`-DiagnosticsOnly` for PowerShell or `--diagnose` for the C# preview. The
+profile reports elevation, domain/RSAT/WinRM/Defender readiness, output-path
+availability, PDF browser discovery, import limits, internet policy, and Graph
+configuration without running checks or persisting hostnames, tenant IDs,
+credentials, or tokens. It writes `NetworkSecurityAudit_diagnostics.txt` and
+`NetworkSecurityAudit_diagnostics.json`; exit code 66 means degraded readiness
+and 67 means a blocked prerequisite.
 
 Run the C# silent mode:
 

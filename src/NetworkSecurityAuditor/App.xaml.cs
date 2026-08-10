@@ -34,7 +34,7 @@ public partial class App : Application
         SetProcessDPIAware();
 
         var args = ParseArgs(e.Args);
-        _headlessMode = args.Dashboard || args.Silent;
+        _headlessMode = args.Dashboard || args.Silent || args.DiagnosticsOnly;
         RegisterGlobalExceptionHandlers();
         var isRunningAsAdmin = IsRunningAsAdmin();
 
@@ -88,6 +88,14 @@ public partial class App : Application
             base.OnStartup(e);
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _ = RunHeadlessAndShutdownAsync("Silent", () => RunSilentAsync(args));
+            return;
+        }
+
+        if (args.DiagnosticsOnly)
+        {
+            base.OnStartup(e);
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _ = RunHeadlessAndShutdownAsync("Diagnostics", () => RunDiagnosticsAsync(args));
             return;
         }
 
@@ -310,6 +318,33 @@ public partial class App : Application
 
         Console.WriteLine();
         return 0;
+    }
+
+    private async Task<int> RunDiagnosticsAsync(CliArgs args)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"Network Security Auditor v{VersionInfo.Version} - Diagnostics");
+
+        var environment = EnvironmentDetector.Detect();
+        var outputDirectory = ResolveOutputDirectory(
+            args.OutputPath,
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop));
+        Directory.CreateDirectory(outputDirectory);
+
+        var report = DiagnosticsReport.Run(environment, outputDirectory, args.NoInternet);
+        var baseName = "NetworkSecurityAuditor_diagnostics";
+        var textPath = Path.Combine(outputDirectory, $"{baseName}.txt");
+        var jsonPath = Path.Combine(outputDirectory, $"{baseName}.json");
+        await AtomicFileWriter.WriteAllTextAsync(textPath, report.ToText());
+        await AtomicFileWriter.WriteAllTextAsync(jsonPath, report.ToJson());
+
+        foreach (var check in report.Checks)
+            Console.WriteLine($"  [{check.Status}] {check.Name}: {check.Detail}");
+
+        Console.WriteLine($"  Text: {textPath}");
+        Console.WriteLine($"  JSON: {jsonPath}");
+        Console.WriteLine($"  Exit code: {(int)(report.HasBlocked ? ExitCode.DiagnosticsBlocked : report.HasDegraded ? ExitCode.DiagnosticsDegraded : ExitCode.Green)}");
+        return (int)(report.HasBlocked ? ExitCode.DiagnosticsBlocked : report.HasDegraded ? ExitCode.DiagnosticsDegraded : ExitCode.Green);
     }
 
     private async Task<int> RunSilentAsync(CliArgs args)
@@ -709,6 +744,8 @@ public partial class App : Application
             }
             else if (arg.Equals("--silent", StringComparison.OrdinalIgnoreCase) || arg.Equals("-Silent", StringComparison.OrdinalIgnoreCase))
                 result.Silent = true;
+            else if (arg.Equals("--diagnose", StringComparison.OrdinalIgnoreCase) || arg.Equals("--diagnostics-only", StringComparison.OrdinalIgnoreCase) || arg.Equals("-DiagnosticsOnly", StringComparison.OrdinalIgnoreCase))
+                result.DiagnosticsOnly = true;
             else if (arg.Equals("--no-elevate", StringComparison.OrdinalIgnoreCase) || arg.Equals("-NoElevate", StringComparison.OrdinalIgnoreCase))
                 result.NoElevate = true;
             else if (arg.Equals("--uia-background", StringComparison.OrdinalIgnoreCase))
@@ -842,6 +879,7 @@ public partial class App : Application
         public string InputDir = "";
         public int StaleDays = 30;
         public bool Silent;
+        public bool DiagnosticsOnly;
         public bool NoElevate;
         public bool UiaBackground;
         public string RenderScreenshotPath = "";
