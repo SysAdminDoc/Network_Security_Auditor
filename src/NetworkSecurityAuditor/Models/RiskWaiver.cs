@@ -33,6 +33,8 @@ public sealed class RiskWaiver
 
 public sealed class WaiverStore
 {
+    public const long MaxImportBytes = ImportFileGuard.MaxWaiverStoreBytes;
+
     public string SchemaVersion { get; set; } = "1.0";
     public List<RiskWaiver> Waivers { get; set; } = [];
 
@@ -73,6 +75,7 @@ public sealed class WaiverStore
     public static async Task<WaiverStore> LoadFromFileAsync(string path)
     {
         if (!File.Exists(path)) return new WaiverStore();
+        ImportFileGuard.EnsureWithinSizeLimit(path, MaxImportBytes, "Risk waiver");
         var json = await File.ReadAllTextAsync(path);
         return Deserialize(json);
     }

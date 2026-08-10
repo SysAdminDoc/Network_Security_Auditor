@@ -2,11 +2,16 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using NetworkSecurityAuditor.Services;
 
 namespace NetworkSecurityAuditor.Export;
 
 public static class DashboardGenerator
 {
+    internal const long MaxInputFileBytes = ImportFileGuard.MaxDashboardFileBytes;
+    internal const long MaxInputTotalBytes = ImportFileGuard.MaxDashboardTotalBytes;
+    internal const int MaxInputFiles = ImportFileGuard.MaxDashboardFiles;
+
     public static async Task<string> GenerateAsync(string inputDir, int staleDays = 30)
     {
         var data = await LoadDashboardDataAsync(inputDir, staleDays);
@@ -40,14 +45,42 @@ public static class DashboardGenerator
 
     private static async Task<DashboardData> LoadDashboardDataAsync(string inputDir, int staleDays)
     {
-        var jsonFiles = Directory.GetFiles(inputDir, "*_findings.json", SearchOption.TopDirectoryOnly);
         var parsed = new List<ClientSummary>();
         var data = new DashboardData();
+        long totalBytes = 0;
+        var fileCount = 0;
 
-        foreach (var file in jsonFiles.OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+        foreach (var file in Directory.EnumerateFiles(inputDir, "*_findings.json", SearchOption.TopDirectoryOnly))
         {
+            fileCount++;
+            if (fileCount > MaxInputFiles)
+            {
+                data.SkippedFiles.Add(new SkippedFile(
+                    Path.GetFileName(file),
+                    $"Dashboard import stopped after {MaxInputFiles:N0} files."));
+                break;
+            }
+
             try
             {
+                var length = new FileInfo(file).Length;
+                if (length > MaxInputFileBytes)
+                {
+                    data.SkippedFiles.Add(new SkippedFile(
+                        Path.GetFileName(file),
+                        $"File exceeds the {MaxInputFileBytes:N0}-byte dashboard limit."));
+                    continue;
+                }
+
+                if (totalBytes > MaxInputTotalBytes - length)
+                {
+                    data.SkippedFiles.Add(new SkippedFile(
+                        Path.GetFileName(file),
+                        $"Dashboard import exceeds the {MaxInputTotalBytes:N0}-byte aggregate limit."));
+                    continue;
+                }
+
+                totalBytes += length;
                 var json = await File.ReadAllTextAsync(file);
                 parsed.Add(ParseClientSummary(file, json, staleDays));
             }

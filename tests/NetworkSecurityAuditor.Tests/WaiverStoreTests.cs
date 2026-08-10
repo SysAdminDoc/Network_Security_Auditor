@@ -202,6 +202,25 @@ public class WaiverStoreTests
     }
 
     [Fact]
+    public async Task LoadFromFile_Rejects_Oversized_Store()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nsa-waivers-large-{Guid.NewGuid():N}.json");
+        await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            stream.SetLength(WaiverStore.MaxImportBytes + 1);
+        }
+
+        try
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(() => WaiverStore.LoadFromFileAsync(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task SaveAndLoad_Roundtrip()
     {
         var store = new WaiverStore();

@@ -1079,6 +1079,31 @@ public class ExportTests
     }
 
     [Fact]
+    public async Task Dashboard_Skips_Oversized_Input_File()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-dashboard-large-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "large_findings.json");
+        await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            stream.SetLength(DashboardGenerator.MaxInputFileBytes + 1);
+        }
+
+        try
+        {
+            var html = await DashboardGenerator.GenerateAsync(dir);
+
+            Assert.Contains("large_findings.json", html);
+            Assert.Contains("exceeds", html, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("No scan exports found", html);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Dashboard_Uses_Latest_Client_Row_With_Trend_And_Duplicate_List()
     {
         var dir = Path.Combine(Path.GetTempPath(), "nsa-export-tests-" + Guid.NewGuid().ToString("N"));

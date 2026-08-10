@@ -1291,8 +1291,7 @@ public partial class MainViewModel : ViewModelBase
         {
             try
             {
-                var json = await File.ReadAllTextAsync(dialog.FileName);
-                var state = AuditState.Deserialize(json);
+                var state = await AuditState.LoadFromFileAsync(dialog.FileName);
                 if (state is null)
                 {
                     ScanStatus = "Failed to load state file.";
@@ -1301,6 +1300,11 @@ public partial class MainViewModel : ViewModelBase
 
                 var restored = ApplyAuditState(state);
                 ScanStatus = $"State loaded: {restored} checks restored from {Path.GetFileName(dialog.FileName)}";
+            }
+            catch (InvalidDataException ex)
+            {
+                AppendActivity($"State load rejected: {ex.Message}");
+                ScanStatus = $"State not loaded: {ex.Message}";
             }
             catch (Exception ex)
             {
@@ -1312,6 +1316,8 @@ public partial class MainViewModel : ViewModelBase
 
     internal int ApplyAuditState(AuditState state)
     {
+        ValidateAuditState(state);
+
         if (Enum.TryParse<ScanProfileType>(state.ScanProfile, ignoreCase: true, out var profile))
             SelectedProfile = profile;
 
@@ -1336,6 +1342,64 @@ public partial class MainViewModel : ViewModelBase
         UpdateScoreCounts();
         HasUnsavedChanges = false;
         return restored;
+    }
+
+    private void ValidateAuditState(AuditState state)
+    {
+        if (state is null)
+            throw new InvalidDataException("State payload is empty.");
+
+        if (!string.Equals(state.SchemaVersion, AuditState.CurrentSchemaVersion, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"Unsupported state schema '{state.SchemaVersion}'. Expected '{AuditState.CurrentSchemaVersion}'.");
+
+        if (string.IsNullOrWhiteSpace(state.Client))
+            throw new InvalidDataException("State is missing the saved client/machine identity.");
+
+        if (!string.IsNullOrWhiteSpace(Environment.ComputerName) &&
+            !state.Client.Equals(Environment.ComputerName, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"State belongs to '{state.Client}', not the current machine '{Environment.ComputerName}'.");
+
+        if (string.IsNullOrWhiteSpace(state.ToolVersion))
+            throw new InvalidDataException("State is missing the tool version.");
+
+        if (state.SavedAt == default)
+            throw new InvalidDataException("State is missing its saved timestamp.");
+
+        if (!Enum.TryParse<ScanProfileType>(state.ScanProfile, ignoreCase: true, out var profile) ||
+            !AvailableProfiles.Contains(profile))
+            throw new InvalidDataException($"State contains unsupported scan profile '{state.ScanProfile}'.");
+
+        if (!AvailableThemes.Contains(state.Theme, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidDataException($"State contains unsupported theme '{state.Theme}'.");
+
+        if (state.Checks is null)
+            throw new InvalidDataException("State is missing its check collection.");
+
+        var currentChecks = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var unknown = new List<string>();
+
+        foreach (var checkState in state.Checks)
+        {
+            if (string.IsNullOrWhiteSpace(checkState.Id))
+                throw new InvalidDataException("State contains a check with no ID.");
+
+            if (!seen.Add(checkState.Id))
+                throw new InvalidDataException($"State contains duplicate check ID '{checkState.Id}'.");
+
+            if (!currentChecks.ContainsKey(checkState.Id))
+                unknown.Add(checkState.Id);
+
+            if (!Enum.IsDefined(checkState.Status))
+                throw new InvalidDataException($"State contains an invalid status for check '{checkState.Id}'.");
+        }
+
+        if (unknown.Count > 0)
+            throw new InvalidDataException($"State contains unknown check ID(s): {string.Join(", ", unknown.Take(5))}.");
+
+        var missing = currentChecks.Keys.Where(id => !seen.Contains(id)).Take(5).ToArray();
+        if (seen.Count != currentChecks.Count)
+            throw new InvalidDataException($"State is incomplete; missing check ID(s): {string.Join(", ", missing)}.");
     }
 
     private bool CanManageState() => !IsScanning && !IsExporting;

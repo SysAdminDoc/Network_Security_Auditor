@@ -6,6 +6,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ### Security
 - Fixed: C# release artifact cleanup now rejects repository roots, source directories, and reparse-point paths before any recursive deletion.
+- Fixed: C# audit-state loading now validates schema, machine identity, complete check coverage, and enum values before mutation; state, waiver, and dashboard JSON imports now enforce size/file-count budgets.
 
 ## [v5.3.3 / v4.11.4] - 2026-08-09
 

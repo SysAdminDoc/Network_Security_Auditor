@@ -75,7 +75,7 @@ public class MainViewModelTests
         Assert.Contains("unavailable", vm.LoadStateHelpText);
 
         vm.IsExporting = false;
-        vm.ApplyAuditState(new AuditState());
+        vm.HasUnsavedChanges = false;
 
         Assert.False(vm.HasUnsavedChanges);
         Assert.Equal("No unsaved assessment changes", vm.StatePersistenceText);
@@ -495,24 +495,16 @@ public class MainViewModelTests
         vm.LoadCheckCatalog();
         var check = vm.Checks.Single(c => c.Id == "EP01");
         check.RemediationDueDate = new DateTime(2026, 7, 9);
+        var state = CompleteState(vm);
+        state.ScanProfile = "Quick";
+        var stateCheck = state.Checks.Single(c => c.Id == "EP01");
+        stateCheck.Status = CheckStatus.Fail;
+        stateCheck.Findings = "Loaded finding";
+        stateCheck.RemediationDueDate = "not-a-date";
 
-        var restored = vm.ApplyAuditState(new AuditState
-        {
-            ScanProfile = "Quick",
-            Theme = "Catppuccin Mocha",
-            Checks =
-            [
-                new CheckState
-                {
-                    Id = "EP01",
-                    Status = CheckStatus.Fail,
-                    Findings = "Loaded finding",
-                    RemediationDueDate = "not-a-date"
-                }
-            ]
-        });
+        var restored = vm.ApplyAuditState(state);
 
-        Assert.Equal(1, restored);
+        Assert.Equal(vm.Checks.Count, restored);
         Assert.Equal(ScanProfileType.Quick, vm.SelectedProfile);
         Assert.Equal("Catppuccin Mocha", vm.SelectedTheme);
         Assert.Equal(CheckStatus.Fail, check.Status);
@@ -534,19 +526,11 @@ public class MainViewModelTests
             var vm = new MainViewModel();
             vm.LoadCheckCatalog();
             var check = vm.Checks.Single(c => c.Id == "EP01");
+            var state = CompleteState(vm);
+            state.Checks.Single(c => c.Id == "EP01").Status = CheckStatus.Partial;
+            state.Checks.Single(c => c.Id == "EP01").RemediationDueDate = "2026-07-09";
 
-            vm.ApplyAuditState(new AuditState
-            {
-                Checks =
-                [
-                    new CheckState
-                    {
-                        Id = "EP01",
-                        Status = CheckStatus.Partial,
-                        RemediationDueDate = "2026-07-09"
-                    }
-                ]
-            });
+            vm.ApplyAuditState(state);
 
             Assert.Equal(new DateTime(2026, 7, 9), check.RemediationDueDate);
         }
@@ -555,6 +539,61 @@ public class MainViewModelTests
             Thread.CurrentThread.CurrentCulture = originalCulture;
             Thread.CurrentThread.CurrentUICulture = originalUiCulture;
         }
+    }
+
+    [Fact]
+    public void ApplyAuditState_Rejects_Foreign_Client_Before_Mutation()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+        var check = vm.Checks[0];
+        check.Status = CheckStatus.Pass;
+        var state = CompleteState(vm);
+        state.Client = "OTHER-MACHINE";
+        state.Checks[0].Status = CheckStatus.Fail;
+
+        var exception = Assert.Throws<InvalidDataException>(() => vm.ApplyAuditState(state));
+
+        Assert.Contains("OTHER-MACHINE", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(CheckStatus.Pass, check.Status);
+    }
+
+    [Fact]
+    public void ApplyAuditState_Rejects_Incomplete_State_Before_Mutation()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+        var state = CompleteState(vm);
+        state.Checks.RemoveAt(0);
+
+        var exception = Assert.Throws<InvalidDataException>(() => vm.ApplyAuditState(state));
+
+        Assert.Contains("incomplete", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static AuditState CompleteState(MainViewModel vm)
+    {
+        var state = new AuditState
+        {
+            Client = vm.Environment.ComputerName,
+            Auditor = "tester",
+            SavedAt = DateTime.UtcNow,
+            ScanProfile = "Full",
+            Theme = "Catppuccin Mocha"
+        };
+
+        state.Checks = vm.Checks.Select(check => new CheckState
+        {
+            Id = check.Id,
+            Status = check.Status,
+            Findings = check.Findings,
+            Evidence = check.Evidence,
+            Notes = check.Notes,
+            RemediationAssignee = check.RemediationAssignee,
+            RemediationDueDate = check.RemediationDueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+        }).ToList();
+
+        return state;
     }
 
     private static string RunningIds(MainViewModel vm)

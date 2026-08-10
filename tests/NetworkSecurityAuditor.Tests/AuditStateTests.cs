@@ -102,6 +102,25 @@ public class AuditStateTests
     }
 
     [Fact]
+    public async Task LoadFromFile_Rejects_Oversized_State()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nsa-state-large-{Guid.NewGuid():N}.json");
+        await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            stream.SetLength(AuditState.MaxImportBytes + 1);
+        }
+
+        try
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(() => AuditState.LoadFromFileAsync(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Deserialize_Empty_Object()
     {
         var result = AuditState.Deserialize("{}");

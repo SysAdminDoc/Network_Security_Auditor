@@ -1,11 +1,16 @@
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NetworkSecurityAuditor.Services;
 
 namespace NetworkSecurityAuditor.Models;
 
 public sealed class AuditState
 {
-    public string SchemaVersion { get; set; } = "1.0";
+    public const string CurrentSchemaVersion = "1.0";
+    public const long MaxImportBytes = ImportFileGuard.MaxAuditStateBytes;
+
+    public string SchemaVersion { get; set; } = CurrentSchemaVersion;
     public string ToolVersion { get; set; } = VersionInfo.Version;
     public string Client { get; set; } = "";
     public string Auditor { get; set; } = "";
@@ -31,6 +36,16 @@ public sealed class AuditState
 
     public static AuditState? Deserialize(string json)
         => JsonSerializer.Deserialize<AuditState>(json, SerializerOptions);
+
+    public static async Task<AuditState?> LoadFromFileAsync(string path)
+    {
+        if (!File.Exists(path))
+            return null;
+
+        ImportFileGuard.EnsureWithinSizeLimit(path, MaxImportBytes, "Audit state");
+        var json = await File.ReadAllTextAsync(path);
+        return Deserialize(json);
+    }
 }
 
 public sealed class CheckState
