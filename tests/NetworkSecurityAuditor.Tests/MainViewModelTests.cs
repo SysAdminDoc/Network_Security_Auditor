@@ -270,6 +270,19 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public async Task Guarded_Write_Always_Clears_Busy_State_And_Records_Failure()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+
+        await vm.RunGuardedWriteAsync("Synthetic export", () => Task.FromException(new IOException("disk denied")));
+
+        Assert.False(vm.IsExporting);
+        Assert.Contains("Synthetic export failed", vm.ScanStatus, StringComparison.Ordinal);
+        Assert.Contains(vm.ActivityLog, entry => entry.Contains("disk denied", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Score_And_Readiness_Copy_Stay_Compact_For_The_Shell()
     {
         var vm = new MainViewModel();
@@ -401,6 +414,32 @@ public class MainViewModelTests
         Assert.DoesNotContain(vm.Checks, c => c.IsRunning);
         Assert.Equal(CheckStatus.Pass, vm.Checks.Single(c => c.Id == "EP01").Status);
         Assert.Contains("Scan cancelled", vm.ScanStatus);
+    }
+
+    [Fact]
+    public async Task Shutdown_Cancels_Active_Scan_And_Prevents_Restart()
+    {
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = new MainViewModel(async (_, _, _, ct, startedProgress) =>
+        {
+            startedProgress?.Report(("EP01", 1, 1));
+            started.SetResult(true);
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return new Dictionary<string, CheckResult>();
+        });
+        vm.LoadCheckCatalog();
+        vm.IsEnvironmentReady = true;
+        vm.SelectedProfile = ScanProfileType.Quick;
+
+        var scanTask = vm.StartScanCommand.ExecuteAsync(null);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await vm.ShutdownAsync(TimeSpan.FromSeconds(2));
+        await scanTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(vm.IsShutdownRequested);
+        Assert.False(vm.IsScanning);
+        Assert.False(vm.StartScanCommand.CanExecute(null));
     }
 
     [Fact]

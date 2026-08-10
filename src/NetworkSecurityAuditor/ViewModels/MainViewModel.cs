@@ -41,6 +41,8 @@ public partial class MainViewModel : ViewModelBase
         "NetworkSecurityAuditor");
 
     private CancellationTokenSource? _scanCts;
+    private TaskCompletionSource? _scanCompletion;
+    private int _shutdownRequested;
     private readonly RunChecksAsync _runChecksAsync;
     private readonly OpenReportFile _openReportFile;
 
@@ -52,6 +54,8 @@ public partial class MainViewModel : ViewModelBase
         IProgress<(string checkId, int index, int total)>? startedProgress);
 
     internal delegate void OpenReportFile(string path);
+
+    internal bool IsShutdownRequested => Volatile.Read(ref _shutdownRequested) != 0;
 
     public ObservableCollection<CheckItemViewModel> Checks { get; } = [];
 
@@ -633,9 +637,12 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStartScan))]
     private async Task StartScanAsync()
     {
-        if (IsScanning) return;
+        if (IsScanning || IsShutdownRequested) return;
 
-        _scanCts = new CancellationTokenSource();
+        var scanCts = new CancellationTokenSource();
+        var scanCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _scanCts = scanCts;
+        _scanCompletion = scanCompletion;
         IsScanning = true;
         ScanStatus = "Scanning...";
         ScanProgressPercent = 0;
@@ -655,6 +662,7 @@ public partial class MainViewModel : ViewModelBase
 
         var startedProgress = new InlineProgress<(string checkId, int index, int total)>(update =>
         {
+            if (IsShutdownRequested) return;
             runningTotal = update.total;
             SetRunningCheck(update.checkId);
             ScanProgressPercent = update.total > 0
@@ -676,6 +684,7 @@ public partial class MainViewModel : ViewModelBase
 
         var progress = new InlineProgress<(string checkId, CheckResult result)>(update =>
         {
+            if (IsShutdownRequested) return;
             var nextCompleted = completed + 1;
             if (checkLookup.TryGetValue(update.checkId, out var vm))
             {
@@ -725,7 +734,7 @@ public partial class MainViewModel : ViewModelBase
                 return;
             }
 
-            var results = await _runChecksAsync(Environment, options, progress, _scanCts.Token, startedProgress);
+            var results = await _runChecksAsync(Environment, options, progress, scanCts.Token, startedProgress);
             completed = results.Count;
         }
         catch (OperationCanceledException)
@@ -734,32 +743,45 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            scanFailed = true;
-            var logPath = Services.CrashLogWriter.Write(ex, "StartScanAsync");
-            ScanStatus = $"Scan failed. Review the activity log and crash log: {logPath}";
-            AppendActivity($"Scan failed: {ex.Message}");
-            AppendActivity($"Crash log: {logPath}");
+            if (!IsShutdownRequested)
+            {
+                scanFailed = true;
+                var logPath = Services.CrashLogWriter.Write(ex, "StartScanAsync");
+                ScanStatus = $"Scan failed. Review the activity log and crash log: {logPath}";
+                AppendActivity($"Scan failed: {ex.Message}");
+                AppendActivity($"Crash log: {logPath}");
+            }
         }
         finally
         {
-            ClearRunningChecks();
-            IsScanning = false;
-            var total = runningTotal;
-            if (!unsupportedProfile && !noApplicableChecks && !scanFailed)
+            if (!IsShutdownRequested)
             {
-                var scanWasCancelled = _scanCts.Token.IsCancellationRequested;
-                ScanStatus = scanWasCancelled
-                    ? $"Scan cancelled ({completed}/{total} completed)"
-                    : $"Scan complete ({completed}/{total} checks)";
-                AppendActivity(ScanStatus);
-                if (!scanWasCancelled && total > 0)
+                ClearRunningChecks();
+                IsScanning = false;
+                var total = runningTotal;
+                if (!unsupportedProfile && !noApplicableChecks && !scanFailed)
                 {
-                    ScanProgressPercent = 100;
-                    await GenerateAndOpenHtmlReportAsync();
+                    var scanWasCancelled = scanCts.Token.IsCancellationRequested;
+                    ScanStatus = scanWasCancelled
+                        ? $"Scan cancelled ({completed}/{total} completed)"
+                        : $"Scan complete ({completed}/{total} checks)";
+                    AppendActivity(ScanStatus);
+                    if (!scanWasCancelled && total > 0)
+                    {
+                        ScanProgressPercent = 100;
+                        await GenerateAndOpenHtmlReportAsync();
+                    }
                 }
             }
-            _scanCts.Dispose();
-            _scanCts = null;
+            else
+            {
+                IsScanning = false;
+            }
+
+            scanCts.Dispose();
+            if (ReferenceEquals(_scanCts, scanCts)) _scanCts = null;
+            scanCompletion.TrySetResult();
+            if (ReferenceEquals(_scanCompletion, scanCompletion)) _scanCompletion = null;
 
             StartScanCommand.NotifyCanExecuteChanged();
             StopScanCommand.NotifyCanExecuteChanged();
@@ -801,7 +823,22 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private bool CanStartScan() => !IsScanning && IsEnvironmentReady;
+    private bool CanStartScan() => !IsScanning && !IsShutdownRequested && IsEnvironmentReady;
+
+    internal async Task ShutdownAsync(TimeSpan? cleanupTimeout = null)
+    {
+        if (Interlocked.Exchange(ref _shutdownRequested, 1) != 0)
+            return;
+
+        try { _scanCts?.Cancel(); } catch (ObjectDisposedException) { }
+
+        var completion = _scanCompletion?.Task;
+        if (completion is null)
+            return;
+
+        var timeout = cleanupTimeout ?? TimeSpan.FromSeconds(5);
+        await Task.WhenAny(completion, Task.Delay(timeout));
+    }
 
     [RelayCommand(CanExecute = nameof(CanStopScan))]
     private void StopScan()
@@ -860,6 +897,30 @@ public partial class MainViewModel : ViewModelBase
         ExportPdfCommand.NotifyCanExecuteChanged();
     }
 
+    internal async Task RunGuardedWriteAsync(string operation, Func<Task> write)
+    {
+        if (IsScanning || IsExporting)
+            return;
+
+        IsExporting = true;
+        ScanStatus = $"{operation}...";
+        AppendActivity(ScanStatus);
+        try
+        {
+            await write();
+        }
+        catch (Exception ex)
+        {
+            var logPath = Services.CrashLogWriter.Write(ex, operation);
+            ScanStatus = $"{operation} failed. Crash log: {logPath}";
+            AppendActivity($"{operation} failed: {ex.Message}");
+        }
+        finally
+        {
+            IsExporting = false;
+        }
+    }
+
     private sealed class InlineProgress<T>(Action<T> handler) : IProgress<T>
     {
         public void Report(T value) => handler(value);
@@ -894,10 +955,7 @@ public partial class MainViewModel : ViewModelBase
     private async Task ExportSelectedAsync()
     {
         var option = SelectedExportFormat;
-        IsExporting = true;
-        ScanStatus = $"Exporting {option.DisplayName}...";
-        AppendActivity(ScanStatus);
-        try
+        await RunGuardedWriteAsync($"Exporting {option.DisplayName}", async () =>
         {
             Directory.CreateDirectory(ExportOutputFolder);
             var baseName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}";
@@ -916,17 +974,7 @@ public partial class MainViewModel : ViewModelBase
             await WriteExportAsync(option.Kind, path);
             ScanStatus = $"{option.DisplayName} exported{(PrivacyMode ? " (privacy mode)" : "")}: {path}";
             AppendActivity($"{option.DisplayName} exported");
-        }
-        catch (Exception ex)
-        {
-            var logPath = Services.CrashLogWriter.Write(ex, "ExportSelectedAsync");
-            ScanStatus = $"Export failed. Crash log: {logPath}";
-            AppendActivity($"Export failed: {ex.Message}");
-        }
-        finally
-        {
-            IsExporting = false;
-        }
+        });
     }
 
     private async Task WriteExportAsync(ExportFormatKind kind, string path)
@@ -1023,12 +1071,13 @@ public partial class MainViewModel : ViewModelBase
         };
 
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, html);
-            ScanStatus = $"HTML report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("HTML export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, html);
+                ScanStatus = $"HTML report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1042,12 +1091,13 @@ public partial class MainViewModel : ViewModelBase
         };
 
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            var json = Export.JsonExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, json);
-            ScanStatus = $"JSON report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("JSON export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                var json = Export.JsonExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, json);
+                ScanStatus = $"JSON report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1060,11 +1110,12 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".csv"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
-            ScanStatus = $"CSV exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("CSV export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                ScanStatus = $"CSV exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1077,11 +1128,12 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".jsonl"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile));
-            ScanStatus = $"JSONL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("JSONL export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile));
+                ScanStatus = $"JSONL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1094,11 +1146,12 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".sarif"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(exportChecks, exportEnv));
-            ScanStatus = $"SARIF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("SARIF export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(exportChecks, exportEnv));
+                ScanStatus = $"SARIF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1111,11 +1164,12 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, _) = GetExportData();
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.NavigatorExporter.Export(exportChecks));
-            ScanStatus = $"Navigator layer exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("Navigator export", async () =>
+            {
+                var (exportChecks, _) = GetExportData();
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.NavigatorExporter.Export(exportChecks));
+                ScanStatus = $"Navigator layer exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1128,11 +1182,12 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
-            ScanStatus = $"DefectDojo exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("DefectDojo export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                ScanStatus = $"DefectDojo exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1145,11 +1200,12 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".jsonl"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile.ToString()));
-            ScanStatus = $"OCSF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("OCSF export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile.ToString()));
+                ScanStatus = $"OCSF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1162,11 +1218,12 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
-            ScanStatus = $"OSCAL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("OSCAL export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
+                ScanStatus = $"OSCAL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1179,11 +1236,12 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
-            ScanStatus = $"Compliance summary exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("Compliance summary export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
+                ScanStatus = $"Compliance summary exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1196,11 +1254,12 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));
-            ScanStatus = $"Intune exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
-        }
+            await RunGuardedWriteAsync("Intune export", async () =>
+            {
+                var (exportChecks, exportEnv) = GetExportData();
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));
+                ScanStatus = $"Intune exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -1213,23 +1272,23 @@ public partial class MainViewModel : ViewModelBase
             DefaultExt = ".pdf"
         };
         if (dialog.ShowDialog() == true)
-        {
-            var (exportChecks, exportEnv) = GetExportData();
-            var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade, tier: Models.ReportTier.All);
-            var tempHtml = Path.Combine(Path.GetTempPath(), $"nsa_report_{Guid.NewGuid():N}.html");
-            try
+            await RunGuardedWriteAsync("PDF export", async () =>
             {
-                await AtomicFileWriter.WriteAllTextAsync(tempHtml, html);
-                var (success, message) = await Export.PdfExporter.ExportAsync(tempHtml, dialog.FileName);
-                ScanStatus = success
-                    ? $"PDF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}"
-                    : $"PDF export failed: {message}";
-            }
-            finally
-            {
-                try { File.Delete(tempHtml); } catch { }
-            }
-        }
+                var (exportChecks, exportEnv) = GetExportData();
+                var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade, tier: Models.ReportTier.All);
+                var tempHtml = Path.Combine(Path.GetTempPath(), $"nsa_report_{Guid.NewGuid():N}.html");
+                try
+                {
+                    await AtomicFileWriter.WriteAllTextAsync(tempHtml, html);
+                    var (success, message) = await Export.PdfExporter.ExportAsync(tempHtml, dialog.FileName);
+                    if (!success) throw new InvalidOperationException(message);
+                    ScanStatus = $"PDF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                }
+                finally
+                {
+                    try { File.Delete(tempHtml); } catch { }
+                }
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanManageState))]
@@ -1243,39 +1302,40 @@ public partial class MainViewModel : ViewModelBase
         };
 
         if (dialog.ShowDialog() == true)
-        {
-            var state = new AuditState
+            await RunGuardedWriteAsync("Saving audit state", async () =>
             {
-                Client = Environment.ComputerName,
-                Auditor = System.Environment.UserName,
-                ScanProfile = SelectedProfile.ToString(),
-                Theme = SelectedTheme,
-                OverallScore = OverallScore,
-                Grade = Grade,
-                RansomwareScore = RansomwareScore,
-                RansomwareGrade = RansomwareGrade,
-                DomainMaturityScore = DomainMaturityScore,
-                DomainMaturityGrade = DomainMaturityGrade
-            };
-
-            foreach (var check in Checks)
-            {
-                state.Checks.Add(new CheckState
+                var state = new AuditState
                 {
-                    Id = check.Id,
-                    Status = check.Status,
-                    Findings = check.Findings,
-                    Evidence = check.Evidence,
-                    Notes = check.Notes,
-                    RemediationAssignee = check.RemediationAssignee,
-                    RemediationDueDate = check.RemediationDueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                });
-            }
+                    Client = Environment.ComputerName,
+                    Auditor = System.Environment.UserName,
+                    ScanProfile = SelectedProfile.ToString(),
+                    Theme = SelectedTheme,
+                    OverallScore = OverallScore,
+                    Grade = Grade,
+                    RansomwareScore = RansomwareScore,
+                    RansomwareGrade = RansomwareGrade,
+                    DomainMaturityScore = DomainMaturityScore,
+                    DomainMaturityGrade = DomainMaturityGrade
+                };
 
-            await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, state.Serialize());
-            HasUnsavedChanges = false;
-            ScanStatus = $"State saved: {dialog.FileName}";
-        }
+                foreach (var check in Checks)
+                {
+                    state.Checks.Add(new CheckState
+                    {
+                        Id = check.Id,
+                        Status = check.Status,
+                        Findings = check.Findings,
+                        Evidence = check.Evidence,
+                        Notes = check.Notes,
+                        RemediationAssignee = check.RemediationAssignee,
+                        RemediationDueDate = check.RemediationDueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                    });
+                }
+
+                await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, state.Serialize());
+                HasUnsavedChanges = false;
+                ScanStatus = $"State saved: {dialog.FileName}";
+            });
     }
 
     [RelayCommand(CanExecute = nameof(CanManageState))]

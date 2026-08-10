@@ -17,6 +17,16 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ### Accessibility
 - Fixed: PowerShell action buttons and severity badges now choose a foreground that remains readable across normal and hover states, with automated WCAG contrast coverage for all seven themes.
 
+### Reliability
+- Fixed: Individual C# saves and exports now share busy-state gating, contextual failure reporting, crash-log capture, and cleanup; closing the window cancels active scans within a bounded shutdown period.
+- Fixed: PDF export discovers validated per-user Edge/Chrome installations and safely resolves executable candidates from rooted PATH entries.
+- Fixed: Crash logs now redact common secret, path, and identity data and retain only bounded, locked rotating archives.
+- Fixed: Intune STIG imports tolerate provider casing differences, malformed rows, and duplicate or blank CSV headers while surfacing bounded import warnings.
+- Fixed: Existing dotted output directories are preserved by the C# CLI instead of being mistaken for file paths.
+
+### Testing
+- Added: Export contract tests now enforce the schema validation keywords used by committed contracts, including dynamic maps, references, composition, and negative fixtures.
+
 ## [v5.3.3 / v4.11.4] - 2026-08-09
 
 ### Maintenance

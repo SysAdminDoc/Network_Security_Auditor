@@ -94,20 +94,57 @@ public static class PdfExporter
         File.Move(tempPath, Path.GetFullPath(targetPath), overwrite: true);
     }
 
-    private static string? FindBrowser()
+    internal static string? FindBrowser(IEnumerable<string>? candidates = null, string? pathValue = null)
     {
-        string[] candidates =
+        var searchCandidates = candidates?.ToArray() ??
         [
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
                 @"Microsoft\Edge\Application\msedge.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 @"Microsoft\Edge\Application\msedge.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                @"Microsoft\Edge\Application\msedge.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
                 @"Google\Chrome\Application\chrome.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 @"Google\Chrome\Application\chrome.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                @"Google\Chrome\Application\chrome.exe"),
         ];
 
-        return candidates.FirstOrDefault(File.Exists);
+        foreach (var candidate in searchCandidates)
+        {
+            if (IsUsableBrowserPath(candidate))
+                return Path.GetFullPath(candidate);
+        }
+
+        // PATH lookup is deliberately limited to rooted entries and the two
+        // supported browser names; never execute an arbitrary PATH command.
+        var path = pathValue ?? Environment.GetEnvironmentVariable("PATH");
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (!Path.IsPathRooted(directory)) continue;
+                foreach (var executable in new[] { "msedge.exe", "chrome.exe" })
+                {
+                    var candidate = Path.Combine(directory, executable);
+                    if (IsUsableBrowserPath(candidate))
+                        return Path.GetFullPath(candidate);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsUsableBrowserPath(string path)
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(path) && new FileInfo(path).Length > 0;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 }

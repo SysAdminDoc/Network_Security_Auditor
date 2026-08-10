@@ -320,6 +320,24 @@ public class CliArgsTests
     }
 
     [Fact]
+    public void ResolveOutputDirectory_Prefers_Existing_Dotted_Directory()
+    {
+        var outputDir = Path.Combine(Path.GetTempPath(), "nsa-reports.v2-" + Guid.NewGuid().ToString("N"));
+        var fallback = Path.Combine(Path.GetTempPath(), "fallback");
+        Directory.CreateDirectory(outputDir);
+
+        try
+        {
+            Assert.Equal(Path.GetFullPath(outputDir), App.ResolveOutputDirectory(outputDir, fallback));
+            Assert.Equal(Path.GetFullPath(outputDir), App.ResolveOutputDirectory(outputDir + Path.DirectorySeparatorChar, fallback));
+        }
+        finally
+        {
+            Directory.Delete(outputDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void SafeFileNameSegment_Replaces_Invalid_Path_Characters()
     {
         var segment = App.SafeFileNameSegment(@"ACME:West/Prod", "Client");

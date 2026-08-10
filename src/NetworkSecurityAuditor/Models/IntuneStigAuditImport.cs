@@ -12,6 +12,9 @@ public sealed class IntuneStigAuditImport
     public string ExportedAtUtc { get; set; } = "";
     public string ImportedAtUtc { get; set; } = DateTime.UtcNow.ToString("o");
     public string ImportStatus { get; set; } = "Imported";
+    public int SkippedRowCount { get; set; }
+    public int SkippedHeaderCount { get; set; }
+    public List<string> ImportWarnings { get; set; } = [];
     public List<IntuneStigAuditFinding> Findings { get; set; } = [];
 
     public IntuneStigAuditSummary Summary => new()

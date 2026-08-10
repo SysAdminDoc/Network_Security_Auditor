@@ -37,10 +37,11 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(ActivityLogScrollViewer.ScrollToEnd, DispatcherPriority.Background);
     }
 
-    private void OnClosed(object? sender, EventArgs e)
+    private async void OnClosed(object? sender, EventArgs e)
     {
         if (_activityAutoFollowEnabled)
             _viewModel.ActivityLog.CollectionChanged -= OnActivityLogChanged;
         Closed -= OnClosed;
+        await _viewModel.ShutdownAsync(TimeSpan.FromSeconds(5));
     }
 }

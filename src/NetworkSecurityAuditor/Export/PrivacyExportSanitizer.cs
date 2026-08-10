@@ -144,6 +144,9 @@ public static class PrivacyExportSanitizer
             ExportedAtUtc = import.ExportedAtUtc,
             ImportedAtUtc = import.ImportedAtUtc,
             ImportStatus = import.ImportStatus,
+            SkippedRowCount = import.SkippedRowCount,
+            SkippedHeaderCount = import.SkippedHeaderCount,
+            ImportWarnings = import.ImportWarnings.ToList(),
             Findings = import.Findings.Select(finding => new IntuneStigAuditFinding
             {
                 DeviceName = redactor.Redact(finding.DeviceName),

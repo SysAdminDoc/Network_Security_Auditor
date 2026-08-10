@@ -649,6 +649,9 @@ public partial class App : Application
             : outputPath;
 
         var resolved = Path.GetFullPath(System.Environment.ExpandEnvironmentVariables(directory));
+        if (Directory.Exists(resolved))
+            return Path.TrimEndingDirectorySeparator(resolved);
+
         if (LooksLikeFilePath(resolved))
             return Path.GetDirectoryName(resolved) ?? Path.GetFullPath(fallbackDirectory);
 

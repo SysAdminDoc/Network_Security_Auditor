@@ -169,6 +169,42 @@ public class ExportTests
     }
 
     [Fact]
+    public void PdfExporter_Finds_PerUser_Browser_Installation()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-pdf-browser-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var browser = Path.Combine(dir, "msedge.exe");
+        File.WriteAllText(browser, "synthetic executable marker");
+
+        try
+        {
+            Assert.Equal(Path.GetFullPath(browser), PdfExporter.FindBrowser([browser], pathValue: ""));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PdfExporter_Ignores_Empty_And_Relative_Path_Candidates()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-pdf-browser-missing-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var emptyBrowser = Path.Combine(dir, "chrome.exe");
+        File.WriteAllBytes(emptyBrowser, []);
+
+        try
+        {
+            Assert.Null(PdfExporter.FindBrowser([emptyBrowser], pathValue: "."));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Json_Compliance_Has_Ten_Scored_Frameworks()
     {
         var (checks, env) = CreateTestData();

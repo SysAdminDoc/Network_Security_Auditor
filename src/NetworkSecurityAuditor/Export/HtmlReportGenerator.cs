@@ -288,6 +288,12 @@ public static class HtmlReportGenerator
         sb.AppendLine($"<div><strong>Policy:</strong> {EscapeHtml(import.PolicyId)}</div>");
         sb.AppendLine($"<div><strong>Exported:</strong> {EscapeHtml(import.ExportedAtUtc)}</div>");
         sb.AppendLine($"<div><strong>Status:</strong> {EscapeHtml(import.ImportStatus)} | Pass {summary.Pass} | Fail {summary.Fail} | N/A {summary.NotApplicable} | Error {summary.Error} | Conflict {summary.Conflict} | Unknown {summary.Unknown} | Not licensed {summary.NotLicensed} | Not permitted {summary.NotPermitted}</div>");
+        if (import.SkippedRowCount > 0 || import.SkippedHeaderCount > 0)
+        {
+            sb.AppendLine($"<div class=\"warning\"><strong>Import warnings:</strong> {import.SkippedRowCount} row(s) skipped; {import.SkippedHeaderCount} header(s) normalized.</div>");
+            foreach (var warning in import.ImportWarnings.Take(25))
+                sb.AppendLine($"<div class=\"sub\">{EscapeHtml(warning)}</div>");
+        }
         if (TryGetHttpHref(import.SourceUrl) is { } sourceHref)
             sb.AppendLine($"<div><a href=\"{EscapeHtmlAttribute(sourceHref)}\" style=\"color:#89b4fa\">Microsoft Intune STIG audit baseline source</a></div>");
         else if (!string.IsNullOrWhiteSpace(import.SourceUrl))

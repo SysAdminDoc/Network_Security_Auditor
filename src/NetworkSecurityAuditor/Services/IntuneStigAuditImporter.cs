@@ -44,13 +44,18 @@ public static class IntuneStigAuditImporter
         var rows = EnumerateRows(root).ToArray();
         foreach (var row in rows)
         {
-            var finding = FromJsonRow(row, import);
+            if (!TryFromJsonRow(row, import, out var finding))
+                continue;
             if (!string.IsNullOrWhiteSpace(finding.SettingId) || !string.IsNullOrWhiteSpace(finding.ReferenceId))
                 import.Findings.Add(finding);
+            else
+                RecordSkippedRow(import, "JSON row has neither a setting ID nor a reference ID.");
         }
 
         if (rows.Length == 0 && import.ImportStatus == "Imported")
             import.ImportStatus = "NoData";
+        else if (import.SkippedRowCount > 0 && import.ImportStatus == "Imported")
+            import.ImportStatus = "Partial";
 
         return import;
     }
@@ -67,21 +72,39 @@ public static class IntuneStigAuditImporter
             SourceUrl = "https://learn.microsoft.com/en-us/intune/device-security/security-baselines/stig-audit-baseline",
             ExportedAtUtc = File.GetLastWriteTimeUtc(path).ToString("o", CultureInfo.InvariantCulture)
         };
+        var normalizedHeaders = NormalizeCsvHeaders(headers, import);
 
         while (!parser.EndOfData)
         {
-            var fields = parser.ReadFields() ?? [];
-            var row = headers
+            string[] fields;
+            try
+            {
+                fields = parser.ReadFields() ?? [];
+            }
+            catch (MalformedLineException ex)
+            {
+                RecordSkippedRow(import, $"CSV row could not be parsed: {ex.Message}");
+                break;
+            }
+
+            if (fields.Length != normalizedHeaders.Length)
+                RecordSkippedRow(import, $"CSV row has {fields.Length} value(s); expected {normalizedHeaders.Length}.");
+
+            var row = normalizedHeaders
                 .Select((header, index) => new { header, value = index < fields.Length ? fields[index] : "" })
                 .ToDictionary(item => item.header, item => item.value, StringComparer.OrdinalIgnoreCase);
 
             var finding = FromDictionaryRow(row, import);
             if (!string.IsNullOrWhiteSpace(finding.SettingId) || !string.IsNullOrWhiteSpace(finding.ReferenceId))
                 import.Findings.Add(finding);
+            else
+                RecordSkippedRow(import, "CSV row has neither a setting ID nor a reference ID.");
         }
 
         if (import.Findings.Count == 0)
             import.ImportStatus = "NoData";
+        else if (import.SkippedRowCount > 0 || import.SkippedHeaderCount > 0)
+            import.ImportStatus = "Partial";
 
         return import;
     }
@@ -93,17 +116,24 @@ public static class IntuneStigAuditImporter
 
         foreach (var name in new[] { "findings", "results", "rows", "values", "data" })
         {
-            if (root.TryGetProperty(name, out var rows) && rows.ValueKind == JsonValueKind.Array)
+            if (TryGetPropertyIgnoreCase(root, name, out var rows) && rows.ValueKind == JsonValueKind.Array)
                 return rows.EnumerateArray();
         }
 
         return [];
     }
 
-    private static IntuneStigAuditFinding FromJsonRow(JsonElement row, IntuneStigAuditImport import)
+    private static bool TryFromJsonRow(JsonElement row, IntuneStigAuditImport import, out IntuneStigAuditFinding finding)
     {
+        if (row.ValueKind != JsonValueKind.Object)
+        {
+            finding = new IntuneStigAuditFinding();
+            RecordSkippedRow(import, $"JSON row has unsupported value kind '{row.ValueKind}'.");
+            return false;
+        }
+
         var status = NormalizeStatus(GetString(row, "status", "MaxSettingStatus", "max_setting_status", "DeviceStatus", "Result") ?? "Unknown");
-        return new IntuneStigAuditFinding
+        finding = new IntuneStigAuditFinding
         {
             DeviceName = GetString(row, "device_name", "DeviceName", "deviceName") ?? "",
             DeviceId = GetString(row, "device_id", "DeviceId", "deviceId") ?? "",
@@ -117,6 +147,42 @@ public static class IntuneStigAuditImporter
             SourcePolicyId = GetString(row, "policy_id", "PolicyId", "policyId") ?? import.PolicyId,
             SourceTenantId = GetString(row, "tenant_id", "TenantId", "tenantId") ?? import.TenantId
         };
+        return true;
+    }
+
+    private static string[] NormalizeCsvHeaders(string[] headers, IntuneStigAuditImport import)
+    {
+        var normalized = new List<string>(headers.Length);
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < headers.Length; index++)
+        {
+            var original = headers[index]?.Trim() ?? "";
+            var baseName = string.IsNullOrWhiteSpace(original) ? $"Column{index + 1}" : original;
+            var name = baseName;
+            var suffix = 2;
+            while (!used.Add(name))
+                name = $"{baseName}_{suffix++}";
+
+            if (string.IsNullOrWhiteSpace(original))
+            {
+                import.SkippedHeaderCount++;
+                RecordWarning(import, $"Blank CSV header at column {index + 1} normalized to '{name}'.");
+            }
+            else if (!name.Equals(original, StringComparison.Ordinal))
+            {
+                import.SkippedHeaderCount++;
+                RecordWarning(import, $"Duplicate CSV header '{original}' normalized to '{name}'.");
+            }
+
+            normalized.Add(name);
+        }
+
+        if (normalized.Count == 0)
+        {
+            import.SkippedHeaderCount++;
+            RecordWarning(import, "CSV contains no header columns.");
+        }
+        return normalized.ToArray();
     }
 
     private static IntuneStigAuditFinding FromDictionaryRow(IReadOnlyDictionary<string, string> row, IntuneStigAuditImport import)
@@ -142,7 +208,7 @@ public static class IntuneStigAuditImporter
     {
         foreach (var name in names)
         {
-            if (!element.TryGetProperty(name, out var value))
+            if (!TryGetPropertyIgnoreCase(element, name, out var value))
                 continue;
 
             return value.ValueKind switch
@@ -156,6 +222,39 @@ public static class IntuneStigAuditImporter
         }
 
         return null;
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = property.Value;
+                    return true;
+                }
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static void RecordSkippedRow(IntuneStigAuditImport import, string reason)
+    {
+        import.SkippedRowCount++;
+        RecordWarning(import, $"Skipped row {import.SkippedRowCount}: {reason}");
+    }
+
+    private static void RecordWarning(IntuneStigAuditImport import, string warning)
+    {
+        const int warningLimit = 25;
+        if (import.ImportWarnings.Count < warningLimit)
+            import.ImportWarnings.Add(warning);
+        else if (import.ImportWarnings.Count == warningLimit)
+            import.ImportWarnings.Add("Additional import warnings were suppressed after 25 entries.");
     }
 
     private static string GetValue(IReadOnlyDictionary<string, string> row, params string[] names)
