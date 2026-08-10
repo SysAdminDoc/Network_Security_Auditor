@@ -9,6 +9,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# audit-state loading now validates schema, machine identity, complete check coverage, and enum values before mutation; state, waiver, and dashboard JSON imports now enforce size/file-count budgets.
 - Fixed: C# external exports now emit the documented OCSF 1.8.0, OSCAL 1.2.2, and ATT&CK Enterprise 19.1 metadata; Intune STIG CSV evidence is emitted as its own rectangular artifact.
 - Fixed: C# PDF export stages generated output and atomically replaces the destination only after a non-empty PDF is produced.
+- Fixed: C# privacy exports now redact structured JSON/YAML/header secrets and strip identifying branding fields from silent HTML output while retaining normal-mode branding.
 
 ## [v5.3.3 / v4.11.4] - 2026-08-09
 

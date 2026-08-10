@@ -46,8 +46,10 @@ public sealed partial class PrivacyRedactor
             text = pattern.Replace(text, replacement);
 
         text = IpPattern().Replace(text, m => $"[IP-{HashValue(m.Value)}]");
-        text = TokenPattern().Replace(text, m => $"{m.Groups[1].Value}=[SECRET-REDACTED]");
         text = BearerPattern().Replace(text, "Bearer [SECRET-REDACTED]");
+        text = StructuredSecretPattern().Replace(
+            text,
+            m => $"{m.Groups["prefix"].Value}[SECRET-REDACTED]{m.Groups["suffix"].Value}");
 
         return text;
     }
@@ -61,9 +63,9 @@ public sealed partial class PrivacyRedactor
     [GeneratedRegex(@"\b(?:\d{1,3}\.){3}\d{1,3}\b")]
     private static partial Regex IpPattern();
 
-    [GeneratedRegex(@"(?i)\b(access_token|refresh_token|id_token|client_secret|token|secret)=([^&\s]+)")]
-    private static partial Regex TokenPattern();
-
     [GeneratedRegex(@"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*")]
     private static partial Regex BearerPattern();
+
+    [GeneratedRegex(@"(?ix)(?<prefix>[""']?(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|apikey|token|secret|password|private[_-]?key|connection[_-]?string|authorization)[""']?\s*[:=]\s*[""']?)(?!Bearer\b)(?<value>[^""'\s,;&}\r\n]+)(?<suffix>[""']?)")]
+    private static partial Regex StructuredSecretPattern();
 }

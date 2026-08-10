@@ -474,7 +474,12 @@ public partial class App : Application
         {
             branding = await BrandingConfig.LoadAsync(args.BrandingPath);
             if (branding is not null)
-                Console.WriteLine($"  Branding: {branding.CompanyName}");
+            {
+                branding = PrivacyExportSanitizer.RedactBranding(branding, redactor)!;
+                Console.WriteLine(args.PrivacyMode
+                    ? "  Branding: privacy-safe visual tokens only"
+                    : $"  Branding: {branding.CompanyName}");
+            }
             else
                 Console.WriteLine($"  WARNING: Branding config not found: {args.BrandingPath}");
         }

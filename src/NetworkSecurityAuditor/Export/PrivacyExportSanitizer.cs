@@ -110,6 +110,21 @@ public static class PrivacyExportSanitizer
         return waivers;
     }
 
+    public static BrandingConfig? RedactBranding(
+        BrandingConfig? branding,
+        PrivacyRedactor redactor)
+    {
+        if (branding is null || !redactor.IsEnabled)
+            return branding;
+
+        return new BrandingConfig
+        {
+            PrimaryColor = branding.PrimaryColor,
+            AccentColor = branding.AccentColor,
+            ShowCoverPage = false
+        };
+    }
+
     public static IntuneStigAuditImport? RedactIntuneStigAudit(
         IntuneStigAuditImport? import,
         PrivacyRedactor redactor)

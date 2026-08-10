@@ -1,6 +1,7 @@
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Export;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 using NetworkSecurityAuditor.ViewModels;
 
 namespace NetworkSecurityAuditor.Tests;
@@ -43,5 +44,37 @@ public class PrivacyExportSanitizerTests
         Assert.Equal(1234.5, redactedCheck.DurationMs);
         Assert.DoesNotContain("Acme Client", clientSegment, StringComparison.OrdinalIgnoreCase);
         Assert.Matches(@"\[CLIENT-[0-9a-f]{8}\]", clientSegment);
+    }
+
+    [Fact]
+    public void Redacts_Branding_Identity_And_Contact_Fields()
+    {
+        var branding = new BrandingConfig
+        {
+            CompanyName = "Acme Secret Company",
+            LogoBase64 = "company-logo-data",
+            PrimaryColor = "#123456",
+            AccentColor = "#abcdef",
+            ContactName = "Jane Secret",
+            ContactEmail = "jane@secret.example",
+            ContactPhone = "555-0100",
+            Tagline = "Private Acme slogan",
+            FooterText = "Acme confidential"
+        };
+        var redactor = new PrivacyRedactor(true);
+
+        var redacted = PrivacyExportSanitizer.RedactBranding(branding, redactor);
+
+        Assert.NotNull(redacted);
+        Assert.Equal("", redacted!.CompanyName);
+        Assert.Equal("", redacted.LogoBase64);
+        Assert.Equal("", redacted.ContactName);
+        Assert.Equal("", redacted.ContactEmail);
+        Assert.Equal("", redacted.ContactPhone);
+        Assert.Equal("", redacted.Tagline);
+        Assert.Equal("", redacted.FooterText);
+        Assert.Equal("#123456", redacted.PrimaryColor);
+        Assert.Equal("#abcdef", redacted.AccentColor);
+        Assert.False(redacted.ShowCoverPage);
     }
 }

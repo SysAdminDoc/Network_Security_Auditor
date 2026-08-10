@@ -56,6 +56,22 @@ public class PrivacyRedactorTests
         Assert.DoesNotContain("xyz789", result);
     }
 
+    [Theory]
+    [InlineData("{\"client_secret\":\"json-secret\"}", "json-secret")]
+    [InlineData("token: yaml-secret", "yaml-secret")]
+    [InlineData("secret:colon-secret", "colon-secret")]
+    [InlineData("X-Api-Key: header-secret", "header-secret")]
+    [InlineData("password = quoted-secret", "quoted-secret")]
+    public void Redacts_Structured_Secret_Forms(string input, string secret)
+    {
+        var redactor = new PrivacyRedactor(true);
+
+        var result = redactor.Redact(input);
+
+        Assert.DoesNotContain(secret, result, StringComparison.Ordinal);
+        Assert.Contains("[SECRET-REDACTED]", result, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Null_Input_Returns_Empty()
     {
