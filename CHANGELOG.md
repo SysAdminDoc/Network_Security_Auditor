@@ -33,6 +33,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: PowerShell dashboard imports now enforce configurable file-count, per-file-byte, and total-byte budgets and show bounded skip diagnostics in the dashboard.
 
 ### Testing
+- Added a repository version-surface test that keeps optional `CLAUDE.md` guidance aligned with the authoritative C# project and PowerShell product versions.
 - Added: Export contract tests now enforce the schema validation keywords used by committed contracts, including dynamic maps, references, composition, and negative fixtures.
 
 ## [v5.3.3 / v4.11.4] - 2026-08-09

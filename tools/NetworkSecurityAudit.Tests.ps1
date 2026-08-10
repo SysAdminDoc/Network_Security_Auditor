@@ -16,8 +16,12 @@ BeforeAll {
     $script:RepoRoot   = Split-Path -Parent $PSScriptRoot
     $script:ScriptPath = Join-Path $script:RepoRoot 'NetworkSecurityAudit.ps1'
     $script:ReadmePath = Join-Path $script:RepoRoot 'README.md'
+    $script:ClaudePath = Join-Path $script:RepoRoot 'CLAUDE.md'
+    $script:CSharpProjectPath = Join-Path $script:RepoRoot 'src\NetworkSecurityAuditor\NetworkSecurityAuditor.csproj'
     $script:Text       = Get-Content -Raw -LiteralPath $script:ScriptPath
     $script:Readme     = Get-Content -Raw -LiteralPath $script:ReadmePath
+    $script:CSharpProject = Get-Content -Raw -LiteralPath $script:CSharpProjectPath
+    $script:Claude     = if (Test-Path -LiteralPath $script:ClaudePath) { Get-Content -Raw -LiteralPath $script:ClaudePath } else { '' }
 
     function Get-IdSet {
         param([string]$Text, [string]$Pattern)
@@ -113,6 +117,9 @@ Describe 'Version surface consistency' {
         $script:HeaderComment = [regex]::Match($script:Text, 'Network Security Auditor v([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
         $script:DotVersion    = [regex]::Match($script:Text, '(?ms)\.VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
         $script:ProductVer    = [regex]::Match($script:Text, "\`$script:ProductVersion\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)'").Groups[1].Value
+        $script:CSharpVer    = [regex]::Match($script:CSharpProject, '<Version>([0-9]+\.[0-9]+\.[0-9]+)</Version>').Groups[1].Value
+        $script:CSharpAssemblyVer = [regex]::Match($script:CSharpProject, '<AssemblyVersion>([0-9]+\.[0-9]+\.[0-9]+)\.0</AssemblyVersion>').Groups[1].Value
+        $script:CSharpFileVer = [regex]::Match($script:CSharpProject, '<FileVersion>([0-9]+\.[0-9]+\.[0-9]+)\.0</FileVersion>').Groups[1].Value
         $script:ReadmeVers    = @([regex]::Matches($script:Readme, '(?:Version|version)-([0-9]+\.[0-9]+\.[0-9]+)') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
     }
     It 'reads a non-empty centralized product version' {
@@ -127,6 +134,19 @@ Describe 'Version surface consistency' {
     It 'all README version badges match the product version' {
         $script:ReadmeVers | Should -Not -BeNullOrEmpty
         ($script:ReadmeVers | Where-Object { $_ -ne $script:ProductVer }) | Should -BeNullOrEmpty -Because "README badges drifted: $($script:ReadmeVers -join ', ')"
+    }
+    It 'C# assembly and file versions match the project version' {
+        $script:CSharpVer | Should -Match '^[0-9]+\.[0-9]+\.[0-9]+$'
+        $script:CSharpAssemblyVer | Should -Be $script:CSharpVer
+        $script:CSharpFileVer | Should -Be $script:CSharpVer
+    }
+    It 'CLAUDE version guidance matches authoritative versions when the local guidance file is present' {
+        if ([string]::IsNullOrWhiteSpace($script:Claude)) { return }
+        $csharpPattern = [regex]::Escape($script:CSharpVer)
+        $powershellPattern = [regex]::Escape($script:ProductVer)
+        $script:Claude | Should -Match "(?m)^## Tech Stack \(v$csharpPattern — C# rewrite\)$"
+        $script:Claude | Should -Match "(?m)^- \*\*C# rewrite v$csharpPattern\*\*"
+        $script:Claude | Should -Match "(?m)^- \*\*PowerShell artifact v$powershellPattern\*\*"
     }
 
     Context 'dynamic surfaces derive from $script:ProductVersion (cannot drift)' {
