@@ -387,6 +387,20 @@ public partial class App : Application
             return (int)ExitCode.NoScorableChecks;
         }
 
+        var outputDir = ResolveOutputDirectory(
+            args.OutputPath,
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop));
+        Directory.CreateDirectory(outputDir);
+        var historyIdentity = Path.Combine(outputDir, "csharp-headless-history");
+        using var runLock = AuditRunLock.TryAcquire(outputDir, options.Client, env.ComputerName, historyIdentity);
+        if (runLock is null)
+        {
+            Console.WriteLine($"AlreadyRunning: another audit owns the per-target lock for {options.Client}/{env.ComputerName} in {outputDir}.");
+            Console.WriteLine($"Exit code: {(int)ExitCode.AlreadyRunning}");
+            return (int)ExitCode.AlreadyRunning;
+        }
+        Console.WriteLine($"Run lock: {runLock.RunId}");
+
         void WriteProgress((string checkId, CheckResult result) update)
         {
             completed++;
@@ -492,11 +506,6 @@ public partial class App : Application
         var exportAuditor = redactor.Redact(options.Auditor);
         if (args.PrivacyMode)
             Console.WriteLine("  Privacy mode: PII redacted with SHA256 pseudonyms");
-
-        var outputDir = ResolveOutputDirectory(
-            args.OutputPath,
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop));
-        Directory.CreateDirectory(outputDir);
 
         var baseName = $"SecurityAudit_{SafeFileNameSegment(exportClient, "Client")}_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}";
 

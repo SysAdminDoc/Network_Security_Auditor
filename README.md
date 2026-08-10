@@ -620,6 +620,23 @@ review dates, supported OS/builds, check coverage, and stale-review windows.
                      Default: 25 MiB
 -BenchmarkMaxRows    Maximum benchmark records accepted per file.
                      Default: 10000
+
+Benchmark provenance
+--------------------
+
+Each `-BenchmarkImportPath` file is hashed as raw bytes with SHA-256 before
+parsing. To verify a user-supplied content pack, place a JSON manifest beside
+it using either `<file>.provenance.json` or the same basename with the
+`.provenance.json` extension. The manifest may declare `source_version`,
+`format`, `reviewed_on`, `stale_after_days`, `supported_targets`,
+`license_status`, `redistribution_status`, and `content_sha256`. A digest
+mismatch rejects the import. Imports without a manifest, with stale metadata,
+or with unknown/restricted licensing remain visibly `degraded` and are never
+treated as equivalent to a verified catalog. Structured JSON and HTML exports
+include the format, review/licensing state, computed digest, expected digest,
+and verification status. The built-in catalog intentionally contains mapping
+metadata only; benchmark and STIG text is not redistributed.
+
 -Dashboard           Generate a static multi-client rollup dashboard from a
                      folder of findings JSON exports, then exit (no scan,
                      no elevation, no host changes)

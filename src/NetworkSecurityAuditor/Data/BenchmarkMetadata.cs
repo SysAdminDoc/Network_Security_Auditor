@@ -93,6 +93,37 @@ public static class BenchmarkMetadata
                 issues.Add($"Benchmark source '{label}' source_version is required.");
             }
 
+            if (string.IsNullOrWhiteSpace(source.Format))
+            {
+                issues.Add($"Benchmark source '{label}' format is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(source.LicenseStatus))
+            {
+                issues.Add($"Benchmark source '{label}' license_status is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(source.RedistributionStatus))
+            {
+                issues.Add($"Benchmark source '{label}' redistribution_status is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(source.VerificationStatus))
+            {
+                issues.Add($"Benchmark source '{label}' verification_status is required.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(source.ContentSha256) && !BenchmarkContentProvenance.IsSha256(source.ContentSha256))
+            {
+                issues.Add($"Benchmark source '{label}' content_sha256 must be a 64-character hexadecimal SHA-256 digest.");
+            }
+
+            var referenceOnly = source.VerificationStatus.Equals("reference-only", StringComparison.OrdinalIgnoreCase);
+            if (!referenceOnly && !BenchmarkContentProvenance.IsSha256(source.ContentSha256))
+            {
+                issues.Add($"Benchmark source '{label}' must provide content_sha256 unless verification_status is reference-only.");
+            }
+
             if (!Uri.TryCreate(source.SourceUrl, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
             {
@@ -219,6 +250,9 @@ public sealed class BenchmarkSourceMetadata
     [JsonPropertyName("source_version")]
     public string SourceVersion { get; init; } = string.Empty;
 
+    [JsonPropertyName("format")]
+    public string Format { get; init; } = string.Empty;
+
     [JsonPropertyName("source_url")]
     public string SourceUrl { get; init; } = string.Empty;
 
@@ -236,6 +270,18 @@ public sealed class BenchmarkSourceMetadata
 
     [JsonPropertyName("catalog_label")]
     public string CatalogLabel { get; init; } = string.Empty;
+
+    [JsonPropertyName("license_status")]
+    public string LicenseStatus { get; init; } = string.Empty;
+
+    [JsonPropertyName("redistribution_status")]
+    public string RedistributionStatus { get; init; } = string.Empty;
+
+    [JsonPropertyName("content_sha256")]
+    public string ContentSha256 { get; init; } = string.Empty;
+
+    [JsonPropertyName("verification_status")]
+    public string VerificationStatus { get; init; } = string.Empty;
 
     [JsonPropertyName("covered_check_ids")]
     public string[] CoveredCheckIds { get; init; } = [];

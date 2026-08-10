@@ -1,91 +1,196 @@
 # Research — Network Security Auditor
-Date: 2026-07-09 — replaces all prior research.
+Date: 2026-08-10 — replaces all prior research.
 
 ## Executive Summary
-Network Security Auditor is a Windows security assessment product for MSPs, consultants, and internal administrators, with a mature PowerShell artifact (`NetworkSecurityAudit.ps1`) and a .NET/WPF C# rewrite under `src/NetworkSecurityAuditor` at v5.2.6 on 2026-07-09. Verified highest-value direction: make the C# rewrite durable before treating it as the primary artifact by moving off .NET 9 before its 2026-11-10 support end, restoring C# parity for Cloud and benchmark workflows that already exist or are promised in the PowerShell path, and tightening release/audit evidence so MSP, SIEM, and GRC consumers can trust outputs across upgrades. Top opportunities: .NET 10 LTS migration; C# Graph cloud posture pack; C# benchmark/import parity; release SBOM/provenance; OSCAL POA&M export; Intune STIG baseline import; non-intrusive WPF UI/accessibility smoke tests; completion of already-tracked parser/export/atomic-write defects in `ROADMAP.md`.
+
+Network Security Auditor is a Windows-first, read-only security posture tool with two deliberately different delivery surfaces: a dependency-light PowerShell 5.1 artifact for RMM/jumpbox use and a .NET 10 WPF/MVVM workstation application for guided scans, state, history, and rich exports. Its strongest shape is local execution with broad evidence collection, privacy-mode export sanitization, fleet/reporting foundations, and a growing normalized export surface. The highest-value direction is to make every result explainable and repeatable across prerequisites, benchmark provenance, privacy handling, exceptions, and successive runs before expanding check count or adding a hosted service.
+
+Priority opportunities, excluding work already present in the active roadmap:
+
+1. Finish the open 2026-08-10 correctness, fleet, export, Graph-retry, and accessibility findings already listed in `ROADMAP.md`.
+2. Turn the existing GUI-only preflight and scattered CLI status into a non-invasive diagnostic profile that explains exactly why a check is ready, degraded, or blocked.
+3. Make data handling, benchmark provenance, and exception disposition visible and machine-verifiable in every export.
+4. Complete the existing Graph, continuous-history, fleet, remediation, and schema initiatives with denominator-safe metrics and single-flight unattended-run behavior.
+5. Harden local releases with an independently executable verifier and a package-freshness/vulnerability gate; the current release script already emits CycloneDX, checksums, and a manifest, so the gap is verification and policy rather than SBOM generation.
+6. Preserve the dark premium default while supporting Windows high-contrast resources and a localization-neutral string boundary.
+
+The current local baseline is healthy: on 2026-08-10, `dotnet test .\\NetworkSecurityAuditor.slnx --no-restore -c Release` passed 384 tests, the Pester suite passed 63 tests, the release gate passed 69 checks, and `dotnet list ... package --vulnerable --include-transitive` reported no vulnerable packages. The same package inspection reported patch drift: the three direct `System.*` 10.0.9 references have 10.0.10 available, and `Microsoft.NET.Test.Sdk` 18.7.0 has 18.8.1 available. That makes release discipline and regression fixtures more urgent than a wholesale architecture rewrite.
 
 ## Product Map
-- Core workflows: WPF-guided audit, silent CLI scan/export, PowerShell RMM deployment, dashboard/history review, waiver/accepted-risk annotation, CMMC/compliance reporting.
-- User personas: MSP technician, Windows/domain administrator, security consultant, CMMC assessor, security engineer feeding SIEM/GRC/ticketing systems.
-- Platforms and distribution: Windows 10/11 and Windows Server; PowerShell 5.1 production artifact v4.11.0; .NET 9 WPF rewrite v5.2.6; local build/release flow via `tools/Publish-CSharpRelease.ps1`; GitHub Releases for distributable artifacts.
-- Key integrations and data flows: registry/WMI/EventLog/AD/service checks into `ISecurityCheck`; `CheckResult` into scoring engines; exporters to HTML, PDF, JSON, CSV, JSONL, SARIF, OCSF, OSCAL, Intune, DefectDojo, SIEM content packs, and CMMC HTML/JSON; PowerShell imports HardeningKitty, Policy Analyzer, and DISA CKL evidence through `-BenchmarkImportPath`.
+
+### Core workflows
+
+- A technician launches the PowerShell artifact locally or through RMM, selects a profile, and receives HTML/JSON/CSV/SARIF/OSCAL/SIEM-style outputs plus optional history, RMM, fleet, benchmark, and cloud-import data.
+- A workstation user opens the WPF application, runs local checks, reviews category/check evidence, edits notes and remediation ownership, saves/loads state, compares runs, and exports reports.
+- An MSP or auditor imports multiple result files, benchmark/STIG/cloud artifacts, or fleet targets and produces client-facing summaries and dashboards.
+- A release operator builds the C# artifact locally with `tools/Publish-CSharpRelease.ps1`, which runs tests and produces a Windows/.NET 10 package, CycloneDX SBOM, checksum file, and release manifest.
+
+### User personas
+
+- MSP technician or vCISO: needs quick, repeatable, privacy-safe client posture and trend outputs from a jumpbox.
+- Windows/AD administrator: needs local evidence, explicit prerequisites, and remediation guidance without an agent or default write behavior.
+- Security/compliance auditor: needs benchmark version, source, framework mapping, evidence, exception/disposition history, and portable OSCAL/SARIF/CSV/JSON artifacts.
+- Release/support operator: needs deterministic diagnostics, bounded failures, dependency visibility, and artifact verification without a hosted control plane.
+
+### Platforms and distribution
+
+- Windows 10/11 and Windows Server are the supported operating systems in `README.md`.
+- The legacy production surface is one `NetworkSecurityAudit.ps1` file targeting Windows PowerShell 5.1; the C# rewrite targets `net10.0-windows` and requires the .NET 10 Desktop Runtime.
+- Distribution is local and offline-friendly by design. There is no `.github` workflow or hosted service in this repository; local PowerShell/.NET gates and the release script are the operational path.
+
+### Key integrations and data flows
+
+- Local collectors cross WMI, registry, services, event logs, Defender, BitLocker, SMB, AD/RSAT, `dsregcmd`, and PowerShell command output.
+- Remote/fleet paths use WinRM/PowerShell remoting and write per-target plus aggregate artifacts.
+- Import paths accept benchmark, STIG/Intune, cloud-assessment, saved-state, and prior-result files; all are trust boundaries and require bounded parsing and explicit degraded states.
+- Export paths fan one normalized result set into HTML/PDF/JSON/JSONL/CSV/SARIF/Navigator/OCSF/OSCAL/POA&M/Intune/DefectDojo/CMMC/SIEM and dashboard formats.
+- Microsoft Graph is a planned/partial PowerShell cloud path with an active `CL01`–`CL12` design in `ROADMAP.md`; the C# cloud profile is intentionally not yet enabled.
 
 ## Competitive Landscape
-- PingCastle: does focused AD/Entra risk scoring, maturity views, and executive-friendly posture reports well. Learn from opinionated risk categories and fast health-check posture. Avoid AD-only product gravity and licensing friction for MSP/commercial use.
-- Purple Knight: does hybrid AD/Entra/Okta posture, clear remediation, and government-cloud messaging well. Learn from permission-aware identity breadth and concise risk communication. Avoid closed-source registration friction and opaque collection behavior.
-- Maester and CISA ScubaGear: do Microsoft 365/Entra baseline automation and Graph-backed test evidence well. Learn from Graph permission modeling, cloud skip/not-licensed states, and test-as-policy structure. Avoid making cloud checks depend on hosted CI or forcing cloud-only workflows.
-- Prowler: does multi-provider compliance scanning, scheduled scans, schema-first outputs, and OCSF/SARIF-style integrations well. Learn from provider separation, compliance folders, and dashboard/API patterns. Avoid adding infrastructure weight that conflicts with a local Windows/MSP tool.
-- HardeningKitty, CIS-CAT, Microsoft Security Compliance Toolkit, Wazuh SCA, Tenable, and Qualys: do policy-as-data, expected/actual evidence, exceptions, and benchmark drift tracking well. Learn from versioned baseline imports and explicit evidence provenance. Avoid bundling copyrighted benchmark content or requiring agents/licensed feeds for core value.
-- Seatbelt and PrivescCheck: do modular local Windows enumeration and concise host posture collection well. Learn from collector boundaries and command grouping. Avoid offensive artifact framing or noisy collection that would reduce client trust.
-- OSCAL, OCSF, and SARIF ecosystems: do machine-readable evidence, finding lineage, and downstream automation well. Learn from stable schemas and false-positive/risk-adjustment fields. Avoid exporting broad JSON without contract tests and versioned schemas.
+
+### PingCastle
+
+PingCastle demonstrates the value of a fast domain healthcheck, maturity/context framing, report history, consolidation, and a management-facing explanation of risk. Network Security Auditor should adopt durable posture context and source-aware trend views while retaining its local one-file deployment. It should avoid copying a commercial centralized-service model or implying that a score replaces evidence.
+
+### Maester and CISA SCuBA/ScubaGear
+
+Maester treats Microsoft 365 security as test automation: checks are customizable, results are exportable, notifications and CI are supported, and the 2026 native-test RFC explicitly calls for structured prerequisites, license/cloud metadata, skip reasons, parallelism, and migration compatibility. ScubaGear supplies an authoritative M365-baseline orientation. Network Security Auditor should keep check metadata close to execution and make prerequisites/skip reasons first-class, but should not require PowerShell 7 modules or a hosted CI service for its Windows PowerShell 5.1 artifact.
+
+### Prowler
+
+Prowler shows the product value of versioned check/compliance catalogs, a local dashboard, bounded scan queueing, cross-provider output, and release-level SBOM/provenance attestations. The local tool should borrow catalog versioning, single-flight behavior, and verifiable artifacts. It should avoid expanding into a cloud SaaS control plane or adopting provider breadth that does not fit Windows/AD evidence.
+
+### Wazuh, HardeningKitty, Security Compliance Toolkit, and OpenSCAP
+
+These tools establish the machine-readable policy pattern: an expected setting, observed value, applicability, evidence, source, and remediation can be represented as data and tested independently of UI. HardeningKitty also exposes the operational importance of signed/stable content and language/platform caveats. Network Security Auditor should strengthen its existing benchmark metadata/import path with integrity and licensing provenance; it should keep automatic hardening opt-in and preserve its read-only default.
+
+### CIS-CAT Pro, Qualys SCA, and Tenable compliance
+
+Commercial products make benchmark version/revision, target prerequisites, exceptions, history, remediation, and report provenance visible to operators. They also warn that credentials, audit-file scope, and oversized policy sets affect completeness. Network Security Auditor should expose these facts in diagnostics, findings, exceptions, and exports without requiring a server, scheduler SaaS, or proprietary benchmark redistribution.
+
+### M365-Assess, Guerrilla, and Microsoft Zero Trust Assessment
+
+These adjacent tools are the clearest model for this repository’s audience: read-only execution, self-contained reports, explicit authentication/permission matrices, compatibility and troubleshooting documentation, sovereign-cloud guidance, PII-scrubbed examples, and local/no-telemetry posture. Guerrilla’s comparison semantics are especially relevant: a check that becomes unavailable must not look unchanged, and partial/crashed runs must not poison the baseline. Network Security Auditor should add those guarantees to its existing Graph/history work while keeping a Windows PowerShell 5.1-compatible deployment path.
+
+### BloodHound/OpenGraph
+
+BloodHound demonstrates the leap from independent settings to relationships and paths across identity, directory, cloud, and code systems. This is a Later opportunity for a bounded relationship-evidence export, not an immediate attack-path replacement: the current catalog produces findings and framework mappings, not a graph of subjects, edges, and reachability claims.
 
 ## Security, Privacy, and Reliability
-- Verified: `src/NetworkSecurityAuditor/NetworkSecurityAuditor.csproj` and `tests/NetworkSecurityAuditor.Tests/NetworkSecurityAuditor.Tests.csproj` target `net9.0-windows`; Microsoft documents .NET 9 as STS with support ending 2026-11-10, while .NET 10 LTS runs until 2028-11-14. The release tool also emits `windows-net9` packages and `.NET 9 Desktop Runtime` install text.
-- Verified: `dotnet list NetworkSecurityAuditor.slnx package --vulnerable` reported no vulnerable NuGet packages on 2026-07-09. `dotnet list ... package --outdated` showed package drift: 2026-07-09 available versions include CommunityToolkit.Mvvm 8.4.2, System.* 10.0.9, Microsoft.NET.Test.Sdk 18.7.0, xUnit 2.9.3/runner 3.1.5, and coverlet.collector 10.0.1.
-- Verified: `src/NetworkSecurityAuditor/Data/ScanProfiles.cs` intentionally resolves the C# `Cloud` profile to no checks, and tests guard that it must not expand to local/AD checks. This is safer than the prior false-positive behavior but leaves a major C# parity gap versus PowerShell cloud assessment/import work and competitors.
-- Verified: `tools/Publish-CSharpRelease.ps1` cleans artifacts, runs tests unless skipped, publishes framework-dependent WPF output, signs if a local certificate exists, zips, hashes, and writes `release-manifest.json`; it does not generate an SBOM or disclose runtime support status in the manifest.
-- Verified: `ROADMAP.md` as read on 2026-07-09 still contains stale research logs and completed-history sections, but this research pass preserved the user's append-only rule and added only new incomplete work. Existing P3 items already cover parser bugs, locale-sensitive `netsh` parsing, dsregcmd timeout/leak, Intune enrollment detection, atomic artifact writes, output filename sanitization, culture-invariant export dates, PDF stale-output/deadlock risk, and several PowerShell fleet/privacy defects; new roadmap additions do not duplicate them.
-- Likely: any live Graph/Intune/Defender implementation will need explicit privacy classes for tenant IDs, user principal names, device IDs, source paths, and token-like values, because README and PowerShell tests already enforce cloud provenance redaction under `-PrivacyMode`.
-- Likely: imported benchmark/STIG evidence needs source/version/provenance fields to remain auditor-grade; bundled exact CIS/STIG benchmark content would create licensing and maintenance risk.
+
+- The current C# waiver model in `src/NetworkSecurityAuditor/Models/RiskWaiver.cs` stores one active record per check with justification, approver, and expiration, but no immutable approval/revocation history or recertification state. The POA&M exporter can carry waiver properties, but disposition governance is not yet a lifecycle.
+- `src/NetworkSecurityAuditor/Services/PreflightChecker.cs` returns seven GUI-oriented pass/details rows. `App.xaml.cs:315-342` prints a small environment summary in silent mode, but there is no bounded diagnostic artifact that explains runtime, output, browser/PDF, remoting, Graph, or import readiness.
+- C# privacy redaction is centralized at `App.xaml.cs:446-454` and `Export/PrivacyExportSanitizer.cs`; the PowerShell artifact has `ConvertTo-PrivacySafeObject`, `ConvertTo-RedactedText`, and exporter-specific redaction. The design is materially safer after the recent hardening, but the output contract does not yet declare a uniform data classification/redaction manifest to the consumer.
+- `Data/BenchmarkMetadata.cs` validates schema, source URL, version, review date, stale period, supported OS/builds, and covered check IDs. It does not represent a digest, signature/verification status, license/redistribution status, or the exact imported content bytes.
+- `tools/Publish-CSharpRelease.ps1` emits a ZIP, CycloneDX 1.5 SBOM, `SHA256SUMS.txt`, and `release-manifest.json`, and can Authenticode-sign PE files when a local certificate exists. It does not provide a separate supported verifier that checks the bundle end-to-end or distinguishes local signing from an external attestation.
+- Microsoft Graph requires least-privilege permission selection, and app-only access is broader/more powerful than delegated access. The active Graph roadmap already specifies permission bundles and throttling; implementation must retain that boundary and never persist tokens, headers, device codes, or client secrets.
+- There is no default telemetry or hosted multi-tenant datastore. That is a product strength for sensitive audits and should remain explicit in documentation and tests.
+
+Recovery priorities are: prevent partial runs from becoming baselines, preserve migration paths for existing state/history, bound import and crash-log storage, make lock/timeout outcomes explicit, and ensure every export can be tied to a catalog/policy/content version and privacy mode.
 
 ## Architecture Assessment
-- Strong boundaries: `Models`, `Data`, `Checks`, `Scoring`, `Export`, `Services`, `Theme`, and `ViewModels` are cleanly separated; 289 xUnit tests passed on 2026-07-09 and `tools/Test-NetworkSecurityAudit.ps1` validated the PowerShell artifact's 69-check contract.
-- Main lifecycle risk: the C# rewrite is release-tooling-complete enough to publish, but its target framework and package family are on an STS track close to maintenance end. Migration should land before more C# feature work expands the retest surface.
-- Main product boundary gap: Cloud is intentionally disabled in the C# scan profile rather than backed by `CLxx` Graph checks. A new Graph service boundary with offline fixtures is needed before enabling Cloud in GUI or silent CLI.
-- Main parity gap: PowerShell v4.11 supports benchmark import, cloud assessment provenance, RMM/fleet workflows, and remediation/dry-run flows that the C# rewrite does not yet fully expose. C# parity should prefer shared structured models and fixture-driven importers over one-off report sections.
-- Export/GRC gap: OSCAL assessment-results output exists, but POA&M is not generated as a first-class artifact. CMMC users need a remediation task/risk artifact linked to failed or partial findings, waivers, owners, due dates, and evidence.
-- Release trust gap: the C# release manifest has checksums and optional Authenticode status, but no SBOM/SPDX/CycloneDX artifact, no package license inventory, and no runtime lifecycle metadata.
-- UI verification gap: static XAML tests exist, and the app supports a test-only `--uia-background` mode, but there is no live WPF UI Automation smoke test that verifies focusable controls, accessible names, scan/export affordances, or non-foreground launch behavior.
-- Documentation gap: README distinguishes the production PowerShell artifact from the C# preview, but subsequent C# parity work must keep setup, release, runtime, export, and cloud-permission docs synchronized with actual behavior.
+
+- The C# rewrite has useful boundaries (`Checks`, `Data`, `Services`, `Export`, `ViewModels`) and substantial xUnit coverage. `MainViewModel` still contains many dialog-specific export/save methods, while `App.xaml.cs` owns headless orchestration; the active audit findings already cover the immediate busy/error and shutdown defects. New work should add shared contracts around those boundaries rather than move code for its own sake.
+- The PowerShell artifact remains a very large single file containing collectors, UI, importers, exporters, scoring, history, and RMM behavior. Preserve the single-file release promise; future policy/content and string catalogs should be generated or embedded without introducing arbitrary runtime code loading.
+- Check metadata is split between C# catalog classes/JSON, PowerShell hashtables, framework/MITRE maps, and imported benchmark data. The existing roadmap’s catalog/schema work should be extended with provenance and compatibility validation, not replaced by a second plugin system.
+- The current dashboard (`Export/DashboardGenerator.cs`) computes latest client/host rows, score, ransomware score, critical/fail counts, stale state, and score trend. It has no denominator-safe coverage/remediation-aging KPI model and currently renders a Catppuccin-like hard-coded HTML palette separate from the WPF resource dictionary and PowerShell themes.
+- Testing is strongest for deterministic C# check/export logic and PowerShell static/fixture behavior. There is no live tenant, real WinRM fleet, enterprise browser/PDF matrix, or signed-release verification fixture in the repository. Add recorded/mock boundary fixtures and headless tests; do not make credentials or network availability part of the default gate.
+- `.NET 10` is the correct LTS target through 2028-11-14. Dependency freshness should be handled as a repeatable local release gate because the repository currently has patch drift but no reported vulnerable packages.
+- Observability is presently console/GUI logging plus the emerging history/delta model; diagnostics, run locks, KPI denominators, and structured run records should become the support contract. Documentation and distribution should stay in `README.md`, the local release scripts, and machine-readable manifests rather than a hosted operations portal.
+- Offline/resilience, migration, and upgrade strategy are first-class constraints: imports need bounded degraded states, existing state/history/waiver formats need versioned migration, and content/catalog hashes must prevent false deltas after an upgrade. Multi-user SaaS, mobile, and runtime plugin ecosystems are intentionally excluded; MSP multi-target operation remains a local batch/reporting workflow.
 
 ## Rejected Ideas
-- Restore GitHub Actions workflows: rejected because repo rules explicitly require local builds/tests/releases and no CI workflow files.
-- Replace the PowerShell artifact immediately: rejected because PowerShell v4.11.0 remains the production MSP/RMM path and has automation features the C# rewrite lacks.
-- Make the C# app cross-platform: rejected because WPF, Windows security APIs, registry/WMI/EventLog/AD checks, and target users are Windows-specific.
-- Import GPL/AGPL code from SharpHound, BloodHound collectors, or ADRecon: rejected because license compatibility and offensive-collection optics conflict with the repo's MIT, MSP-friendly posture.
-- Ship bundled full CIS/STIG benchmark catalogs: rejected because licensing/provenance risk is higher than importing user-provided or vendor-exported evidence.
-- Add Okta/Google Workspace before Entra/M365: rejected because code/docs as read on 2026-07-09 and the target customers are Microsoft-first; Purple Knight and ScubaGear show those can be later adjacent tracks after Graph parity.
-- Add runtime arbitrary plugins before data-driven packs: rejected because deterministic local deployment and inspectability matter more; data-driven import/policy packs are the safer extension route.
-- Build a hosted multi-tenant SaaS dashboard before local/offline parity is complete: rejected because the product's trust model is local/offline-friendly reporting for MSPs and admins, not centralized custody of client findings.
-- Build a mobile companion app: rejected because the audited evidence sources are Windows registry/WMI/EventLog/AD/WPF surfaces in `NetworkSecurityAudit.ps1` and `src/NetworkSecurityAuditor/NetworkSecurityAuditor.csproj`; mobile would add distribution complexity without improving evidence quality.
+
+- Mobile or cross-platform desktop clients: WPF, WMI, registry, Windows services, RSAT, and PowerShell 5.1 are core constraints; a mobile client would duplicate a different product rather than improve the supported workflow.
+- Hosted SaaS/multi-tenant storage and default telemetry: conflicts with the local, privacy-safe, one-file/RMM philosophy and creates a new custody boundary for audit evidence.
+- Arbitrary runtime plugins that execute third-party PowerShell or assemblies: increases supply-chain and trust risk; prefer signed/data-only policy packs and explicit built-in adapters.
+- Automatic remediation as the default: the repository’s read-only safety model and the risk of domain-managed settings require explicit selection, dry run, before/after evidence, and rollback; existing remediation items remain opt-in.
+- Bundling proprietary CIS/STIG benchmark text or silently redistributing licensed content: use source/version/license metadata and user-supplied imports unless redistribution rights are established.
+- A full BloodHound replacement in the next cycle: a relationship graph is a different data model and needs carefully bounded identity/edge semantics; only a later, privacy-aware relationship evidence export is recommended.
+- PowerShell 7-only production support: adjacent tools benefit from modern modules, but the legacy artifact’s Windows PowerShell 5.1/RMM compatibility is a stated differentiator. PowerShell 7 compatibility can be tested opportunistically, not made a prerequisite.
 
 ## Sources
-Competitors and analogous projects:
-- https://github.com/netwrix/pingcastle
-- https://www.semperis.com/purple-knight/
-- https://github.com/SpecterOps/BloodHound
-- https://github.com/GhostPack/Seatbelt
-- https://github.com/itm4n/PrivescCheck
-- https://github.com/scipag/HardeningKitty
+
+### Direct OSS competitors and adjacent projects
+
 - https://github.com/maester365/maester
-- https://maester.dev/
 - https://github.com/cisagov/ScubaGear
 - https://github.com/prowler-cloud/prowler
+- https://github.com/prowler-cloud/prowler/releases
+- https://github.com/specterops/bloodhound
 - https://documentation.wazuh.com/current/user-manual/capabilities/sec-config-assessment/index.html
-- https://learn.cisecurity.org/cis-cat-lite
-- https://learn.microsoft.com/en-us/windows/security/operating-system-security/device-management/windows-security-configuration-framework/security-compliance-toolkit-10
-- https://www.tenable.com/audits
-- https://www.qualys.com/apps/security-configuration-assessment
-
-Standards, APIs, and platform:
-- https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core
-- https://learn.microsoft.com/en-us/graph/api/security-list-securescores?view=graph-rest-1.0
-- https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-evaluate?view=graph-rest-1.0
-- https://learn.microsoft.com/en-us/graph/api/resources/authenticationmethods-overview?view=graph-rest-1.0
-- https://learn.microsoft.com/en-us/intune/device-security/security-baselines/stig-audit-baseline
-- https://learn.microsoft.com/en-us/defender-endpoint/api/get-assessment-secure-config
-- https://pages.nist.gov/OSCAL/learn/concepts/layer/assessment/assessment-results/
-- https://pages.nist.gov/OSCAL/learn/concepts/layer/assessment/poam/
-- https://schema.ocsf.io/classes/compliance_finding
-- https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
-- https://github.com/microsoft/sbom-tool
-- https://github.com/CycloneDX/cyclonedx-dotnet
-
-Community signal:
-- https://github.com/decalage2/awesome-security-hardening
+- https://github.com/scipag/HardeningKitty
+- https://github.com/openscap/openscap
+- https://github.com/Galvnyz/M365-Assess
+- https://guerrilla.army/
 - https://github.com/PaulSec/awesome-windows-domain-hardening
-- https://www.reddit.com/r/activedirectory/comments/1r6kwvd/ad_security_checker_scriptstools/
+- https://learn.microsoft.com/en-us/security/zero-trust/assessment/get-started
+
+### Commercial assessment products
+
+- https://www.pingcastle.com/documentation/
+- https://www.pingcastle.com/services/enterprise/
+- https://www.cisecurity.org/cybersecurity-tools/cis-cat-pro
+- https://ciscat-pro-dashboard.docs.cisecurity.org/en/latest/source/Dashboard%20User%27s%20Guide/
+- https://docs.tenable.com/nessus/10_9/Content/Compliance.htm
+- https://docs.tenable.com/nessus/compliance-checks-reference/Content/CustomItems.htm
+- https://www.qualys.com/apps/security-configuration-assessment
+- https://docs.qualys.com/en/pa/latest/policies/manage_policies.htm
+
+### Standards and platform guidance
+
+- https://csrc.nist.gov/pubs/sp/800/70/r5/final
+- https://csrc.nist.gov/Projects/security-content-automation-protocol/SCAP-Releases/scap-1-3
+- https://learn.microsoft.com/en-us/windows/security/operating-system-security/device-management/windows-security-configuration-framework/security-compliance-toolkit-10
+- https://pages.nist.gov/OSCAL/learn/concepts/layer/assessment/poam/
+- https://pages.nist.gov/OSCAL/learn/concepts/layer/assessment/assessment-results/
+- https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html
+- https://schema.ocsf.io/classes/compliance_finding
+- https://www.w3.org/TR/wcag/
+- https://learn.microsoft.com/en-us/windows/apps/design/accessibility/high-contrast-themes
+- https://learn.microsoft.com/en-us/graph/permissions-overview
+- https://learn.microsoft.com/en-us/graph/throttling
+- https://learn.microsoft.com/en-us/entra/identity-platform/app-only-access-primer
+- https://cyclonedx.org/specification/overview/
+- https://github.com/CycloneDX/cyclonedx-dotnet
+- https://github.com/CycloneDX/sbom-utility
+- https://dotnet.microsoft.com/en-us/platform/support/policy
+
+### Community, issue, and discussion signals
+
+- https://github.com/maester365/maester/issues/1802
+- https://github.com/maester365/maester/discussions/2050
+- https://www.reddit.com/r/msp/comments/xg9hd1
+- https://www.reddit.com/r/msp/comments/1rus9f2
+- https://www.reddit.com/r/sysadmin/comments/1i9rh9n
+- https://www.reddit.com/r/sysadmin/comments/1snz0i2
+- https://www.reddit.com/r/PowerShell/comments/1sqdmg6
+- https://www.reddit.com/r/MAESTER/comments/1v8p6fe
+- https://www.reddit.com/r/MAESTER/comments/1v9qxtn
+
+### Academic and engineering research
+
+- https://arxiv.org/abs/2209.08936
+- https://arxiv.org/abs/2209.08824
+- https://arxiv.org/abs/2112.13175
+- https://arxiv.org/abs/2608.02336
+- https://arxiv.org/abs/2512.11316
+
+### Dependency, lifecycle, and supply-chain references
+
+- https://github.com/CommunityToolkit/dotnet/releases
+- https://www.nuget.org/packages/Microsoft.NET.Test.Sdk
+- https://www.nuget.org/packages/System.Management/10.0.0
+- https://www.nuget.org/packages/CommunityToolkit.Mvvm
+- https://xunit.net/releases/v2/2.9.3
+- https://learn.microsoft.com/en-us/powershell/scripting/install/powershell-support-lifecycle?view=powershell-7.6
+- https://github.com/GitHub/advisory-database
+- https://www.cisa.gov/topics/cyber-threats-and-advisories/sbom/sbomresourceslibrary
+- https://www.cisa.gov/sites/default/files/2024-08/SECURING_THE_SOFTWARE_SUPPLY_CHAIN_RECOMMENDED_PRACTICES_FOR_SOFTWARE_BILL_OF_MATERIALS_CONSUMPTION-508.pdf
 
 ## Open Questions
-- For C# Graph checks, the implementation can proceed with offline fixtures first, but live-mode prioritization still needs a product decision between delegated device-code auth and app-only certificate auth as the first supported tenant connection model.
-- For STIG expansion beyond IA11/IA12, the project should decide whether C# remains import-only for authoritative STIG evidence or adds a licensed/operator-supplied STIG catalog path.
+
+- Which Graph authentication boundary is acceptable for the first production cloud release: delegated interactive/device code, app-only, or a separately documented MSP/partner mode? This changes consent UX and permission risk.
+- Which benchmark sources may be redistributed as embedded content, versus metadata-only or user-supplied imports? This requires an owner/licensing decision, not more technical research.
+- Is a code-signing certificate and/or repository attestation provider available for releases? The verifier can validate unsigned local bundles, but mandatory authenticity claims require that authority.
+- Which representative tenant, WinRM fleet, PDF-browser, and RMM environments can be used for opt-in integration validation? Deterministic mocks cover the default gate, but they cannot prove enterprise boundary behavior.

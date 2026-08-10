@@ -733,6 +733,7 @@ Describe 'Benchmark import bounds and diagnostics' {
 
     It 'imports valid benchmark rows and records the import contract' {
         $path = Join-Path ([IO.Path]::GetTempPath()) ('nsa-benchmark-' + [guid]::NewGuid().ToString('N') + '.csv')
+        $provenancePath = "$path.provenance.json"
         try {
             @(
                 'ID,Name,TestResult,Category,Recommended,CurrentValue'
@@ -745,9 +746,50 @@ Describe 'Benchmark import bounds and diagnostics' {
             $import.findings.Count | Should -Be 2
             $import.limits.max_rows | Should -Be 10
             $import.summary.fail | Should -Be 1
+            $import.provenance.verification_status | Should -Be 'unverified'
+            $import.provenance.trust_status | Should -Be 'degraded'
         }
         finally {
             if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+            if (Test-Path -LiteralPath $provenancePath) { Remove-Item -LiteralPath $provenancePath -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It 'verifies a supplied provenance manifest and rejects tampered content' {
+        $path = Join-Path ([IO.Path]::GetTempPath()) ('nsa-benchmark-provenance-' + [guid]::NewGuid().ToString('N') + '.csv')
+        $provenancePath = "$path.provenance.json"
+        try {
+            @(
+                'ID,Name,TestResult'
+                'HK01,Firewall,Passed'
+            ) | Set-Content -LiteralPath $path -Encoding UTF8
+            $digest = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            [ordered]@{
+                source_version = 'fixture-v1'
+                format = 'HardeningKitty CSV'
+                reviewed_on = '2026-08-10'
+                supported_targets = @('Windows test fixture')
+                license_status = 'approved'
+                redistribution_status = 'permitted'
+                content_sha256 = $digest
+                stale_after_days = 180
+            } | ConvertTo-Json | Set-Content -LiteralPath $provenancePath -Encoding UTF8
+
+            $verified = Import-BenchmarkResults -Path $path -MaxFileBytes 4096 -MaxRows 10
+            $verified.provenance.verification_status | Should -Be 'verified'
+            $verified.provenance.trust_status | Should -Be 'verified'
+            $verified.provenance.content_sha256 | Should -Be $digest
+
+            Add-Content -LiteralPath $path -Value 'HK02,SMB,Failed' -Encoding UTF8
+            $tampered = Import-BenchmarkResults -Path $path -MaxFileBytes 4096 -MaxRows 10
+            $tampered.status | Should -Be 'Error'
+            $tampered.provenance.verification_status | Should -Be 'mismatch'
+            $tampered.import_error | Should -Match 'SHA-256 digest does not match'
+        }
+        finally {
+            foreach ($candidate in $path, $provenancePath) {
+                if (Test-Path -LiteralPath $candidate) { Remove-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue }
+            }
         }
     }
 

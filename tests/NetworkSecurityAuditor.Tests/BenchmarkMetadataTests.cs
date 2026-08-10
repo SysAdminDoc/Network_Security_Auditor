@@ -20,6 +20,13 @@ public class BenchmarkMetadataTests
         Assert.NotNull(manifest.FindSource("microsoft-windows-lifecycle"));
         Assert.NotNull(manifest.FindSource("microsoft-smb-signing"));
         Assert.NotNull(manifest.FindSource("hardeningkitty-finding-list-model"));
+        Assert.All(manifest.Sources, source =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(source.Format));
+            Assert.False(string.IsNullOrWhiteSpace(source.LicenseStatus));
+            Assert.False(string.IsNullOrWhiteSpace(source.RedistributionStatus));
+            Assert.False(string.IsNullOrWhiteSpace(source.VerificationStatus));
+        });
     }
 
     [Fact]
@@ -125,6 +132,72 @@ public class BenchmarkMetadataTests
             new DateOnly(2026, 7, 8));
 
         Assert.Contains(issues, issue => issue.Contains("stale", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Content_Verification_Reports_Unverified_Match_And_Tamper()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nsa-benchmark-{Guid.NewGuid():N}.txt");
+        try
+        {
+            File.WriteAllText(path, "benchmark fixture");
+            var digest = BenchmarkContentProvenance.VerifyFile(path);
+            Assert.Equal("unverified", digest.VerificationStatus);
+            Assert.True(BenchmarkContentProvenance.IsSha256(digest.Sha256));
+
+            var verified = BenchmarkContentProvenance.VerifyFile(path, digest.Sha256);
+            Assert.Equal("verified", verified.VerificationStatus);
+
+            File.AppendAllText(path, " tampered");
+            var tampered = BenchmarkContentProvenance.VerifyFile(path, digest.Sha256);
+            Assert.Equal("mismatch", tampered.VerificationStatus);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public void Validation_Rejects_Invalid_Content_Digest_For_NonReference_Source()
+    {
+        var manifest = new BenchmarkMetadataManifest
+        {
+            SchemaVersion = 1,
+            ManifestVersion = "test",
+            ReviewedOn = new DateOnly(2026, 7, 8),
+            DefaultStaleAfterDays = 180,
+            Sources =
+            [
+                new BenchmarkSourceMetadata
+                {
+                    Id = "bundled-source",
+                    Name = "Bundled source",
+                    SourceVersion = "v1",
+                    Format = "json",
+                    SourceUrl = "https://example.test/source",
+                    ReviewedOn = new DateOnly(2026, 7, 8),
+                    SupportedOs = ["Windows"],
+                    SupportedBuilds = ["10.0"],
+                    CatalogLabel = "Bundled source",
+                    LicenseStatus = "approved",
+                    RedistributionStatus = "permitted",
+                    ContentSha256 = "not-a-digest",
+                    VerificationStatus = "verified",
+                    CoveredCheckIds = ["EP03"]
+                }
+            ]
+        };
+
+        var issues = BenchmarkMetadata.Validate(
+            manifest,
+            CheckCatalog.All.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase),
+            new DateOnly(2026, 7, 8));
+
+        Assert.Contains(issues, issue => issue.Contains("content_sha256", StringComparison.OrdinalIgnoreCase));
     }
 
     private static BenchmarkMetadataManifest LoadManifest()

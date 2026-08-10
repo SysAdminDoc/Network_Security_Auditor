@@ -77,5 +77,6 @@ public enum ExitCode
     InputPathUnavailable = 64,
     NoScorableChecks = 65,
     DiagnosticsDegraded = 66,
-    DiagnosticsBlocked = 67
+    DiagnosticsBlocked = 67,
+    AlreadyRunning = 68
 }

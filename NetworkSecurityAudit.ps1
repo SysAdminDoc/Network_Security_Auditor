@@ -12411,6 +12411,13 @@ $(if($reportBranding){
             $html += "<span style='color:$bmStatusColor;font-size:11px;font-weight:600'>$([System.Net.WebUtility]::HtmlEncode($bmStatus))</span>"
             $html += "<span style='color:#94a3b8;font-size:11px'>$($bm.summary.pass) pass | $($bm.summary.fail) fail | $($bm.summary.warning) warning | $($bm.summary.not_applicable) N/A of $($bm.summary.total) checks</span></div>`n"
             if ($bm.benchmark) { $html += "<div style='color:#c4b5fd;font-size:11px;margin-bottom:4px'>Benchmark: $([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $bm.benchmark)))$(if($bm.version){" v$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $bm.version)))"})</div>`n" }
+            $bmProvenance = if ($bm.provenance) { $bm.provenance } else { [ordered]@{ trust_status = 'degraded'; verification_status = 'unverified'; format = ''; content_sha256 = ''; license_status = 'unknown' } }
+            $bmTrust = [System.Net.WebUtility]::HtmlEncode([string]$bmProvenance.trust_status)
+            $bmVerification = [System.Net.WebUtility]::HtmlEncode([string]$bmProvenance.verification_status)
+            $bmFormat = [System.Net.WebUtility]::HtmlEncode([string]$bmProvenance.format)
+            $bmLicense = [System.Net.WebUtility]::HtmlEncode([string]$bmProvenance.license_status)
+            $bmDigest = [System.Net.WebUtility]::HtmlEncode([string]$bmProvenance.content_sha256)
+            $html += "<div style='color:#c4b5fd;font-size:11px;margin-bottom:6px'>Provenance: $bmTrust | $bmVerification | $bmFormat | license: $bmLicense | SHA-256: $bmDigest</div>`n"
             $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>File: $([System.Net.WebUtility]::HtmlEncode($bmSourceFile))</div>`n"
             if ($bm.import_error) { $html += "<div style='color:#fca5a5;font-size:11px;margin-bottom:6px'>Import diagnostic: $([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $bm.import_error)))</div>`n" }
             $failedBm = @($bm.findings | Where-Object { $_.status -eq 'Fail' })
@@ -13133,6 +13140,7 @@ function Export-FindingsJSON {
         } else { @() }
         benchmark_imports = if ($script:BenchmarkImports.Count -gt 0) {
             @($script:BenchmarkImports | ForEach-Object {
+                $benchmarkProvenance = if ($privacyFlag) { ConvertTo-PrivacySafeObject $_.provenance } else { $_.provenance }
                 [ordered]@{
                     source = if ($privacyFlag) { Get-RedactedIdentity ([string]$_.source) 'SOURCE' } else { $_.source }
                     source_file = if ($privacyFlag) { Get-RedactedIdentity ([string]$_.source_file) 'PATH' } else { $_.source_file }
@@ -13142,6 +13150,7 @@ function Export-FindingsJSON {
                     limits = if ($privacyFlag) { ConvertTo-PrivacySafeObject $_.limits } else { $_.limits }
                     benchmark = ConvertTo-RedactedText $_.benchmark
                     version = ConvertTo-RedactedText $_.version; timestamp = $_.timestamp
+                    provenance = $benchmarkProvenance
                     summary = if ($privacyFlag) { ConvertTo-PrivacySafeObject $_.summary } else { $_.summary }
                     findings = if ($privacyFlag) { @($_.findings | ForEach-Object { ConvertTo-PrivacySafeObject $_ }) } else { @($_.findings) }
                 }
@@ -14335,6 +14344,13 @@ function Import-BenchmarkResults {
         source = 'Unknown'; source_file = $fileName; path = $Path; status = 'Skipped'; import_error = ''; skipped_reason = ''
         limits = [ordered]@{ max_file_bytes = $MaxFileBytes; max_rows = $MaxRows }
         timestamp = (Get-Date -Format 'o'); benchmark = ''; version = ''
+        provenance = [ordered]@{
+            format = if ($Path) { [System.IO.Path]::GetExtension($Path).TrimStart('.').ToUpperInvariant() } else { '' }
+            source_version = ''; reviewed_on = ''; supported_targets = @()
+            license_status = 'unknown'; redistribution_status = 'unknown'
+            content_sha256 = ''; expected_sha256 = ''; verification_status = 'unverified'
+            trust_status = 'degraded'; manifest_path = ''; degraded_reasons = @('user-supplied content has no provenance manifest')
+        }
         findings = [System.Collections.Generic.List[object]]::new()
         summary = [ordered]@{ total = 0; pass = 0; fail = 0; warning = 0; not_applicable = 0; manual = 0; error = 0 }
     }
@@ -14363,6 +14379,28 @@ function Import-BenchmarkResults {
         $value = Get-BenchmarkPropertyValue -Object $Object -Names $Names
         if ($null -eq $value) { return '' }
         return [string]$value
+    }
+
+    function Get-BenchmarkProvenanceManifest {
+        param([string]$InputPath)
+        $candidates = @(
+            "$InputPath.provenance.json",
+            ([System.IO.Path]::ChangeExtension($InputPath, '.provenance.json'))
+        ) | Select-Object -Unique
+        foreach ($candidate in $candidates) {
+            if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { continue }
+            try {
+                $manifestInfo = Get-Item -LiteralPath $candidate -ErrorAction Stop
+                if ([long]$manifestInfo.Length -gt 1MB) {
+                    return [ordered]@{ __error = 'provenance manifest exceeds 1 MiB' }
+                }
+                $manifest = [System.IO.File]::ReadAllText($manifestInfo.FullName, [System.Text.Encoding]::UTF8) | ConvertFrom-Json -ErrorAction Stop
+                return [pscustomobject]@{ Data = $manifest; Path = $manifestInfo.FullName }
+            } catch {
+                return [ordered]@{ __error = "unable to read provenance manifest: $($_.Exception.Message)"; Path = $candidate }
+            }
+        }
+        return $null
     }
 
     function Convert-BenchmarkStatus {
@@ -14426,6 +14464,7 @@ function Import-BenchmarkResults {
             return $result
         }
         $content = [System.IO.File]::ReadAllText($fileInfo.FullName, [System.Text.Encoding]::UTF8)
+        $result.provenance.content_sha256 = (Get-FileHash -LiteralPath $fileInfo.FullName -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
     } catch {
         Set-BenchmarkImportError -Reason "unable to read file: $($_.Exception.Message)"
         return $result
@@ -14433,6 +14472,57 @@ function Import-BenchmarkResults {
     if ([string]::IsNullOrWhiteSpace($content)) {
         Set-BenchmarkImportError -Reason 'file is empty' -Status 'Skipped'
         return $result
+    }
+
+    $provenanceManifest = Get-BenchmarkProvenanceManifest -InputPath $fileInfo.FullName
+    if ($provenanceManifest) {
+        if ($provenanceManifest.__error) {
+            Set-BenchmarkImportError -Reason ([string]$provenanceManifest.__error)
+            return $result
+        }
+
+        $result.provenance.manifest_path = [string]$provenanceManifest.Path
+        $manifestData = $provenanceManifest.Data
+        $result.provenance.degraded_reasons = @()
+        $result.provenance.source_version = Get-BenchmarkText -Object $manifestData -Names @('source_version', 'version')
+        $result.provenance.reviewed_on = Get-BenchmarkText -Object $manifestData -Names @('reviewed_on', 'review_date')
+        $result.provenance.format = if (Get-BenchmarkText -Object $manifestData -Names @('format', 'content_format')) { Get-BenchmarkText -Object $manifestData -Names @('format', 'content_format') } else { $result.provenance.format }
+        $result.provenance.license_status = if (Get-BenchmarkText -Object $manifestData -Names @('license_status', 'license')) { Get-BenchmarkText -Object $manifestData -Names @('license_status', 'license') } else { 'unknown' }
+        $result.provenance.redistribution_status = if (Get-BenchmarkText -Object $manifestData -Names @('redistribution_status', 'redistribution')) { Get-BenchmarkText -Object $manifestData -Names @('redistribution_status', 'redistribution') } else { 'unknown' }
+        $targets = Get-BenchmarkPropertyValue -Object $manifestData -Names @('supported_targets', 'supported_os', 'targets')
+        if ($targets) { $result.provenance.supported_targets = @($targets | ForEach-Object { [string]$_ }) }
+        $expectedDigest = Get-BenchmarkText -Object $manifestData -Names @('content_sha256', 'sha256', 'digest')
+        $result.provenance.expected_sha256 = $expectedDigest.ToLowerInvariant()
+        if ([string]::IsNullOrWhiteSpace($expectedDigest) -or $expectedDigest -notmatch '^[0-9a-fA-F]{64}$') {
+            $result.provenance.verification_status = if ([string]::IsNullOrWhiteSpace($expectedDigest)) { 'unverified' } else { 'invalid-expected-digest' }
+            $result.provenance.degraded_reasons += if ([string]::IsNullOrWhiteSpace($expectedDigest)) { 'provenance manifest has no SHA-256 digest' } else { 'provenance manifest digest is invalid' }
+        } elseif (-not $result.provenance.content_sha256.Equals($expectedDigest, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $result.provenance.verification_status = 'mismatch'
+            Set-BenchmarkImportError -Reason 'provenance SHA-256 digest does not match imported content'
+            return $result
+        } else {
+            $result.provenance.verification_status = 'verified'
+        }
+
+        $reviewedDate = [datetime]::MinValue
+        $staleDays = 180
+        $manifestStaleDays = Get-BenchmarkPropertyValue -Object $manifestData -Names @('stale_after_days')
+        if ($manifestStaleDays -and [int]::TryParse([string]$manifestStaleDays, [ref]$staleDays) -eq $false) { $staleDays = 180 }
+        if ([datetime]::TryParse($result.provenance.reviewed_on, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$reviewedDate)) {
+            if ($reviewedDate.ToUniversalTime().Date.AddDays($staleDays) -lt [datetime]::UtcNow.Date) {
+                $result.provenance.verification_status = 'stale'
+                $result.provenance.degraded_reasons += "provenance reviewed_on is older than $staleDays days"
+            }
+        } elseif (-not [string]::IsNullOrWhiteSpace($result.provenance.reviewed_on)) {
+            $result.provenance.degraded_reasons += 'provenance reviewed_on is not a valid date'
+        }
+
+        if ($result.provenance.license_status -match '(?i)^(unknown|unlicensed|prohibited|restricted|not[- ]?permitted)$') {
+            $result.provenance.degraded_reasons += "license status is $($result.provenance.license_status)"
+        }
+        if ($result.provenance.redistribution_status -match '(?i)^(unknown|prohibited|restricted|not[- ]?permitted)$') {
+            $result.provenance.degraded_reasons += "redistribution status is $($result.provenance.redistribution_status)"
+        }
     }
 
     $ext = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
@@ -14455,10 +14545,12 @@ function Import-BenchmarkResults {
             $cols = @($csv[0].PSObject.Properties | Select-Object -ExpandProperty Name)
             if ('TestResult' -in $cols -and 'ID' -in $cols -and 'Name' -in $cols) {
                 $result.source = 'HardeningKitty'
+                $result.provenance.format = 'HardeningKitty CSV'
                 $result.benchmark = if ('Category' -in $cols) { Get-BenchmarkText -Object $csv[0] -Names @('Category') } else { 'Windows Hardening' }
                 foreach ($row in $csv) { Add-BenchmarkFinding -Row $row -ResultField 'TestResult' -IdField 'ID' -NameField 'Name' }
             } elseif ('Setting' -in $cols -and 'Result' -in $cols) {
                 $result.source = 'PolicyAnalyzer'
+                $result.provenance.format = 'Policy Analyzer CSV'
                 $result.benchmark = 'Microsoft Security Baseline'
                 foreach ($row in $csv) { Add-BenchmarkFinding -Row $row -ResultField 'Result' -IdField 'Setting' -NameField 'Setting' }
             } else {
@@ -14473,6 +14565,7 @@ function Import-BenchmarkResults {
                 return $result
             }
             $result.source = 'JSON'
+            $result.provenance.format = 'benchmark JSON'
             $result.benchmark = Get-BenchmarkText -Object $json -Names @('benchmark', 'Benchmark', 'title', 'Title')
             foreach ($row in $rows) { Add-BenchmarkFinding -Row $row -ResultField 'status' -IdField 'id' -NameField 'name' }
         } elseif ($ext -in '.xml', '.ckl') {
@@ -14483,6 +14576,7 @@ function Import-BenchmarkResults {
             }
             if ($content -match '<CHECKLIST>') {
                 $result.source = 'DISA_STIG_CKL'
+                $result.provenance.format = 'DISA STIG CKL XML'
                 $xml = [xml]$content
                 $stigs = $xml.CHECKLIST.STIGS.iSTIG
                 if ($stigs) {
@@ -14507,6 +14601,7 @@ function Import-BenchmarkResults {
                 }
             } elseif ($content -match 'TestResult|Benchmark') {
                 $result.source = 'XCCDF'
+                $result.provenance.format = 'XCCDF XML'
                 $result.benchmark = 'XCCDF Benchmark'
             } else {
                 Set-BenchmarkImportError -Reason 'XML is not a supported DISA CKL or XCCDF result' -Status 'Skipped'
@@ -14524,6 +14619,7 @@ function Import-BenchmarkResults {
     $result.summary.total = $result.findings.Count
     if ($result.status -eq 'Skipped') { $result.status = if ($result.findings.Count -gt 0) { 'Imported' } else { 'Empty' } }
     if ($result.status -eq 'Unknown') { $result.status = 'Imported' }
+    $result.provenance.trust_status = if ($result.provenance.verification_status -eq 'verified' -and $result.provenance.degraded_reasons.Count -eq 0 -and $result.provenance.license_status -notmatch '(?i)^(unknown|unlicensed|prohibited|restricted|not[- ]?permitted)$' -and $result.provenance.redistribution_status -notmatch '(?i)^(unknown|prohibited|restricted|not[- ]?permitted)$') { 'verified' } else { 'degraded' }
     return $result
 }
 
