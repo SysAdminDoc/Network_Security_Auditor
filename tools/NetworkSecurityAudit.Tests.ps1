@@ -678,9 +678,34 @@ Describe 'Fleet orchestration safeguards' {
     }
 
     It 'uses a local HTML output path and parses the derived findings JSON' {
-        $script:FleetBlock | Should -Match '\$hostOutFile\s*=\s*Join-Path \$fleetDir "\$\{safeTarget\}\.html"'
+        $script:FleetBlock | Should -Match '\$hostOutFile\s*=\s*Join-Path \$fleetDir "\$\{artifactBase\}\.html"'
         $script:FleetBlock | Should -Match '\$localJsonPath\s*=\s*\$hostOutFile -replace ''\\\.html\$'', ''_findings\.json'''
         $script:FleetBlock | Should -Match '\$localJson\s*=\s*\$meta\.JsonPath'
+    }
+
+    It 'disambiguates sanitized fleet artifact names with a stable target token' {
+        $script:FleetBlock | Should -Match 'function Get-FleetStableToken'
+        $script:FleetBlock | Should -Match '\$fleetSafeNameGroups\s*=\s*@\{\}'
+        $script:FleetBlock | Should -Match '\$fleetMembers\.Count -gt 1'
+        $script:FleetBlock | Should -Match '\$fleetArtifactNames\[\$fleetMember\]'
+        $script:FleetBlock | Should -Match 'artifact_base\s*=\s*\$meta\.ArtifactBase'
+    }
+
+    It 'rejects missing, malformed, and schema-incomplete child output' {
+        $script:FleetBlock | Should -Match 'function Test-FleetFindingsContract'
+        $script:FleetBlock | Should -Match "status = 'OutputInvalid'"
+        $script:FleetBlock | Should -Match "error = 'No JSON output'"
+        $script:FleetBlock | Should -Match "error = 'JSON parse failed'"
+        $script:FleetBlock | Should -Match "error = 'JSON contract invalid'"
+        $script:FleetBlock | Should -Match "status = 'Completed'"
+    }
+
+    It 'projects fleet aggregate identities and source paths through privacy helpers' {
+        $script:FleetBlock | Should -Match 'function Get-FleetPrivacyIdentity'
+        $script:FleetBlock | Should -Match 'function Convert-FleetPrivacyText'
+        $script:FleetBlock | Should -Match 'targets_csv = if \(\$PrivacyMode\.IsPresent\) \{ ''\[PATH-REDACTED\]'' \}'
+        $script:FleetBlock | Should -Match 'fleetExportResults'
+        $script:FleetBlock | Should -Match 'Get-FleetPrivacyIdentity \$_.host ''HOST'''
     }
 
     It 'builds localhost child parameters as a typed splat' {

@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## Unreleased
 
 ### Security
+- Fixed: Fleet artifacts now use collision-safe target names, reject missing or schema-invalid child results instead of counting them as completed, and redact aggregate identities and source paths in privacy mode.
 - Fixed: C# release artifact cleanup now rejects repository roots, source directories, and reparse-point paths before any recursive deletion.
 - Fixed: C# audit-state loading now validates schema, machine identity, complete check coverage, and enum values before mutation; state, waiver, and dashboard JSON imports now enforce size/file-count budgets.
 - Fixed: C# external exports now emit the documented OCSF 1.8.0, OSCAL 1.2.2, and ATT&CK Enterprise 19.1 metadata; Intune STIG CSV evidence is emitted as its own rectangular artifact.
@@ -12,6 +13,9 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# privacy exports now redact structured JSON/YAML/header secrets and strip identifying branding fields from silent HTML output while retaining normal-mode branding.
 - Fixed: PowerShell continuous history now separates default baselines by client and target, rejects identity-mismatched comparisons, atomically persists snapshots, and reports locked/failed writes in console and JSON output.
 - Fixed: PowerShell privacy exports now recursively redact structured secrets, remediation/benchmark/write metadata, and identifying branding across HTML, JSON, JSONL, and CSV outputs.
+
+### Accessibility
+- Fixed: PowerShell action buttons and severity badges now choose a foreground that remains readable across normal and hover states, with automated WCAG contrast coverage for all seven themes.
 
 ## [v5.3.3 / v4.11.4] - 2026-08-09
 

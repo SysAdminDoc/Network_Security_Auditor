@@ -444,6 +444,73 @@ if ($Silent.IsPresent -and $TargetsCsv) {
         return $safe
     }
 
+    function Get-FleetStableToken {
+        param([string]$Value)
+        if (-not $Value) { return '00000000' }
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value.ToLowerInvariant())
+            return (($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 10)
+        } finally {
+            $sha.Dispose()
+        }
+    }
+
+    # Sanitized names are still allowed to be readable, but they must be unique
+    # for the original target. Privacy mode intentionally uses only a stable
+    # pseudonym so host names never appear in file names or aggregate exports.
+    $fleetArtifactNames = @{}
+    $fleetSafeNameGroups = @{}
+    foreach ($fleetHost in $fleetHosts) {
+        $fleetBase = Get-FleetSafeName $fleetHost
+        if (-not $fleetSafeNameGroups.ContainsKey($fleetBase)) { $fleetSafeNameGroups[$fleetBase] = [System.Collections.Generic.List[string]]::new() }
+        $fleetSafeNameGroups[$fleetBase].Add($fleetHost)
+    }
+    foreach ($fleetBase in $fleetSafeNameGroups.Keys) {
+        $fleetMembers = @($fleetSafeNameGroups[$fleetBase])
+        foreach ($fleetMember in $fleetMembers) {
+            $fleetArtifactNames[$fleetMember] = if ($PrivacyMode.IsPresent) {
+                'target_' + (Get-FleetStableToken $fleetMember)
+            } elseif ($fleetMembers.Count -gt 1) {
+                $fleetBase + '_' + (Get-FleetStableToken $fleetMember)
+            } else {
+                $fleetBase
+            }
+        }
+    }
+
+    function Test-FleetFindingsContract {
+        param([AllowNull()][object]$Parsed)
+        return ($null -ne $Parsed -and $null -ne $Parsed.score -and
+            $null -ne $Parsed.findings_count -and $null -ne $Parsed.findings)
+    }
+
+    $fleetPrivacyMap = @{}
+    function Get-FleetPrivacyIdentity {
+        param([AllowNull()][object]$Value, [string]$Tag)
+        $text = if ($null -eq $Value) { '' } else { [string]$Value }
+        if (-not $PrivacyMode.IsPresent -or -not $text) { return $text }
+        $key = "$Tag`:$($text.ToLowerInvariant())"
+        if (-not $fleetPrivacyMap.ContainsKey($key)) {
+            $fleetPrivacyMap[$key] = "[$Tag-$(Get-FleetStableToken $text)]"
+        }
+        return $fleetPrivacyMap[$key]
+    }
+
+    function Convert-FleetPrivacyText {
+        param([AllowNull()][object]$Value)
+        $text = if ($null -eq $Value) { '' } else { [string]$Value }
+        if (-not $PrivacyMode.IsPresent -or -not $text) { return $text }
+        foreach ($fleetHost in $fleetHosts) {
+            $replacement = Get-FleetPrivacyIdentity $fleetHost 'HOST'
+            $text = [regex]::Replace($text, [regex]::Escape($fleetHost), $replacement, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        }
+        if ($TargetsCsv) {
+            $text = [regex]::Replace($text, [regex]::Escape($TargetsCsv), '[PATH-REDACTED]', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        }
+        return $text
+    }
+
     function Invoke-FleetRemoteTempCleanup {
         param(
             [string]$ComputerName,
@@ -501,14 +568,14 @@ if ($Silent.IsPresent -and $TargetsCsv) {
                 $hostClient = if ($hostRow.PSObject.Properties['Client']) { $hostRow.Client } else { $target }
                 $hostSite   = if ($hostRow.PSObject.Properties['Site']) { $hostRow.Site } else { '' }
                 $hostTags   = if ($hostRow.PSObject.Properties['Tags']) { $hostRow.Tags } else { '' }
-                $safeTarget = Get-FleetSafeName $target
-                $localJsonPath = Join-Path $fleetDir "${safeTarget}_findings.json"
+                $artifactBase = $fleetArtifactNames[$target]
+                $localJsonPath = Join-Path $fleetDir "${artifactBase}_findings.json"
                 $fleetRunId = [guid]::NewGuid().ToString('N')
                 Write-Host "[Fleet Mode] [$($completed + $jobs.Count + 1)/$($fleetHosts.Count)] Starting: $target" -ForegroundColor Cyan
 
                 $fleetNoInternet = $NoInternet.IsPresent
                 if ($target -eq 'localhost' -or $target -eq $env:COMPUTERNAME -or $target -eq '127.0.0.1') {
-                    $hostOutFile = Join-Path $fleetDir "${safeTarget}.html"
+                    $hostOutFile = Join-Path $fleetDir "${artifactBase}.html"
                     $localJsonPath = $hostOutFile -replace '\.html$', '_findings.json'
                     $job = Start-Job -ScriptBlock {
                         $childParams = @{
@@ -584,7 +651,7 @@ if ($Silent.IsPresent -and $TargetsCsv) {
                         } finally { Remove-PSSession $session -ErrorAction SilentlyContinue }
                     }
                 }
-                $jobs[$target] = @{ Job = $job; Client = $hostClient; Site = $hostSite; Tags = $hostTags; JsonPath = $localJsonPath; StartTime = Get-Date; RemoteRunId = $(if ($target -eq 'localhost' -or $target -eq $env:COMPUTERNAME -or $target -eq '127.0.0.1') { '' } else { $fleetRunId }) }
+                $jobs[$target] = @{ Job = $job; Client = $hostClient; Site = $hostSite; Tags = $hostTags; JsonPath = $localJsonPath; ArtifactBase = $artifactBase; StartTime = Get-Date; RemoteRunId = $(if ($target -eq 'localhost' -or $target -eq $env:COMPUTERNAME -or $target -eq '127.0.0.1') { '' } else { $fleetRunId }) }
             }
         }
         $done = @($jobs.GetEnumerator() | Where-Object { $_.Value.Job.State -in 'Completed','Failed','Stopped' })
@@ -596,7 +663,7 @@ if ($Silent.IsPresent -and $TargetsCsv) {
             $result = [ordered]@{
                 host = $target; client = $meta.Client; site = $meta.Site; tags = $meta.Tags
                 status = 'Unknown'; grade = ''; score = 0; ransomware_score = 0
-                has_score = $false; fail_count = 0; critical_count = 0; skipped = 0; error = ''; duration_seconds = [math]::Round($elapsed, 1)
+                has_score = $false; fail_count = 0; critical_count = 0; skipped = 0; error = ''; artifact_base = $meta.ArtifactBase; duration_seconds = [math]::Round($elapsed, 1)
             }
             try {
                 if ($timedOut) {
@@ -608,32 +675,36 @@ if ($Silent.IsPresent -and $TargetsCsv) {
                     $localJson = $meta.JsonPath
                     if (Test-Path $localJson) {
                         $parsed = Get-Content $localJson -Raw | ConvertFrom-Json
-                        $result.status = 'Completed'
-                        $result.grade = $parsed.score.grade
-                        if ($null -ne $parsed.score.overall) {
-                            $result.score = $parsed.score.overall
-                            $result.has_score = $true
-                        }
-                        $result.ransomware_score = $parsed.score.ransomware.score
-                        $result.fail_count = $parsed.findings_count.fail
-                        $result.critical_count = @($parsed.findings | Where-Object { $_.status -eq 'Fail' -and $_.severity -eq 'Critical' }).Count
-                    } else { $result.status = 'Completed'; $result.error = 'No JSON output' }
+                        if (Test-FleetFindingsContract $parsed) {
+                            $result.status = 'Completed'
+                            $result.grade = $parsed.score.grade
+                            if ($null -ne $parsed.score.overall) {
+                                $result.score = $parsed.score.overall
+                                $result.has_score = $true
+                            }
+                            $result.ransomware_score = $parsed.score.ransomware.score
+                            $result.fail_count = $parsed.findings_count.fail
+                            $result.critical_count = @($parsed.findings | Where-Object { $_.status -eq 'Fail' -and $_.severity -eq 'Critical' }).Count
+                        } else { $result.status = 'OutputInvalid'; $result.error = 'JSON contract invalid' }
+                    } else { $result.status = 'OutputInvalid'; $result.error = 'No JSON output' }
                 } else {
                     $remoteJson = if ($output.Json) { $output.Json } else { '{}' }
                     $localJson = $meta.JsonPath
                     $remoteJson | Set-Content $localJson -Encoding UTF8
                     try {
                         $parsed = $remoteJson | ConvertFrom-Json
-                        $result.status = 'Completed'
-                        $result.grade = $parsed.score.grade
-                        if ($null -ne $parsed.score.overall) {
-                            $result.score = $parsed.score.overall
-                            $result.has_score = $true
-                        }
-                        $result.ransomware_score = $parsed.score.ransomware.score
-                        $result.fail_count = $parsed.findings_count.fail
-                        $result.critical_count = @($parsed.findings | Where-Object { $_.status -eq 'Fail' -and $_.severity -eq 'Critical' }).Count
-                    } catch { $result.status = 'Completed'; $result.error = 'JSON parse failed' }
+                        if (Test-FleetFindingsContract $parsed) {
+                            $result.status = 'Completed'
+                            $result.grade = $parsed.score.grade
+                            if ($null -ne $parsed.score.overall) {
+                                $result.score = $parsed.score.overall
+                                $result.has_score = $true
+                            }
+                            $result.ransomware_score = $parsed.score.ransomware.score
+                            $result.fail_count = $parsed.findings_count.fail
+                            $result.critical_count = @($parsed.findings | Where-Object { $_.status -eq 'Fail' -and $_.severity -eq 'Critical' }).Count
+                        } else { $result.status = 'OutputInvalid'; $result.error = 'JSON contract invalid' }
+                    } catch { $result.status = 'OutputInvalid'; $result.error = 'JSON parse failed' }
                 }
             } catch {
                 $result.status = if ($timedOut) { 'TimedOut' } else { 'Failed' }
@@ -656,8 +727,19 @@ if ($Silent.IsPresent -and $TargetsCsv) {
         }
     }
 
+    $fleetExportResults = @($fleetResults | ForEach-Object {
+        [ordered]@{
+            host = Get-FleetPrivacyIdentity $_.host 'HOST'
+            client = Get-FleetPrivacyIdentity $_.client 'CLIENT'
+            site = Get-FleetPrivacyIdentity $_.site 'SITE'
+            tags = Get-FleetPrivacyIdentity $_.tags 'TAGS'
+            status = $_.status; grade = $_.grade; score = $_.score; ransomware_score = $_.ransomware_score
+            has_score = $_.has_score; fail_count = $_.fail_count; critical_count = $_.critical_count; skipped = $_.skipped
+            error = Convert-FleetPrivacyText $_.error; artifact_base = $_.artifact_base; duration_seconds = $_.duration_seconds
+        }
+    })
     $aggCsvPath = Join-Path $fleetDir 'fleet_summary.csv'
-    $fleetResults | ForEach-Object { [PSCustomObject]$_ } | Export-Csv $aggCsvPath -NoTypeInformation -Encoding UTF8
+    $fleetExportResults | ForEach-Object { [PSCustomObject]$_ } | Export-Csv $aggCsvPath -NoTypeInformation -Encoding UTF8
     $aggJsonPath = Join-Path $fleetDir 'fleet_summary.json'
     $scoredFleetResults = @($fleetResults | Where-Object { $_.status -eq 'Completed' -and $_.has_score })
     $aggData = [ordered]@{
@@ -666,16 +748,16 @@ if ($Silent.IsPresent -and $TargetsCsv) {
         export_type = 'fleet_summary'
         timestamp = (Get-Date -Format 'o')
         scan_profile = $ScanProfile; read_only = $ReadOnly; throttle_limit = $ThrottleLimit
-        targets_csv = $TargetsCsv
+        targets_csv = if ($PrivacyMode.IsPresent) { '[PATH-REDACTED]' } else { $TargetsCsv }
         hosts_total = $fleetHosts.Count
         hosts_completed = @($fleetResults | Where-Object { $_.status -eq 'Completed' }).Count
         hosts_failed = @($fleetResults | Where-Object { $_.status -eq 'Failed' }).Count
         hosts_timedout = @($fleetResults | Where-Object { $_.status -eq 'TimedOut' }).Count
         hosts_scored = $scoredFleetResults.Count
         avg_score = if ($scoredFleetResults.Count -gt 0) { [math]::Round(($scoredFleetResults | Measure-Object -Property score -Average).Average, 1) } else { $null }
-        worst_host = if ($scoredFleetResults.Count -gt 0) { ($scoredFleetResults | Sort-Object score | Select-Object -First 1).host } else { '' }
-        best_host = if ($scoredFleetResults.Count -gt 0) { ($scoredFleetResults | Sort-Object score -Descending | Select-Object -First 1).host } else { '' }
-        results = @($fleetResults)
+        worst_host = if ($scoredFleetResults.Count -gt 0) { Get-FleetPrivacyIdentity (($scoredFleetResults | Sort-Object score | Select-Object -First 1).host) 'HOST' } else { '' }
+        best_host = if ($scoredFleetResults.Count -gt 0) { Get-FleetPrivacyIdentity (($scoredFleetResults | Sort-Object score -Descending | Select-Object -First 1).host) 'HOST' } else { '' }
+        results = $fleetExportResults
     }
     $aggData | ConvertTo-Json -Depth 5 | Set-Content $aggJsonPath -Encoding UTF8
 
@@ -2336,6 +2418,44 @@ $script:Themes = @{
 $script:CurrentThemeName = 'Midnight'
 function Get-T { $script:Themes[$script:CurrentThemeName] }
 function New-Brush([string]$hex) { New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString($hex)) }
+
+function Get-ThemeRelativeLuminance {
+    param([string]$Hex)
+    $color = [System.Windows.Media.ColorConverter]::ConvertFromString($Hex)
+    $channels = @($color.R, $color.G, $color.B) | ForEach-Object {
+        $channel = [double]$_ / 255.0
+        if ($channel -le 0.04045) { $channel / 12.92 } else { [math]::Pow(($channel + 0.055) / 1.055, 2.4) }
+    }
+    return (0.2126 * $channels[0]) + (0.7152 * $channels[1]) + (0.0722 * $channels[2])
+}
+
+function Get-ThemeContrastRatio {
+    param([string]$Foreground, [string]$Background)
+    $foregroundLuminance = Get-ThemeRelativeLuminance $Foreground
+    $backgroundLuminance = Get-ThemeRelativeLuminance $Background
+    $lighter = [math]::Max($foregroundLuminance, $backgroundLuminance)
+    $darker = [math]::Min($foregroundLuminance, $backgroundLuminance)
+    return ($lighter + 0.05) / ($darker + 0.05)
+}
+
+function Get-AccessibleForeground {
+    param([string]$Background, [string]$Hover = '')
+    $backgrounds = @($Background)
+    if ($Hover) { $backgrounds += $Hover }
+    $best = '#ffffff'
+    $bestMinimum = 0.0
+    foreach ($candidate in @('#ffffff', '#000000')) {
+        $minimum = [double]::PositiveInfinity
+        foreach ($surface in $backgrounds) {
+            $minimum = [math]::Min($minimum, (Get-ThemeContrastRatio $candidate $surface))
+        }
+        if ($minimum -gt $bestMinimum) {
+            $best = $candidate
+            $bestMinimum = $minimum
+        }
+    }
+    return $best
+}
 
 # ── Severity Colors ──────────────────────────────────────────────────────────
 $script:SeverityColors = @{ Critical='#f87171'; High='#f97316'; Medium='#eab308'; Low='#22c55e' }
@@ -7921,7 +8041,7 @@ function Apply-ButtonTheme([System.Windows.Controls.Button]$btn, [string]$bg, [s
     $trDisabled.Property = [System.Windows.UIElement]::IsEnabledProperty; $trDisabled.Value = $false
     $trDisabled.Setters.Add((New-Object System.Windows.Setter ([System.Windows.UIElement]::OpacityProperty, [double]0.5)))
     $tmpl.Triggers.Add($trDisabled)
-    $btn.Template = $tmpl; $btn.Foreground = [System.Windows.Media.Brushes]::White
+    $btn.Template = $tmpl; $btn.Foreground = New-Brush (Get-AccessibleForeground -Background $bg -Hover $hover)
 }
 
 function Apply-ComboTheme([System.Windows.Controls.ComboBox]$combo) {
@@ -8044,7 +8164,7 @@ function Apply-Theme {
     Apply-ButtonTheme $el['btnSave'] $t.Accent $t.AccentHover
     Apply-ButtonTheme $el['btnLoad'] '#6366f1' '#818cf8'
     Apply-ButtonTheme $el['btnDiff'] '#8b5cf6' '#a78bfa'
-    Apply-ButtonTheme $el['btnReset'] '#dc2626' '#ef4444'
+    Apply-ButtonTheme $el['btnReset'] '#b91c1c' '#dc2626'
     Apply-ButtonTheme $el['btnExportHTML'] '#16a34a' '#22c55e'
     Apply-ButtonTheme $el['btnExportJSON'] '#0ea5e9' '#38bdf8'
     Apply-ButtonTheme $el['btnExportCSV'] '#f59e0b' '#fbbf24'
@@ -8326,7 +8446,7 @@ function Flash-TabForCheck([string]$id, [string]$status) {
     $flashColor = switch ($status) { 'Pass' {'#22c55e'} 'Fail' {'#ef4444'} 'Partial' {'#eab308'} 'N/A' {'#94a3b8'} default {'#0ea5e9'} }
     $naSuffix = if ($counts.NA -gt 0) { " $($counts.NA)N/A" } else { '' }
     if ($counts.Fail -gt 0) {
-        $badgeBg = '#dc2626'; $badgeFg = '#ffffff'
+        $badgeBg = '#b91c1c'; $badgeFg = Get-AccessibleForeground -Background $badgeBg
         $badgeText = "$($counts.Pass)P $($counts.Fail)F$naSuffix"
     } elseif ($counts.Partial -gt 0) {
         $badgeBg = '#854d0e'; $badgeFg = '#fef08a'
@@ -8437,7 +8557,7 @@ function Apply-ScanResult([string]$id, [hashtable]$result) {
         $btn.ToolTip = "Last: $($script:ScanTimestamps[$id]) | $statusText - Click to re-scan"
         switch ($result.Status) {
             'Pass'    { Apply-ButtonTheme $btn '#16a34a' '#22c55e' }
-            'Fail'    { Apply-ButtonTheme $btn '#dc2626' '#ef4444' }
+            'Fail'    { Apply-ButtonTheme $btn '#b91c1c' '#dc2626' }
             'Partial' { Apply-ButtonTheme $btn '#eab308' '#facc15' }
             'N/A'     { Apply-ButtonTheme $btn '#334155' '#64748b' }
         }
@@ -8485,7 +8605,7 @@ function Apply-ScanError([string]$id, [string]$errMsg, [switch]$TimedOut) {
     if ($script:ScanButtons.Contains($id)) {
         $script:ScanButtons[$id].Content = "ERR"
         $script:ScanButtons[$id].ToolTip = "Error: $errMsg - Click to retry"
-        Apply-ButtonTheme $script:ScanButtons[$id] '#dc2626' '#ef4444'
+        Apply-ButtonTheme $script:ScanButtons[$id] '#b91c1c' '#dc2626'
     }
     # Flash tab badge with error
     Flash-TabForCheck $id 'Error'
@@ -9060,7 +9180,7 @@ foreach ($catName in $script:AuditCategories.Keys) {
         $sevClr = $script:SeverityColors[$item.Severity]
         $sb = New-Object System.Windows.Controls.Border; $sb.Background=New-Brush $sevClr; $sb.CornerRadius=[System.Windows.CornerRadius]::new(8)
         $sb.Padding=[System.Windows.Thickness]::new(8,1,8,1); $sb.Opacity=0.9
-        $stx = New-Object System.Windows.Controls.TextBlock; $stx.Text=$item.Severity; $stx.FontSize=10.5; $stx.FontWeight=[System.Windows.FontWeights]::Bold; $stx.Foreground=[System.Windows.Media.Brushes]::White
+        $stx = New-Object System.Windows.Controls.TextBlock; $stx.Text=$item.Severity; $stx.FontSize=10.5; $stx.FontWeight=[System.Windows.FontWeights]::Bold; $stx.Foreground=New-Brush (Get-AccessibleForeground -Background $sevClr)
         $sb.Child=$stx; $bp.Children.Add($sb)|Out-Null
 
         # Per-item scan button (only for items with auto-checks)

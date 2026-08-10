@@ -147,6 +147,42 @@ $contrastPairs = @(
     @{ FG='ThumbBg'; BG='PanelBg';  Type='ui'; Label='Thumb on panel' }
 )
 
+# Action buttons and severity badges use white or black text selected at runtime.
+# Check both normal and hover fills so the shared foreground decision cannot become
+# unreadable when a themed button enters its hover state.
+$actionButtonPairs = @(
+    @{ BG='Accent'; Hover='AccentHover'; Label='Theme accent action' }
+    @{ BG='#6366f1'; Hover='#818cf8'; Label='Indigo action' }
+    @{ BG='#8b5cf6'; Hover='#a78bfa'; Label='Purple action' }
+    @{ BG='#b91c1c'; Hover='#dc2626'; Label='Danger action' }
+    @{ BG='#16a34a'; Hover='#22c55e'; Label='Success action' }
+    @{ BG='#0ea5e9'; Hover='#38bdf8'; Label='Cyan action' }
+    @{ BG='#eab308'; Hover='#facc15'; Label='Warning action' }
+    @{ BG='#a855f7'; Hover='#c084fc'; Label='Violet action' }
+    @{ BG='#22c55e'; Hover='#4ade80'; Label='Green action' }
+    @{ BG='#475569'; Hover='#64748b'; Label='Neutral action' }
+)
+
+function Resolve-ThemeColor {
+    param([hashtable]$Theme, [string]$Value)
+    if ($Value -match '^#') { return $Value }
+    return $Theme[$Value]
+}
+
+function Get-AccessibleForeground {
+    param([string[]]$Backgrounds)
+    $bestMinimum = 0.0
+    $best = '#ffffff'
+    foreach ($candidate in @('#ffffff', '#000000')) {
+        $minimum = [double]::PositiveInfinity
+        foreach ($surface in $Backgrounds) {
+            $minimum = [math]::Min($minimum, (Get-ContrastRatio $candidate $surface))
+        }
+        if ($minimum -gt $bestMinimum) { $best = $candidate; $bestMinimum = $minimum }
+    }
+    return @{ Color = $best; MinimumRatio = $bestMinimum }
+}
+
 # ── Run checks ──────────────────────────────────────────────────────────────
 
 $totalChecks = 0
@@ -205,6 +241,43 @@ foreach ($themeName in $themes.Keys) {
                 }
                 $themeFailCount++
             }
+        }
+    }
+
+    foreach ($action in $actionButtonPairs) {
+        $background = Resolve-ThemeColor $t $action.BG
+        $hover = Resolve-ThemeColor $t $action.Hover
+        if (-not $background -or -not $hover) { continue }
+        $foreground = Get-AccessibleForeground @($background, $hover)
+        $totalChecks++
+        if ($foreground.MinimumRatio -lt 4.5) {
+            $failures += [PSCustomObject]@{
+                Theme = $themeName
+                Label = "$($action.Label) foreground"
+                FG = "$($foreground.Color)"
+                BG = "$background / $hover"
+                Ratio = [math]::Round($foreground.MinimumRatio, 2)
+                Required = 4.5
+                Type = 'text'
+            }
+            $themeFailCount++
+        }
+    }
+
+    foreach ($sevName in $severityColors.Keys) {
+        $foreground = Get-AccessibleForeground @($severityColors[$sevName])
+        $totalChecks++
+        if ($foreground.MinimumRatio -lt 4.5) {
+            $failures += [PSCustomObject]@{
+                Theme = $themeName
+                Label = "$sevName badge foreground"
+                FG = "$($foreground.Color)"
+                BG = $severityColors[$sevName]
+                Ratio = [math]::Round($foreground.MinimumRatio, 2)
+                Required = 4.5
+                Type = 'text'
+            }
+            $themeFailCount++
         }
     }
 
