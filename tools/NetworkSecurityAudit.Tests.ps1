@@ -320,6 +320,43 @@ Describe 'Graph wrapper offline fixtures' {
         $res.Retried | Should -Be 1
         @($res.Data).Count | Should -Be 1
     }
+    It 'retries an exception-shaped live 429 and stops after the retry budget' {
+        Set-Item -Path Function:\Invoke-MgGraphRequest -Value {
+            $script:__graphCalls++
+            if ($script:__graphCalls -eq 1) {
+                $exception = [System.Exception]::new('HTTP 429 throttled; Retry-After: 0')
+                $exception.Data['StatusCode'] = 429
+                $exception.Data['Retry-After'] = '0'
+                throw $exception
+            }
+            return [ordered]@{ value = @([ordered]@{ id = 'recovered' }) }
+        } -Force
+        $script:__graphCalls = 0
+        try {
+            $recovered = Invoke-GraphAuditRequest -Uri '/security/secureScores' -PermissionScopes @('SecurityEvents.Read.All') -MaxRetries 1
+            $recovered.Status | Should -Be 'Pass'
+            $recovered.Retried | Should -Be 1
+            $script:__graphCalls | Should -Be 2
+        }
+        finally {
+            Remove-Item Function:\Invoke-MgGraphRequest -Force -ErrorAction SilentlyContinue
+        }
+
+        Set-Item -Path Function:\Invoke-MgGraphRequest -Value {
+            $exception = [System.Exception]::new('HTTP 429 throttled; Retry-After: 0')
+            $exception.Data['StatusCode'] = 429
+            throw $exception
+        } -Force
+        try {
+            $terminal = Invoke-GraphAuditRequest -Uri '/security/secureScores' -PermissionScopes @('SecurityEvents.Read.All') -MaxRetries 1
+            $terminal.Status | Should -Be 'Error'
+            $terminal.Error.status_code | Should -Be 429
+            $terminal.Retried | Should -Be 1
+        }
+        finally {
+            Remove-Item Function:\Invoke-MgGraphRequest -Force -ErrorAction SilentlyContinue
+        }
+    }
     It 'classifies denied and unlicensed mock responses without tenant access' {
         $denied = Invoke-GraphAuditRequest -Uri '/identity/conditionalAccess/policies' -PermissionScopes @('Policy.Read.All') -MockResponses @(
             [ordered]@{ StatusCode=403; Body=[ordered]@{ error='permission denied' } }

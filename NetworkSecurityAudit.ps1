@@ -1747,9 +1747,54 @@ function Invoke-GraphAuditRequest {
         [hashtable]$Headers = @{},
         [object]$Body = $null,
         [int]$MaxPages = 10,
+        [ValidateRange(0, 10)]
         [int]$MaxRetries = 3,
         [object[]]$MockResponses = @()
     )
+
+    function Get-GraphExceptionStatusCode {
+        param([object]$ErrorRecord)
+        $exception = if ($ErrorRecord -and $ErrorRecord.Exception) { $ErrorRecord.Exception } else { $ErrorRecord }
+        $candidates = @(
+            (Get-GraphObjectProperty $exception 'StatusCode'),
+            (Get-GraphObjectProperty $exception 'ResponseStatusCode'),
+            (Get-GraphObjectProperty (Get-GraphObjectProperty $exception 'Response') 'StatusCode')
+        )
+        if ($exception -and $exception.Data -and $exception.Data.Contains('StatusCode')) { $candidates += $exception.Data['StatusCode'] }
+        foreach ($candidate in $candidates) {
+            $parsed = 0
+            if ($null -ne $candidate -and [int]::TryParse([string]$candidate, [ref]$parsed) -and $parsed -gt 0) { return $parsed }
+        }
+        $message = if ($exception) { [string]$exception.Message } else { [string]$ErrorRecord }
+        $match = [regex]::Match($message, '\b(408|429|500|502|503|504)\b')
+        if ($match.Success) { return [int]$match.Groups[1].Value }
+        return 0
+    }
+
+    function Get-GraphExceptionRetryAfterSeconds {
+        param([object]$ErrorRecord)
+        $exception = if ($ErrorRecord -and $ErrorRecord.Exception) { $ErrorRecord.Exception } else { $ErrorRecord }
+        $candidates = @()
+        if ($exception -and $exception.Data -and $exception.Data.Contains('Retry-After')) { $candidates += $exception.Data['Retry-After'] }
+        $response = Get-GraphObjectProperty $exception 'Response'
+        $headers = Get-GraphObjectProperty $response 'Headers'
+        $retryHeader = Get-GraphObjectProperty $headers 'Retry-After'
+        if ($retryHeader) { $candidates += $retryHeader }
+        $message = if ($exception) { [string]$exception.Message } else { [string]$ErrorRecord }
+        $messageMatch = [regex]::Match($message, '(?i)Retry-After\s*[:=]\s*([0-9]+)')
+        if ($messageMatch.Success) { $candidates += $messageMatch.Groups[1].Value }
+        foreach ($candidate in $candidates) {
+            $seconds = 0
+            if ($candidate -and [int]::TryParse([string]$candidate, [ref]$seconds)) { return [math]::Max(0, $seconds) }
+            $date = [datetimeoffset]::MinValue
+            if ($candidate -and [datetimeoffset]::TryParse([string]$candidate, [ref]$date)) {
+                return [math]::Max(0, [int][math]::Ceiling(($date - [datetimeoffset]::UtcNow).TotalSeconds))
+            }
+            $delta = Get-GraphObjectProperty $candidate 'Delta'
+            if ($delta) { return [math]::Max(0, [int][math]::Ceiling($delta.TotalSeconds)) }
+        }
+        return 0
+    }
 
     $items = @()
     $requests = @()
@@ -1813,8 +1858,14 @@ function Invoke-GraphAuditRequest {
             $nextUri = [string](Get-GraphObjectProperty $responseBody '@odata.nextLink')
         }
         catch {
-            $statusCode = 0
-            try { if ($_.Exception.Response -and $_.Exception.Response.StatusCode) { $statusCode = [int]$_.Exception.Response.StatusCode } } catch {}
+            $statusCode = Get-GraphExceptionStatusCode $_
+            if ($statusCode -in @(408,429,500,502,503,504) -and $retries -lt $MaxRetries) {
+                $retryAfter = Get-GraphExceptionRetryAfterSeconds $_
+                if ($retryAfter -le 0) { $retryAfter = [math]::Min(30, [int][math]::Pow(2, $retries)) }
+                if ($retryAfter -gt 0) { Start-Sleep -Seconds ([math]::Min($retryAfter, 30)) }
+                $retries++
+                continue
+            }
             $status = Convert-GraphAuditErrorStatus -StatusCode $statusCode -Message $_.Exception.Message
             return [ordered]@{
                 Status=$status; Data=@(); Error=[ordered]@{ status=$status; status_code=$statusCode; message=$_.Exception.Message }
