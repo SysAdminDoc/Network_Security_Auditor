@@ -487,8 +487,15 @@ public partial class App : Application
         if (args.ExportCsv)
         {
             var csvPath = Path.Combine(outputDir, $"{baseName}.csv");
-            await AtomicFileWriter.WriteAllTextAsync(csvPath, CsvExporter.Export(exportChecks, exportEnv, score, grade, exportIntuneStigAudit));
+            await AtomicFileWriter.WriteAllTextAsync(csvPath, CsvExporter.Export(exportChecks, exportEnv, score, grade));
             Console.WriteLine($"  CSV: {csvPath}");
+
+            if (exportIntuneStigAudit is not null)
+            {
+                var intuneCsvPath = Path.Combine(outputDir, $"{baseName}_intune_stig.csv");
+                await AtomicFileWriter.WriteAllTextAsync(intuneCsvPath, CsvExporter.ExportIntuneStig(exportIntuneStigAudit));
+                Console.WriteLine($"  Intune STIG CSV: {intuneCsvPath}");
+            }
         }
 
         if (args.ExportJsonl)

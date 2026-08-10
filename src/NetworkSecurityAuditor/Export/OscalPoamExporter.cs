@@ -151,7 +151,7 @@ public static class OscalPoamExporter
                     title = $"Security POA&M - {env.ComputerName}",
                     lastModified = timestamp,
                     version = "1.0.0",
-                    oscalVersion = "1.1.3",
+                    oscalVersion = ExternalVersions.Oscal,
                     roles = new[]
                     {
                         new { id = "assessor", title = "Security Assessor" },

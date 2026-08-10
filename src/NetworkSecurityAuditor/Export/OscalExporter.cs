@@ -7,7 +7,7 @@ using NetworkSecurityAuditor.ViewModels;
 namespace NetworkSecurityAuditor.Export;
 
 /// <summary>
-/// NIST OSCAL v1.1.3 Assessment Results exporter.
+/// NIST OSCAL v1.2.2 Assessment Results exporter.
 /// Produces observations, findings, and risks per the OSCAL assessment-results model.
 /// </summary>
 public static class OscalExporter
@@ -78,27 +78,39 @@ public static class OscalExporter
                 if (mapping?.E8 is not null) props.Add(new { name = "essential-eight", value = mapping.E8 });
                 if (mapping?.CyberEssentials is not null) props.Add(new { name = "cyber-essentials", value = mapping.CyberEssentials });
 
-                findings.Add(new
+                var targetIds = SplitNistControls(mapping?.NIST, check.Id);
+                foreach (var targetId in targetIds)
                 {
-                    uuid = OscalIds.Finding(env, check),
-                    title = $"[{check.Id}] {check.Label}",
-                    description = check.Findings,
-                    target = new
+                    var findingUuid = targetIds.Count == 1
+                        ? OscalIds.Finding(env, check)
+                        : OscalIds.Finding(env, check, targetId);
+                    var findingProps = new List<object>(props)
                     {
-                        type = "objective-id",
-                        targetId = mapping?.NIST ?? check.Id,
-                        status = new
+                        new { name = "nist", value = targetId }
+                    };
+
+                    findings.Add(new
+                    {
+                        uuid = findingUuid,
+                        title = $"[{check.Id}] {check.Label}",
+                        description = check.Findings,
+                        target = new
                         {
-                            state = "not-satisfied",
-                            reason = check.Status == CheckStatus.Fail ? "fail" : "other"
-                        }
-                    },
-                    relatedObservations = new[]
-                    {
-                        new { observationUuid = obsUuid }
-                    },
-                    props = props.Count > 0 ? props : null
-                });
+                            type = "objective-id",
+                            targetId,
+                            status = new
+                            {
+                                state = "not-satisfied",
+                                reason = check.Status == CheckStatus.Fail ? "fail" : "other"
+                            }
+                        },
+                        relatedObservations = new[]
+                        {
+                            new { observationUuid = obsUuid }
+                        },
+                        props = findingProps
+                    });
+                }
 
                 if (check.Status == CheckStatus.Fail && check.Severity >= Severity.High)
                 {
@@ -193,7 +205,7 @@ public static class OscalExporter
                     title = $"Security Assessment - {env.ComputerName}",
                     lastModified = timestamp,
                     version = "1.0.0",
-                    oscalVersion = "1.1.3",
+                    oscalVersion = ExternalVersions.Oscal,
                     roles = new[]
                     {
                         new { id = "assessor", title = "Security Assessor" }
@@ -221,5 +233,16 @@ public static class OscalExporter
         };
 
         return JsonSerializer.Serialize(oscal, Options);
+    }
+
+    private static IReadOnlyList<string> SplitNistControls(string? mapping, string fallback)
+    {
+        var controls = mapping?
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(control => control.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return controls is { Length: > 0 } ? controls : [fallback];
     }
 }

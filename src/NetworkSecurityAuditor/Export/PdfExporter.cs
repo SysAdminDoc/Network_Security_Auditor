@@ -15,8 +15,10 @@ public static class PdfExporter
         var targetDirectory = Path.GetDirectoryName(targetPath);
         if (!string.IsNullOrWhiteSpace(targetDirectory))
             Directory.CreateDirectory(targetDirectory);
-        if (File.Exists(targetPath))
-            File.Delete(targetPath);
+
+        var tempPath = Path.Combine(
+            targetDirectory ?? Path.GetTempPath(),
+            $".{Path.GetFileName(targetPath)}.{Guid.NewGuid():N}.tmp.pdf");
 
         var htmlUri = new Uri(Path.GetFullPath(htmlPath)).AbsoluteUri;
 
@@ -27,7 +29,7 @@ public static class PdfExporter
             {
                 "--headless",
                 "--disable-gpu",
-                $"--print-to-pdf={targetPath}",
+                $"--print-to-pdf={tempPath}",
                 htmlUri
             },
             UseShellExecute = false,
@@ -54,9 +56,11 @@ public static class PdfExporter
                 return (false, $"Browser exited with code {process.ExitCode}: {stderr}");
             }
 
-            return File.Exists(targetPath) && new FileInfo(targetPath).Length > 0
-                ? (true, targetPath)
-                : (false, "Browser completed but PDF file was not created.");
+            if (!File.Exists(tempPath) || new FileInfo(tempPath).Length == 0)
+                return (false, "Browser completed but PDF file was not created.");
+
+            CommitPdf(tempPath, targetPath);
+            return (true, targetPath);
         }
         catch (OperationCanceledException)
         {
@@ -70,7 +74,24 @@ public static class PdfExporter
         finally
         {
             process?.Dispose();
+            try
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
+            catch
+            {
+                // Best-effort cleanup; preserve the original export result.
+            }
         }
+    }
+
+    internal static void CommitPdf(string tempPath, string targetPath)
+    {
+        if (!File.Exists(tempPath) || new FileInfo(tempPath).Length == 0)
+            throw new InvalidDataException("Generated PDF is missing or empty.");
+
+        File.Move(tempPath, Path.GetFullPath(targetPath), overwrite: true);
     }
 
     private static string? FindBrowser()

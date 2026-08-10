@@ -136,13 +136,36 @@ public class ExportTests
     }
 
     [Fact]
-    public void PdfExporter_Removes_Stale_Target_And_Does_Not_Redirect_Stdout()
+    public void PdfExporter_Stages_Target_And_Does_Not_Redirect_Stdout()
     {
         var source = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "NetworkSecurityAuditor", "Export", "PdfExporter.cs"));
 
-        Assert.Contains("File.Delete(targetPath)", source);
+        Assert.DoesNotContain("File.Delete(targetPath)", source);
+        Assert.Contains("CommitPdf(tempPath, targetPath)", source);
+        Assert.Contains("File.Move(tempPath, Path.GetFullPath(targetPath), overwrite: true)", source);
         Assert.Contains("RedirectStandardOutput = false", source);
-        Assert.Contains("new FileInfo(targetPath).Length > 0", source);
+        Assert.Contains("new FileInfo(tempPath).Length == 0", source);
+    }
+
+    [Fact]
+    public void PdfExporter_Preserves_Target_When_Staged_Pdf_Is_Invalid()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-pdf-atomic-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var targetPath = Path.Combine(dir, "report.pdf");
+        var tempPath = Path.Combine(dir, ".report.pdf.invalid.tmp");
+        File.WriteAllText(targetPath, "previous report");
+        File.WriteAllBytes(tempPath, []);
+
+        try
+        {
+            Assert.Throws<InvalidDataException>(() => PdfExporter.CommitPdf(tempPath, targetPath));
+            Assert.Equal("previous report", File.ReadAllText(targetPath));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]
@@ -385,6 +408,37 @@ public class ExportTests
     }
 
     [Fact]
+    public void External_Export_Metadata_Uses_Centralized_Versions()
+    {
+        var (checks, env) = CreateTestData();
+
+        var ocsfJson = OcsfExporter.Export(checks, env, 85, "B", "Full")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .First(line => line.Contains("\"attacks\":", StringComparison.Ordinal) && !line.Contains("\"attacks\":null", StringComparison.Ordinal));
+        using var ocsf = JsonDocument.Parse(ocsfJson);
+        var ocsfEvent = ocsf.RootElement;
+        Assert.Equal(ExternalVersions.Ocsf, ocsfEvent.GetProperty("metadata").GetProperty("version").GetString());
+        Assert.Equal(ExternalVersions.AttackEnterprise, ocsfEvent.GetProperty("attacks")[0].GetProperty("version").GetString());
+
+        using var navigator = JsonDocument.Parse(NavigatorExporter.Export(checks));
+        Assert.Equal(ExternalVersions.AttackEnterprise, navigator.RootElement.GetProperty("versions").GetProperty("attack").GetString());
+
+        using var oscal = JsonDocument.Parse(OscalExporter.Export(checks, env, 85, "B"));
+        Assert.Equal(ExternalVersions.Oscal, oscal.RootElement
+            .GetProperty("assessment-results")
+            .GetProperty("metadata")
+            .GetProperty("oscal-version")
+            .GetString());
+
+        using var poam = JsonDocument.Parse(OscalPoamExporter.Export(checks, env));
+        Assert.Equal(ExternalVersions.Oscal, poam.RootElement
+            .GetProperty("plan-of-action-and-milestones")
+            .GetProperty("metadata")
+            .GetProperty("oscal-version")
+            .GetString());
+    }
+
+    [Fact]
     public void DefectDojo_Has_Required_Fields()
     {
         var (checks, env) = CreateTestData();
@@ -468,10 +522,11 @@ public class ExportTests
         var result = doc.RootElement.GetProperty("assessment-results").GetProperty("results")[0];
         var findings = result.GetProperty("findings").EnumerateArray().ToArray();
 
-        Assert.Equal(2, findings.Length);
+        Assert.True(findings.Length >= 2);
         Assert.All(findings, finding =>
         {
             Assert.True(finding.GetProperty("target").TryGetProperty("target-id", out _));
+            Assert.DoesNotContain(",", finding.GetProperty("target").GetProperty("target-id").GetString());
             Assert.True(finding.TryGetProperty("related-observations", out _));
             Assert.Equal("not-satisfied", finding.GetProperty("target").GetProperty("status").GetProperty("state").GetString());
         });
@@ -607,10 +662,16 @@ public class ExportTests
             Assert.Contains("SV-253275r828909", json);
             Assert.Contains("NotLicensed", json);
 
-            var csv = CsvExporter.Export(checks, env, 85, "B", import);
-            Assert.Contains("# Intune STIG audit baseline evidence", csv);
-            Assert.Contains("IntuneSTIG", csv);
-            Assert.Contains("SV-253276r828910", csv);
+            var csv = CsvExporter.Export(checks, env, 85, "B");
+            Assert.DoesNotContain("IntuneSTIG", csv);
+
+            var intuneCsv = CsvExporter.ExportIntuneStig(import);
+            var intuneCsvLines = intuneCsv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var intuneHeader = intuneCsvLines.First(line => !line.StartsWith('#'));
+            Assert.Equal(12, CountCsvColumns(intuneHeader));
+            Assert.All(intuneCsvLines.Where(line => !line.StartsWith('#')), line => Assert.Equal(12, CountCsvColumns(line)));
+            Assert.Contains("IntuneSTIG", intuneCsv);
+            Assert.Contains("SV-253276r828910", intuneCsv);
 
             var html = HtmlReportGenerator.Generate(checks, env, 85, "B", 70, "C", intuneStigAudit: import);
             Assert.Contains("Intune STIG Audit Baseline Evidence", html);
@@ -625,6 +686,33 @@ public class ExportTests
         {
             File.Delete(importPath);
         }
+    }
+
+    [Fact]
+    public void Oscal_MultiControl_Mappings_Emit_Individual_Targets()
+    {
+        var mapped = FrameworkMappings.All.First(pair => pair.Value.NIST?.Contains(',', StringComparison.Ordinal) == true);
+        var check = CheckItemViewModel.FromMetadata(CheckCatalog.All[mapped.Key]);
+        check.Status = CheckStatus.Fail;
+        check.Findings = "Multi-control mapping test";
+        var env = new EnvironmentInfo { ComputerName = "TEST" };
+
+        using var doc = JsonDocument.Parse(OscalExporter.Export([check], env, 0, "F"));
+        var findings = doc.RootElement
+            .GetProperty("assessment-results")
+            .GetProperty("results")[0]
+            .GetProperty("findings")
+            .EnumerateArray()
+            .ToArray();
+        var expected = mapped.Value.NIST!
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal(expected.Count, findings.Length);
+        Assert.Equal(expected, findings
+            .Select(finding => finding.GetProperty("target").GetProperty("target-id").GetString()!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(expected.Count, findings.Select(finding => finding.GetProperty("uuid").GetString()).Distinct().Count());
     }
 
     [Fact]
@@ -1179,6 +1267,31 @@ public class ExportTests
           ]
         }
         """;
+
+    private static int CountCsvColumns(string line)
+    {
+        var columns = 1;
+        var quoted = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            if (line[i] == '"')
+            {
+                if (quoted && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    i++;
+                    continue;
+                }
+
+                quoted = !quoted;
+            }
+            else if (line[i] == ',' && !quoted)
+            {
+                columns++;
+            }
+        }
+
+        return columns;
+    }
 
     private static string GetProp(JsonElement element, string name)
     {

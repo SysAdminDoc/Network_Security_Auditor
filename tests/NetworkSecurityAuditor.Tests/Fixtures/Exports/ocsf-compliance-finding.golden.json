@@ -14,7 +14,7 @@
   "time": 1783468800000,
   "message": "Protection is disabled.",
   "metadata": {
-    "version": "1.4.0",
+    "version": "1.8.0",
     "product": {
       "name": "Network Security Auditor",
       "version": "5.3.3",

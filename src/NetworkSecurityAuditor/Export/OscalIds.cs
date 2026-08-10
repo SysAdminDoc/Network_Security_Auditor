@@ -13,6 +13,9 @@ internal static class OscalIds
     public static string Finding(EnvironmentInfo env, CheckItemViewModel check)
         => StableUuid("finding", env.ComputerName, check.Id);
 
+    public static string Finding(EnvironmentInfo env, CheckItemViewModel check, string targetId)
+        => StableUuid("finding", env.ComputerName, check.Id, targetId);
+
     public static string Risk(EnvironmentInfo env, CheckItemViewModel check)
         => StableUuid("risk", env.ComputerName, check.Id);
 

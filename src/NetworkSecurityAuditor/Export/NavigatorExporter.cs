@@ -65,7 +65,7 @@ public static class NavigatorExporter
         var layer = new
         {
             name = "Network Security Auditor Coverage",
-            versions = new { attack = "19.0", navigator = "4.9.0", layer = "4.5" },
+            versions = new { attack = ExternalVersions.AttackEnterprise, navigator = "4.9.0", layer = "4.5" },
             domain = "enterprise-attack",
             description = $"Generated {DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} UTC by Network Security Auditor v{VersionInfo.Version}",
             sorting = 3,

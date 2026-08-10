@@ -67,7 +67,7 @@ public static class OcsfExporter
                 message = !string.IsNullOrEmpty(check.Findings) ? check.Findings : check.Label,
                 metadata = new
                 {
-                    version = "1.4.0",
+                    version = ExternalVersions.Ocsf,
                     product = new
                     {
                         name = "Network Security Auditor",
@@ -102,7 +102,7 @@ public static class OcsfExporter
                 {
                     tactics = mitre.Tactics.Select(t => new { uid = t, name = t }).ToArray(),
                     technique = new { uid = tech, name = mitre.Description },
-                    version = "19.0"
+                    version = ExternalVersions.AttackEnterprise
                 }).ToArray() : null,
                 evidences = !string.IsNullOrEmpty(check.Evidence) ? new[]
                 {

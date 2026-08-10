@@ -445,7 +445,7 @@ Automatic platform detection and field population:
 | JSON | `*_findings.json` | Per-finding structured data with compliance, ATT&CK, D3FEND, evidence-mode metadata, an `exceptions` list (accepted-risk/deferred items with owner, expiration, and rationale), per-framework control summaries, observed-fact/narrative separation, and write disclosure |
 | JSONL | `*_siem.jsonl` | One event per finding for Splunk/Elastic/Sentinel with truncation, evidence-mode, and D3FEND fields |
 | Run Log JSONL | `*_runlog.jsonl` | Per-check timing, timeout, skip reason, error, and slow-check metadata |
-| CSV | `*.csv` | Pivot table analysis with compliance, ATT&CK, D3FEND, and evidence-mode columns |
+| CSV | `*.csv` | Pivot table analysis with compliance, ATT&CK, D3FEND, and evidence-mode columns; an Intune STIG import also writes a separate `*_intune_stig.csv` table |
 | SARIF | `*.sarif` | Static Analysis Results Interchange Format with D3FEND and evidence-mode rule properties |
 | PDF | `*.pdf` | Portable report via Edge/Chrome headless rendering |
 | Intune | `*_intune.json` | Device compliance discovery script for Conditional Access |
