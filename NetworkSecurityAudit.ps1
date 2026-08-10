@@ -923,7 +923,7 @@ function Export-MultiClientDashboard {
         [int]$StaleAfterDays = 30,
         [string]$CsvPath = ''
     )
-    function Convert-DashHtml { param([string]$s) if ($null -eq $s) { return '' }; ($s -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;') }
+    function Convert-DashHtml { param([string]$s) if ($null -eq $s) { return '' }; ($s -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;' -replace "'",'&#39;') }
 
     if (-not (Test-Path -LiteralPath $SourceDir)) {
         Write-Host "[Dashboard] Source directory not found: $SourceDir" -ForegroundColor Red
@@ -1036,13 +1036,18 @@ function Export-MultiClientDashboard {
         $lastScan = if ($r.Timestamp) { $r.Timestamp.ToString('yyyy-MM-dd') } else { 'unknown' }
         $staleBadge = if ($r.Stale) { "<span class='badge stale'>STALE $($r.StaleDays)d</span>" } else { "<span class='badge fresh'>$($r.StaleDays)d</span>" }
         $clientCell = Convert-DashHtml $r.Client
-        if ($r.ReportPath) { $clientCell = "<a href='$([uri]$r.ReportPath)'>$clientCell</a>" }
+        if ($r.ReportPath) {
+            $reportHref = Convert-DashHtml ([string]([uri]$r.ReportPath))
+            $clientCell = "<a href='$reportHref'>$clientCell</a>"
+        }
+        $gradeText = Convert-DashHtml ([string]$r.Grade)
+        $ransomGradeText = Convert-DashHtml ([string]$r.RansomGrade)
         $fwCell = "$($r.FwCompliant)/$($r.FwTotal)"
         $cloudCell = "$($r.CloudFail) fail / $($r.CloudUnavailable) unavailable"
         # mini trend bars
         $trendBars = ''
         foreach ($tp in $r.Trend) { $h = [math]::Max(2,[int]($tp * 0.28)); $tc = Get-ScoreColor $tp; $trendBars += "<span class='tbar' style='height:${h}px;background:$tc' title='$tp%'></span>" }
-        [void]$rowsHtml.Append("<tr><td>$clientCell<div class='sub'>$(Convert-DashHtml $r.Target)</div></td><td style='color:$gColor;font-weight:700'>$($r.Grade)</td><td style='color:$sColor;font-weight:700'>$($r.ScorePct)%</td><td>$($r.RansomScore)% ($($r.RansomGrade))</td><td style='color:$(if($r.Critical -gt 0){'#f38ba8'}else{'#a6e3a1'});font-weight:700'>$($r.Critical)</td><td>$fwCell</td><td>$cloudCell</td><td><div class='trend'>$trendBars</div><div class='sub'>$($r.ScanCount) scans</div></td><td>$lastScan</td><td>$staleBadge</td></tr>")
+        [void]$rowsHtml.Append("<tr><td>$clientCell<div class='sub'>$(Convert-DashHtml $r.Target)</div></td><td style='color:$gColor;font-weight:700'>$gradeText</td><td style='color:$sColor;font-weight:700'>$($r.ScorePct)%</td><td>$($r.RansomScore)% ($ransomGradeText)</td><td style='color:$(if($r.Critical -gt 0){'#f38ba8'}else{'#a6e3a1'});font-weight:700'>$($r.Critical)</td><td>$fwCell</td><td>$cloudCell</td><td><div class='trend'>$trendBars</div><div class='sub'>$($r.ScanCount) scans</div></td><td>$lastScan</td><td>$staleBadge</td></tr>")
     }
 
     $catHtml = New-Object System.Text.StringBuilder
@@ -1200,7 +1205,7 @@ function ConvertTo-RedactedText {
     foreach ($r in $script:PrivacyReplacements) {
         $text = [regex]::Replace($text, $r.Pattern, $r.Replacement, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
     }
-    $text = [regex]::Replace($text, '(?i)\b(access_token|refresh_token|id_token|client_secret|client_assertion|token|secret)=([^&\s]+)', { param($m) "$($m.Groups[1].Value)=[SECRET-REDACTED]" })
+    $text = [regex]::Replace($text, '(?ix)(?<prefix>["'']?(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|client[_-]?assertion|api[_-]?key|apikey|token|secret|password|private[_-]?key|connection[_-]?string|authorization)["'']?\s*[:=]\s*["'']?)(?!Bearer\b)(?<value>[^"''\s,;&}\r\n]+)(?<suffix>["'']?)', { param($m) "$($m.Groups['prefix'].Value)[SECRET-REDACTED]$($m.Groups['suffix'].Value)" })
     $text = [regex]::Replace($text, '(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*', 'Bearer [SECRET-REDACTED]')
     $text = [regex]::Replace($text, '\b(?:\d{1,3}\.){3}\d{1,3}\b', { param($m) "[IP-$(Get-PrivacyHash $m.Value)]" })
     return $text
@@ -1211,6 +1216,62 @@ function Get-RedactedIdentity {
     if (-not $Value) { return '' }
     if (-not $script:CliPrivacyMode) { return $Value }
     return "[$Tag-$(Get-PrivacyHash $Value)]"
+}
+
+function ConvertTo-PrivacySafeObject {
+    param([AllowNull()][object]$Value, [int]$Depth = 0)
+    if (-not $script:CliPrivacyMode) { return $Value }
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [string]) { return ConvertTo-RedactedText $Value }
+    if ($Depth -ge 12) { return ConvertTo-RedactedText ([string]$Value) }
+    if ($Value -is [System.ValueType] -or $Value -is [System.Type]) { return $Value }
+
+    if ($Value -is [System.Collections.IDictionary]) {
+        $safeMap = [ordered]@{}
+        foreach ($key in $Value.Keys) {
+            $entry = $Value[$key]
+            if ($entry -is [string] -and ([string]$key -match '(?i)(access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|client[_-]?assertion|api[_-]?key|apikey|token|secret|password|private[_-]?key|connection[_-]?string|authorization)')) {
+                $safeMap[[string]$key] = '[SECRET-REDACTED]'
+            } else {
+                $safeMap[[string]$key] = ConvertTo-PrivacySafeObject -Value $entry -Depth ($Depth + 1)
+            }
+        }
+        return $safeMap
+    }
+
+    if ($Value -is [System.Collections.IEnumerable]) {
+        $safeList = @()
+        foreach ($entry in $Value) {
+            $safeList += ConvertTo-PrivacySafeObject -Value $entry -Depth ($Depth + 1)
+        }
+        return ,$safeList
+    }
+
+    $properties = @($Value.PSObject.Properties)
+    if ($properties.Count -eq 0) { return ConvertTo-RedactedText ([string]$Value) }
+    $safeObject = [ordered]@{}
+    foreach ($property in $properties) {
+        $safeObject[$property.Name] = ConvertTo-PrivacySafeObject -Value $property.Value -Depth ($Depth + 1)
+    }
+    return $safeObject
+}
+
+function Get-PrivacySafeBranding {
+    param($Branding)
+    if ($null -eq $Branding -or -not $script:CliPrivacyMode) { return $Branding }
+    return [ordered]@{
+        CompanyName  = if ($Branding.CompanyName) { Get-RedactedIdentity $Branding.CompanyName 'COMPANY' } else { '' }
+        Tagline      = ''
+        LogoData     = ''
+        PrimaryColor = $Branding.PrimaryColor
+        AccentColor  = $Branding.AccentColor
+        ContactName  = ''
+        ContactEmail = ''
+        ContactPhone = ''
+        Website      = ''
+        FooterText   = ''
+        CoverPage    = $false
+    }
 }
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
@@ -10705,9 +10766,44 @@ function Convert-SaveStateToSnapshot {
     }
 }
 
+# Returns whether two snapshots describe the same client and target. Older
+# snapshots that contain neither identity field remain comparable for backward
+# compatibility; a partially populated or mismatched identity is never safe to
+# use as a recurring-assessment baseline.
+function Test-AuditSnapshotIdentity {
+    param($Previous, $Current)
+    $getValue = {
+        param($snapshot, [string]$name)
+        if ($null -eq $snapshot) { return '' }
+        if ($snapshot -is [System.Collections.IDictionary]) {
+            if ($snapshot.Contains($name)) { return [string]$snapshot[$name] }
+            return ''
+        }
+        if ($snapshot.PSObject.Properties[$name]) { return [string]$snapshot.PSObject.Properties[$name].Value }
+        return ''
+    }
+    $errors = @()
+    foreach ($field in 'client','target') {
+        $previousValue = (& $getValue $Previous $field).Trim()
+        $currentValue = (& $getValue $Current $field).Trim()
+        $hasPrevious = -not [string]::IsNullOrWhiteSpace($previousValue)
+        $hasCurrent = -not [string]::IsNullOrWhiteSpace($currentValue)
+        if (-not $hasPrevious -and -not $hasCurrent) { continue }
+        if (-not $hasPrevious -or -not $hasCurrent) {
+            $errors += "$field is missing from one snapshot"
+        } elseif (-not [string]::Equals($previousValue, $currentValue, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $errors += "$field differs ('$previousValue' versus '$currentValue')"
+        }
+    }
+    return [ordered]@{
+        compatible = ($errors.Count -eq 0)
+        error = if ($errors.Count -gt 0) { $errors -join '; ' } else { $null }
+    }
+}
+
 # Pure comparison of two snapshots. Returns categorized id lists, score deltas,
 # and critical counts. Unavailable/skipped current states never count as
-# remediations. Validates schema compatibility before comparing.
+# remediations. Validates schema and identity compatibility before comparing.
 function Compare-AuditSnapshot {
     param($Previous, $Current)
     $unavailable = @('N/A','Not Assessed','Skipped','Unavailable','NotLicensed','NotPermitted','NotConfigured','Error','')
@@ -10720,6 +10816,8 @@ function Compare-AuditSnapshot {
     if ($Previous -and $Previous.schema_version -and $Current -and $Current.schema_version) {
         $schemaCompatible = ([string]$Previous.schema_version -eq [string]$Current.schema_version)
     }
+    $identity = Test-AuditSnapshotIdentity -Previous $Previous -Current $Current
+    $identityCompatible = [bool]$identity.compatible
     $prevFindings = if ($Previous -and $Previous.findings) { $Previous.findings } else { @{} }
     $currFindings = if ($Current -and $Current.findings) { $Current.findings } else { @{} }
     $keysOf = { param($map) if ($null -eq $map) { @() } elseif ($map -is [System.Collections.IDictionary]) { @($map.Keys) } else { @($map.PSObject.Properties.Name) } }
@@ -10729,7 +10827,8 @@ function Compare-AuditSnapshot {
 
     $allIds = @($prevKeys + $currKeys | Select-Object -Unique)
     $newCrit = 0; $resolvedCrit = 0
-    foreach ($id in $allIds) {
+    if ($schemaCompatible -and $identityCompatible) {
+        foreach ($id in $allIds) {
         $p = & $getEntry $prevFindings $id
         $c = & $getEntry $currFindings $id
         if (-not $c) { $states.AbsentFromCurrentRun += $id; continue }
@@ -10760,15 +10859,18 @@ function Compare-AuditSnapshot {
             elseif ([string]$p.fingerprint -ne [string]$c.fingerprint) { $states.UpdatedEvidence += $id }
             else { $states.UnchangedFail += $id }
         }
+        }
     }
 
     $scoreDelta = [ordered]@{ overall = $null; ransomware = $null }
-    if ($Previous -and $Previous.score -and $Current -and $Current.score) {
+    if ($schemaCompatible -and $identityCompatible -and $Previous -and $Previous.score -and $Current -and $Current.score) {
         $scoreDelta.overall = [int]$Current.score.overall - [int]$Previous.score.overall
         $scoreDelta.ransomware = [int]$Current.score.ransomware - [int]$Previous.score.ransomware
     }
     return [ordered]@{
         schema_compatible = $schemaCompatible
+        identity_compatible = $identityCompatible
+        identity_error = $identity.error
         previous_run_id   = if ($Previous) { $Previous.run_id } else { $null }
         current_run_id    = if ($Current) { $Current.run_id } else { $null }
         states            = $states
@@ -10836,6 +10938,52 @@ function Get-AuditAlertPayload {
     }
 }
 
+# Writes a JSON artifact through a same-directory temporary file, preserving the
+# previous artifact if serialization or replacement fails.
+function Write-HistoryJsonFile {
+    param([string]$Path, [object]$Value, [int]$Depth = 8)
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw 'History artifact path is empty.' }
+    $parent = Split-Path -Parent -Path $Path
+    if ($parent -and -not (Test-Path -LiteralPath $parent -PathType Container)) {
+        New-Item -ItemType Directory -Path $parent -Force -ErrorAction Stop | Out-Null
+    }
+    $tempPath = "$Path.$([guid]::NewGuid().ToString('N')).tmp"
+    $backupPath = "$Path.$([guid]::NewGuid().ToString('N')).bak"
+    try {
+        $Value | ConvertTo-Json -Depth $Depth -ErrorAction Stop | Set-Content -LiteralPath $tempPath -Encoding UTF8 -ErrorAction Stop
+        if (Test-Path -LiteralPath $Path -PathType Leaf) {
+            [System.IO.File]::Replace($tempPath, $Path, $backupPath, $true)
+            if (Test-Path -LiteralPath $backupPath -PathType Leaf) {
+                Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
+            }
+        } else {
+            [System.IO.File]::Move($tempPath, $Path)
+        }
+        return $true
+    } finally {
+        if (Test-Path -LiteralPath $tempPath -PathType Leaf) {
+            Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# Appends one JSONL record while holding an exclusive writer handle. A second
+# process receives a visible persistence failure instead of interleaving bytes.
+function Append-HistoryLine {
+    param([string]$Path, [string]$Line)
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw 'History log path is empty.' }
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    $bytes = $encoding.GetBytes($Line + [Environment]::NewLine)
+    $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+    try {
+        [void]$stream.Seek(0, [System.IO.SeekOrigin]::End)
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 # Orchestrates a history run: build the current snapshot, compare to the baseline,
 # compute exposure, append a run record to history.jsonl, persist the snapshot and
 # baseline, prune to retention, and return everything for reporting. Honors
@@ -10848,7 +10996,10 @@ function Invoke-AuditHistory {
     $nowIso = $now.ToString('o')
     $runId = $now.ToString('yyyyMMddHHmmssfff')
     $safeClient = ($Client -replace '[^\w\.-]','_'); if (-not $safeClient) { $safeClient = 'client' }
-    $histDir = if ($script:CliHistoryPath) { $script:CliHistoryPath } else { Join-Path $OutputDir ("SecurityAudit_{0}_history" -f $safeClient) }
+    $safeTarget = ($Target -replace '[^\w\.-]','_'); if (-not $safeTarget) { $safeTarget = 'target' }
+    $clientKeyHash = (Get-StringSha256 ([string]$Client).ToLowerInvariant()).Substring(0, 8)
+    $targetKeyHash = (Get-StringSha256 ([string]$Target).ToLowerInvariant()).Substring(0, 8)
+    $histDir = if ($script:CliHistoryPath) { $script:CliHistoryPath } else { Join-Path $OutputDir ("SecurityAudit_{0}_{1}_{2}_{3}_history" -f $safeClient, $clientKeyHash, $safeTarget, $targetKeyHash) }
     $snapDir = Join-Path $histDir 'snapshots'
     $baseDir = Join-Path $histDir 'baselines'
     foreach ($d in @($histDir, $snapDir, $baseDir)) { if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null } }
@@ -10857,27 +11008,34 @@ function Invoke-AuditHistory {
 
     $snapshot = Convert-AuditStateToSnapshot -RunId $runId -SnapshotId $runId -TimestampIso $nowIso -Client $Client -Target $Target
 
-    $baseline = $null; $prevExposure = $null; $baselineAgeDays = $null; $schemaOk = $true
+    $baseline = $null; $prevExposure = $null; $baselineAgeDays = $null; $schemaOk = $true; $identityOk = $true; $identityError = $null
     if (Test-Path $baselineFile) {
         try { $baseline = Get-Content -LiteralPath $baselineFile -Raw -EA Stop | ConvertFrom-Json -EA Stop } catch { $baseline = $null }
         if ($baseline) {
-            if ($baseline.exposure) { $prevExposure = $baseline.exposure }
             if ($baseline.schema_version -and ([string]$baseline.schema_version -ne [string]$snapshot.schema_version)) { $schemaOk = $false }
+            $identityCheck = Test-AuditSnapshotIdentity -Previous $baseline -Current $snapshot
+            $identityOk = [bool]$identityCheck.compatible
+            $identityError = $identityCheck.error
+            if ($schemaOk -and $identityOk -and $baseline.exposure) { $prevExposure = $baseline.exposure }
             if ($baseline.timestamp) { try { $baselineAgeDays = [math]::Round(($now - [datetime]$baseline.timestamp).TotalDays) } catch {} }
         }
     }
 
-    $delta = if ($baseline -and $schemaOk) { Compare-AuditSnapshot -Previous $baseline -Current $snapshot } else { $null }
+    $delta = if ($baseline -and $schemaOk -and $identityOk) { Compare-AuditSnapshot -Previous $baseline -Current $snapshot } else { $null }
     $exposure = Update-ExposureWindows -PrevExposure $prevExposure -CurrentSnapshot $snapshot -Now $now -NowIso $nowIso
     $snapshot['exposure'] = $exposure
-    $snapshot['previous_run_id'] = if ($baseline) { $baseline.run_id } else { $null }
+    $snapshot['previous_run_id'] = if ($baseline -and $schemaOk -and $identityOk) { $baseline.run_id } else { $null }
     $payload = Get-AuditAlertPayload -Delta $delta -CurrentSnapshot $snapshot -Exposure $exposure -NowIso $nowIso
 
-    # Persist snapshot + baseline
-    try {
-        $snapshot | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $snapDir "$runId.snapshot.json") -Encoding UTF8
-        $snapshot | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $baselineFile -Encoding UTF8
-    } catch {}
+    # Persist snapshot + baseline independently so one failure does not hide the
+    # other, and so the returned status identifies exactly what was durable.
+    $snapshotPath = Join-Path $snapDir "$runId.snapshot.json"
+    $snapshotPersisted = $false; $baselinePersisted = $false; $historyPersisted = $false
+    $persistenceErrors = New-Object System.Collections.Generic.List[string]
+    try { Write-HistoryJsonFile -Path $snapshotPath -Value $snapshot -Depth 8 | Out-Null; $snapshotPersisted = $true }
+    catch { [void]$persistenceErrors.Add("snapshot: $($_.Exception.Message)") }
+    try { Write-HistoryJsonFile -Path $baselineFile -Value $snapshot -Depth 8 | Out-Null; $baselinePersisted = $true }
+    catch { [void]$persistenceErrors.Add("baseline: $($_.Exception.Message)") }
 
     # Append run summary to history.jsonl
     $histRec = [ordered]@{
@@ -10887,7 +11045,7 @@ function Invoke-AuditHistory {
         catalog_hash=$snapshot.catalog_hash; policy_hash=$snapshot.policy_hash
         schema_compatible=$schemaOk
         output_paths = if ($OutputBase) { [ordered]@{ html="$OutputBase.html"; findings_json="${OutputBase}_findings.json"; summary_json="${OutputBase}_summary.json" } } else { $null }
-        snapshot_path = (Join-Path $snapDir "$runId.snapshot.json")
+        snapshot_path = $snapshotPath
         write_results_in = if ($OutputBase) { "${OutputBase}_findings.json#writes" } else { $null }
         score=$snapshot.score.overall; grade=$snapshot.score.grade; ransomware=$snapshot.score.ransomware
         score_delta = if ($delta) { $delta.score_delta.overall } else { $null }
@@ -10897,8 +11055,22 @@ function Invoke-AuditHistory {
         worst_exposure_days = $payload.worst_exposure_days
         worst_critical_exposure_days = $payload.worst_critical_exposure_days
         baseline_age_days = $baselineAgeDays
+        identity_compatible = $identityOk
+        identity_error = $identityError
+        snapshot_persisted = $snapshotPersisted
+        baseline_persisted = $baselinePersisted
     }
-    try { Add-Content -LiteralPath $historyFile -Value ($histRec | ConvertTo-Json -Depth 6 -Compress) -Encoding UTF8 } catch {}
+    try {
+        Append-HistoryLine -Path $historyFile -Line ($histRec | ConvertTo-Json -Depth 6 -Compress)
+        $historyPersisted = $true
+    } catch { [void]$persistenceErrors.Add("history: $($_.Exception.Message)") }
+
+    if ($persistenceErrors.Count -gt 0) {
+        foreach ($persistenceError in $persistenceErrors) {
+            Write-Host "[History] WARNING: $persistenceError" -ForegroundColor Yellow
+            try { Write-Log "History persistence warning: $persistenceError" 'WARN' } catch {}
+        }
+    }
 
     # Retention: prune snapshot files older than the retention window (0/negative = keep all)
     $pruned = 0
@@ -10911,7 +11083,10 @@ function Invoke-AuditHistory {
 
     $script:HistoryResult = [ordered]@{
         run_id=$runId; history_dir=$histDir; baseline_age_days=$baselineAgeDays
-        schema_compatible=$schemaOk; had_baseline=[bool]$baseline
+        schema_compatible=$schemaOk; identity_compatible=$identityOk; identity_error=$identityError; had_baseline=[bool]$baseline
+        snapshot_persisted=$snapshotPersisted; baseline_persisted=$baselinePersisted; history_persisted=$historyPersisted
+        persistence_succeeded=($snapshotPersisted -and $baselinePersisted -and $historyPersisted)
+        persistence_errors=@($persistenceErrors)
         delta=$delta; exposure=$exposure; alert_payload=$payload; pruned_snapshots=$pruned
     }
     return $script:HistoryResult
@@ -10944,6 +11119,17 @@ function Get-AuditState {
     return $state
 }
 
+function ConvertTo-SafeScanTime {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return '' }
+    try {
+        $parsed = [datetime]::Parse([string]$Value, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind)
+        return $parsed.ToString('yyyy-MM-dd HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture)
+    } catch {
+        return ''
+    }
+}
+
 function Set-AuditState($state) {
     $script:SuppressAdvance = $true
     $el['txtClient'].Text=$state.Client; $el['txtAuditor'].Text=$state.Auditor; $el['txtDate'].Text=$state.Date
@@ -10965,9 +11151,12 @@ function Set-AuditState($state) {
         if($script:RemStatusCombos.Contains($id)){$c2=$script:RemStatusCombos[$id];for($i=0;$i -lt $c2.Items.Count;$i++){if($c2.Items[$i] -eq $it.RemStatus){$c2.SelectedIndex=$i;break}}}
         # Restore scan timestamp and button state
         if ($it.ScanTime) {
-            $script:ScanTimestamps[$id] = $it.ScanTime
-            if ($script:ScanButtons.Contains($id)) {
-                $script:ScanButtons[$id].ToolTip = "Last: $($it.ScanTime) - Click to re-scan"
+            $safeScanTime = ConvertTo-SafeScanTime $it.ScanTime
+            if ($safeScanTime) {
+                $script:ScanTimestamps[$id] = $safeScanTime
+                if ($script:ScanButtons.Contains($id)) {
+                    $script:ScanButtons[$id].ToolTip = "Last: $safeScanTime - Click to re-scan"
+                }
             }
         }
         # Sync card visual state
@@ -11109,7 +11298,7 @@ $el['btnReset'].Add_Click({
 function Export-HTMLReport([string]$outPath, [switch]$OpenAfter, [string]$Tier = '') {
     if (-not $Tier) { $Tier = $script:CliReport }
     if (-not $Tier) { $Tier = 'All' }
-    $state=Get-AuditState; $risk=Get-RiskScore
+    $state=Get-AuditState; $risk=Get-RiskScore; $reportBranding = Get-PrivacySafeBranding $script:Branding
     $ck2=($script:CheckStates.Values|Where-Object{$_}).Count; $tot2=$script:TotalItems
     $pct2=if($tot2 -gt 0){[math]::Round(($ck2/$tot2)*100)}else{0}
     $gc=switch($risk.Grade){'A'{'#22c55e'}'B'{'#84cc16'}'C'{'#eab308'}'D'{'#f97316'}default{'#ef4444'}}
@@ -11374,45 +11563,45 @@ body{background:#fff;color:#111;padding:16px;font-size:11px}
 "@
 
     # ── COVER PAGE (white-label) ────────────────────────────────────────────
-    $brandPrimary = if ($script:Branding.PrimaryColor) { $script:Branding.PrimaryColor } else { '#0ea5e9' }
-    $brandAccent  = if ($script:Branding.AccentColor) { $script:Branding.AccentColor } else { $overallColor }
-    if ($script:Branding -and $script:Branding.CoverPage) {
+    $brandPrimary = if ($reportBranding.PrimaryColor) { $reportBranding.PrimaryColor } else { '#0ea5e9' }
+    $brandAccent  = if ($reportBranding.AccentColor) { $reportBranding.AccentColor } else { $overallColor }
+    if ($reportBranding -and $reportBranding.CoverPage) {
         $html += "<div class='cover'>`n"
-        if ($script:Branding.LogoData) {
-            $html += "<img class='cover-logo' src='$($script:Branding.LogoData)' alt='$([System.Net.WebUtility]::HtmlEncode($script:Branding.CompanyName))' />`n"
+        if ($reportBranding.LogoData) {
+            $html += "<img class='cover-logo' src='$($reportBranding.LogoData)' alt='$([System.Net.WebUtility]::HtmlEncode($reportBranding.CompanyName))' />`n"
         }
-        $coverTitle = if ($script:Branding.CompanyName) { $script:Branding.CompanyName } else { $script:ProductName }
+        $coverTitle = if ($reportBranding.CompanyName) { $reportBranding.CompanyName } else { $script:ProductName }
         $html += "<h1 style='color:$brandPrimary'>$([System.Net.WebUtility]::HtmlEncode($coverTitle))</h1>`n"
-        if ($script:Branding.Tagline) {
-            $html += "<div class='cover-tagline'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.Tagline))</div>`n"
+        if ($reportBranding.Tagline) {
+            $html += "<div class='cover-tagline'>$([System.Net.WebUtility]::HtmlEncode($reportBranding.Tagline))</div>`n"
         }
         $html += "<div class='cover-divider' style='background:$brandPrimary'></div>`n"
         $html += "<div class='cover-client'>Security Assessment Report</div>`n"
         $html += "<div class='cover-client'>$([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))</div>`n"
         $html += "<div class='cover-date'>$([System.Net.WebUtility]::HtmlEncode($state.Date))</div>`n"
         $contactLines = @()
-        if ($script:Branding.ContactName) { $contactLines += "Prepared by: $([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactName))" }
-        if ($script:Branding.ContactEmail) { $contactLines += "Email: <a href='mailto:$([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactEmail))'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactEmail))</a>" }
-        if ($script:Branding.ContactPhone) { $contactLines += "Phone: $([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactPhone))" }
-        if ($script:Branding.Website) { $contactLines += "Web: <a href='$([System.Net.WebUtility]::HtmlEncode($script:Branding.Website))'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.Website))</a>" }
+        if ($reportBranding.ContactName) { $contactLines += "Prepared by: $([System.Net.WebUtility]::HtmlEncode($reportBranding.ContactName))" }
+        if ($reportBranding.ContactEmail) { $contactLines += "Email: <a href='mailto:$([System.Net.WebUtility]::HtmlEncode($reportBranding.ContactEmail))'>$([System.Net.WebUtility]::HtmlEncode($reportBranding.ContactEmail))</a>" }
+        if ($reportBranding.ContactPhone) { $contactLines += "Phone: $([System.Net.WebUtility]::HtmlEncode($reportBranding.ContactPhone))" }
+        if ($reportBranding.Website) { $contactLines += "Web: <a href='$([System.Net.WebUtility]::HtmlEncode($reportBranding.Website))'>$([System.Net.WebUtility]::HtmlEncode($reportBranding.Website))</a>" }
         if ($contactLines.Count -gt 0) {
             $html += "<div class='cover-meta'>$($contactLines -join '<br/>')</div>`n"
         }
-        $confText = if ($script:Branding.FooterText) { $script:Branding.FooterText } else { 'Confidential - For authorized recipients only' }
+        $confText = if ($reportBranding.FooterText) { $reportBranding.FooterText } else { 'Confidential - For authorized recipients only' }
         $html += "<div class='cover-conf'>$([System.Net.WebUtility]::HtmlEncode($confText))</div>`n"
         $html += "</div>`n"
     }
 
     # ── HEADER ───────────────────────────────────────────────────────────────
-    $brandedTitle = if ($script:Branding.CompanyName) { "$($script:Branding.CompanyName) - Security Assessment" } else { "$($script:ProductName) Report" }
-    $brandedSub = if ($script:Branding.FooterText) { [System.Net.WebUtility]::HtmlEncode($script:Branding.FooterText) } else { "Confidential - Prepared for $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))" }
+    $brandedTitle = if ($reportBranding.CompanyName) { "$($reportBranding.CompanyName) - Security Assessment" } else { "$($script:ProductName) Report" }
+    $brandedSub = if ($reportBranding.FooterText) { [System.Net.WebUtility]::HtmlEncode($reportBranding.FooterText) } else { "Confidential - Prepared for $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))" }
     $html += @"
-<div class="hdr"$(if($script:Branding.PrimaryColor){" style='border-color:$brandPrimary'"})>
-$(if($script:Branding.PrimaryColor){"<style>.hdr::before{background:linear-gradient(90deg,$brandPrimary,$brandAccent)!important}</style>"})
-$(if($script:Branding){
+<div class="hdr"$(if($reportBranding.PrimaryColor){" style='border-color:$brandPrimary'"})>
+$(if($reportBranding.PrimaryColor){"<style>.hdr::before{background:linear-gradient(90deg,$brandPrimary,$brandAccent)!important}</style>"})
+$(if($reportBranding){
     $brandHtml = "<div class='brand-bar'>"
-    if($script:Branding.LogoData){ $brandHtml += "<img src='$($script:Branding.LogoData)' alt='$([System.Net.WebUtility]::HtmlEncode($script:Branding.CompanyName))' />" }
-    if($script:Branding.CompanyName){ $brandHtml += "<span class='brand-name' style='color:$brandPrimary'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.CompanyName))</span>" }
+    if($reportBranding.LogoData){ $brandHtml += "<img src='$($reportBranding.LogoData)' alt='$([System.Net.WebUtility]::HtmlEncode($reportBranding.CompanyName))' />" }
+    if($reportBranding.CompanyName){ $brandHtml += "<span class='brand-name' style='color:$brandPrimary'>$([System.Net.WebUtility]::HtmlEncode($reportBranding.CompanyName))</span>" }
     $brandHtml += "</div>"
     $brandHtml
 })
@@ -11635,7 +11824,7 @@ $(if($script:Branding){
         $remOpen = [System.Collections.ArrayList]@()
         foreach($id in $script:CheckStates.Keys) {
             $rs=if($script:RemStatusCombos[$id].SelectedItem){$script:RemStatusCombos[$id].SelectedItem.ToString()}else{'Open'}
-            $assign=$script:RemAssignBoxes[$id].Text; $due=$script:RemDueBoxes[$id].Text
+            $assign=ConvertTo-RedactedText $script:RemAssignBoxes[$id].Text; $due=ConvertTo-RedactedText $script:RemDueBoxes[$id].Text
             if ($rs -ne 'Closed' -and ($assign -or $due)) { $remOpen.Add(@{ID=$id;Status=$rs;Assign=$assign;Due=$due}) | Out-Null }
         }
         if ($remOpen.Count -gt 0) {
@@ -11862,18 +12051,20 @@ $(if($script:Branding){
         foreach ($bm in $script:BenchmarkImports) {
             $bmScore = if ($bm.summary.total -gt 0) { [math]::Round(($bm.summary.pass / $bm.summary.total) * 100) } else { 0 }
             $bmColor = if ($bmScore -ge 80) { '#22c55e' } elseif ($bmScore -ge 60) { '#eab308' } elseif ($bmScore -ge 40) { '#f97316' } else { '#ef4444' }
+            $bmSource = if ($script:CliPrivacyMode) { Get-RedactedIdentity ([string]$bm.source) 'SOURCE' } else { [string]$bm.source }
+            $bmSourceFile = if ($script:CliPrivacyMode) { Get-RedactedIdentity ([string]$bm.source_file) 'PATH' } else { [string]$bm.source_file }
             $html += "<div style='background:#1e293b;border-radius:4px;padding:12px;margin:8px 0;border:1px solid #334155'>`n"
             $html += "<div style='display:flex;align-items:center;gap:12px;margin-bottom:8px'>"
-            $html += "<span style='font-size:15px;font-weight:600;color:#e2e8f0'>$([System.Net.WebUtility]::HtmlEncode($bm.source))</span>"
+            $html += "<span style='font-size:15px;font-weight:600;color:#e2e8f0'>$([System.Net.WebUtility]::HtmlEncode($bmSource))</span>"
             $html += "<span style='font-size:22px;font-weight:700;color:$bmColor'>${bmScore}%</span>"
             $html += "<span style='color:#94a3b8;font-size:11px'>$($bm.summary.pass) pass | $($bm.summary.fail) fail | $($bm.summary.warning) warning | $($bm.summary.not_applicable) N/A of $($bm.summary.total) checks</span></div>`n"
-            if ($bm.benchmark) { $html += "<div style='color:#c4b5fd;font-size:11px;margin-bottom:4px'>Benchmark: $([System.Net.WebUtility]::HtmlEncode($bm.benchmark))$(if($bm.version){" v$([System.Net.WebUtility]::HtmlEncode($bm.version))"})</div>`n" }
-            $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>File: $([System.Net.WebUtility]::HtmlEncode($bm.source_file))</div>`n"
+            if ($bm.benchmark) { $html += "<div style='color:#c4b5fd;font-size:11px;margin-bottom:4px'>Benchmark: $([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $bm.benchmark)))$(if($bm.version){" v$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $bm.version)))"})</div>`n" }
+            $html += "<div style='color:#94a3b8;font-size:11px;margin-bottom:6px'>File: $([System.Net.WebUtility]::HtmlEncode($bmSourceFile))</div>`n"
             $failedBm = @($bm.findings | Where-Object { $_.status -eq 'Fail' })
             if ($failedBm.Count -gt 0) {
                 $html += "<table style='margin-top:8px'><tr><th>ID</th><th>Status</th><th>Severity</th><th>Name</th><th>Expected</th><th>Actual</th></tr>`n"
                 foreach ($f in $failedBm | Select-Object -First 50) {
-                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode($f.id))</td><td style='color:#ef4444'>$([System.Net.WebUtility]::HtmlEncode($f.status))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.severity))</td><td>$([System.Net.WebUtility]::HtmlEncode($f.name))</td><td style='color:#22c55e'>$([System.Net.WebUtility]::HtmlEncode($f.expected))</td><td style='color:#ef4444'>$([System.Net.WebUtility]::HtmlEncode($f.actual))</td></tr>`n"
+                    $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.id)))</td><td style='color:#ef4444'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.status)))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.severity)))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.name)))</td><td style='color:#22c55e'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.expected)))</td><td style='color:#ef4444'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.actual)))</td></tr>`n"
                 }
                 if ($failedBm.Count -gt 50) { $html += "<tr><td colspan='6' style='color:#94a3b8'>... and $($failedBm.Count - 50) more failed checks</td></tr>`n" }
                 $html += "</table>`n"
@@ -11986,7 +12177,7 @@ $(if($script:Branding){
                 $hasAuto = $script:AutoCheckIDs.Contains($id)
                 $wasScanned = $script:ScanTimestamps.Contains($id)
                 if ($hasAuto) { $idHtml += "<span class='scan-auto'>AUTO</span>" }
-                if ($wasScanned) { $idHtml += "<span class='scan-ts'>$($script:ScanTimestamps[$id])</span>" }
+                if ($wasScanned) { $idHtml += "<span class='scan-ts'>$([System.Net.WebUtility]::HtmlEncode([string]$script:ScanTimestamps[$id]))</span>" }
 
                 $notes=ConvertTo-RedactedText $script:NotesBoxes[$id].Text
                 $finds=ConvertTo-RedactedText $script:FindingsBoxes[$id].Text
@@ -12040,8 +12231,8 @@ $(if($script:Branding){
                 }
 
                 $rs5=if($script:RemStatusCombos[$id].SelectedItem){$script:RemStatusCombos[$id].SelectedItem.ToString()}else{'Open'}
-                $assign=[System.Net.WebUtility]::HtmlEncode($script:RemAssignBoxes[$id].Text)
-                $due=[System.Net.WebUtility]::HtmlEncode($script:RemDueBoxes[$id].Text)
+                $assign=[System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $script:RemAssignBoxes[$id].Text))
+                $due=[System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $script:RemDueBoxes[$id].Text))
                 $remHtml="<span class='rem'>$rs5</span>"
                 if($assign){$remHtml+="<div class='rem'>Assigned: $assign</div>"}
                 if($due){$remHtml+="<div class='rem'>Due: $due</div>"}
@@ -12055,13 +12246,13 @@ $(if($script:Branding){
     }
 
     $fwLabel = if ($script:ComplianceTarget -eq 'All') { 'All Frameworks' } else { $script:FrameworkMeta[$script:ComplianceTarget].Name }
-    $ftrBrand = if ($script:Branding.CompanyName) { "$([System.Net.WebUtility]::HtmlEncode($script:Branding.CompanyName)) | " } else { '' }
-    $ftrCustom = if ($script:Branding.FooterText) { "<div style='margin-top:4px;font-style:italic'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.FooterText))</div>" } else { '' }
+    $ftrBrand = if ($reportBranding.CompanyName) { "$([System.Net.WebUtility]::HtmlEncode($reportBranding.CompanyName)) | " } else { '' }
+    $ftrCustom = if ($reportBranding.FooterText) { "<div style='margin-top:4px;font-style:italic'>$([System.Net.WebUtility]::HtmlEncode($reportBranding.FooterText))</div>" } else { '' }
     $ftrContact = ''
-    if ($script:Branding.ContactEmail -or $script:Branding.Website) {
+    if ($reportBranding.ContactEmail -or $reportBranding.Website) {
         $parts = @()
-        if ($script:Branding.ContactEmail) { $parts += "<a href='mailto:$([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactEmail))'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.ContactEmail))</a>" }
-        if ($script:Branding.Website) { $parts += "<a href='$([System.Net.WebUtility]::HtmlEncode($script:Branding.Website))'>$([System.Net.WebUtility]::HtmlEncode($script:Branding.Website))</a>" }
+        if ($reportBranding.ContactEmail) { $parts += "<a href='mailto:$([System.Net.WebUtility]::HtmlEncode($reportBranding.ContactEmail))'>$([System.Net.WebUtility]::HtmlEncode($reportBranding.ContactEmail))</a>" }
+        if ($reportBranding.Website) { $parts += "<a href='$([System.Net.WebUtility]::HtmlEncode($reportBranding.Website))'>$([System.Net.WebUtility]::HtmlEncode($reportBranding.Website))</a>" }
         $ftrContact = "<div style='margin-top:2px'>$($parts -join ' | ')</div>"
     }
     $html += "<div class='ftr'>${ftrBrand}Generated by $([System.Net.WebUtility]::HtmlEncode($script:ProductDisplayName)) | $(Get-Date -Format 'yyyy-MM-dd HH:mm') | Profile: $profName | Framework: $fwLabel | $scannedCount auto-checks on $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $scanTarget 'HOST'))) | Read-Only: $roMode${ftrCustom}${ftrContact}</div></body></html>"
@@ -12077,8 +12268,10 @@ function Export-RunLogJSONL {
         $out = [ordered]@{}
         foreach ($k in $entry.Keys) { $out[$k] = $entry[$k] }
         if ($script:CliPrivacyMode) {
+            $out = ConvertTo-PrivacySafeObject $entry
             if ($out.target) { $out.target = Get-RedactedIdentity $out.target 'HOST' }
             if ($out.error) { $out.error = ConvertTo-RedactedText $out.error }
+            if ($out.msg) { $out.msg = ConvertTo-RedactedText $out.msg }
         }
         $lines.Add(($out | ConvertTo-Json -Depth 5 -Compress))
     }
@@ -12227,13 +12420,13 @@ function Get-AuditExceptions {
         }
         $out += [ordered]@{
             id          = $f.id
-            label       = $f.text
+            label       = ConvertTo-RedactedText $f.text
             severity    = $f.severity
             status      = $f.status
             disposition = $status
-            owner       = if ($f.remediation) { [string]$f.remediation.assigned } else { '' }
-            expiration  = if ($f.remediation) { [string]$f.remediation.due } else { '' }
-            rationale   = [string]$f.notes
+            owner       = if ($f.remediation) { ConvertTo-RedactedText $f.remediation.assigned } else { '' }
+            expiration  = if ($f.remediation) { ConvertTo-RedactedText $f.remediation.due } else { '' }
+            rationale   = ConvertTo-RedactedText $f.notes
             controls    = $controls
         }
     }
@@ -12367,8 +12560,8 @@ function Export-FindingsJSON {
                 notes         = ConvertTo-RedactedText $rawNotes
                 remediation   = [ordered]@{
                     status   = $rs
-                    assigned = if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' }
-                    due      = if ($script:RemDueBoxes[$id]) { $script:RemDueBoxes[$id].Text } else { '' }
+                    assigned = if ($script:RemAssignBoxes[$id]) { ConvertTo-RedactedText $script:RemAssignBoxes[$id].Text } else { '' }
+                    due      = if ($script:RemDueBoxes[$id]) { ConvertTo-RedactedText $script:RemDueBoxes[$id].Text } else { '' }
                 }
                 compliance    = $compObj
                 mitre_attack  = $mitreObj
@@ -12415,6 +12608,48 @@ function Export-FindingsJSON {
     }
 
     $privacyFlag = $script:CliPrivacyMode
+    $exportBranding = Get-PrivacySafeBranding $script:Branding
+    $exportWriteManifest = if ($privacyFlag) {
+        @($script:WriteManifest | ForEach-Object {
+            [ordered]@{
+                action_id = ConvertTo-RedactedText $_.action_id
+                provider = ConvertTo-RedactedText $_.provider
+                destination = Get-RedactedIdentity ([string]$_.destination) 'PATH'
+                risk_tier = $_.risk_tier
+                requires_admin = $_.requires_admin
+                allowed = $_.allowed
+                attempted = $_.attempted
+                succeeded = $_.succeeded
+                skip_reason = ConvertTo-RedactedText $_.skip_reason
+                error = if ($_.error) { '[ERROR-REDACTED]' } else { '' }
+                rollback_hint = ConvertTo-RedactedText $_.rollback_hint
+            }
+        })
+    } else { @($script:WriteManifest) }
+    $exportContinuous = if ($script:HistoryResult) {
+        $alertPayload = $script:HistoryResult.alert_payload
+        if ($privacyFlag -and $alertPayload) {
+            $alertPayload = ConvertTo-PrivacySafeObject $alertPayload
+            if ($alertPayload.client) { $alertPayload.client = Get-RedactedIdentity $alertPayload.client 'CLIENT' }
+            if ($alertPayload.target) { $alertPayload.target = Get-RedactedIdentity $alertPayload.target 'HOST' }
+        }
+        [ordered]@{
+            run_id = $script:HistoryResult.run_id
+            had_baseline = $script:HistoryResult.had_baseline
+            baseline_age_days = $script:HistoryResult.baseline_age_days
+            schema_compatible = $script:HistoryResult.schema_compatible
+            identity_compatible = $script:HistoryResult.identity_compatible
+            identity_error = ConvertTo-RedactedText $script:HistoryResult.identity_error
+            snapshot_persisted = $script:HistoryResult.snapshot_persisted
+            baseline_persisted = $script:HistoryResult.baseline_persisted
+            history_persisted = $script:HistoryResult.history_persisted
+            persistence_succeeded = $script:HistoryResult.persistence_succeeded
+            persistence_errors = @($script:HistoryResult.persistence_errors | ForEach-Object { ConvertTo-RedactedText $_ })
+            delta = $script:HistoryResult.delta
+            exposure = $script:HistoryResult.exposure
+            alert_payload = $alertPayload
+        }
+    } else { $null }
     $export = [ordered]@{
         schema_version = $script:SchemaVersion
         tool           = $script:ProductShortName
@@ -12433,13 +12668,13 @@ function Export-FindingsJSON {
             join_type   = $script:Env.JoinType
             intune      = $script:Env.IntuneManaged
         }
-        branding       = if ($script:Branding) {
+        branding       = if ($exportBranding) {
             [ordered]@{
-                company_name  = $script:Branding.CompanyName
-                contact_name  = $script:Branding.ContactName
-                contact_email = $script:Branding.ContactEmail
-                website       = $script:Branding.Website
-                has_logo      = [bool]$script:Branding.LogoData
+                company_name  = $exportBranding.CompanyName
+                contact_name  = $exportBranding.ContactName
+                contact_email = $exportBranding.ContactEmail
+                website       = $exportBranding.Website
+                has_logo      = [bool]$exportBranding.LogoData
             }
         } else { $null }
         score          = [ordered]@{
@@ -12450,7 +12685,7 @@ function Export-FindingsJSON {
         compliance_frameworks = $fwStatus
         framework_provenance = $fwProvenance
         run_log_summary = Get-RunLogSummary
-        run_log = @(if ($script:CliPrivacyMode) { foreach ($rl in $script:RunLog) { $o=[ordered]@{}; foreach($k in $rl.Keys){$o[$k]=$rl[$k]}; if($o.target){$o.target=Get-RedactedIdentity $o.target 'HOST'}; if($o.error){$o.error=ConvertTo-RedactedText $o.error}; $o } } else { $script:RunLog })
+        run_log = @(if ($script:CliPrivacyMode) { foreach ($rl in $script:RunLog) { $o=ConvertTo-PrivacySafeObject $rl; if($o.target){$o.target=Get-RedactedIdentity $o.target 'HOST'}; if($o.error){$o.error=ConvertTo-RedactedText $o.error}; $o } } else { $script:RunLog })
         writes = [ordered]@{
             read_only           = $script:ReadOnlyMode
             write_manifest_only = $script:CliWriteManifestOnly
@@ -12459,7 +12694,7 @@ function Export-FindingsJSON {
             intended_count      = @($script:WriteManifest).Count
             any_attempted       = [bool](@($script:WriteManifest | Where-Object { $_.attempted }).Count -gt 0)
             any_succeeded       = [bool](@($script:WriteManifest | Where-Object { $_.succeeded }).Count -gt 0)
-            manifest            = @($script:WriteManifest)
+            manifest            = $exportWriteManifest
         }
         findings_count = [ordered]@{
             total    = $findings.Count
@@ -12481,17 +12716,7 @@ function Export-FindingsJSON {
         framework_controls = if ($script:CliProfile -and $script:FrameworkMeta -and $script:FrameworkMeta.Contains($script:CliProfile)) {
             Get-FrameworkControlSummary -Framework $script:CliProfile -Findings $findings
         } else { $null }
-        continuous = if ($script:HistoryResult) {
-            [ordered]@{
-                run_id              = $script:HistoryResult.run_id
-                had_baseline        = $script:HistoryResult.had_baseline
-                baseline_age_days   = $script:HistoryResult.baseline_age_days
-                schema_compatible   = $script:HistoryResult.schema_compatible
-                delta               = $script:HistoryResult.delta
-                exposure            = $script:HistoryResult.exposure
-                alert_payload       = $script:HistoryResult.alert_payload
-            }
-        } else { $null }
+        continuous = $exportContinuous
         findings       = $findings
         cloud_assessments = if ($script:CloudAssessmentImports.Count -gt 0) {
             @($script:CloudAssessmentImports | ForEach-Object {
@@ -12543,10 +12768,12 @@ function Export-FindingsJSON {
         benchmark_imports = if ($script:BenchmarkImports.Count -gt 0) {
             @($script:BenchmarkImports | ForEach-Object {
                 [ordered]@{
-                    source = $_.source; source_file = $_.source_file; benchmark = $_.benchmark
-                    version = $_.version; timestamp = $_.timestamp
-                    summary = $_.summary
-                    findings = @($_.findings)
+                    source = if ($privacyFlag) { Get-RedactedIdentity ([string]$_.source) 'SOURCE' } else { $_.source }
+                    source_file = if ($privacyFlag) { Get-RedactedIdentity ([string]$_.source_file) 'PATH' } else { $_.source_file }
+                    benchmark = ConvertTo-RedactedText $_.benchmark
+                    version = ConvertTo-RedactedText $_.version; timestamp = $_.timestamp
+                    summary = if ($privacyFlag) { ConvertTo-PrivacySafeObject $_.summary } else { $_.summary }
+                    findings = if ($privacyFlag) { @($_.findings | ForEach-Object { ConvertTo-PrivacySafeObject $_ }) } else { @($_.findings) }
                 }
             })
         } else { @() }
@@ -12623,8 +12850,8 @@ function Export-FindingsJSONL {
                 evidence_truncated = $evidenceTruncated
                 evidence_original_length = $evidenceText.Length
                 remediation_status = $rs
-                remediation_assigned = if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' }
-                remediation_due = if ($script:RemDueBoxes[$id]) { $script:RemDueBoxes[$id].Text } else { '' }
+                remediation_assigned = if ($script:RemAssignBoxes[$id]) { ConvertTo-RedactedText $script:RemAssignBoxes[$id].Text } else { '' }
+                remediation_due = if ($script:RemDueBoxes[$id]) { ConvertTo-RedactedText $script:RemDueBoxes[$id].Text } else { '' }
                 nist_csf        = ''
                 cis_controls    = ''
                 hipaa           = ''
@@ -12717,8 +12944,8 @@ function Export-OCSFFindings {
             if ($sv -eq 'Pass' -or $sv -eq 'Not Assessed' -or $sv -eq 'N/A') { continue }
             $mitreData = if ($script:MitreMap.Contains($id)) { $script:MitreMap[$id] } else { $null }
             $d3fendData = if ($script:D3FendMap.Contains($id)) { $script:D3FendMap[$id] } else { $null }
-            $findingsText = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
-            $evidenceText = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
+            $findingsText = if ($script:FindingsBoxes[$id]) { ConvertTo-RedactedText $script:FindingsBoxes[$id].Text } else { '' }
+            $evidenceText = if ($script:EvidenceBoxes[$id]) { ConvertTo-RedactedText $script:EvidenceBoxes[$id].Text } else { '' }
             $sevId = if ($sevMap.ContainsKey($item.Severity)) { $sevMap[$item.Severity] } else { 0 }
             $statusId = if ($statusMap.ContainsKey($sv)) { $statusMap[$sv] } else { 0 }
             $checkTs = if ($script:ScanTimestamps.Contains($id)) { try { [datetime]::ParseExact($script:ScanTimestamps[$id],'yyyy-MM-dd HH:mm:ss',$null).ToUniversalTime().ToString('o') } catch { $scanTs } } else { $scanTs }
@@ -12814,8 +13041,8 @@ function Export-OSCALResults {
         foreach ($item in $cat.Items) {
             $id = $item.ID
             $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
-            $findingsText = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
-            $evidenceText = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
+            $findingsText = if ($script:FindingsBoxes[$id]) { ConvertTo-RedactedText $script:FindingsBoxes[$id].Text } else { '' }
+            $evidenceText = if ($script:EvidenceBoxes[$id]) { ConvertTo-RedactedText $script:EvidenceBoxes[$id].Text } else { '' }
             $fwData = if ($script:FrameworkMap.Contains($id)) { $script:FrameworkMap[$id] } else { $null }
 
             $obsUuid = [guid]::NewGuid().ToString()
@@ -13026,8 +13253,8 @@ function Export-FindingsCSV {
                 Evidence         = ConvertTo-CsvSafeText (ConvertTo-RedactedText $(if ($script:EvidenceBoxes[$id]) { ($script:EvidenceBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }))
                 Notes            = ConvertTo-CsvSafeText (ConvertTo-RedactedText $(if ($script:NotesBoxes[$id]) { ($script:NotesBoxes[$id].Text -replace "`r?`n",' ;; ') } else { '' }))
                 RemStatus        = ConvertTo-CsvSafeText $rs
-                RemAssigned      = ConvertTo-CsvSafeText $(if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' })
-                RemDue           = ConvertTo-CsvSafeText $(if ($script:RemDueBoxes[$id]) { $script:RemDueBoxes[$id].Text } else { '' })
+                RemAssigned      = ConvertTo-CsvSafeText (ConvertTo-RedactedText $(if ($script:RemAssignBoxes[$id]) { $script:RemAssignBoxes[$id].Text } else { '' }))
+                RemDue           = ConvertTo-CsvSafeText (ConvertTo-RedactedText $(if ($script:RemDueBoxes[$id]) { $script:RemDueBoxes[$id].Text } else { '' }))
                 NIST_CSF         = ConvertTo-CsvSafeText $nistCsf
                 CIS_Controls     = ConvertTo-CsvSafeText $cisCtrl
                 HIPAA            = ConvertTo-CsvSafeText $hipaaRef
@@ -13262,7 +13489,7 @@ function Export-SARIF {
                 }
             }
             if ($sv -eq 'Fail' -or $sv -eq 'Partial') {
-                $findings = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
+                $findings = if ($script:FindingsBoxes[$id]) { ConvertTo-RedactedText $script:FindingsBoxes[$id].Text } else { '' }
                 $results += [ordered]@{
                     ruleId = $id
                     level = if ($sv -eq 'Fail') { switch($item.Severity) { 'Critical'{'error'} 'High'{'error'} default{'warning'} } } else { 'warning' }
@@ -14098,13 +14325,24 @@ if ($script:SilentMode) {
             Write-Host ""
             Write-Host "[Silent Mode] CONTINUOUS DELTA" -ForegroundColor Cyan
             if (-not $histResult.had_baseline) {
-                Write-Host "[Silent Mode]   Baseline established (first run). History: $($histResult.history_dir)"
+                if ($histResult.persistence_succeeded) {
+                    Write-Host "[Silent Mode]   Baseline established (first run). History: $($histResult.history_dir)"
+                } else {
+                    Write-Host "[Silent Mode]   Baseline/history persistence failed; no durable baseline was established." -ForegroundColor Yellow
+                }
+            } elseif (-not $histResult.identity_compatible) {
+                Write-Host "[Silent Mode]   Baseline client/target identity mismatch; delta skipped. $($histResult.identity_error)" -ForegroundColor Yellow
             } elseif (-not $histResult.schema_compatible) {
                 Write-Host "[Silent Mode]   Baseline schema/catalog changed - delta skipped; new baseline written." -ForegroundColor Yellow
+            } elseif (-not $histResult.delta) {
+                Write-Host "[Silent Mode]   Delta unavailable; comparison was not performed." -ForegroundColor Yellow
             } else {
                 $d = $histResult.delta
                 Write-Host "[Silent Mode]   vs baseline (age $($histResult.baseline_age_days)d): score delta $($d.score_delta.overall), new criticals $($d.new_criticals), resolved criticals $($d.resolved_criticals)"
                 Write-Host "[Silent Mode]   New fail: $($d.counts.new_failure) | Resolved: $($d.counts.resolved) | Worsened: $($d.counts.worsened) | Improved: $($d.counts.improved) | Unavailable: $($d.counts.unavailable)"
+            }
+            if (-not $histResult.persistence_succeeded) {
+                Write-Host "[Silent Mode]   WARNING: history persistence incomplete; see persistence_errors in the findings export." -ForegroundColor Yellow
             }
             $critExp = @($histResult.exposure.GetEnumerator() | Where-Object { $_.Value.severity -eq 'Critical' } | Sort-Object { $_.Value.days } -Descending)
             if ($critExp.Count -gt 0) { Write-Host "[Silent Mode]   Worst critical exposure: $($critExp[0].Value.days)d ($($critExp[0].Key))" }

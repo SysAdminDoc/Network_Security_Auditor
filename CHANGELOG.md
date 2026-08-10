@@ -10,6 +10,8 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: C# external exports now emit the documented OCSF 1.8.0, OSCAL 1.2.2, and ATT&CK Enterprise 19.1 metadata; Intune STIG CSV evidence is emitted as its own rectangular artifact.
 - Fixed: C# PDF export stages generated output and atomically replaces the destination only after a non-empty PDF is produced.
 - Fixed: C# privacy exports now redact structured JSON/YAML/header secrets and strip identifying branding fields from silent HTML output while retaining normal-mode branding.
+- Fixed: PowerShell continuous history now separates default baselines by client and target, rejects identity-mismatched comparisons, atomically persists snapshots, and reports locked/failed writes in console and JSON output.
+- Fixed: PowerShell privacy exports now recursively redact structured secrets, remediation/benchmark/write metadata, and identifying branding across HTML, JSON, JSONL, and CSV outputs.
 
 ## [v5.3.3 / v4.11.4] - 2026-08-09
 

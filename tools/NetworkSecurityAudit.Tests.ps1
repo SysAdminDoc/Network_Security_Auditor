@@ -414,7 +414,7 @@ Describe 'Cloud Graph profile manifest' {
 Describe 'Privacy redaction coverage' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        foreach ($nm in 'Get-PrivacyHash','Initialize-PrivacyReplacements','ConvertTo-RedactedText','Get-RedactedIdentity') {
+        foreach ($nm in 'Get-PrivacyHash','Initialize-PrivacyReplacements','ConvertTo-RedactedText','Get-RedactedIdentity','ConvertTo-PrivacySafeObject','Get-PrivacySafeBranding') {
             $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
             . ([scriptblock]::Create($fn.Extent.Text))
         }
@@ -447,6 +447,104 @@ Describe 'Privacy redaction coverage' {
         $redacted | Should -Match 'Bearer \[SECRET-REDACTED\]'
         $pathRedacted | Should -Match '^\[PATH-[0-9a-f]{8}\]$'
         (Get-RedactedIdentity $script:CloudAssessmentImports[0].TenantId 'TENANT') | Should -Match '^\[TENANT-[0-9a-f]{8}\]$'
+    }
+
+    It 'redacts structured secrets and recursively sanitizes imported objects' {
+        Initialize-PrivacyReplacements
+        $value = [ordered]@{
+            owner = 'Acme Tenant'
+            credentials = [ordered]@{ client_secret = 'json-secret'; nested = @('token: yaml-secret', 'safe text') }
+        }
+        $safe = ConvertTo-PrivacySafeObject $value
+        $json = $safe | ConvertTo-Json -Depth 8 -Compress
+        $json | Should -Not -Match 'json-secret|yaml-secret'
+        $json | Should -Match '\[SECRET-REDACTED\]'
+        $json | Should -Match '\[TENANT-[0-9a-f]{8}\]'
+    }
+
+    It 'removes identifying branding and contact values from privacy exports' {
+        Initialize-PrivacyReplacements
+        $branding = [ordered]@{
+            CompanyName = 'Acme Secret Company'; Tagline = 'Confidential slogan'; LogoData = 'data:image/png;base64,secret'
+            PrimaryColor = '#123456'; AccentColor = '#abcdef'; ContactName = 'Jane Secret'; ContactEmail = 'jane@secret.example'
+            ContactPhone = '555-0100'; Website = 'https://secret.example'; FooterText = 'Acme footer'; CoverPage = $true
+        }
+        $safe = Get-PrivacySafeBranding $branding
+        $safe.CompanyName | Should -Match '^\[COMPANY-[0-9a-f]{8}\]$'
+        $safe.Tagline | Should -Be ''
+        $safe.LogoData | Should -Be ''
+        $safe.ContactName | Should -Be ''
+        $safe.ContactEmail | Should -Be ''
+        $safe.Website | Should -Be ''
+        $safe.FooterText | Should -Be ''
+        $safe.CoverPage | Should -BeFalse
+    }
+
+    It 'preserves branding details when privacy mode is disabled' {
+        $script:CliPrivacyMode = $false
+        $branding = [ordered]@{ CompanyName = 'Acme'; ContactEmail = 'jane@acme.example'; LogoData = 'logo'; CoverPage = $true }
+        $safe = Get-PrivacySafeBranding $branding
+        $safe.CompanyName | Should -Be 'Acme'
+        $safe.ContactEmail | Should -Be 'jane@acme.example'
+        $safe.LogoData | Should -Be 'logo'
+        $safe.CoverPage | Should -BeTrue
+    }
+}
+
+Describe 'Multi-client dashboard output safety' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Export-MultiClientDashboard' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+        $script:ProductName = 'Network Security Auditor'
+        $script:ProductVersion = 'test'
+    }
+
+    It 'HTML-encodes untrusted client fields, grades, categories, and report hrefs' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('nsa-dashboard-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        try {
+            $jsonName = "client' onmouseover='alert(1)_findings.json"
+            $jsonPath = Join-Path $root $jsonName
+            $htmlPath = $jsonPath -replace '_findings\.json$','.html'
+            Set-Content -LiteralPath $htmlPath -Value '<html></html>' -Encoding UTF8
+            $doc = [ordered]@{
+                export_type = 'structured_findings'
+                timestamp = (Get-Date).ToString('o')
+                client = '<img src=x onerror=alert(1)>'
+                target = '</div><script>alert(2)</script>'
+                score = [ordered]@{ overall = 75; grade = '</td><script>alert(3)</script>'; ransomware = [ordered]@{ score = 65; grade = "bad' onmouseover='alert(4)" } }
+                findings = @([ordered]@{ status = 'Fail'; severity = 'Critical'; category = '<svg onload=alert(5)>' })
+                compliance_frameworks = [ordered]@{ NIST = [ordered]@{ compliant = $false } }
+                tool_version = 'test'
+            }
+            $doc | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+            $outPath = Join-Path $root 'dashboard.html'
+
+            Export-MultiClientDashboard -SourceDir $root -OutPath $outPath | Should -Be $outPath
+            $html = Get-Content -LiteralPath $outPath -Raw
+            $html | Should -Not -Match '<(?:img|svg|script)\b'
+            $html | Should -Not -Match "href='[^']*'\s+onmouseover="
+            $html | Should -Match '&#39;'
+            $html | Should -Match '&lt;script&gt;'
+        }
+        finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
+}
+
+Describe 'Saved timestamp validation' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'ConvertTo-SafeScanTime' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+    }
+
+    It 'normalizes valid invariant timestamps and rejects markup' {
+        ConvertTo-SafeScanTime '2026-08-10T14:30:00' | Should -Be '2026-08-10 14:30:00'
+        ConvertTo-SafeScanTime '<script>alert(1)</script>' | Should -Be ''
+        $script:Text | Should -Match 'HtmlEncode\(\[string\]\$script:ScanTimestamps\[\$id\]\)'
     }
 }
 
@@ -514,7 +612,7 @@ Describe 'Write gate behavior (real functions via AST)' {
 Describe 'Evidence-grade compliance helpers (real functions via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        foreach ($nm in 'Get-CheckEvidenceMetadata','Test-ManualEvidenceRequired','Get-AuditExceptions','Get-FrameworkControlSummary') {
+        foreach ($nm in 'Get-CheckEvidenceMetadata','Test-ManualEvidenceRequired','ConvertTo-RedactedText','Get-AuditExceptions','Get-FrameworkControlSummary') {
             $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
             . ([scriptblock]::Create($fn.Extent.Text))
         }
@@ -636,7 +734,7 @@ Describe 'Fleet orchestration safeguards' {
 Describe 'Continuous delta engine (real functions via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        foreach ($nm in 'Compare-AuditSnapshot','Update-ExposureWindows','Get-AuditAlertPayload') {
+        foreach ($nm in 'Test-AuditSnapshotIdentity','Compare-AuditSnapshot','Update-ExposureWindows','Get-AuditAlertPayload') {
             $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
             . ([scriptblock]::Create($fn.Extent.Text))
         }
@@ -667,6 +765,16 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $prev = [ordered]@{ schema_version='2.0'; findings=[ordered]@{} }
         $curr = [ordered]@{ schema_version='2.1'; findings=[ordered]@{} }
         (Compare-AuditSnapshot -Previous $prev -Current $curr).schema_compatible | Should -BeFalse
+    }
+    It 'refuses to compare snapshots from different clients or targets' {
+        $prev = [ordered]@{ schema_version='2.1'; client='Acme'; target='DC01'; score=@{ overall=50; ransomware=40 }; findings=[ordered]@{ IA01=(F 'Fail' 'Critical' 'old') } }
+        $curr = [ordered]@{ schema_version='2.1'; client='Acme'; target='DC02'; score=@{ overall=80; ransomware=70 }; findings=[ordered]@{ IA01=(F 'Pass' 'Critical' 'new') } }
+        $d = Compare-AuditSnapshot -Previous $prev -Current $curr
+        $d.schema_compatible | Should -BeTrue
+        $d.identity_compatible | Should -BeFalse
+        $d.identity_error | Should -Match 'target differs'
+        @($d.states.NewFailure).Count | Should -Be 0
+        $d.score_delta.overall | Should -BeNullOrEmpty
     }
     It 'carries the exposure first-seen timestamp forward for still-failing findings' {
         $prevExp = @{ IA01 = @{ first_seen='2026-06-01T00:00:00.0000000'; days=0; severity='Critical' } }
@@ -705,6 +813,38 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $d.states.Resolved   | Should -Be @('IA01')   # IA01 Fail -> Pass
         $d.states.NewFailure | Should -Be @('IA02')   # IA02 Pass -> Fail
         $d.resolved_criticals | Should -Be 1          # IA01 is Critical
+    }
+}
+
+Describe 'History persistence helpers (real functions via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Write-HistoryJsonFile','Append-HistoryLine') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+
+    It 'replaces JSON atomically and appends complete JSONL records' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('nsa-history-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        try {
+            $jsonPath = Join-Path $root 'latest.snapshot.json'
+            Write-HistoryJsonFile -Path $jsonPath -Value ([ordered]@{ version = 1 }) | Should -BeTrue
+            Write-HistoryJsonFile -Path $jsonPath -Value ([ordered]@{ version = 2 }) | Should -BeTrue
+            (Get-Content -LiteralPath $jsonPath -Raw | ConvertFrom-Json).version | Should -Be 2
+            @(Get-ChildItem -LiteralPath $root -Filter '*.tmp' -File) | Should -BeNullOrEmpty
+
+            $historyPath = Join-Path $root 'history.jsonl'
+            Append-HistoryLine -Path $historyPath -Line '{"run":1}'
+            Append-HistoryLine -Path $historyPath -Line '{"run":2}'
+            $lines = @(Get-Content -LiteralPath $historyPath)
+            $lines.Count | Should -Be 2
+            ($lines | ForEach-Object { ($_ | ConvertFrom-Json).run }) | Should -Be @(1,2)
+        }
+        finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
     }
 }
 

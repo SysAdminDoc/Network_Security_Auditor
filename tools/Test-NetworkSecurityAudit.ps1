@@ -440,9 +440,9 @@ if ($scriptText -notmatch '\$meta\.Job\.PSEndTime' -or
     $scriptText -match '\.score -gt 0') {
     Add-Failure 'Fleet summaries must classify only stopped jobs as timed out and include 0 percent scored hosts in aggregates.'
 }
-if ($scriptText -notmatch '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterText\)\s*\{\s*\[System\.Net\.WebUtility\]::HtmlEncode\(\$script:Branding\.FooterText\)\s*\}' -or
-    $scriptText -match '\$brandedSub\s*=\s*if\s*\(\$script:Branding\.FooterText\)\s*\{\s*\$script:Branding\.FooterText\s*\}') {
-    Add-Failure 'HTML report branded subtitle must HTML-encode Branding.FooterText.'
+if ($scriptText -notmatch '\$brandedSub\s*=\s*if\s*\(\$reportBranding\.FooterText\)' -or
+    $scriptText -notmatch 'HtmlEncode\(\$reportBranding\.FooterText\)') {
+    Add-Failure 'HTML report branded subtitle must HTML-encode the privacy-safe branding footer.'
 }
 if ($scriptText -notmatch 'function Test-BrandingLogoDataUri' -or
     $scriptText -notmatch 'function Get-BrandingLogoMime' -or

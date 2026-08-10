@@ -601,8 +601,8 @@ review dates, supported OS/builds, check coverage, and stale-review windows.
 -StaleDays           Dashboard mode: scans older than this many days are
                      flagged stale. Default: 30
 -HistoryPath         Continuous mode: directory for history.jsonl, snapshots,
-                     and the baseline. Default: a per-client folder next to the
-                     report output
+                     and the baseline. Default: a per-client-and-target folder
+                     with stable identity suffixes next to the report output
 -BaselinePath        Explicit baseline snapshot to compare this run against.
                      Default: the history folder's latest snapshot
 -NoHistory           Disable continuous delta/history entirely
