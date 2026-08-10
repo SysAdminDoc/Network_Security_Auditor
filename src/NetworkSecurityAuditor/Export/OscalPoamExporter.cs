@@ -22,7 +22,8 @@ public static class OscalPoamExporter
     public static string Export(
         IEnumerable<CheckItemViewModel> checks,
         EnvironmentInfo env,
-        IReadOnlyDictionary<string, RiskWaiver>? activeWaivers = null)
+        IReadOnlyDictionary<string, RiskWaiver>? activeWaivers = null,
+        IReadOnlyList<RiskWaiver>? waiverHistory = null)
     {
         var timestamp = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
         var toolPartyUuid = OscalIds.Party("tool", "Network Security Auditor");
@@ -66,7 +67,11 @@ public static class OscalPoamExporter
                 Prop("evidence-mode", check.EvidenceMode.ToString()),
                 Prop("waiver-status", acceptedRisk ? "active" : "none")
             };
-            AddWaiverProps(riskProps, waiver);
+            var checkWaiverHistory = waiverHistory?
+                .Where(item => item.CheckId.Equals(check.Id, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(item => item.LastActivityDate)
+                .ToList();
+            AddWaiverProps(riskProps, waiver, checkWaiverHistory);
 
             risks.Add(new
             {
@@ -100,7 +105,7 @@ public static class OscalPoamExporter
                 Prop("risk-uuid", riskUuid),
                 Prop("waiver-status", acceptedRisk ? "active" : "none")
             };
-            AddWaiverProps(itemProps, waiver);
+            AddWaiverProps(itemProps, waiver, checkWaiverHistory);
 
             string[]? responsiblePartyUuids = null;
             if (!string.IsNullOrWhiteSpace(check.RemediationAssignee))
@@ -181,16 +186,73 @@ public static class OscalPoamExporter
         return (activeWaivers?.ContainsKey(check.Id) ?? false) || HasAcceptedRiskNote(check);
     }
 
-    private static void AddWaiverProps(List<object> props, RiskWaiver? waiver)
+    private static void AddWaiverProps(
+        List<object> props,
+        RiskWaiver? waiver,
+        IReadOnlyList<RiskWaiver>? waiverHistory)
     {
         if (waiver is null)
+        {
+            AddWaiverHistoryProps(props, waiverHistory);
             return;
+        }
 
         props.Add(Prop("waiver-justification", waiver.Justification));
         props.Add(Prop("waiver-approved-by", waiver.ApprovedBy));
         props.Add(Prop("waiver-approved-date", waiver.ApprovedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+        props.Add(Prop("waiver-disposition-status", waiver.EffectiveStatus.ToString().ToLowerInvariant()));
+        props.Add(Prop("waiver-scope", waiver.Scope));
+        if (waiver.RecertificationDate is { } recertification)
+            props.Add(Prop("waiver-recertification-date", recertification.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
         if (waiver.ExpirationDate is { } expiration)
             props.Add(Prop("waiver-expiration-date", expiration.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+        if (waiver.Events.Count > 0)
+        {
+            props.Add(new
+            {
+                name = "waiver-events",
+                value = waiver.Events.Select(evt => new
+                {
+                    eventType = evt.EventType,
+                    fromStatus = evt.FromStatus.ToString(),
+                    toStatus = evt.ToStatus.ToString(),
+                    actor = evt.Actor,
+                    occurredAt = evt.OccurredAt.ToString("O", CultureInfo.InvariantCulture),
+                    reason = evt.Reason
+                }).ToArray()
+            });
+        }
+
+        AddWaiverHistoryProps(props, waiverHistory);
+    }
+
+    private static void AddWaiverHistoryProps(List<object> props, IReadOnlyList<RiskWaiver>? waiverHistory)
+    {
+        if (waiverHistory is null || waiverHistory.Count == 0)
+            return;
+
+        props.Add(new
+        {
+            name = "waiver-history",
+            value = waiverHistory.Select(item => new
+            {
+                status = item.EffectiveStatus.ToString(),
+                scope = item.Scope,
+                approvedBy = item.ApprovedBy,
+                approvedDate = item.ApprovedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                expirationDate = item.ExpirationDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                recertificationDate = item.RecertificationDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                events = item.Events.Select(evt => new
+                {
+                    eventType = evt.EventType,
+                    fromStatus = evt.FromStatus.ToString(),
+                    toStatus = evt.ToStatus.ToString(),
+                    actor = evt.Actor,
+                    occurredAt = evt.OccurredAt.ToString("O", CultureInfo.InvariantCulture),
+                    reason = evt.Reason
+                }).ToArray()
+            }).ToArray()
+        });
     }
 
     private static string BuildRemediationText(CheckItemViewModel check, RiskWaiver? waiver, bool acceptedRisk)

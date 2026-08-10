@@ -519,6 +519,7 @@ Optional for full coverage:
 - RMM field writes are limited to the configured RMM integration paths documented below.
 - Use `-NoRmmWrite` in silent mode when reports should be generated without updating RMM fields.
 - Use `-NoRegistryWrite` when registry-backed RMM/cache writes should be suppressed while command-based RMM integrations remain available.
+- C# waiver files use schema 2.0 with append-only disposition history. Only the latest `Approved` and unexpired record suppresses scoring; `Proposed`, `Rejected`, `Revoked`, and expired records remain visible for audit history and OSCAL POA&M export. Version 1 waiver files migrate without losing justification, approver, or dates.
 - `-BrandingConfig` warns when the file is missing, accepts logo data only as a supported `data:image/...;base64` URI or supported image path, and only renders website links when they are absolute `http://` or `https://` URLs.
 - The script does not auto-update or replace itself.
 - In sensitive environments, download the script first, inspect it, and verify the checksum before running.

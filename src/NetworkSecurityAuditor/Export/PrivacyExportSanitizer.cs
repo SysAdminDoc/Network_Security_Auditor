@@ -93,21 +93,46 @@ public static class PrivacyExportSanitizer
             return new Dictionary<string, RiskWaiver>(StringComparer.OrdinalIgnoreCase);
 
         var waivers = new Dictionary<string, RiskWaiver>(StringComparer.OrdinalIgnoreCase);
-        foreach (var waiver in waiverStore.Waivers.Where(w => w.IsActive))
+        foreach (var checkId in waiverStore.Waivers.Select(w => w.CheckId).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            waivers[waiver.CheckId] = redactor.IsEnabled
-                ? new RiskWaiver
-                {
-                    CheckId = waiver.CheckId,
-                    Justification = redactor.Redact(waiver.Justification),
-                    ApprovedBy = redactor.Redact(waiver.ApprovedBy),
-                    ApprovedDate = waiver.ApprovedDate,
-                    ExpirationDate = waiver.ExpirationDate
-                }
-                : waiver;
+            var waiver = waiverStore.GetActive(checkId);
+            if (waiver is not null)
+                waivers[waiver.CheckId] = RedactWaiver(waiver, redactor);
         }
 
         return waivers;
+    }
+
+    public static IReadOnlyList<RiskWaiver> RedactWaiverHistory(
+        WaiverStore? waiverStore,
+        PrivacyRedactor redactor)
+    {
+        return waiverStore?.Waivers.Select(waiver => RedactWaiver(waiver, redactor)).ToList()
+            ?? [];
+    }
+
+    private static RiskWaiver RedactWaiver(RiskWaiver waiver, PrivacyRedactor redactor)
+    {
+        return new RiskWaiver
+        {
+            CheckId = waiver.CheckId,
+            Justification = redactor.Redact(waiver.Justification),
+            ApprovedBy = redactor.Redact(waiver.ApprovedBy),
+            ApprovedDate = waiver.ApprovedDate,
+            ExpirationDate = waiver.ExpirationDate,
+            Scope = redactor.Redact(waiver.Scope),
+            RecertificationDate = waiver.RecertificationDate,
+            Status = waiver.Status,
+            Events = waiver.Events.Select(evt => new WaiverEvent
+            {
+                EventType = evt.EventType,
+                FromStatus = evt.FromStatus,
+                ToStatus = evt.ToStatus,
+                Actor = redactor.Redact(evt.Actor),
+                OccurredAt = evt.OccurredAt,
+                Reason = redactor.Redact(evt.Reason)
+            }).ToList()
+        };
     }
 
     public static BrandingConfig? RedactBranding(

@@ -486,6 +486,7 @@ public partial class App : Application
         var exportEnv = PrivacyExportSanitizer.RedactEnvironment(env, redactor);
         var exportChecks = PrivacyExportSanitizer.RedactChecks(checkVms, redactor);
         var exportWaivers = PrivacyExportSanitizer.RedactActiveWaivers(waiverStore, redactor);
+        var exportWaiverHistory = PrivacyExportSanitizer.RedactWaiverHistory(waiverStore, redactor);
         var exportIntuneStigAudit = PrivacyExportSanitizer.RedactIntuneStigAudit(intuneStigAudit, redactor);
         var exportClient = redactor.Redact(options.Client);
         var exportAuditor = redactor.Redact(options.Auditor);
@@ -583,7 +584,7 @@ public partial class App : Application
         if (args.ExportOscalPoam)
         {
             var oscalPoamPath = Path.Combine(outputDir, $"{baseName}_oscal_poam.json");
-            await AtomicFileWriter.WriteAllTextAsync(oscalPoamPath, OscalPoamExporter.Export(exportChecks, exportEnv, exportWaivers));
+            await AtomicFileWriter.WriteAllTextAsync(oscalPoamPath, OscalPoamExporter.Export(exportChecks, exportEnv, exportWaivers, exportWaiverHistory));
             Console.WriteLine($"  OSCAL POA&M: {oscalPoamPath}");
         }
 

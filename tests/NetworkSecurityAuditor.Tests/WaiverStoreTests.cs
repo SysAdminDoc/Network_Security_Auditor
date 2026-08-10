@@ -27,7 +27,7 @@ public class WaiverStoreTests
     }
 
     [Fact]
-    public void Add_Replaces_Existing_By_CheckId()
+    public void Add_Preserves_Previous_Disposition_By_CheckId()
     {
         var store = new WaiverStore();
         store.Add(new RiskWaiver
@@ -45,8 +45,9 @@ public class WaiverStoreTests
             ApprovedDate = DateTime.UtcNow
         });
 
-        Assert.Single(store.Waivers);
-        Assert.Equal("new", store.Waivers[0].Justification);
+        Assert.Equal(2, store.Waivers.Count);
+        Assert.Equal("new", store.GetActive("EP01")!.Justification);
+        Assert.Equal(WaiverDispositionState.Approved, store.Waivers[0].Status);
     }
 
     [Fact]
@@ -168,7 +169,9 @@ public class WaiverStoreTests
         });
 
         store.Remove("EP01");
-        Assert.Empty(store.Waivers);
+        Assert.Single(store.Waivers);
+        Assert.Equal(WaiverDispositionState.Revoked, store.Waivers[0].Status);
+        Assert.Null(store.GetActive("EP01"));
     }
 
     [Fact]
@@ -191,6 +194,8 @@ public class WaiverStoreTests
         Assert.Equal("EP01", restored.Waivers[0].CheckId);
         Assert.Equal("accepted risk", restored.Waivers[0].Justification);
         Assert.Equal("CISO", restored.Waivers[0].ApprovedBy);
+        Assert.Equal(WaiverStore.CurrentSchemaVersion, restored.SchemaVersion);
+        Assert.Contains(restored.Waivers[0].Events, evt => evt.EventType == "LegacyImported");
     }
 
     [Fact]
@@ -282,6 +287,65 @@ public class WaiverStoreTests
 
         Assert.Contains(scoredChecks, check => check.Id == "EP01");
         Assert.Contains(scoredChecks, check => check.Id == "EP02");
+    }
+
+    [Fact]
+    public void Lifecycle_Only_Approved_Unexpired_Disposition_Is_Active()
+    {
+        var waiver = new RiskWaiver
+        {
+            CheckId = "EP01",
+            Justification = "Temporary exception",
+            ApprovedBy = "risk-owner",
+            ApprovedDate = DateTime.UtcNow,
+            Status = WaiverDispositionState.Proposed,
+            RecertificationDate = DateTime.UtcNow.AddDays(30)
+        };
+
+        var store = new WaiverStore();
+        store.Add(waiver);
+        Assert.Null(store.GetActive("EP01"));
+
+        waiver.Transition(WaiverDispositionState.Approved, "ciso", "Approved for the documented exception.");
+        Assert.Same(waiver, store.GetActive("EP01"));
+
+        waiver.Transition(WaiverDispositionState.Revoked, "ciso", "Compensating control was removed.");
+        Assert.Null(store.GetActive("EP01"));
+        Assert.Equal(3, waiver.Events.Count);
+        Assert.All(waiver.Events, evt =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(evt.Actor));
+            Assert.False(string.IsNullOrWhiteSpace(evt.Reason));
+        });
+    }
+
+    [Fact]
+    public void Deserialize_Migrates_VersionOne_Record_Without_Losing_Approval_Data()
+    {
+        var legacy = """
+        {
+          "schema_version": "1.0",
+          "waivers": [
+            {
+              "check_id": "ep01",
+              "justification": "Legacy exception",
+              "approved_by": "CISO",
+              "approved_date": "2026-01-15T00:00:00Z",
+              "expiration_date": "2026-12-31T00:00:00Z"
+            }
+          ]
+        }
+        """;
+
+        var store = WaiverStore.Deserialize(legacy);
+        var waiver = Assert.Single(store.Waivers);
+
+        Assert.Equal(WaiverStore.CurrentSchemaVersion, store.SchemaVersion);
+        Assert.Equal("EP01", waiver.CheckId);
+        Assert.Equal("Legacy exception", waiver.Justification);
+        Assert.Equal("CISO", waiver.ApprovedBy);
+        Assert.Equal(WaiverDispositionState.Approved, waiver.Status);
+        Assert.Contains(waiver.Events, evt => evt.EventType == "LegacyImported");
     }
 
     private static CheckItemViewModel Check(string id, CheckStatus status)

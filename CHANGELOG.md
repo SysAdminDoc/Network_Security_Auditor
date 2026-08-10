@@ -30,6 +30,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: Fleet timeout cleanup now runs as a bounded remoting job with a short grace period, removes duplicate cleanup calls, and records cleanup failure separately from the host audit result.
 - Fixed: PowerShell Graph requests now extract status and Retry-After values from thrown live errors and apply bounded retries to throttling and transient HTTP failures.
 - Added: C# and PowerShell export batches now emit a deterministic data-handling manifest describing privacy mode, identity strategy, field classifications, source-path policy, artifact names, and secret exclusions.
+- Changed: C# waiver files now use a versioned disposition lifecycle with proposed/approved/rejected/revoked/expired states, immutable event history, recertification scope, v1 migration, privacy-safe export, and OSCAL POA&M history fields.
 
 ### Performance
 - Fixed: PowerShell dashboard imports now enforce configurable file-count, per-file-byte, and total-byte budgets and show bounded skip diagnostics in the dashboard.

@@ -647,6 +647,44 @@ public class ExportTests
     }
 
     [Fact]
+    public void Oscal_Poam_Exports_Waiver_Disposition_History()
+    {
+        var check = CheckItemViewModel.FromMetadata(CheckCatalog.All["EP01"]);
+        check.Status = CheckStatus.Fail;
+        check.Findings = "Lifecycle export finding";
+        var env = new EnvironmentInfo { ComputerName = "HOST01" };
+        var store = new WaiverStore();
+        var waiver = new RiskWaiver
+        {
+            CheckId = "EP01",
+            Justification = "Temporary exception",
+            ApprovedBy = "risk-owner",
+            ApprovedDate = DateTime.UtcNow,
+            Scope = "production",
+            RecertificationDate = DateTime.UtcNow.AddDays(30)
+        };
+        store.Add(waiver);
+        waiver.Transition(WaiverDispositionState.Revoked, "ciso", "Control was restored.");
+
+        using var document = JsonDocument.Parse(OscalPoamExporter.Export(
+            [check],
+            env,
+            new Dictionary<string, RiskWaiver>(StringComparer.OrdinalIgnoreCase),
+            store.Waivers));
+        var risk = document.RootElement
+            .GetProperty("plan-of-action-and-milestones")
+            .GetProperty("risks")[0];
+        var history = risk.GetProperty("props")
+            .EnumerateArray()
+            .Single(prop => prop.GetProperty("name").GetString() == "waiver-history")
+            .GetProperty("value");
+
+        Assert.Single(history.EnumerateArray());
+        Assert.Equal("Revoked", history[0].GetProperty("status").GetString());
+        Assert.Equal(2, history[0].GetProperty("events").GetArrayLength());
+    }
+
+    [Fact]
     public async Task Intune_Stig_Import_Flows_Into_Json_Csv_Html_And_Oscal()
     {
         var importPath = Path.Combine(Path.GetTempPath(), "nsa-intune-stig-" + Guid.NewGuid().ToString("N") + ".json");

@@ -77,4 +77,31 @@ public class PrivacyExportSanitizerTests
         Assert.Equal("#abcdef", redacted.AccentColor);
         Assert.False(redacted.ShowCoverPage);
     }
+
+    [Fact]
+    public void Redacts_Waiver_Lifecycle_History_Without_Dropping_Disposition()
+    {
+        var store = new WaiverStore();
+        var waiver = new RiskWaiver
+        {
+            CheckId = "EP01",
+            Justification = "Tenant-specific exception for Acme",
+            ApprovedBy = "risk.owner@secret.example",
+            ApprovedDate = DateTime.UtcNow,
+            Scope = "Acme production hosts"
+        };
+        store.Add(waiver);
+        waiver.Transition(WaiverDispositionState.Revoked, "ciso@secret.example", "Compensating control was removed.");
+
+        var redacted = PrivacyExportSanitizer.RedactWaiverHistory(
+            store,
+            new PrivacyRedactor(true, userName: "risk.owner@secret.example", clientName: "Acme production", tenantName: "secret.example"));
+        var copy = Assert.Single(redacted);
+
+        Assert.Equal(WaiverDispositionState.Revoked, copy.Status);
+        Assert.DoesNotContain("secret.example", copy.ApprovedBy, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret.example", copy.Events[1].Actor, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Acme production", copy.Scope, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, copy.Events.Count);
+    }
 }
