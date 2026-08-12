@@ -225,6 +225,16 @@ public class CliArgsTests
     }
 
     [Fact]
+    public void Screenshot_Render_Can_Force_The_System_Contrast_Resource_Boundary()
+    {
+        var args = App.ParseArgs(["--render-screenshot", @"C:\Temp\contrast.png", "--render-high-contrast"]);
+
+        Assert.Equal(@"C:\Temp\contrast.png", args.RenderScreenshotPath);
+        Assert.True(args.UiaBackground);
+        Assert.True(args.RenderHighContrast);
+    }
+
+    [Fact]
     public void Multiple_Flags_Combined()
     {
         var args = App.ParseArgs(["--silent", "--no-internet", "--privacy", "--profile", "ADOnly", "--client", "TestCo", "--export-csv"]);

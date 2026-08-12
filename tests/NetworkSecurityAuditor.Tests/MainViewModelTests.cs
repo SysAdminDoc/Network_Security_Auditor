@@ -316,12 +316,12 @@ public class MainViewModelTests
         var check = CheckItemViewModel.FromMetadata(CheckCatalog.All["EP01"]);
 
         Assert.Equal("BadgeBg", check.StatusBrushKey);
-        Assert.Equal("TextSecondary", check.StatusForegroundBrushKey);
+        Assert.Equal("NeutralStatusText", check.StatusForegroundBrushKey);
 
         check.Status = CheckStatus.Pass;
 
         Assert.Equal("ProgressGood", check.StatusBrushKey);
-        Assert.Equal("WindowBg", check.StatusForegroundBrushKey);
+        Assert.Equal("StatusOnColor", check.StatusForegroundBrushKey);
     }
 
     [Fact]

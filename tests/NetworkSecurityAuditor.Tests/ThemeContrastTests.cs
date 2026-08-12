@@ -11,6 +11,12 @@ public sealed partial class ThemeContrastTests
     [InlineData("ControlBorder", "InputBg", 3.0)]
     [InlineData("ScrollThumb", "PanelBg", 3.0)]
     [InlineData("WindowBg", "Accent", 3.0)]
+    [InlineData("OnAccent", "Accent", 4.5)]
+    [InlineData("StatusOnColor", "ProgressGood", 4.5)]
+    [InlineData("StatusOnColor", "ProgressMid", 4.5)]
+    [InlineData("StatusOnColor", "ProgressBad", 4.5)]
+    [InlineData("SelectionText", "SelectionBg", 4.5)]
+    [InlineData("NeutralStatusText", "BadgeBg", 4.5)]
     public void Theme_Tokens_Meet_Their_Wcag_Contrast_Target(string foreground, string background, double minimum)
     {
         var colors = LoadBrushColors();

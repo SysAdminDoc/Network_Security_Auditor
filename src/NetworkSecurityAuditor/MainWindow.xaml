@@ -8,7 +8,7 @@
         Title="Network Security Auditor"
         Width="1440" Height="900"
         MinWidth="1180" MinHeight="760"
-        Background="{StaticResource WindowBg}"
+        Background="{DynamicResource WindowBg}"
         FontFamily="Segoe UI Variable Text, Segoe UI"
         FontSize="13"
         WindowStartupLocation="CenterScreen"
@@ -41,7 +41,7 @@
                                        FontFamily="Cascadia Code, Consolas"
                                        FontSize="14"
                                        FontWeight="Bold"
-                                       Foreground="{StaticResource Accent}"
+                                       Foreground="{DynamicResource AccentText}"
                                        Margin="0,0,10,0" />
                             <Border Background="{Binding StatusBrushKey, Converter={StaticResource ResourceBrush}}"
                                     CornerRadius="4"
@@ -56,7 +56,7 @@
                         <TextBlock Text="{Binding Label}"
                                    FontSize="20"
                                    FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextPrimary}"
+                                   Foreground="{DynamicResource TextPrimary}"
                                    TextWrapping="Wrap"
                                    Margin="0,8,0,0" />
                     </StackPanel>
@@ -88,7 +88,7 @@
                                 <StackPanel>
                                     <TextBlock Text="CATEGORY" Style="{StaticResource SectionLabel}" />
                                     <TextBlock Text="{Binding Category}"
-                                               Foreground="{StaticResource TextPrimary}"
+                                               Foreground="{DynamicResource TextPrimary}"
                                                Margin="0,5,0,0"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
@@ -107,7 +107,7 @@
                                                 HorizontalAlignment="Left"
                                                 Margin="0,5,0,0">
                                             <TextBlock Text="{Binding SeverityLabel}"
-                                                       Foreground="{StaticResource WindowBg}"
+                                                       Foreground="{DynamicResource StatusOnColor}"
                                                        FontSize="10"
                                                        FontWeight="Bold" />
                                         </Border>
@@ -115,7 +115,7 @@
                                     <StackPanel Grid.Column="1" HorizontalAlignment="Right">
                                         <TextBlock Text="EVIDENCE" Style="{StaticResource SectionLabel}" HorizontalAlignment="Right" />
                                         <TextBlock Text="{Binding EvidenceMode}"
-                                                   Foreground="{StaticResource TextSecondary}"
+                                                   Foreground="{DynamicResource TextSecondary}"
                                                    Margin="0,5,0,0"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
@@ -194,9 +194,9 @@
                                          AutomationProperties.AutomationId="InspectorDueDateTextBox"
                                          AutomationProperties.Name="{Binding Id, StringFormat='Remediation due date for {0}'}"
                                          AutomationProperties.ItemStatus="{Binding (Validation.Errors)[0].ErrorContent, RelativeSource={RelativeSource Self}}" />
-                                <TextBlock Text="yyyy-MM-dd" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="0,4,0,0" />
+                                <TextBlock Text="yyyy-MM-dd" Foreground="{DynamicResource TextMuted}" FontSize="10" Margin="0,4,0,0" />
                                 <TextBlock Text="{Binding (Validation.Errors)[0].ErrorContent, ElementName=InspectorDueDateInput}"
-                                           Foreground="{StaticResource ProgressBad}"
+                                           Foreground="{DynamicResource ProgressBad}"
                                            FontSize="10"
                                            TextWrapping="Wrap"
                                            Margin="0,4,0,0"
@@ -207,8 +207,8 @@
                             </StackPanel>
                         </Grid>
 
-                        <Border Background="{StaticResource CommandBg}"
-                                BorderBrush="{StaticResource BorderDim}"
+                        <Border Background="{DynamicResource CommandBg}"
+                                BorderBrush="{DynamicResource BorderDim}"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="14">
@@ -219,11 +219,11 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock Text="COMPLIANCE MAPPING" Style="{StaticResource SectionLabel}" Margin="0,0,0,5" />
-                                    <TextBlock Text="{Binding Compliance}" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Compliance}" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Margin="14,0,0,0" HorizontalAlignment="Right">
                                     <TextBlock Text="RUNTIME" Style="{StaticResource SectionLabel}" HorizontalAlignment="Right" />
-                                    <TextBlock Text="{Binding DurationDisplay}" Foreground="{StaticResource TextPrimary}" Margin="0,5,0,0" HorizontalAlignment="Right" />
+                                    <TextBlock Text="{Binding DurationDisplay}" Foreground="{DynamicResource TextPrimary}" Margin="0,5,0,0" HorizontalAlignment="Right" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -240,8 +240,8 @@
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0"
-                Background="{StaticResource RailBg}"
-                BorderBrush="{StaticResource BorderDim}"
+                Background="{DynamicResource RailBg}"
+                BorderBrush="{DynamicResource BorderDim}"
                 BorderThickness="0,0,1,0"
                 Padding="16">
             <Grid>
@@ -259,13 +259,13 @@
                         </Grid.ColumnDefinitions>
                         <Border Width="34" Height="34"
                                 CornerRadius="8"
-                                Background="{StaticResource AccentSoft}"
-                                BorderBrush="{StaticResource Accent}"
+                                Background="{DynamicResource AccentSoft}"
+                                BorderBrush="{DynamicResource Accent}"
                                 BorderThickness="1">
                             <TextBlock Text="NSA"
                                        FontSize="10"
                                        FontWeight="Bold"
-                                       Foreground="{StaticResource Accent}"
+                                       Foreground="{DynamicResource AccentText}"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
                         </Border>
@@ -273,11 +273,11 @@
                             <TextBlock Text="Network Security Auditor"
                                        FontSize="14"
                                        FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimary}"
+                                       Foreground="{DynamicResource TextPrimary}"
                                        TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="Security posture workspace"
                                        FontSize="11"
-                                       Foreground="{StaticResource TextMuted}" />
+                                       Foreground="{DynamicResource TextMuted}" />
                         </StackPanel>
                     </Grid>
 
@@ -285,12 +285,12 @@
                         <StackPanel>
                             <TextBlock Text="CLIENT / CONTEXT" Style="{StaticResource SectionLabel}" />
                             <TextBlock Text="{Binding TargetDisplay}"
-                                       Foreground="{StaticResource TextPrimary}"
+                                       Foreground="{DynamicResource TextPrimary}"
                                        TextWrapping="Wrap"
                                        FontWeight="SemiBold"
                                        Margin="0,5,0,0" />
                             <TextBlock Text="{Binding EnvironmentBadge}"
-                                       Foreground="{StaticResource TextMuted}"
+                                       Foreground="{DynamicResource TextMuted}"
                                        FontSize="11"
                                        Margin="0,3,0,0" />
                         </StackPanel>
@@ -329,15 +329,22 @@
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="RailItem" Property="Background" Value="{StaticResource CardHoverBg}" />
-                                                <Setter TargetName="RailItem" Property="BorderBrush" Value="{StaticResource BorderBright}" />
+                                                <Setter TargetName="RailItem" Property="Background" Value="{DynamicResource CardHoverBg}" />
+                                                <Setter TargetName="RailItem" Property="BorderBrush" Value="{DynamicResource BorderBright}" />
                                             </Trigger>
                                             <Trigger Property="IsSelected" Value="True">
-                                                <Setter TargetName="RailItem" Property="Background" Value="{StaticResource AccentSoft}" />
-                                                <Setter TargetName="RailItem" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                                <Setter TargetName="RailItem" Property="Background" Value="{DynamicResource AccentSoft}" />
+                                                <Setter TargetName="RailItem" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
+                                                <Setter TargetName="RailItem" Property="BorderThickness" Value="2" />
                                             </Trigger>
                                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                                <Setter TargetName="RailItem" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                                <Setter TargetName="RailItem" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
+                                                <Setter TargetName="RailItem" Property="BorderThickness" Value="2" />
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter TargetName="RailItem" Property="Background" Value="{DynamicResource DisabledSurface}" />
+                                                <Setter TargetName="RailItem" Property="BorderBrush" Value="{DynamicResource DisabledText}" />
+                                                <Setter Property="Foreground" Value="{DynamicResource DisabledText}" />
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
@@ -359,12 +366,12 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="{Binding Name}"
-                                               Foreground="{StaticResource TextPrimary}"
+                                               Foreground="{DynamicResource TextPrimary}"
                                                FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding AssessedDisplay}"
-                                               Foreground="{StaticResource TextMuted}"
+                                               Foreground="{DynamicResource TextMuted}"
                                                FontSize="11"
                                                Margin="8,0,0,0" />
                                 </Grid>
@@ -373,7 +380,7 @@
                                              Maximum="{Binding Total, Mode=OneWay}"
                                              Value="{Binding AssessedCount, Mode=OneWay}"
                                              Height="3"
-                                             Background="{StaticResource TrackBg}"
+                                             Background="{DynamicResource TrackBg}"
                                              Foreground="{Binding HealthBrushKey, Converter={StaticResource ResourceBrush}}"
                                              BorderThickness="0"
                                              Margin="0,7,0,6" />
@@ -388,7 +395,7 @@
                                                FontSize="12" />
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding HealthLabel}"
-                                               Foreground="{StaticResource TextMuted}"
+                                               Foreground="{DynamicResource TextMuted}"
                                                FontSize="11" />
                                 </Grid>
                             </Grid>
@@ -401,12 +408,12 @@
                     <Border Style="{StaticResource CommandSegment}" Padding="12">
                         <StackPanel>
                             <TextBlock Text="{Binding VisibleChecksDisplay}"
-                                       Foreground="{StaticResource TextPrimary}"
+                                       Foreground="{DynamicResource TextPrimary}"
                                        FontWeight="SemiBold"
                                        AutomationProperties.AutomationId="FilteredCheckCount"
                                        AutomationProperties.Name="{Binding VisibleChecksDisplay, StringFormat='Filtered checks: {0}'}" />
                             <TextBlock Text="{Binding OutcomeSummaryDisplay}"
-                                       Foreground="{StaticResource TextMuted}"
+                                       Foreground="{DynamicResource TextMuted}"
                                        FontSize="11"
                                        Margin="0,4,0,10" />
                             <CheckBox Content="Privacy mode"
@@ -450,23 +457,23 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Background="{StaticResource CommandBg}" BorderBrush="{StaticResource BorderDim}" BorderThickness="0,0,1,1" Padding="16,12">
+                        <Border Grid.Column="0" Background="{DynamicResource CommandBg}" BorderBrush="{DynamicResource BorderDim}" BorderThickness="0,0,1,1" Padding="16,12">
                             <StackPanel>
                                 <TextBlock Text="CLIENT / CONTEXT" Style="{StaticResource SectionLabel}" />
                                 <TextBlock Text="{Binding TargetDisplay}"
-                                           Foreground="{StaticResource TextPrimary}"
+                                           Foreground="{DynamicResource TextPrimary}"
                                            FontSize="16"
                                            FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis"
                                            Margin="0,5,0,0" />
                                 <TextBlock Text="{Binding EnvironmentBadge}"
-                                           Foreground="{StaticResource TextMuted}"
+                                           Foreground="{DynamicResource TextMuted}"
                                            FontSize="11"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Column="1" Background="{StaticResource CommandBg}" BorderBrush="{StaticResource BorderDim}" BorderThickness="0,0,1,1" Padding="16,12">
+                        <Border Grid.Column="1" Background="{DynamicResource CommandBg}" BorderBrush="{DynamicResource BorderDim}" BorderThickness="0,0,1,1" Padding="16,12">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
@@ -487,7 +494,7 @@
                             </Grid>
                         </Border>
 
-                        <Border Grid.Column="2" Background="{StaticResource CommandBg}" BorderBrush="{StaticResource BorderDim}" BorderThickness="0,0,1,1" Padding="16,12">
+                        <Border Grid.Column="2" Background="{DynamicResource CommandBg}" BorderBrush="{DynamicResource BorderDim}" BorderThickness="0,0,1,1" Padding="16,12">
                             <StackPanel>
                                 <TextBlock Text="ENVIRONMENT READINESS" Style="{StaticResource SectionLabel}" />
                                 <TextBlock Text="{Binding ReadinessDisplay}"
@@ -497,7 +504,7 @@
                                            Margin="0,5,0,0"
                                            ToolTip="{Binding PreflightSummary}" />
                                 <TextBlock Text="{Binding ScanReadinessText}"
-                                           Foreground="{StaticResource TextMuted}"
+                                           Foreground="{DynamicResource TextMuted}"
                                            FontSize="11"
                                            TextTrimming="CharacterEllipsis"
                                            ToolTip="{Binding PreflightSummary}"
@@ -508,7 +515,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Column="3" Background="{StaticResource CommandBg}" BorderBrush="{StaticResource BorderDim}" BorderThickness="0,0,1,1" Padding="16,12">
+                        <Border Grid.Column="3" Background="{DynamicResource CommandBg}" BorderBrush="{DynamicResource BorderDim}" BorderThickness="0,0,1,1" Padding="16,12">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -517,14 +524,14 @@
                                 <StackPanel>
                                     <TextBlock Text="SCAN STATUS" Style="{StaticResource SectionLabel}" />
                                     <TextBlock Text="{Binding ScanStatusHeadline}"
-                                               Foreground="{StaticResource TextPrimary}"
+                                               Foreground="{DynamicResource TextPrimary}"
                                                FontSize="15"
                                                FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis"
                                                Margin="0,5,0,0"
                                                ToolTip="{Binding ScanStatus}" />
                                     <TextBlock Text="{Binding ScanProgressDisplay}"
-                                               Foreground="{StaticResource TextMuted}"
+                                               Foreground="{DynamicResource TextMuted}"
                                                FontSize="11"
                                                AutomationProperties.LiveSetting="Polite"
                                                AutomationProperties.AutomationId="ScanProgressText"
@@ -532,7 +539,7 @@
                                                a11y:LiveRegion.Announcement="{Binding ScanProgressDisplay}" />
                                 </StackPanel>
                                 <Grid Grid.Column="1" Width="52" Height="52" Margin="14,0,0,0">
-                                    <Ellipse Stroke="{StaticResource TrackBg}" StrokeThickness="7" />
+                                    <Ellipse Stroke="{DynamicResource TrackBg}" StrokeThickness="7" />
                                     <Ellipse Stroke="{Binding ScanProgressBrushKey, Converter={StaticResource ResourceBrush}}"
                                              StrokeThickness="7"
                                              StrokeDashArray="10,4"
@@ -542,7 +549,7 @@
                                         </Ellipse.RenderTransform>
                                     </Ellipse>
                                     <TextBlock Text="{Binding ScanProgressDisplay}"
-                                               Foreground="{StaticResource TextPrimary}"
+                                               Foreground="{DynamicResource TextPrimary}"
                                                FontSize="11"
                                                FontWeight="SemiBold"
                                                HorizontalAlignment="Center"
@@ -653,14 +660,14 @@
                         <ColumnDefinition Width="190" />
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0" Background="{StaticResource CommandBg}" BorderBrush="{StaticResource BorderDim}" BorderThickness="0,0,1,0" Padding="18,14">
+                    <Border Grid.Column="0" Background="{DynamicResource CommandBg}" BorderBrush="{DynamicResource BorderDim}" BorderThickness="0,0,1,0" Padding="18,14">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="94" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Grid Width="82" Height="82" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Ellipse Stroke="{StaticResource TrackBg}" StrokeThickness="9" />
+                                <Ellipse Stroke="{DynamicResource TrackBg}" StrokeThickness="9" />
                                 <Ellipse Stroke="{Binding GradeBrushKey, Converter={StaticResource ResourceBrush}}"
                                          StrokeThickness="9"
                                          StrokeDashArray="14,5"
@@ -682,7 +689,7 @@
                                 <TextBlock Text="{Binding OverallScoreDisplay}"
                                            FontSize="22"
                                            FontWeight="Bold"
-                                           Foreground="{StaticResource TextPrimary}"
+                                           Foreground="{DynamicResource TextPrimary}"
                                            TextTrimming="CharacterEllipsis"
                                            Margin="0,4,0,0" />
                                 <TextBlock Text="{Binding RiskPostureLabel}"
@@ -703,28 +710,28 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="FAILED" Style="{StaticResource SectionLabel}" />
-                            <TextBlock Text="{Binding FailCount}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource ProgressBad}" />
+                            <TextBlock Text="{Binding FailCount}" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource ProgressBad}" />
                         </StackPanel>
                         <StackPanel Grid.Column="1">
                             <TextBlock Text="PARTIAL" Style="{StaticResource SectionLabel}" />
-                            <TextBlock Text="{Binding PartialCount}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource ProgressMid}" />
+                            <TextBlock Text="{Binding PartialCount}" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource ProgressMid}" />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <TextBlock Text="PASSED" Style="{StaticResource SectionLabel}" />
-                            <TextBlock Text="{Binding PassCount}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource ProgressGood}" />
+                            <TextBlock Text="{Binding PassCount}" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource ProgressGood}" />
                         </StackPanel>
                         <StackPanel Grid.Column="3">
                             <TextBlock Text="N/A" Style="{StaticResource SectionLabel}" />
-                            <TextBlock Text="{Binding NotApplicableCount}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource StatusNeutral}" />
+                            <TextBlock Text="{Binding NotApplicableCount}" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource StatusNeutral}" />
                         </StackPanel>
                         <StackPanel Grid.Column="4">
                             <TextBlock Text="ASSESSED" Style="{StaticResource SectionLabel}" />
-                            <TextBlock Text="{Binding AssessedChecksDisplay}" FontSize="22" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" Margin="0,6,0,0" />
-                            <TextBlock Text="{Binding ScoreSubtitle}" Foreground="{StaticResource TextMuted}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding AssessedChecksDisplay}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding ScoreSubtitle}" Foreground="{DynamicResource TextMuted}" FontSize="11" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>
 
-                    <Border Grid.Column="2" Background="{StaticResource CommandBg}" BorderBrush="{StaticResource BorderDim}" BorderThickness="1,0,0,0" Padding="16,14">
+                    <Border Grid.Column="2" Background="{DynamicResource CommandBg}" BorderBrush="{DynamicResource BorderDim}" BorderThickness="1,0,0,0" Padding="16,14">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -734,7 +741,7 @@
                             <TextBlock Text="FRAMEWORKS" Style="{StaticResource SectionLabel}" />
                             <TextBlock Text="11 mapped"
                                        Grid.Row="1"
-                                       Foreground="{StaticResource TextPrimary}"
+                                       Foreground="{DynamicResource TextPrimary}"
                                        FontSize="22"
                                        FontWeight="Bold"
                                        Margin="0,5,0,1" />
@@ -751,7 +758,7 @@
                                                    FontWeight="Bold"
                                                    Margin="0,0,5,0" />
                                         <TextBlock Text="{Binding RansomwareScoreDisplay}"
-                                                   Foreground="{StaticResource TextMuted}"
+                                                   Foreground="{DynamicResource TextMuted}"
                                                    FontSize="11"
                                                    VerticalAlignment="Bottom" />
                                     </StackPanel>
@@ -764,7 +771,7 @@
                                                    FontWeight="Bold"
                                                    Margin="0,0,5,0" />
                                         <TextBlock Text="{Binding DomainMaturityScoreDisplay}"
-                                                   Foreground="{StaticResource TextMuted}"
+                                                   Foreground="{DynamicResource TextMuted}"
                                                    FontSize="11"
                                                    VerticalAlignment="Bottom" />
                                     </StackPanel>
@@ -790,7 +797,7 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <Grid Grid.Row="0" Background="{StaticResource CommandBg}" Margin="0">
+                        <Grid Grid.Row="0" Background="{DynamicResource CommandBg}" Margin="0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="128" />
@@ -799,11 +806,11 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding SelectedCategory, StringFormat=Checks - {0}}"
-                                           Foreground="{StaticResource TextPrimary}"
+                                           Foreground="{DynamicResource TextPrimary}"
                                            FontSize="15"
                                            FontWeight="SemiBold" />
                                 <TextBlock Text="{Binding VisibleChecksDisplay}"
-                                           Foreground="{StaticResource TextMuted}"
+                                           Foreground="{DynamicResource TextMuted}"
                                            FontSize="11" />
                             </StackPanel>
                             <ComboBox Grid.Column="1"
@@ -819,7 +826,7 @@
                                          AutomationProperties.AutomationId="CheckSearchBox"
                                          AutomationProperties.Name="Search checks" />
                                 <TextBlock Text="Search ID, check, or category"
-                                           Foreground="{StaticResource TextMuted}"
+                                           Foreground="{DynamicResource TextMuted}"
                                            Margin="10,0,0,0"
                                            VerticalAlignment="Center"
                                            IsHitTestVisible="False"
@@ -827,7 +834,7 @@
                             </Grid>
                         </Grid>
 
-                        <Grid Grid.Row="1" Background="{StaticResource SurfaceBg}">
+                        <Grid Grid.Row="1" Background="{DynamicResource SurfaceBg}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="70" />
                                 <ColumnDefinition Width="92" />
@@ -845,7 +852,7 @@
                         <ListBox Grid.Row="2"
                                  ItemsSource="{Binding FilteredChecks}"
                                  SelectedItem="{Binding SelectedCheck, Mode=TwoWay}"
-                                 Background="{StaticResource CardBg}"
+                                 Background="{DynamicResource CardBg}"
                                  BorderThickness="0"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -871,7 +878,7 @@
                                             <ControlTemplate TargetType="ListBoxItem">
                                                 <Border x:Name="Row"
                                                         Background="{TemplateBinding Background}"
-                                                        BorderBrush="{StaticResource BorderDim}"
+                                                        BorderBrush="{DynamicResource BorderDim}"
                                                         BorderThickness="0,0,0,1">
                                                     <Grid>
                                                         <Border x:Name="SelectedRail"
@@ -887,15 +894,21 @@
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="Row" Property="Background" Value="{StaticResource CardHoverBg}" />
+                                                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource CardHoverBg}" />
                                                     </Trigger>
                                                     <Trigger Property="IsSelected" Value="True">
-                                                        <Setter TargetName="Row" Property="Background" Value="{StaticResource AccentSoft}" />
-                                                        <Setter TargetName="Row" Property="BorderBrush" Value="{StaticResource Accent}" />
-                                                        <Setter TargetName="SelectedRail" Property="Background" Value="{StaticResource Accent}" />
+                                                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource AccentSoft}" />
+                                                        <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
+                                                        <Setter TargetName="SelectedRail" Property="Background" Value="{DynamicResource Accent}" />
                                                     </Trigger>
                                                     <Trigger Property="IsKeyboardFocused" Value="True">
-                                                        <Setter TargetName="FocusBorder" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                                        <Setter TargetName="FocusBorder" Property="BorderBrush" Value="{DynamicResource FocusRing}" />
+                                                        <Setter TargetName="FocusBorder" Property="BorderThickness" Value="2" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsEnabled" Value="False">
+                                                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource DisabledSurface}" />
+                                                        <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource DisabledText}" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource DisabledText}" />
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -916,7 +929,7 @@
                                         <TextBlock Grid.Column="0"
                                                    Text="{Binding Id}"
                                                    FontFamily="Cascadia Code, Consolas"
-                                                   Foreground="{StaticResource Accent}"
+                                                   Foreground="{DynamicResource AccentText}"
                                                    FontWeight="Bold"
                                                    Margin="14,0,0,0"
                                                    VerticalAlignment="Center" />
@@ -927,17 +940,17 @@
                                                 HorizontalAlignment="Left"
                                                 VerticalAlignment="Center">
                                             <TextBlock Text="{Binding SeverityLabel}"
-                                                       Foreground="{StaticResource WindowBg}"
+                                                       Foreground="{DynamicResource StatusOnColor}"
                                                        FontSize="10"
                                                        FontWeight="Bold" />
                                         </Border>
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,0,12,0">
                                             <TextBlock Text="{Binding Label}"
-                                                       Foreground="{StaticResource TextPrimary}"
+                                                       Foreground="{DynamicResource TextPrimary}"
                                                        TextTrimming="CharacterEllipsis"
                                                        FontWeight="SemiBold" />
                                             <TextBlock Text="{Binding Category}"
-                                                       Foreground="{StaticResource TextMuted}"
+                                                       Foreground="{DynamicResource TextMuted}"
                                                        FontSize="11"
                                                        TextTrimming="CharacterEllipsis"
                                                        Margin="0,3,0,0" />
@@ -955,15 +968,15 @@
                                         </Border>
                                         <TextBlock Grid.Column="4"
                                                    Text="{Binding DurationDisplay}"
-                                                   Foreground="{StaticResource TextMuted}"
+                                                   Foreground="{DynamicResource TextMuted}"
                                                    VerticalAlignment="Center" />
 
                                         <Border Grid.Column="0"
                                                 Grid.ColumnSpan="5"
-                                                Background="{StaticResource OverlayScrim}"
+                                                Background="{DynamicResource OverlayScrim}"
                                                 Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}">
                                             <TextBlock Text="Scanning..."
-                                                       Foreground="{StaticResource Accent}"
+                                                       Foreground="{DynamicResource AccentText}"
                                                        FontWeight="SemiBold"
                                                        HorizontalAlignment="Center"
                                                        VerticalAlignment="Center" />
@@ -974,7 +987,7 @@
                         </ListBox>
 
                         <Border Grid.Row="2"
-                                Background="{StaticResource CardBg}"
+                                Background="{DynamicResource CardBg}"
                                 Padding="26"
                                 Visibility="{Binding HasNoVisibleChecks, Converter={StaticResource BoolToVis}}"
                                 AutomationProperties.Name="No matching checks">
@@ -982,12 +995,12 @@
                                         VerticalAlignment="Center"
                                         MaxWidth="420">
                                 <TextBlock Text="{Binding FilterEmptyStateTitle}"
-                                           Foreground="{StaticResource TextPrimary}"
+                                           Foreground="{DynamicResource TextPrimary}"
                                            FontSize="18"
                                            FontWeight="SemiBold"
                                            TextAlignment="Center" />
                                 <TextBlock Text="{Binding FilterEmptyStateDetail}"
-                                           Foreground="{StaticResource TextMuted}"
+                                           Foreground="{DynamicResource TextMuted}"
                                            Margin="0,8,0,16"
                                            TextAlignment="Center"
                                            TextWrapping="Wrap" />
@@ -1008,7 +1021,7 @@
                               Width="6"
                               HorizontalAlignment="Stretch"
                               VerticalAlignment="Stretch"
-                              Background="{StaticResource BorderDim}"
+                              Background="{DynamicResource BorderDim}"
                               Margin="2,0"
                               Cursor="SizeWE"
                               ResizeBehavior="PreviousAndNext"
@@ -1021,19 +1034,19 @@
                                         ContentTemplate="{StaticResource InspectorTemplate}"
                                         AutomationProperties.AutomationId="SelectedCheckInspector"
                                         AutomationProperties.Name="Selected check evidence and remediation inspector" />
-                        <Border Background="{StaticResource PanelBg}"
+                        <Border Background="{DynamicResource PanelBg}"
                                 Visibility="{Binding HasNoVisibleChecks, Converter={StaticResource BoolToVis}}">
                             <StackPanel HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
                                         MaxWidth="260">
                                 <TextBlock Text="{Binding FilterEmptyStateTitle}"
-                                           Foreground="{StaticResource TextPrimary}"
+                                           Foreground="{DynamicResource TextPrimary}"
                                            FontSize="16"
                                            FontWeight="SemiBold"
                                            TextAlignment="Center"
                                            TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding FilterEmptyStateDetail}"
-                                           Foreground="{StaticResource TextMuted}"
+                                           Foreground="{DynamicResource TextMuted}"
                                            Margin="0,8,0,0"
                                            TextAlignment="Center"
                                            TextWrapping="Wrap" />
@@ -1049,7 +1062,7 @@
                         <RowDefinition Height="38" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <Grid Grid.Row="0" Background="{StaticResource CommandBg}">
+                    <Grid Grid.Row="0" Background="{DynamicResource CommandBg}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -1057,7 +1070,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
                                    Text="Activity Console"
-                                   Foreground="{StaticResource TextPrimary}"
+                                   Foreground="{DynamicResource TextPrimary}"
                                    FontWeight="SemiBold"
                                    Margin="14,0,18,0"
                                    VerticalAlignment="Center" />
@@ -1066,8 +1079,8 @@
                                      Maximum="100"
                                      Value="{Binding ScanProgressPercent}"
                                      Height="5"
-                                     Background="{StaticResource TrackBg}"
-                                     Foreground="{StaticResource Accent}"
+                                     Background="{DynamicResource TrackBg}"
+                                     Foreground="{DynamicResource Accent}"
                                      BorderThickness="0"
                                      VerticalAlignment="Center"
                                      Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"
@@ -1077,13 +1090,13 @@
                                      AutomationProperties.LiveSetting="Polite" />
                         <TextBlock Grid.Column="2"
                                    Text="{Binding ScanProgressDisplay}"
-                                   Foreground="{StaticResource TextMuted}"
+                                   Foreground="{DynamicResource TextMuted}"
                                    Margin="18,0,14,0"
                                    VerticalAlignment="Center"
                                    AutomationProperties.LiveSetting="Polite" />
                     </Grid>
 
-                    <Border Grid.Row="1" Background="{StaticResource ConsoleBg}">
+                    <Border Grid.Row="1" Background="{DynamicResource ConsoleBg}">
                         <ScrollViewer x:Name="ActivityLogScrollViewer"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
@@ -1096,7 +1109,7 @@
                                         <TextBlock Text="{Binding}"
                                                    FontFamily="Cascadia Code, Consolas"
                                                    FontSize="12"
-                                                   Foreground="{StaticResource TextSecondary}"
+                                                   Foreground="{DynamicResource TextSecondary}"
                                                    Margin="0,0,0,3" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -1114,7 +1127,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0"
                            Text="{Binding ExportAvailabilityText}"
-                           Foreground="{StaticResource TextMuted}"
+                           Foreground="{DynamicResource TextMuted}"
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"
                            AutomationProperties.AutomationId="ExportAvailabilityText"
@@ -1129,15 +1142,15 @@
                            AutomationProperties.Name="{Binding StatePersistenceText, StringFormat='Assessment save status: {0}'}"
                            a11y:LiveRegion.Announcement="{Binding StatePersistenceText}" />
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <TextBlock Foreground="{StaticResource ProgressGood}" FontSize="12" Margin="0,0,12,0"
+                    <TextBlock Foreground="{DynamicResource ProgressGood}" FontSize="12" Margin="0,0,12,0"
                                Text="{Binding PassCount, StringFormat=Pass: {0}}" />
-                    <TextBlock Foreground="{StaticResource ProgressMid}" FontSize="12" Margin="0,0,12,0"
+                    <TextBlock Foreground="{DynamicResource ProgressMid}" FontSize="12" Margin="0,0,12,0"
                                Text="{Binding PartialCount, StringFormat=Partial: {0}}" />
-                    <TextBlock Foreground="{StaticResource ProgressBad}" FontSize="12" Margin="0,0,12,0"
+                    <TextBlock Foreground="{DynamicResource ProgressBad}" FontSize="12" Margin="0,0,12,0"
                                Text="{Binding FailCount, StringFormat=Fail: {0}}" />
-                    <TextBlock Foreground="{StaticResource TextMuted}" FontSize="12" Margin="0,0,12,0"
+                    <TextBlock Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="0,0,12,0"
                                Text="{Binding NotApplicableCount, StringFormat=N/A: {0}}" />
-                    <TextBlock Foreground="{StaticResource TextMuted}" FontSize="12"
+                    <TextBlock Foreground="{DynamicResource TextMuted}" FontSize="12"
                                Text="{Binding NotAssessedCount, StringFormat=Not assessed: {0}}" />
                 </StackPanel>
             </Grid>

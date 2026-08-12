@@ -32,6 +32,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         SetProcessDPIAware();
+        ThemeManager.Initialize(this);
 
         var args = ParseArgs(e.Args);
         _headlessMode = args.Dashboard || args.Silent || args.DiagnosticsOnly;
@@ -104,6 +105,8 @@ public partial class App : Application
             base.OnStartup(e);
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+            if (args.RenderHighContrast)
+                ThemeManager.Apply(Resources, highContrast: true);
             var screenshotWindow = CreateMainWindow(args);
             MainWindow = screenshotWindow;
             screenshotWindow.Show();
@@ -115,6 +118,12 @@ public partial class App : Application
         var window = CreateMainWindow(args);
         MainWindow = window;
         window.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        ThemeManager.Shutdown();
+        base.OnExit(e);
     }
 
     private async Task CaptureWindowAndShutdownAsync(Window window, string path)
@@ -784,6 +793,8 @@ public partial class App : Application
                     result.RenderScreenshotPath = value;
                 }
             }
+            else if (arg.Equals("--render-high-contrast", StringComparison.OrdinalIgnoreCase))
+                result.RenderHighContrast = true;
             else if (arg.Equals("--no-internet", StringComparison.OrdinalIgnoreCase) || arg.Equals("-NoInternet", StringComparison.OrdinalIgnoreCase))
                 result.NoInternet = true;
             else if (arg.Equals("--privacy", StringComparison.OrdinalIgnoreCase) || arg.Equals("-PrivacyMode", StringComparison.OrdinalIgnoreCase))
@@ -909,6 +920,7 @@ public partial class App : Application
         public bool NoElevate;
         public bool UiaBackground;
         public string RenderScreenshotPath = "";
+        public bool RenderHighContrast;
         public bool NoInternet;
         public bool PrivacyMode;
         public bool ExportCsv;

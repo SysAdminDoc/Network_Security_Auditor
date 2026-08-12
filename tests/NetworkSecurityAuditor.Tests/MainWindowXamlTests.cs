@@ -66,7 +66,7 @@ public class MainWindowXamlTests
 
         Assert.Contains("x:Key=\"TextMuted\" Color=\"#9aa7bd\"", theme);
         Assert.DoesNotContain("Foreground=\"{StaticResource BorderDim}\"", xaml);
-        Assert.Contains("Foreground=\"{StaticResource TextMuted}\"", xaml);
+        Assert.Contains("Foreground=\"{DynamicResource TextMuted}\"", xaml);
         Assert.Contains("Height=\"5\"", xaml);
         Assert.Contains("Style x:Key=\"PremiumCard\"", theme);
     }
@@ -83,8 +83,8 @@ public class MainWindowXamlTests
         Assert.Contains("ResourceBrushConverter x:Key=\"ResourceBrush\"", app);
         Assert.Contains("x:Key=\"OverlayScrim\" Color=\"#aa0f141d\"", theme);
         Assert.Contains("x:Key=\"BadgeBg\" Color=\"#273244\"", theme);
-        Assert.Contains("x:Key=\"OnAccent\" Color=\"#f8fafc\"", theme);
-        Assert.Contains("Background=\"{StaticResource OverlayScrim}\"", xaml);
+        Assert.Contains("x:Key=\"OnAccent\" Color=\"#08111a\"", theme);
+        Assert.Contains("Background=\"{DynamicResource OverlayScrim}\"", xaml);
         Assert.DoesNotContain("Background=\"#881e1e2e\"", xaml);
         Assert.DoesNotMatch("#[0-9a-fA-F]{6,8}", checkVm);
         Assert.DoesNotMatch("#[0-9a-fA-F]{6,8}", mainVm);
@@ -268,6 +268,8 @@ public class MainWindowXamlTests
 
         Assert.Contains("--uia-background", source);
         Assert.Contains("--render-screenshot", source);
+        Assert.Contains("--render-high-contrast", source);
+        Assert.Contains("ThemeManager.Apply(Resources, highContrast: true);", source);
         Assert.Contains("RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;", source);
         Assert.Contains("window.Left = -32000;", source);
         Assert.Contains("window.ShowActivated = false;", source);

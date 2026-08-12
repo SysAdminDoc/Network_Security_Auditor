@@ -70,8 +70,8 @@ public partial class CheckItemViewModel : ViewModelBase
     };
 
     public string StatusForegroundBrushKey => Status == CheckStatus.NotAssessed
-        ? "TextSecondary"
-        : "WindowBg";
+        ? "NeutralStatusText"
+        : "StatusOnColor";
 
     public string SeverityLabel => Severity switch
     {
@@ -90,6 +90,13 @@ public partial class CheckItemViewModel : ViewModelBase
         Severity.Low => "ProgressGood",
         _ => "StatusNeutral"
     };
+
+    internal void RefreshThemeResources()
+    {
+        OnPropertyChanged(nameof(StatusBrushKey));
+        OnPropertyChanged(nameof(StatusForegroundBrushKey));
+        OnPropertyChanged(nameof(SeverityBrushKey));
+    }
 
     public static CheckItemViewModel FromMetadata(CheckMetadata meta) => new()
     {

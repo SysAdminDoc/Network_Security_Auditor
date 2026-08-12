@@ -102,6 +102,8 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
     public string AccessibilitySummary =>
         $"{Name}. {CompletionDisplay}. {HealthLabel}. {(AssessedCount > 0 ? $"Score {Score} percent" : "Score not available")}.";
 
+    internal void RefreshThemeResources() => OnPropertyChanged(nameof(HealthBrushKey));
+
     public void Update(IEnumerable<CheckItemViewModel> checks)
     {
         var categoryChecks = Name.Equals("All", StringComparison.OrdinalIgnoreCase)

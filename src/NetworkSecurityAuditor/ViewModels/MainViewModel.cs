@@ -277,6 +277,21 @@ public partial class MainViewModel : ViewModelBase
         HasUnsavedChanges = true;
     }
 
+    internal void RefreshThemeResources()
+    {
+        OnPropertyChanged(nameof(StatePersistenceBrushKey));
+        OnPropertyChanged(nameof(ReadinessBrushKey));
+        OnPropertyChanged(nameof(RansomwareBrushKey));
+        OnPropertyChanged(nameof(DomainMaturityBrushKey));
+        OnPropertyChanged(nameof(ScanProgressBrushKey));
+        OnPropertyChanged(nameof(GradeBrushKey));
+
+        foreach (var check in Checks)
+            check.RefreshThemeResources();
+        foreach (var summary in CategoryRailItems)
+            summary.RefreshThemeResources();
+    }
+
     public bool HasAssessedChecks => Checks.Any(c => c.Status is CheckStatus.Pass or CheckStatus.Partial or CheckStatus.Fail);
 
     public bool HasVisibleChecks => VisibleCheckCount > 0;

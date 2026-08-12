@@ -17,6 +17,7 @@ public partial class MainWindow : Window
         _activityAutoFollowEnabled = enableActivityAutoFollow;
         Title = $"Network Security Auditor v{VersionInfo.Version}";
         DataContext = _viewModel;
+        ThemeManager.SystemContrastChanged += OnSystemContrastChanged;
         Loaded += OnLoaded;
         Closed += OnClosed;
         if (_activityAutoFollowEnabled)
@@ -37,10 +38,16 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(ActivityLogScrollViewer.ScrollToEnd, DispatcherPriority.Background);
     }
 
+    private void OnSystemContrastChanged(object? sender, EventArgs e)
+    {
+        _viewModel.RefreshThemeResources();
+    }
+
     private async void OnClosed(object? sender, EventArgs e)
     {
         if (_activityAutoFollowEnabled)
             _viewModel.ActivityLog.CollectionChanged -= OnActivityLogChanged;
+        ThemeManager.SystemContrastChanged -= OnSystemContrastChanged;
         Closed -= OnClosed;
         await _viewModel.ShutdownAsync(TimeSpan.FromSeconds(5));
     }

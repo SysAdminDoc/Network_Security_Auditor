@@ -17,6 +17,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: PowerShell privacy exports now recursively redact structured secrets, remediation/benchmark/write metadata, and identifying branding across HTML, JSON, JSONL, and CSV outputs.
 
 ### Accessibility
+- Added automatic Windows High Contrast support to the C# workstation. Semantic brushes switch to dynamic system window/control/highlight colors, custom templates retain focus/selected/disabled/error cues, and status/severity remain text-labeled while Catppuccin Mocha stays the saved default.
 - Fixed: PowerShell action buttons and severity badges now choose a foreground that remains readable across normal and hover states, with automated WCAG contrast coverage for all seven themes.
 
 ### Reliability

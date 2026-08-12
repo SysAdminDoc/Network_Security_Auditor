@@ -471,7 +471,7 @@ Every HTML report can include up to three tiers, each targeting a different audi
 
 Full WPF interface with:
 
-- **Catppuccin Mocha dark theme** in the C# rewrite; the legacy PowerShell WPF artifact retains the seven-theme selector
+- **Catppuccin Mocha dark theme** in the C# rewrite, with an automatic Windows High Contrast override that follows system window, control, selection, disabled, and focus colors without changing the saved theme; the legacy PowerShell WPF artifact retains the seven-theme selector
 - **Security-operations workstation shell** with a persistent category progress rail, command/status bar, risk score band, dense virtualized check table, selected-check inspector, and integrated activity console
 - **Per-check controls** — status dropdown, findings, evidence, notes, remediation assignment/due date/status
 - **Live risk score dashboard** updated as checks complete
