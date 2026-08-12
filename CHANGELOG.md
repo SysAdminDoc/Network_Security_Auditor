@@ -19,6 +19,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ### Reliability
 - Added a non-invasive diagnostics profile to both delivery surfaces. It emits bounded text/JSON readiness reports for elevation, Windows capabilities, output paths, PDF discovery, import limits, internet policy, and Graph configuration without persisting identities or credentials.
+- Fixed and completed per-target single-flight scan locking across the C# and PowerShell silent paths. Locks now compile cleanly, preserve verified live owners, recover dead or PID-reused stale owners after a bounded age, emit `AlreadyRunning` exit code 68, and are covered for overlapping, canceled, crashed, completed, and unrelated-target runs.
 - Fixed: Individual C# saves and exports now share busy-state gating, contextual failure reporting, crash-log capture, and cleanup; closing the window cancels active scans within a bounded shutdown period.
 - Fixed: PDF export discovers validated per-user Edge/Chrome installations and safely resolves executable candidates from rooted PATH entries.
 - Fixed: Crash logs now redact common secret, path, and identity data and retain only bounded, locked rotating archives.
@@ -38,6 +39,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ### Testing
 - Added a repository version-surface test that keeps optional `CLAUDE.md` guidance aligned with the authoritative C# project and PowerShell product versions.
+- Made the Pester quality suite ASCII-safe so all 83 tests parse and pass under both Windows PowerShell 5.1 and PowerShell 7.
 - Added: Export contract tests now enforce the schema validation keywords used by committed contracts, including dynamic maps, references, composition, and negative fixtures.
 
 ## [v5.3.3 / v4.11.4] - 2026-08-09

@@ -777,20 +777,6 @@ High.
 
 ---
 
-- [ ] P2 — Add integrity and licensing provenance to imported benchmark/content packs
-  Why: The current benchmark manifest validates source identity, version, URL, review date, staleness, supported OS/builds, and covered checks, but it cannot prove which content bytes were assessed or whether redistribution is permitted. NIST SP 800-70 Rev. 5 treats machine-readable checklists as executable verification artifacts; Scapolite research emphasizes versioned authoring/generated artifacts/tests; HardeningKitty demonstrates the value of signed/stable content.
-  Evidence: `src/NetworkSecurityAuditor/Data/BenchmarkMetadata.cs:7-160,190-240`, `src/NetworkSecurityAuditor/Data/BenchmarkMetadata.json`, and PowerShell import initialization at `NetworkSecurityAudit.ps1:13692-13795`; sources: https://csrc.nist.gov/pubs/sp/800/70/r5/final, https://arxiv.org/abs/2209.08824, and https://github.com/scipag/HardeningKitty.
-  Touches: `BenchmarkMetadata` model/manifest, PowerShell benchmark importer, imported STIG/CKL/JSON/CSV result metadata, export schemas, release/content tests, and documentation for embedded versus user-supplied content.
-  Acceptance: Each content source records format, source/version/review date, supported targets, license/redistribution status, SHA-256 digest, and verification status. User-supplied imports compute and export the digest; a supplied manifest mismatch is rejected or clearly degraded; stale/unverified/unlicensed content never appears equivalent to the built-in verified catalog. Tamper, stale, unsupported-OS, and license-policy fixtures are covered without bundling copyrighted benchmark text.
-  Complexity: M
-
-- [ ] P2 — Add per-target single-flight locking and stale-run recovery for unattended scans
-  Why: The current C# headless path and PowerShell history path can be invoked repeatedly by Task Scheduler/RMM without a shared run identity or cross-process lock, so overlapping runs can contend for the same output/history files and produce misleading baselines. Prowler's current release notes emphasize queueing/duplicate-scan control, while Guerrilla deliberately keeps cadence external and compares only completed runs.
-  Evidence: C# orchestration at `src/NetworkSecurityAuditor/App.xaml.cs:315-589` and PowerShell history at `NetworkSecurityAudit.ps1:10991-11092,14317-14349`; no run-lock/owner manifest is present in those entry paths. Sources: https://github.com/prowler-cloud/prowler/releases and https://guerrilla.army/.
-  Touches: C# headless runner/output resolution, PowerShell silent/fleet/history entry points, history schemas, exit-code definitions, and concurrent-process tests.
-  Acceptance: A lock keyed by normalized client/target/output/history identity records tool version, PID, start time, and run ID. A second invocation receives a documented `AlreadyRunning`/queued result without writing partial artifacts; stale locks are recoverable only after bounded process/age validation; locks are per target so unrelated fleet hosts still run in parallel. A canceled, crashed, and completed run is tested, and only a completed contract result can become a history baseline.
-  Complexity: M
-
 - [ ] P2 — Add denominator-safe MSP executive KPIs to dashboard and history outputs
   Why: The C# dashboard currently exposes client count, average score, critical count, stale count, latest row, and a score sparkline, while the existing history roadmap covers score deltas and critical changes. Operators still lack a trustworthy view of scan coverage, invalid/skipped/not-permitted hosts, exception debt, remediation aging, and freshness denominators; commercial SCA dashboards and MSP community signals repeatedly prioritize those operational metrics.
   Evidence: `src/NetworkSecurityAuditor/Export/DashboardGenerator.cs:15-43,171-283,388-409` and PowerShell dashboard/history paths `NetworkSecurityAudit.ps1:933-1135,10991-11092`; sources: https://www.qualys.com/apps/security-configuration-assessment, https://www.pingcastle.com/services/enterprise/, and https://www.reddit.com/r/msp/comments/xg9hd1.

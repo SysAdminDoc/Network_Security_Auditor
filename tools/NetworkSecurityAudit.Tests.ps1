@@ -144,7 +144,7 @@ Describe 'Version surface consistency' {
         if ([string]::IsNullOrWhiteSpace($script:Claude)) { return }
         $csharpPattern = [regex]::Escape($script:CSharpVer)
         $powershellPattern = [regex]::Escape($script:ProductVer)
-        $script:Claude | Should -Match "(?m)^## Tech Stack \(v$csharpPattern — C# rewrite\)$"
+        $script:Claude | Should -Match "(?m)^## Tech Stack \(v$csharpPattern .+ C# rewrite\)$"
         $script:Claude | Should -Match "(?m)^- \*\*C# rewrite v$csharpPattern\*\*"
         $script:Claude | Should -Match "(?m)^- \*\*PowerShell artifact v$powershellPattern\*\*"
     }
@@ -199,7 +199,7 @@ Describe 'Diagnostics profile' {
     }
 
     It 'does not include raw host, domain, or user identifiers in the diagnostics payload' {
-        $diagnosticBlock = Get-Block $script:Text 'function Export-DiagnosticsReport' '# ── Launch'
+        $diagnosticBlock = Get-Block $script:Text 'function Export-DiagnosticsReport' '# .* Launch'
         $diagnosticBlock | Should -Not -Match '\$env:COMPUTERNAME|\$env:USERNAME|DomainName|TenantName|ClientName|AuditorName'
     }
 }
@@ -604,7 +604,7 @@ Describe 'Data-handling manifest coverage' {
     }
 
     It 'never writes raw tenant, user, or token values into the manifest payload' {
-        $manifestBlock = Get-Block $script:Text 'function Export-DataHandlingManifest' '# ── Phase 5G'
+        $manifestBlock = Get-Block $script:Text 'function Export-DataHandlingManifest' '# .* Phase 5G'
         $manifestBlock | Should -Not -Match '\$script:Env\.TenantName|\$env:USERNAME|access_token\s*=|client_secret\s*='
         $manifestBlock | Should -Match 'credentials_and_tokens\s*=\s*''secret-excluded'''
     }
@@ -1140,6 +1140,114 @@ Describe 'History persistence helpers (real functions via AST)' {
         finally {
             if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
         }
+    }
+}
+
+Describe 'Unattended audit run locking (real functions via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Get-AuditRunLockIdentity','Get-AuditRunLockPath','Test-AuditRunLockRecoverable','Enter-AuditRunLock','Exit-AuditRunLock') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+    BeforeEach {
+        $script:ProductVersion = '4.11.4'
+    }
+
+    It 'records owner metadata, normalizes identity, and permits unrelated targets' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('nsa-run-lock-' + [guid]::NewGuid().ToString('N'))
+        $first = $null
+        $other = $null
+        try {
+            $now = [DateTimeOffset]::UtcNow
+            $first = Enter-AuditRunLock -OutputDirectory $root -Client 'Client A' -Target 'Host A' -HistoryIdentity 'history\client-a' -NowUtc $now
+            $first | Should -Not -BeNullOrEmpty
+
+            $metadataStream = [IO.FileStream]::new($first.LockPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+            $reader = [IO.StreamReader]::new($metadataStream)
+            try { $metadata = $reader.ReadToEnd() | ConvertFrom-Json }
+            finally { $reader.Dispose() }
+            $metadata.schema_version | Should -Be 1
+            $metadata.run_id | Should -Be $first.RunId
+            $metadata.tool_version | Should -Be $script:ProductVersion
+            $metadata.process_id | Should -Be $PID
+
+            $duplicate = Enter-AuditRunLock -OutputDirectory $root -Client ' client a ' -Target 'host a' -HistoryIdentity 'history/client-a' -NowUtc $now.AddMinutes(1)
+            $duplicate | Should -BeNullOrEmpty
+
+            $other = Enter-AuditRunLock -OutputDirectory $root -Client 'Client A' -Target 'Host B' -HistoryIdentity 'history\client-a' -NowUtc $now.AddMinutes(1)
+            $other | Should -Not -BeNullOrEmpty
+        }
+        finally {
+            Exit-AuditRunLock -Lock $other
+            Exit-AuditRunLock -Lock $first
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It 'removes the lock after a completed or canceled run' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('nsa-run-lock-' + [guid]::NewGuid().ToString('N'))
+        try {
+            $lock = Enter-AuditRunLock -OutputDirectory $root -Client 'Client' -Target 'Host'
+            $lock | Should -Not -BeNullOrEmpty
+            $lockPath = $lock.LockPath
+            Exit-AuditRunLock -Lock $lock
+            Test-Path -LiteralPath $lockPath | Should -BeFalse
+
+            $next = Enter-AuditRunLock -OutputDirectory $root -Client 'Client' -Target 'Host'
+            $next | Should -Not -BeNullOrEmpty
+            Exit-AuditRunLock -Lock $next
+        }
+        finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It 'recovers a stale crashed owner but never evicts a verified live owner' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('nsa-run-lock-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        $recovered = $null
+        try {
+            $now = [DateTimeOffset]::UtcNow
+            $crashedIdentity = Get-AuditRunLockIdentity -OutputDirectory $root -Client 'Crashed' -Target 'Host A'
+            $crashedPath = Get-AuditRunLockPath -OutputDirectory $root -Identity $crashedIdentity
+            [ordered]@{
+                schema_version = 1; run_id = 'crashed'; tool_version = $script:ProductVersion
+                process_id = [int]::MaxValue; started_at_utc = $now.AddHours(-1).ToString('o')
+            } | ConvertTo-Json | Set-Content -LiteralPath $crashedPath -Encoding UTF8
+            [IO.File]::SetLastWriteTimeUtc($crashedPath, $now.AddHours(-1).UtcDateTime)
+
+            $recovered = Enter-AuditRunLock -OutputDirectory $root -Client 'Crashed' -Target 'Host A' -NowUtc $now
+            $recovered | Should -Not -BeNullOrEmpty
+
+            $liveIdentity = Get-AuditRunLockIdentity -OutputDirectory $root -Client 'Live' -Target 'Host B'
+            $livePath = Get-AuditRunLockPath -OutputDirectory $root -Identity $liveIdentity
+            $ownerStarted = (Get-Process -Id $PID).StartTime.ToUniversalTime()
+            [ordered]@{
+                schema_version = 1; run_id = 'live'; tool_version = $script:ProductVersion
+                process_id = $PID; started_at_utc = $ownerStarted.ToString('o')
+            } | ConvertTo-Json | Set-Content -LiteralPath $livePath -Encoding UTF8
+            [IO.File]::SetLastWriteTimeUtc($livePath, $now.AddHours(-1).UtcDateTime)
+
+            Enter-AuditRunLock -OutputDirectory $root -Client 'Live' -Target 'Host B' -NowUtc $now | Should -BeNullOrEmpty
+        }
+        finally {
+            Exit-AuditRunLock -Lock $recovered
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It 'acquires before history persistence and releases before normal exit' {
+        $acquire = $script:Text.IndexOf('$script:ActiveAuditRunLock = Enter-AuditRunLock')
+        $history = $script:Text.IndexOf('$histResult = Invoke-AuditHistory')
+        $release = $script:Text.LastIndexOf('Exit-AuditRunLock -Lock $script:ActiveAuditRunLock')
+        $normalExit = $script:Text.LastIndexOf('exit $exitCode')
+        $acquire | Should -BeGreaterThan -1
+        $history | Should -BeGreaterThan $acquire
+        $release | Should -BeGreaterThan $history
+        $normalExit | Should -BeGreaterThan $release
+        $script:Text | Should -Match 'Invoke-AuditHistory[^\r\n]+-RunId \$script:ActiveAuditRunLock\.RunId'
     }
 }
 

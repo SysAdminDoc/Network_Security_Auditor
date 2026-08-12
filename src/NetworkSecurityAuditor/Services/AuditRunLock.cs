@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -122,7 +123,21 @@ public sealed class AuditRunLock : IDisposable
             try
             {
                 using var process = Process.GetProcessById(metadata.ProcessId);
-                return !process.HasExited;
+                if (process.HasExited)
+                    return true;
+
+                try
+                {
+                    // A live process that started after the recorded owner cannot own this lock;
+                    // the PID was reused after the original audit crashed.
+                    var processStartedAtUtc = process.StartTime.ToUniversalTime();
+                    return processStartedAtUtc > metadata.StartedAtUtc.UtcDateTime.AddMinutes(1);
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    // If ownership cannot be proven, preserve the lock rather than overlap scans.
+                    return false;
+                }
             }
             catch (ArgumentException)
             {
@@ -148,7 +163,7 @@ public sealed class AuditRunLock : IDisposable
     }
 
     private static string Normalize(string value) =>
-        value.Trim().Replace('\', '/').ToUpperInvariant();
+        value.Trim().Replace('\\', '/').ToUpperInvariant();
 
     public void Dispose()
     {

@@ -582,6 +582,13 @@ foreach ($tn in $themeNames) {
 if ($scriptText -notmatch 'exit\s+\$exitCode' -or $scriptText -notmatch 'Score\s*-ge\s*60\b') {
     Add-Failure 'Silent mode exit code contract: framework compliance threshold must use 60% and exit via $exitCode.'
 }
+if ($scriptText -notmatch 'function Enter-AuditRunLock' -or
+    $scriptText -notmatch 'function Exit-AuditRunLock' -or
+    $scriptText -notmatch 'Test-AuditRunLockRecoverable' -or
+    $scriptText -notmatch 'AlreadyRunning' -or
+    $scriptText -notmatch 'exit 68') {
+    Add-Failure 'Silent mode must enforce a per-target run lock, bounded stale recovery, and AlreadyRunning exit code 68.'
+}
 
 if ($failures.Count -gt 0) {
     Write-Host 'NetworkSecurityAudit validation FAILED' -ForegroundColor Red

@@ -119,6 +119,14 @@ value. `--output` is treated as an output directory; if a file-looking value suc
 as `C:\Reports\audit.html` is supplied, the C# rewrite writes its artifact set to
 that file's parent folder.
 
+PowerShell and C# silent scans use a per-client/target/output/history run lock so
+Task Scheduler or an RMM cannot overlap writes for the same assessment. A second
+invocation exits with code 68 (`AlreadyRunning`) before scanning or writing
+partial artifacts. Locks record the run ID, tool version, PID, start time, and
+normalized identity; normal completion removes the lock, while a lock left by a
+crash is recovered only after 15 minutes and dead-owner/PID-reuse validation.
+Different fleet targets retain independent locks and can still run in parallel.
+
 Build the local C# installable artifact:
 
 ```powershell

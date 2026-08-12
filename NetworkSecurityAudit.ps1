@@ -11334,12 +11334,12 @@ function Append-HistoryLine {
 # baseline, prune to retention, and return everything for reporting. Honors
 # -NoHistory. Stores the result in $script:HistoryResult for the JSON export.
 function Invoke-AuditHistory {
-    param([string]$Client, [string]$Target, [string]$OutputDir, [string]$OutputBase = '')
+    param([string]$Client, [string]$Target, [string]$OutputDir, [string]$OutputBase = '', [string]$RunId = '')
     $script:HistoryResult = $null
     if ($script:CliNoHistory) { return $null }
     $now = Get-Date
     $nowIso = $now.ToString('o')
-    $runId = $now.ToString('yyyyMMddHHmmssfff')
+    $runId = if ($RunId) { $RunId } else { $now.ToString('yyyyMMddHHmmssfff') }
     $safeClient = ($Client -replace '[^\w\.-]','_'); if (-not $safeClient) { $safeClient = 'client' }
     $safeTarget = ($Target -replace '[^\w\.-]','_'); if (-not $safeTarget) { $safeTarget = 'target' }
     $clientKeyHash = (Get-StringSha256 ([string]$Client).ToLowerInvariant()).Substring(0, 8)
@@ -14808,6 +14808,152 @@ function Export-DiagnosticsReport {
     return @{ Report = $payload; JsonPath = $jsonPath; TextPath = $textPath; HasBlocked = @($checks | Where-Object status -eq 'Blocked').Count -gt 0; HasDegraded = @($checks | Where-Object status -eq 'Degraded').Count -gt 0 }
 }
 
+function Get-AuditRunLockIdentity {
+    param(
+        [string]$OutputDirectory,
+        [string]$Client,
+        [string]$Target,
+        [string]$HistoryIdentity = ''
+    )
+
+    $parts = @($OutputDirectory, $Client, $Target, $HistoryIdentity)
+    return (($parts | ForEach-Object { ([string]$_).Trim().Replace('\', '/').ToUpperInvariant() }) -join '|')
+}
+
+function Get-AuditRunLockPath {
+    param(
+        [string]$OutputDirectory,
+        [string]$Identity
+    )
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Identity)
+        $hash = ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join ''
+    }
+    finally {
+        $sha.Dispose()
+    }
+    return Join-Path $OutputDirectory ('.network-security-auditor-{0}.run.lock' -f $hash.Substring(0, 32))
+}
+
+function Test-AuditRunLockRecoverable {
+    param(
+        [string]$LockPath,
+        [DateTimeOffset]$CutoffUtc
+    )
+
+    try {
+        $lockInfo = Get-Item -LiteralPath $LockPath -Force -ErrorAction Stop
+        if ($lockInfo.LastWriteTimeUtc -gt $CutoffUtc.UtcDateTime) { return $false }
+
+        $metadata = [System.IO.File]::ReadAllText($LockPath) | ConvertFrom-Json -ErrorAction Stop
+        if ([int]$metadata.schema_version -ne 1 -or [int]$metadata.process_id -le 0) { return $false }
+
+        $ownerProcess = Get-Process -Id ([int]$metadata.process_id) -ErrorAction SilentlyContinue
+        if (-not $ownerProcess) { return $true }
+
+        $recordedStart = [DateTimeOffset]::MinValue
+        $parsed = [DateTimeOffset]::TryParse(
+            [string]$metadata.started_at_utc,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind,
+            [ref]$recordedStart)
+        if (-not $parsed) { return $false }
+
+        try {
+            $ownerStartedAtUtc = $ownerProcess.StartTime.ToUniversalTime()
+            return $ownerStartedAtUtc -gt $recordedStart.UtcDateTime.AddMinutes(1)
+        }
+        catch {
+            return $false
+        }
+    }
+    catch {
+        return $false
+    }
+}
+
+function Enter-AuditRunLock {
+    param(
+        [string]$OutputDirectory,
+        [string]$Client,
+        [string]$Target,
+        [string]$HistoryIdentity = '',
+        [ValidateRange(1, 1440)]
+        [int]$StaleAfterMinutes = 15,
+        [DateTimeOffset]$NowUtc = [DateTimeOffset]::UtcNow,
+        [int]$ProcessId = $PID
+    )
+
+    $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
+    if (-not (Test-Path -LiteralPath $resolvedOutput -PathType Container)) {
+        New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
+    }
+    $identity = Get-AuditRunLockIdentity -OutputDirectory $resolvedOutput -Client $Client -Target $Target -HistoryIdentity $HistoryIdentity
+    $lockPath = Get-AuditRunLockPath -OutputDirectory $resolvedOutput -Identity $identity
+    $cutoff = $NowUtc.ToUniversalTime().AddMinutes(-$StaleAfterMinutes)
+
+    foreach ($attempt in 0, 1) {
+        $lockStream = $null
+        try {
+            $lockStream = [System.IO.FileStream]::new(
+                $lockPath,
+                [System.IO.FileMode]::CreateNew,
+                [System.IO.FileAccess]::ReadWrite,
+                [System.IO.FileShare]::Read)
+            $runId = [guid]::NewGuid().ToString('N')
+            $metadata = [ordered]@{
+                schema_version = 1
+                run_id = $runId
+                tool_version = $script:ProductVersion
+                process_id = $ProcessId
+                started_at_utc = $NowUtc.ToUniversalTime().ToString('o', [Globalization.CultureInfo]::InvariantCulture)
+                identity = $identity
+                client = $Client
+                target = $Target
+                output_directory = $resolvedOutput
+                history_identity = $HistoryIdentity
+            }
+            $payload = [System.Text.Encoding]::UTF8.GetBytes(($metadata | ConvertTo-Json -Depth 4))
+            $lockStream.Write($payload, 0, $payload.Length)
+            $lockStream.Flush($true)
+            return [pscustomobject]@{
+                LockPath = $lockPath
+                RunId = $runId
+                Stream = $lockStream
+                Metadata = $metadata
+            }
+        }
+        catch [System.IO.IOException] {
+            if ($lockStream) { $lockStream.Dispose() }
+            if ($attempt -gt 0 -or -not (Test-AuditRunLockRecoverable -LockPath $lockPath -CutoffUtc $cutoff)) {
+                return $null
+            }
+            try { [System.IO.File]::Delete($lockPath) }
+            catch { return $null }
+        }
+        catch {
+            if ($lockStream) { $lockStream.Dispose() }
+            return $null
+        }
+    }
+
+    return $null
+}
+
+function Exit-AuditRunLock {
+    param([object]$Lock)
+
+    if (-not $Lock) { return }
+    try {
+        if ($Lock.Stream) { $Lock.Stream.Dispose() }
+    }
+    finally {
+        try { [System.IO.File]::Delete([string]$Lock.LockPath) } catch {}
+    }
+}
+
 # ── Launch ───────────────────────────────────────────────────────────────────
 $el['StatusText'].Text = "Initializing turnkey setup..."
 
@@ -14927,6 +15073,36 @@ if ($script:SilentMode) {
     $adChecks = @($idList | Where-Object { $script:AutoChecks[$_].Type -eq 'AD' }).Count
     $cloudChecks = if ($profName -eq 'Cloud') { @($script:CloudCheckManifest.Keys | Where-Object { $script:CloudCheckManifest[$_].Implemented }).Count } else { 0 }
     $localChecks = if ($profName -eq 'Cloud') { 0 } else { $idList.Count - $adChecks }
+
+    $outputDir = if ($script:CliOutput) {
+        $resolvedOutputPath = [System.IO.Path]::GetFullPath($script:CliOutput)
+        [System.IO.Path]::GetDirectoryName($resolvedOutputPath)
+    } else {
+        [Environment]::GetFolderPath('Desktop')
+    }
+    if ([string]::IsNullOrWhiteSpace($outputDir)) { $outputDir = (Get-Location).Path }
+    $lockTarget = if ($script:Env.ComputerName) { $script:Env.ComputerName } else { 'localhost' }
+    $lockHistoryIdentity = if ($script:CliNoHistory) {
+        'history-disabled'
+    } elseif ($script:CliHistoryPath) {
+        [System.IO.Path]::GetFullPath($script:CliHistoryPath)
+    } else {
+        Join-Path $outputDir 'default-history'
+    }
+    $script:ActiveAuditRunLock = Enter-AuditRunLock -OutputDirectory $outputDir -Client $clientName -Target $lockTarget -HistoryIdentity $lockHistoryIdentity
+    if (-not $script:ActiveAuditRunLock) {
+        Write-Host "[Silent Mode] AlreadyRunning: another audit owns the per-target lock for $clientName/$lockTarget in $outputDir." -ForegroundColor Yellow
+        Write-Host '[Silent Mode] Exit code: 68' -ForegroundColor Yellow
+        exit 68
+    }
+    Write-Host "[Silent Mode] Run lock: $($script:ActiveAuditRunLock.RunId)"
+    $null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
+        if ($script:ActiveAuditRunLock) {
+            Exit-AuditRunLock -Lock $script:ActiveAuditRunLock
+            $script:ActiveAuditRunLock = $null
+        }
+    }
+
     Write-Host ""
     Write-Host "[Silent Mode] SCAN MANIFEST" -ForegroundColor Cyan
     Write-Host "[Silent Mode]   Profile:     $profName ($($idList.Count + $cloudChecks) checks: $localChecks local, $adChecks AD, $cloudChecks cloud)"
@@ -15050,7 +15226,7 @@ if ($script:SilentMode) {
     }
     if (-not $script:CliNoHistory -and $profName -ne 'Cloud') {
         $histTarget = try { if ($el['txtScanTarget'].Text) { $el['txtScanTarget'].Text } else { 'localhost' } } catch { 'localhost' }
-        $histResult = Invoke-AuditHistory -Client $clientName -Target $histTarget -OutputDir (Split-Path -Parent $basePath) -OutputBase $basePath
+        $histResult = Invoke-AuditHistory -Client $clientName -Target $histTarget -OutputDir (Split-Path -Parent $basePath) -OutputBase $basePath -RunId $script:ActiveAuditRunLock.RunId
         if ($histResult) {
             Write-Host ""
             Write-Host "[Silent Mode] CONTINUOUS DELTA" -ForegroundColor Cyan
@@ -15401,6 +15577,8 @@ if ($script:SilentMode) {
         }
     }
 
+    Exit-AuditRunLock -Lock $script:ActiveAuditRunLock
+    $script:ActiveAuditRunLock = $null
     exit $exitCode
 }
 
