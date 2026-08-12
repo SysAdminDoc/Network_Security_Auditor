@@ -3,7 +3,7 @@
   "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/compliance-summary.schema.json",
   "title": "Network Security Auditor compliance summary export",
   "type": "object",
-  "required": ["schema_version", "tool", "tool_version", "timestamp", "host", "os", "domain", "score", "counts", "category_scores", "framework_scores", "critical_failures"],
+  "required": ["schema_version", "tool", "tool_version", "timestamp", "host", "os", "domain", "score", "counts", "category_scores", "framework_scores", "critical_failures", "executive_kpis"],
   "properties": {
     "schema_version": { "type": "string" },
     "tool": { "type": "string" },
@@ -40,9 +40,10 @@
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["total", "met", "partial", "failing", "pct"],
+        "required": ["total", "denominator", "met", "partial", "failing", "pct"],
         "properties": {
           "total": { "type": "integer" },
+          "denominator": { "type": "integer" },
           "met": { "type": "integer" },
           "partial": { "type": "integer" },
           "failing": { "type": "integer" },
@@ -54,10 +55,11 @@
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["mapped", "total", "met", "partial", "failing", "not_assessed", "pct"],
+        "required": ["mapped", "total", "denominator", "met", "partial", "failing", "not_assessed", "pct"],
         "properties": {
           "mapped": { "type": "integer" },
           "total": { "type": "integer" },
+          "denominator": { "type": "integer" },
           "met": { "type": "integer" },
           "partial": { "type": "integer" },
           "failing": { "type": "integer" },
@@ -66,6 +68,23 @@
         }
       }
     },
-    "critical_failures": { "type": "array" }
+    "critical_failures": { "type": "array" },
+    "executive_kpis": {
+      "type": "object",
+      "required": ["assets_discovered", "assets_valid", "assets_scanned", "assets_skipped", "assets_failed", "coverage", "freshness", "scores", "critical_findings", "exceptions", "remediation_aging"],
+      "properties": {
+        "assets_discovered": { "type": "integer", "minimum": 0 },
+        "assets_valid": { "type": "integer", "minimum": 0 },
+        "assets_scanned": { "type": "integer", "minimum": 0 },
+        "assets_skipped": { "type": "integer", "minimum": 0 },
+        "assets_failed": { "type": "integer", "minimum": 0 },
+        "coverage": { "type": "object", "required": ["numerator", "denominator", "percentage"] },
+        "freshness": { "type": "object", "required": ["fresh", "stale", "unknown", "denominator"] },
+        "scores": { "type": "object", "required": ["average", "median", "population", "population_definition"] },
+        "critical_findings": { "type": "object", "required": ["open", "open_denominator", "new", "resolved", "change_denominator", "oldest_high_age_days", "oldest_critical_age_days", "age_denominator"] },
+        "exceptions": { "type": "object", "required": ["active", "expired", "denominator"] },
+        "remediation_aging": { "type": "object", "required": ["denominator", "not_due", "overdue_1_to_30_days", "overdue_31_to_60_days", "overdue_61_to_90_days", "overdue_91_plus_days", "no_due_date"] }
+      }
+    }
   }
 }

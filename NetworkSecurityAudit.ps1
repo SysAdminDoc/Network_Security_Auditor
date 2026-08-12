@@ -1048,12 +1048,103 @@ function Block-IfReadOnly {
 # Reads a folder of structured findings JSON exports and emits a single static
 # HTML rollup (plus CSV) across clients/endpoints. No server, no host changes,
 # no embedded evidence text - only aggregate scores, grades, and counts.
+function Get-MspExecutiveKpis {
+    param(
+        [object[]]$Rows = @(),
+        [int]$AssetsValid = 0,
+        [int]$AssetsSkipped = 0,
+        [int]$AssetsFailed = 0,
+        [datetime]$Now = (Get-Date)
+    )
+    $rowsArray = @($Rows)
+    $assetsScanned = $rowsArray.Count
+    $assetsDiscovered = $AssetsValid + $AssetsFailed
+    $scores = @($rowsArray | ForEach-Object { [double]$_.ScorePct } | Sort-Object)
+    $average = if ($scores.Count -gt 0) { [math]::Round((($scores | Measure-Object -Average).Average), 1) } else { $null }
+    $median = $null
+    if ($scores.Count -gt 0) {
+        $middle = [int][math]::Floor($scores.Count / 2)
+        $median = if (($scores.Count % 2) -eq 1) { $scores[$middle] } else { [math]::Round(($scores[$middle - 1] + $scores[$middle]) / 2, 1) }
+    }
+
+    $openCriticals = 0; $newCriticals = 0; $resolvedCriticals = 0; $changeDenominator = 0
+    $activeExceptions = 0; $expiredExceptions = 0
+    $highAges = @(); $criticalAges = @()
+    $notDue = 0; $overdue1To30 = 0; $overdue31To60 = 0; $overdue61To90 = 0; $overdue91Plus = 0; $noDueDate = 0
+    foreach ($row in $rowsArray) {
+        $openCriticals += [int]$row.Critical
+        $continuous = $row.Continuous
+        if ($continuous -and $continuous.delta) {
+            $changeDenominator++
+            $newCriticals += [int]$continuous.delta.new_criticals
+            $resolvedCriticals += [int]$continuous.delta.resolved_criticals
+        }
+        if ($continuous -and $continuous.exposure) {
+            $exposureValues = if ($continuous.exposure -is [System.Collections.IDictionary]) { @($continuous.exposure.Values) } else { @($continuous.exposure.PSObject.Properties.Value) }
+            foreach ($entry in $exposureValues) {
+                $age = 0
+                if ($null -eq $entry.days -or -not [int]::TryParse([string]$entry.days, [ref]$age)) { continue }
+                if ([string]$entry.severity -eq 'Critical') { $criticalAges += $age }
+                elseif ([string]$entry.severity -eq 'High') { $highAges += $age }
+            }
+        }
+        foreach ($exception in @($row.Exceptions)) {
+            $state = if ($exception.disposition) { [string]$exception.disposition } else { [string]$exception.status }
+            if ($state -in @('Revoked','Rejected')) { continue }
+            $expired = ($state -eq 'Expired')
+            if (-not $expired -and $exception.expiration) {
+                $expirationDate = [datetime]::MinValue
+                if ([datetime]::TryParse([string]$exception.expiration, [ref]$expirationDate)) { $expired = $expirationDate.Date -lt $Now.Date }
+            }
+            if ($expired) { $expiredExceptions++ } else { $activeExceptions++ }
+        }
+        foreach ($finding in @($row.Findings)) {
+            if ([string]$finding.status -ne 'Fail') { continue }
+            $remStatus = if ($finding.remediation) { [string]$finding.remediation.status } else { '' }
+            if ($remStatus -in @('Closed','Complete','Completed','Resolved')) { continue }
+            if ($remStatus -in @('Accepted Risk','Deferred')) {
+                if (@($row.Exceptions).Count -eq 0) {
+                    $expired = $false
+                    $expirationDate = [datetime]::MinValue
+                    if ($finding.remediation.due -and [datetime]::TryParse([string]$finding.remediation.due, [ref]$expirationDate)) { $expired = $expirationDate.Date -lt $Now.Date }
+                    if ($expired) { $expiredExceptions++ } else { $activeExceptions++ }
+                }
+                continue
+            }
+            $dueText = if ($finding.remediation -and $finding.remediation.due) { [string]$finding.remediation.due } elseif ($finding.remediation_due_date) { [string]$finding.remediation_due_date } else { '' }
+            $due = [datetime]::MinValue
+            if (-not $dueText -or -not [datetime]::TryParse($dueText, [ref]$due)) { $noDueDate++; continue }
+            $daysOverdue = [int][math]::Floor(($Now.Date - $due.Date).TotalDays)
+            if ($daysOverdue -le 0) { $notDue++ }
+            elseif ($daysOverdue -le 30) { $overdue1To30++ }
+            elseif ($daysOverdue -le 60) { $overdue31To60++ }
+            elseif ($daysOverdue -le 90) { $overdue61To90++ }
+            else { $overdue91Plus++ }
+        }
+    }
+    $remediationDenominator = $notDue + $overdue1To30 + $overdue31To60 + $overdue61To90 + $overdue91Plus + $noDueDate
+    return [ordered]@{
+        assets_discovered = $assetsDiscovered
+        assets_valid = $AssetsValid
+        assets_scanned = $assetsScanned
+        assets_skipped = $AssetsSkipped
+        assets_failed = $AssetsFailed
+        coverage = [ordered]@{ numerator=$assetsScanned; denominator=$assetsDiscovered; percentage=if($assetsDiscovered -gt 0){[math]::Round($assetsScanned/$assetsDiscovered*100,1)}else{$null}; denominator_definition='unique latest asset identities plus failed inputs whose identity could not be safely deduplicated' }
+        freshness = [ordered]@{ fresh=@($rowsArray | Where-Object { -not $_.Stale }).Count; stale=@($rowsArray | Where-Object { $_.Stale }).Count; unknown=0; denominator=$assetsScanned }
+        scores = [ordered]@{ average=$average; median=$median; population=$scores.Count; population_definition='latest contract-valid assets with at least one Pass, Partial, or Fail finding' }
+        critical_findings = [ordered]@{ open=$openCriticals; open_denominator=$assetsScanned; new=$newCriticals; resolved=$resolvedCriticals; change_denominator=$changeDenominator; oldest_high_age_days=if($highAges.Count){($highAges|Measure-Object -Maximum).Maximum}else{$null}; oldest_critical_age_days=if($criticalAges.Count){($criticalAges|Measure-Object -Maximum).Maximum}else{$null}; age_denominator=($highAges.Count+$criticalAges.Count) }
+        exceptions = [ordered]@{ active=$activeExceptions; expired=$expiredExceptions; denominator=($activeExceptions+$expiredExceptions) }
+        remediation_aging = [ordered]@{ denominator=$remediationDenominator; not_due=$notDue; overdue_1_to_30_days=$overdue1To30; overdue_31_to_60_days=$overdue31To60; overdue_61_to_90_days=$overdue61To90; overdue_91_plus_days=$overdue91Plus; no_due_date=$noDueDate; denominator_definition='open failed findings excluding accepted-risk and deferred exceptions' }
+    }
+}
+
 function Export-MultiClientDashboard {
     param(
         [string]$SourceDir,
         [string]$OutPath,
         [int]$StaleAfterDays = 30,
         [string]$CsvPath = '',
+        [string]$JsonPath = '',
         [ValidateRange(1, 3650)]
         [int]$TrendWindowDays = 90,
         [ValidateRange(1, 100000)]
@@ -1073,7 +1164,7 @@ function Export-MultiClientDashboard {
     $records = New-Object System.Collections.Generic.List[object]
     $skipDetails = New-Object System.Collections.Generic.List[string]
     $jsonFileCount = 0; $acceptedBytes = [long]0; $parsed = 0; $skipped = 0
-    foreach ($jf in Get-ChildItem -LiteralPath $SourceDir -Recurse -Filter '*.json' -File -EA SilentlyContinue) {
+    foreach ($jf in Get-ChildItem -LiteralPath $SourceDir -Recurse -Filter '*_findings.json' -File -EA SilentlyContinue) {
         $jsonFileCount++
         if ($jsonFileCount -gt $MaxFiles) {
             $skipped++
@@ -1104,14 +1195,38 @@ function Export-MultiClientDashboard {
             if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): invalid JSON") }
             continue
         }
-        if (-not $doc -or $doc.export_type -ne 'structured_findings') {
+        if (-not $doc -or -not $doc.PSObject.Properties['timestamp'] -or -not $doc.PSObject.Properties['findings']) {
             $skipped++
-            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): not a structured findings export") }
+            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): not a findings export") }
             continue
         }
-        $parsed++
         $ts = $null
         if ($doc.timestamp) { try { $ts = [datetime]$doc.timestamp } catch { $ts = $null } }
+        if (-not $ts) {
+            $skipped++
+            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): invalid or missing timestamp") }
+            continue
+        }
+        $clientName = if ($doc.client) { [string]$doc.client } else { 'Unknown' }
+        $targetName = if ($doc.target) { [string]$doc.target } elseif ($doc.environment -and $doc.environment.computer_name) { [string]$doc.environment.computer_name } else { '' }
+        if (-not $targetName) {
+            $skipped++
+            if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): missing target asset identity") }
+            continue
+        }
+        $applicable = @($doc.findings | Where-Object { [string]$_.status -in @('Pass','Partial','Fail') }).Count
+        $isScorable = $applicable -gt 0
+        $scorePct = $null
+        if ($isScorable) {
+            $scoreValue = 0
+            if (-not $doc.score -or -not [int]::TryParse([string]$doc.score.overall, [ref]$scoreValue) -or $scoreValue -lt 0 -or $scoreValue -gt 100 -or -not $doc.score.grade) {
+                $skipped++
+                if ($skipDetails.Count -lt 20) { [void]$skipDetails.Add("$($jf.Name): scorable export has an invalid score contract") }
+                continue
+            }
+            $scorePct = $scoreValue
+        }
+        $parsed++
         $critical = 0; $totalFail = 0
         foreach ($f in @($doc.findings)) {
             if ($f.status -eq 'Fail') {
@@ -1137,14 +1252,21 @@ function Export-MultiClientDashboard {
         $htmlReport = $jf.FullName -replace '_findings\.json$','.html'
         if (-not (Test-Path -LiteralPath $htmlReport)) { $htmlReport = '' }
         $staleDays = if ($ts) { [math]::Round(((Get-Date) - $ts).TotalDays) } else { $null }
+        $ransomScore = 0; $ransomGrade = ''
+        if ($doc.score) {
+            if ($doc.score.ransomware -and $doc.score.ransomware.PSObject.Properties['score']) { $ransomScore = [int]$doc.score.ransomware.score; $ransomGrade = [string]$doc.score.ransomware.grade }
+            elseif ($doc.score.PSObject.Properties['ransomware_readiness']) { $ransomScore = [int]$doc.score.ransomware_readiness; $ransomGrade = [string]$doc.score.ransomware_grade }
+        }
         $records.Add([pscustomobject]@{
-            Client      = if ($doc.client) { [string]$doc.client } else { 'Unknown' }
-            Target      = if ($doc.target) { [string]$doc.target } else { '' }
+            Client      = $clientName
+            Target      = $targetName
+            StableKey   = (([string]$clientName).Trim().ToUpperInvariant() + '|' + ([string]$targetName).Trim().ToUpperInvariant())
             Timestamp   = $ts
-            ScorePct    = [int]($doc.score.overall)
+            IsScorable  = $isScorable
+            ScorePct    = if ($isScorable) { [int]$scorePct } else { $null }
             Grade       = [string]$doc.score.grade
-            RansomScore = [int]($doc.score.ransomware.score)
-            RansomGrade = [string]$doc.score.ransomware.grade
+            RansomScore = $ransomScore
+            RansomGrade = $ransomGrade
             Critical    = $critical
             TotalFail   = $totalFail
             FwCompliant = $fwCompliant
@@ -1153,6 +1275,8 @@ function Export-MultiClientDashboard {
             Stale       = ($null -ne $staleDays -and $staleDays -gt $StaleAfterDays)
             ReportPath  = $htmlReport
             Findings    = @($doc.findings)
+            Exceptions  = @($doc.exceptions)
+            Continuous  = $doc.continuous
             CloudFindings = $cloudFindings
             CloudFail = $cloudFail
             CloudUnavailable = $cloudUnavailable
@@ -1163,23 +1287,25 @@ function Export-MultiClientDashboard {
     if ($records.Count -eq 0) {
         Write-Host "[Dashboard] No structured findings exports found ($jsonFileCount JSON files scanned, $skipped skipped; limits: $MaxFiles files/$MaxFileBytes bytes per file/$MaxTotalBytes total bytes)." -ForegroundColor Yellow
         foreach ($detail in $skipDetails) { Write-Host "[Dashboard] Skipped: $detail" -ForegroundColor Yellow }
-        return $null
     }
 
-    # Latest scan per client + per-client trend
-    $byClient = $records | Group-Object Client
+    # Latest scan per stable client + target identity. Unavailable/not-assessed
+    # latest records remain valid assets but never become zero-risk rows.
+    $byClient = $records | Group-Object StableKey
     $latestRows = New-Object System.Collections.Generic.List[object]
+    $skippedAssetDetails = New-Object System.Collections.Generic.List[string]
     foreach ($g in $byClient) {
         $ordered = @($g.Group | Sort-Object { if ($_.Timestamp) { $_.Timestamp } else { [datetime]::MinValue } })
         $latest = $ordered[-1]
         $trendCutoff = (Get-Date).AddDays(-$TrendWindowDays)
-        $trendRecords = @($ordered | Where-Object { -not $_.Timestamp -or $_.Timestamp -ge $trendCutoff })
+        $trendRecords = @($ordered | Where-Object { $_.IsScorable -and $_.Timestamp -ge $trendCutoff })
         $trend = @($trendRecords | ForEach-Object { $_.ScorePct })
-        if ($trend.Count -eq 0) { $trend = @($latest.ScorePct) }
+        if ($latest.IsScorable -and $trend.Count -eq 0) { $trend = @($latest.ScorePct) }
         $latest | Add-Member -NotePropertyName Trend -NotePropertyValue $trend -Force
         $latest | Add-Member -NotePropertyName ScanCount -NotePropertyValue $g.Count -Force
         $latest | Add-Member -NotePropertyName TrendCount -NotePropertyValue $trendRecords.Count -Force
-        $latestRows.Add($latest)
+        if ($latest.IsScorable) { $latestRows.Add($latest) }
+        else { [void]$skippedAssetDetails.Add("$($latest.Client) / $($latest.Target): latest valid export has no Pass, Partial, or Fail findings") }
     }
     $latestRows = @($latestRows | Sort-Object ScorePct)
 
@@ -1196,10 +1322,17 @@ function Export-MultiClientDashboard {
     }
 
     $totalClients = $latestRows.Count
-    $avgScore = if ($totalClients -gt 0) { [int]([math]::Round((($latestRows | Measure-Object ScorePct -Average).Average))) } else { 0 }
+    $assetsValid = @($byClient).Count
+    $assetsSkipped = $skippedAssetDetails.Count
+    $kpis = Get-MspExecutiveKpis -Rows $latestRows -AssetsValid $assetsValid -AssetsSkipped $assetsSkipped -AssetsFailed $skipped -Now (Get-Date)
+    $avgScore = if ($null -ne $kpis.scores.average) { [int][math]::Round([double]$kpis.scores.average) } else { 0 }
     $totalCriticals = ($latestRows | Measure-Object Critical -Sum).Sum
     $totalCloudUnavailable = ($latestRows | Measure-Object CloudUnavailable -Sum).Sum
     $staleCount = @($latestRows | Where-Object { $_.Stale }).Count
+    $coveragePct = if ($null -ne $kpis.coverage.percentage) { "$($kpis.coverage.percentage)%" } else { 'N/A' }
+    $medianScore = if ($null -ne $kpis.scores.median) { "$($kpis.scores.median)%" } else { 'N/A' }
+    $oldestHigh = if ($null -ne $kpis.critical_findings.oldest_high_age_days) { "$($kpis.critical_findings.oldest_high_age_days)d" } else { 'N/A' }
+    $oldestCritical = if ($null -ne $kpis.critical_findings.oldest_critical_age_days) { "$($kpis.critical_findings.oldest_critical_age_days)d" } else { 'N/A' }
     $generated = Get-Date -Format 'yyyy-MM-dd HH:mm'
 
     function Get-GradeColor { param([string]$g) switch ($g) { 'A' {'#a6e3a1'} 'B' {'#94e2d5'} 'C' {'#f9e2af'} 'D' {'#fab387'} default {'#f38ba8'} } }
@@ -1240,6 +1373,11 @@ function Export-MultiClientDashboard {
         if ($skipped -gt $skipDetails.Count) { [void]$limitHtml.Append("<li>$(Convert-DashHtml ([string]($skipped - $skipDetails.Count) + ' additional skipped file(s)'))</li>") }
         [void]$limitHtml.Append('</ul></div>')
     }
+    if ($skippedAssetDetails.Count -gt 0) {
+        [void]$limitHtml.Append("<div class='panel'><h2>Valid assets excluded from score coverage</h2><ul>")
+        foreach ($detail in $skippedAssetDetails) { [void]$limitHtml.Append("<li>$(Convert-DashHtml $detail)</li>") }
+        [void]$limitHtml.Append('</ul></div>')
+    }
 
     $html = @"
 <!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
@@ -1269,13 +1407,14 @@ footer{color:var(--sub);font-size:11px;margin-top:24px;text-align:center}
 <h1>Multi-Client Security Dashboard</h1>
 <div class='muted'>$($script:ProductName) v$($script:ProductVersion) &middot; Generated $generated &middot; Source: $(Convert-DashHtml $SourceDir)</div>
 <div class='cards'>
-<div class='card'><div class='n'>$totalClients</div><div class='l'>Clients</div></div>
-<div class='card'><div class='n'>$($records.Count)</div><div class='l'>Total Scans</div></div>
-<div class='card'><div class='n' style='color:$(Get-ScoreColor $avgScore)'>$avgScore%</div><div class='l'>Avg Latest Score</div></div>
-<div class='card'><div class='n' style='color:$(if($totalCriticals -gt 0){'#f38ba8'}else{'#a6e3a1'})'>$totalCriticals</div><div class='l'>Critical Findings</div></div>
-<div class='card'><div class='n' style='color:$(if($totalCloudUnavailable -gt 0){'#f9e2af'}else{'#a6e3a1'})'>$totalCloudUnavailable</div><div class='l'>Cloud Unavailable</div></div>
-<div class='card'><div class='n' style='color:$(if($staleCount -gt 0){'#fab387'}else{'#a6e3a1'})'>$staleCount</div><div class='l'>Stale Scans (&gt;$StaleAfterDays d)</div></div>
+<div class='card'><div class='n'>$($kpis.assets_scanned)/$($kpis.coverage.denominator)</div><div class='l'>Scan Coverage ($coveragePct)</div><div class='sub'>valid $($kpis.assets_valid), skipped $($kpis.assets_skipped), failed $($kpis.assets_failed)</div></div>
+<div class='card'><div class='n' style='color:$(Get-ScoreColor $avgScore)'>$(if($kpis.scores.population -gt 0){"$avgScore%"}else{'N/A'})</div><div class='l'>Average Score</div><div class='sub'>median $medianScore / n=$($kpis.scores.population)</div></div>
+<div class='card'><div class='n' style='color:$(if($totalCriticals -gt 0){'#f38ba8'}else{'#a6e3a1'})'>$($kpis.critical_findings.open)</div><div class='l'>Open Criticals</div><div class='sub'>new $($kpis.critical_findings.new), resolved $($kpis.critical_findings.resolved), delta n=$($kpis.critical_findings.change_denominator)</div></div>
+<div class='card'><div class='n' style='color:$(if($staleCount -gt 0){'#fab387'}else{'#a6e3a1'})'>$($kpis.freshness.stale)</div><div class='l'>Stale Assets (&gt;$StaleAfterDays d)</div><div class='sub'>$($kpis.freshness.fresh) fresh / n=$($kpis.freshness.denominator)</div></div>
+<div class='card'><div class='n'>$($kpis.exceptions.active)</div><div class='l'>Active Exceptions</div><div class='sub'>$($kpis.exceptions.expired) expired / n=$($kpis.exceptions.denominator)</div></div>
+<div class='card'><div class='n'>$($kpis.remediation_aging.denominator)</div><div class='l'>Open Remediations</div><div class='sub'>aging denominator n=$($kpis.remediation_aging.denominator)</div></div>
 </div>
+<div class='panel'><h2>Executive KPI definitions</h2><div class='sub'>Assets: $($kpis.assets_discovered) discovered; $($kpis.assets_valid) valid; $($kpis.assets_scanned) scanned; $($kpis.assets_skipped) skipped; $($kpis.assets_failed) failed. Scores use latest scorable assets only. Oldest high: $oldestHigh; oldest critical: $oldestCritical (age n=$($kpis.critical_findings.age_denominator)). Remediation aging: not due $($kpis.remediation_aging.not_due), 1-30 overdue $($kpis.remediation_aging.overdue_1_to_30_days), 31-60 $($kpis.remediation_aging.overdue_31_to_60_days), 61-90 $($kpis.remediation_aging.overdue_61_to_90_days), 91+ $($kpis.remediation_aging.overdue_91_plus_days), no due date $($kpis.remediation_aging.no_due_date).</div></div>
 <div class='panel'><h2>Clients (latest scan, lowest score first)</h2>
 <table><thead><tr><th>Client / Target</th><th>Grade</th><th>Score</th><th>Ransomware</th><th>Criticals</th><th>Frameworks</th><th>Cloud</th><th>Trend</th><th>Last Scan</th><th>Freshness</th></tr></thead>
 <tbody>$($rowsHtml.ToString())</tbody></table></div>
@@ -1289,21 +1428,40 @@ $($limitHtml.ToString())
     Write-Host "[Dashboard] Wrote dashboard: $OutPath ($totalClients clients, $($records.Count) scans, $skipped files skipped; limits: $MaxFiles files/$MaxFileBytes bytes per file/$MaxTotalBytes total bytes)" -ForegroundColor Green
 
     if ($CsvPath) {
-        $csvRows = $latestRows | ForEach-Object {
+        $csvRows = @([pscustomobject][ordered]@{
+            RecordType='Summary'; AssetsDiscovered=$kpis.assets_discovered; AssetsValid=$kpis.assets_valid; AssetsScanned=$kpis.assets_scanned; AssetsSkipped=$kpis.assets_skipped; AssetsFailed=$kpis.assets_failed
+            CoveragePct=$kpis.coverage.percentage; CoverageDenominator=$kpis.coverage.denominator; FreshAssets=$kpis.freshness.fresh; StaleAssets=$kpis.freshness.stale; FreshnessDenominator=$kpis.freshness.denominator
+            AverageScore=$kpis.scores.average; MedianScore=$kpis.scores.median; ScorePopulation=$kpis.scores.population
+            OpenCriticals=$kpis.critical_findings.open; NewCriticals=$kpis.critical_findings.new; ResolvedCriticals=$kpis.critical_findings.resolved; CriticalChangeDenominator=$kpis.critical_findings.change_denominator
+            OldestHighAgeDays=$kpis.critical_findings.oldest_high_age_days; OldestCriticalAgeDays=$kpis.critical_findings.oldest_critical_age_days
+            ActiveExceptions=$kpis.exceptions.active; ExpiredExceptions=$kpis.exceptions.expired; ExceptionDenominator=$kpis.exceptions.denominator
+            RemediationDenominator=$kpis.remediation_aging.denominator; RemediationNotDue=$kpis.remediation_aging.not_due; RemediationOverdue1To30=$kpis.remediation_aging.overdue_1_to_30_days; RemediationOverdue31To60=$kpis.remediation_aging.overdue_31_to_60_days; RemediationOverdue61To90=$kpis.remediation_aging.overdue_61_to_90_days; RemediationOverdue91Plus=$kpis.remediation_aging.overdue_91_plus_days; RemediationNoDueDate=$kpis.remediation_aging.no_due_date
+            Client=''; Target=''; LastScan=''; Grade=''; ScorePct=''; RansomwareScore=''; RansomwareGrade=''; Criticals=''; TotalFailures=''; FrameworksCompliant=''; FrameworksTotal=''; CloudFailures=''; CloudUnavailable=''; ScanCount=''; StaleDays=''; Stale=''; ReportPath=''
+        })
+        $csvRows += @($latestRows | ForEach-Object {
             [pscustomobject][ordered]@{
-                Client = $_.Client; Target = $_.Target
-                LastScan = if ($_.Timestamp) { $_.Timestamp.ToString('o') } else { '' }
-                Grade = $_.Grade; ScorePct = $_.ScorePct
-                RansomwareScore = $_.RansomScore; RansomwareGrade = $_.RansomGrade
-                Criticals = $_.Critical; TotalFailures = $_.TotalFail
-                FrameworksCompliant = $_.FwCompliant; FrameworksTotal = $_.FwTotal
-                CloudFailures = $_.CloudFail; CloudUnavailable = $_.CloudUnavailable
-                ScanCount = $_.ScanCount; StaleDays = $_.StaleDays; Stale = $_.Stale
-                ReportPath = $_.ReportPath
+                RecordType='Asset'; AssetsDiscovered=''; AssetsValid=''; AssetsScanned=''; AssetsSkipped=''; AssetsFailed=''; CoveragePct=''; CoverageDenominator=''; FreshAssets=''; StaleAssets=''; FreshnessDenominator=''; AverageScore=''; MedianScore=''; ScorePopulation=''; OpenCriticals=''; NewCriticals=''; ResolvedCriticals=''; CriticalChangeDenominator=''; OldestHighAgeDays=''; OldestCriticalAgeDays=''; ActiveExceptions=''; ExpiredExceptions=''; ExceptionDenominator=''; RemediationDenominator=''; RemediationNotDue=''; RemediationOverdue1To30=''; RemediationOverdue31To60=''; RemediationOverdue61To90=''; RemediationOverdue91Plus=''; RemediationNoDueDate=''
+                Client=$_.Client; Target=$_.Target; LastScan=if ($_.Timestamp) { $_.Timestamp.ToString('o') } else { '' }; Grade=$_.Grade; ScorePct=$_.ScorePct
+                RansomwareScore=$_.RansomScore; RansomwareGrade=$_.RansomGrade; Criticals=$_.Critical; TotalFailures=$_.TotalFail; FrameworksCompliant=$_.FwCompliant; FrameworksTotal=$_.FwTotal
+                CloudFailures=$_.CloudFail; CloudUnavailable=$_.CloudUnavailable; ScanCount=$_.ScanCount; StaleDays=$_.StaleDays; Stale=$_.Stale; ReportPath=$_.ReportPath
             }
-        }
+        })
         $csvRows | Export-Csv -LiteralPath $CsvPath -NoTypeInformation -Encoding UTF8
         Write-Host "[Dashboard] Wrote CSV: $CsvPath" -ForegroundColor Green
+    }
+    if ($JsonPath) {
+        $jsonAssets = @($latestRows | ForEach-Object {
+            [ordered]@{ client=$_.Client; host=$_.Target; score=$_.ScorePct; grade=$_.Grade; ransomware=$_.RansomScore; critical_fails=$_.Critical; total_fails=$_.TotalFail; stale=$_.Stale; scan_date=$_.Timestamp.ToString('yyyy-MM-dd'); trend=@($_.Trend); scan_count=$_.ScanCount }
+        })
+        $dashboardJson = [ordered]@{
+            schema_version='1.0'; tool=$script:ProductShortName; tool_version=$script:ProductVersion; generated_at_utc=(Get-Date).ToUniversalTime().ToString('o'); stale_after_days=$StaleAfterDays
+            assets_discovered=$kpis.assets_discovered; assets_valid=$kpis.assets_valid; assets_scanned=$kpis.assets_scanned; assets_skipped=$kpis.assets_skipped; assets_failed=$kpis.assets_failed
+            coverage=$kpis.coverage; freshness=$kpis.freshness; scores=$kpis.scores; critical_findings=$kpis.critical_findings; exceptions=$kpis.exceptions; remediation_aging=$kpis.remediation_aging
+            assets=$jsonAssets
+            diagnostics=[ordered]@{ input_files_discovered=$jsonFileCount; valid_scan_files=$parsed; duplicate_scan_files=($records.Count-$assetsValid); failed_input_files=@($skipDetails); skipped_assets=@($skippedAssetDetails) }
+        }
+        $dashboardJson | ConvertTo-Json -Depth 9 | Set-Content -LiteralPath $JsonPath -Encoding UTF8
+        Write-Host "[Dashboard] Wrote JSON: $JsonPath" -ForegroundColor Green
     }
     return $OutPath
 }
@@ -1315,9 +1473,10 @@ if ($Dashboard) {
     $dashOut = if ($script:CliOutput -and $script:CliOutput.ToLower().EndsWith('.html')) { $script:CliOutput }
                else { Join-Path $dashSrc 'NSA_Dashboard.html' }
     $dashCsv = $dashOut -replace '\.html$','.csv'
+    $dashJson = $dashOut -replace '\.html$','.json'
     Write-Host ""
     Write-Host "$($script:ProductName) v$($script:ProductVersion) - Dashboard Mode" -ForegroundColor Cyan
-    $written = Export-MultiClientDashboard -SourceDir $dashSrc -OutPath $dashOut -StaleAfterDays $StaleDays -CsvPath $dashCsv -TrendWindowDays $TrendDays -MaxFiles $DashboardMaxFiles -MaxFileBytes $DashboardMaxFileBytes -MaxTotalBytes $DashboardMaxTotalBytes
+    $written = Export-MultiClientDashboard -SourceDir $dashSrc -OutPath $dashOut -StaleAfterDays $StaleDays -CsvPath $dashCsv -JsonPath $dashJson -TrendWindowDays $TrendDays -MaxFiles $DashboardMaxFiles -MaxFileBytes $DashboardMaxFileBytes -MaxTotalBytes $DashboardMaxTotalBytes
     if ($written) { exit 0 } else { exit 1 }
 }
 
@@ -11061,10 +11220,13 @@ function Convert-AuditStateToSnapshot {
             $sv = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
             $fTxt = if ($script:FindingsBoxes[$id]) { $script:FindingsBoxes[$id].Text } else { '' }
             $eTxt = if ($script:EvidenceBoxes[$id]) { $script:EvidenceBoxes[$id].Text } else { '' }
+            $remStatus = if ($script:RemStatusCombos[$id] -and $script:RemStatusCombos[$id].SelectedItem) { $script:RemStatusCombos[$id].SelectedItem.ToString() } else { 'Open' }
+            $remDue = if ($script:RemDueBoxes[$id]) { [string]$script:RemDueBoxes[$id].Text } else { '' }
             $findings[$id] = [ordered]@{
                 status      = $sv
                 severity    = $item.Severity
                 fingerprint = Get-FindingFingerprint -Status $sv -Findings $fTxt -Evidence $eTxt
+                remediation = [ordered]@{ status=$remStatus; due=$remDue }
             }
         }
     }
@@ -11371,6 +11533,12 @@ function Invoke-AuditHistory {
     $snapshot['exposure'] = $exposure
     $snapshot['previous_run_id'] = if ($baseline -and $schemaOk -and $identityOk) { $baseline.run_id } else { $null }
     $payload = Get-AuditAlertPayload -Delta $delta -CurrentSnapshot $snapshot -Exposure $exposure -NowIso $nowIso
+    $snapshotFindingValues = if ($snapshot.findings -is [System.Collections.IDictionary]) { @($snapshot.findings.Values) } else { @($snapshot.findings.PSObject.Properties.Value) }
+    $snapshotScorable = @($snapshotFindingValues | Where-Object { [string]$_.status -in @('Pass','Partial','Fail') }).Count -gt 0
+    $snapshotCritical = @($snapshotFindingValues | Where-Object { [string]$_.status -eq 'Fail' -and [string]$_.severity -eq 'Critical' }).Count
+    $snapshotRows = if ($snapshotScorable) { @([pscustomobject]@{ ScorePct=[int]$snapshot.score.overall; Stale=$false; Critical=$snapshotCritical; Findings=$snapshotFindingValues; Exceptions=@(); Continuous=[pscustomobject]@{ delta=$delta; exposure=$exposure } }) } else { @() }
+    $historyKpis = Get-MspExecutiveKpis -Rows $snapshotRows -AssetsValid 1 -AssetsSkipped $(if($snapshotScorable){0}else{1}) -AssetsFailed 0 -Now $now
+    $snapshot['executive_kpis'] = $historyKpis
 
     # Persist snapshot + baseline independently so one failure does not hide the
     # other, and so the returned status identifies exactly what was durable.
@@ -11399,6 +11567,7 @@ function Invoke-AuditHistory {
         counts = if ($delta) { $delta.counts } else { $null }
         worst_exposure_days = $payload.worst_exposure_days
         worst_critical_exposure_days = $payload.worst_critical_exposure_days
+        executive_kpis = $historyKpis
         baseline_age_days = $baselineAgeDays
         identity_compatible = $identityOk
         identity_error = $identityError
@@ -13798,6 +13967,25 @@ function Export-ComplianceSummary {
         findings = $cloudRecords
     }
 
+    $kpiFindings = @()
+    foreach ($cn in $script:AuditCategories.Keys) {
+        foreach ($item in $script:AuditCategories[$cn].Items) {
+            $id = $item.ID
+            $statusValue = if ($script:StatusCombos[$id] -and $script:StatusCombos[$id].SelectedItem) { $script:StatusCombos[$id].SelectedItem.ToString() } else { 'Not Assessed' }
+            $remediationStatus = if ($script:RemStatusCombos[$id] -and $script:RemStatusCombos[$id].SelectedItem) { $script:RemStatusCombos[$id].SelectedItem.ToString() } else { 'Open' }
+            $remediationDue = if ($script:RemDueBoxes[$id]) { [string]$script:RemDueBoxes[$id].Text } else { '' }
+            $kpiFindings += [pscustomobject]@{ status=$statusValue; severity=$item.Severity; remediation=[pscustomobject]@{ status=$remediationStatus; due=$remediationDue } }
+        }
+    }
+    $kpiScorable = @($kpiFindings | Where-Object { $_.status -in @('Pass','Partial','Fail') }).Count -gt 0
+    $kpiRows = if ($kpiScorable) {
+        @([pscustomobject]@{
+            ScorePct=[int]$riskData.Pct; Stale=$false; Critical=@($kpiFindings | Where-Object { $_.status -eq 'Fail' -and $_.severity -eq 'Critical' }).Count
+            Findings=$kpiFindings; Exceptions=@(); Continuous=if($script:HistoryResult){[pscustomobject]@{delta=$script:HistoryResult.delta;exposure=$script:HistoryResult.exposure}}else{$null}
+        })
+    } else { @() }
+    $executiveKpis = Get-MspExecutiveKpis -Rows $kpiRows -AssetsValid 1 -AssetsSkipped $(if($kpiScorable){0}else{1}) -AssetsFailed 0 -Now (Get-Date)
+
     $summary = [ordered]@{
         schema_version = $script:SchemaVersion
         tool           = $script:ProductShortName
@@ -13819,6 +14007,7 @@ function Export-ComplianceSummary {
         framework_compliance = $fwFlags
         critical_findings = $critFindings
         cloud_assessments = $cloudSummary
+        executive_kpis = $executiveKpis
         evidence_model = [ordered]@{
             manual_validation_modes = $script:ManualEvidenceModes
             note = 'Framework scores include checklist/interview/external-required controls by default; score_excluding_manual_evidence is provided where consumers need automated-only scoring.'
@@ -14084,6 +14273,8 @@ function Export-DataHandlingManifest {
             source_paths = 'restricted'
             credentials_and_tokens = 'secret-excluded'
             scores_and_status = 'operational'
+            fleet_kpis_and_denominators = 'operational-aggregate'
+            dashboard_input_diagnostics = 'restricted'
         }
         secret_fields_excluded = @('access_token','refresh_token','client_secret','password','private_key','authorization')
         artifacts = @($ArtifactPaths | Where-Object { $_ } | ForEach-Object { [System.IO.Path]::GetFileName($_) } | Sort-Object -Unique)

@@ -23,6 +23,7 @@ public class ExportContractTests
         yield return ["oscal-assessment-results.schema.json", "oscal-assessment-results.golden.json"];
         yield return ["oscal-poam.schema.json", "oscal-poam.golden.json"];
         yield return ["dashboard-client-row.schema.json", "dashboard-client-row.golden.json"];
+        yield return ["dashboard-summary.schema.json", "dashboard-summary.golden.json"];
         yield return ["siem-field-mapping.schema.json", "siem-field-mapping.golden.json"];
     }
 
@@ -88,6 +89,28 @@ public class ExportContractTests
         {
             if (Directory.Exists(siemDir))
                 Directory.Delete(siemDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Generated_Dashboard_Conforms_To_Committed_Schema()
+    {
+        var (checks, env) = CreateContractData();
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-dashboard-contract-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(dir, "example_findings.json"),
+                JsonExporter.Export(checks, env, 85, "B", 70, "C", ScanProfileType.Full, 60, "D", "Example Client", "Example Auditor"));
+
+            ValidateJsonDocument(
+                "dashboard-summary.schema.json",
+                await DashboardGenerator.GenerateJsonAsync(dir));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
         }
     }
 

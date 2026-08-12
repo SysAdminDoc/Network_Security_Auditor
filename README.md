@@ -160,19 +160,24 @@ fleet or RMM output share:
 ```
 
 Dashboard mode defaults to 2,000 JSON files, 10 MiB per file, and 100 MiB total
-input. Files that exceed a budget or are malformed are skipped with the reason
-listed in the dashboard; valid files within the budget are still included. The
-dashboard shows each client's latest grade/score, ransomware readiness,
-critical-finding count, compliance-framework coverage, a per-client score trend,
-and a stale-scan flag, with a critical-findings-by-category rollup. It links back
-to each client's individual HTML report when one sits next to its JSON, writes a
-companion CSV, and embeds only aggregate scores — never finding evidence or notes.
+input. Files that exceed a budget or fail the findings contract are reported as
+failed inputs; unavailable and not-assessed assets are reported as skipped. They
+never become score-zero rows or inflate scan coverage. HTML, CSV, and JSON
+companions report discovered/valid/scanned/skipped/failed assets, freshness,
+average and median score with the scored population, open/new/resolved criticals,
+oldest high/critical exposure, active/expired exceptions, and remediation-aging
+buckets. Every rate and aging rollup names its denominator. Older scans for the
+same client and host remain trend points but do not increase the asset count. The
+HTML links to an adjacent individual report and embeds only aggregate values —
+never finding evidence or notes.
 
 ### Continuous Delta Assessment
 
 Run the same scan on a schedule and the tool tracks change over time. Each silent
 run writes a compact snapshot, compares it to the previous baseline, and records a
-run summary to `history.jsonl`:
+run summary to `history.jsonl`. Snapshots and run summaries carry the same
+single-asset executive KPI shape used by the fleet dashboard, including explicit
+score, freshness, critical-change, exception, and remediation denominators:
 
 ```powershell
 # Recurring scan with history (delta vs. the last run is computed automatically)
@@ -483,7 +488,7 @@ Automatic platform detection and field population:
 | OSCAL POA&M | `*_oscal_poam.json` | OSCAL plan of action and milestones risks/tasks linked to finding UUIDs, waiver status, owner, due date, and remediation text |
 
 Machine-readable contract schemas for JSON, JSONL, OCSF, OSCAL, OSCAL POA&M,
-Intune, compliance summary, dashboard aggregate rows, and SIEM field mappings are
+Intune, compliance summary, dashboard summaries/aggregate rows, and SIEM field mappings are
 committed under `schemas/exports` and covered by xUnit golden fixture tests.
 
 The C# silent mode can also import an Intune STIG audit baseline JSON or CSV

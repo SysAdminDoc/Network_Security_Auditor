@@ -777,13 +777,6 @@ High.
 
 ---
 
-- [ ] P2 — Add denominator-safe MSP executive KPIs to dashboard and history outputs
-  Why: The C# dashboard currently exposes client count, average score, critical count, stale count, latest row, and a score sparkline, while the existing history roadmap covers score deltas and critical changes. Operators still lack a trustworthy view of scan coverage, invalid/skipped/not-permitted hosts, exception debt, remediation aging, and freshness denominators; commercial SCA dashboards and MSP community signals repeatedly prioritize those operational metrics.
-  Evidence: `src/NetworkSecurityAuditor/Export/DashboardGenerator.cs:15-43,171-283,388-409` and PowerShell dashboard/history paths `NetworkSecurityAudit.ps1:933-1135,10991-11092`; sources: https://www.qualys.com/apps/security-configuration-assessment, https://www.pingcastle.com/services/enterprise/, and https://www.reddit.com/r/msp/comments/xg9hd1.
-  Touches: C# `DashboardGenerator`, `ComplianceSummaryExporter`, history/delta models, PowerShell `Export-MultiClientDashboard`/history summary, privacy manifest, dashboard JSON/CSV schemas, and golden fixtures.
-  Acceptance: Dashboard JSON/CSV/HTML report `assets_discovered`, `assets_valid`, `assets_scanned`, `assets_skipped`, `assets_failed`, `freshness`, `open/new/resolved criticals`, `oldest high/critical age`, `active/expired exception counts`, and remediation-aging buckets with explicit denominators. Malformed, skipped, and unavailable results never inflate coverage or become zero-risk rows; average/median scores state their population; fixtures cover empty, partial, duplicate, stale, privacy, and mixed-success fleet inputs.
-  Complexity: M
-
 - [ ] P2 — Ship an independently executable release-bundle verifier
   Why: The local release script already creates a ZIP, CycloneDX SBOM, checksum manifest, and release manifest, but verification is currently manual and the optional Authenticode state is not the same as an external provenance attestation. Prowler publishes SBOM/provenance attestations and verifies downloaded tool checksums; CISA supply-chain guidance treats consumer verification as a release requirement.
   Evidence: `tools/Publish-CSharpRelease.ps1:421-517`, `tests/NetworkSecurityAuditor.Tests/ReleaseToolingTests.cs:1-100`, and `README.md:113-121,504-520`; sources: https://github.com/prowler-cloud/prowler/releases, https://github.com/CycloneDX/sbom-utility, and https://www.cisa.gov/topics/cyber-threats-and-advisories/sbom/sbomresourceslibrary.

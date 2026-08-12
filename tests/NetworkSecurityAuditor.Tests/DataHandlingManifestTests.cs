@@ -19,6 +19,8 @@ public class DataHandlingManifestTests
         Assert.Equal("sha256-pseudonym", manifest.IdentityStrategy);
         Assert.Equal("redacted", manifest.SourcePathPolicy);
         Assert.Equal("secret-excluded", manifest.FieldClassifications["credentials_and_tokens"]);
+        Assert.Equal("operational-aggregate", manifest.FieldClassifications["fleet_kpis_and_denominators"]);
+        Assert.Equal("restricted", manifest.FieldClassifications["dashboard_input_diagnostics"]);
         Assert.Contains("access_token", manifest.SecretFieldsExcluded);
         Assert.Single(manifest.Artifacts);
         Assert.Equal("pseudonymized", manifest.Redaction["hostnames"]);

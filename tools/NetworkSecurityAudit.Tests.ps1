@@ -599,6 +599,8 @@ Describe 'Data-handling manifest coverage' {
         $script:Text | Should -Match 'secret_fields_excluded'
         $script:Text | Should -Match 'identity_strategy'
         $script:Text | Should -Match 'source_path_policy'
+        $script:Text | Should -Match 'fleet_kpis_and_denominators\s*=\s*''operational-aggregate'''
+        $script:Text | Should -Match 'dashboard_input_diagnostics\s*=\s*''restricted'''
         $script:Text | Should -Match 'data-handling\.json'
         $script:Text | Should -Match 'GetFileName\(\$_\)'
     }
@@ -613,8 +615,10 @@ Describe 'Data-handling manifest coverage' {
 Describe 'Multi-client dashboard output safety' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Export-MultiClientDashboard' }, $true)[0]
-        . ([scriptblock]::Create($fn.Extent.Text))
+        foreach ($functionName in 'Get-MspExecutiveKpis','Export-MultiClientDashboard') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $functionName }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
         $script:ProductName = 'Network Security Auditor'
         $script:ProductVersion = 'test'
     }
@@ -662,7 +666,7 @@ Describe 'Multi-client dashboard output safety' {
                 client = 'Bounded Client'
                 target = 'HOST01'
                 score = [ordered]@{ overall = 80; grade = 'B'; ransomware = [ordered]@{ score = 80; grade = 'B' } }
-                findings = @()
+                findings = @([ordered]@{ status='Pass'; severity='Low' })
                 compliance_frameworks = [ordered]@{}
                 tool_version = 'test'
             }
@@ -690,7 +694,7 @@ Describe 'Multi-client dashboard output safety' {
                 client = 'Trend Client'
                 target = 'HOST01'
                 score = [ordered]@{ overall = 70; grade = 'C'; ransomware = [ordered]@{ score = 70; grade = 'C' } }
-                findings = @()
+                findings = @([ordered]@{ status='Pass'; severity='Low' })
                 compliance_frameworks = [ordered]@{}
                 tool_version = 'test'
             }
@@ -699,14 +703,57 @@ Describe 'Multi-client dashboard output safety' {
             $old | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $root '01_old_findings.json') -Encoding UTF8
             $new | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $root '02_new_findings.json') -Encoding UTF8
             $outPath = Join-Path $root 'dashboard.html'
+            $csvPath = Join-Path $root 'dashboard.csv'
+            $jsonPath = Join-Path $root 'dashboard.json'
 
-            Export-MultiClientDashboard -SourceDir $root -OutPath $outPath -TrendWindowDays 30 | Should -Be $outPath
+            Export-MultiClientDashboard -SourceDir $root -OutPath $outPath -CsvPath $csvPath -JsonPath $jsonPath -TrendWindowDays 30 | Should -Be $outPath
             $html = Get-Content -LiteralPath $outPath -Raw
             $html | Should -Match '2 scans / 1 in 30d trend'
+            $dashboard = Get-Content -LiteralPath $jsonPath -Raw | ConvertFrom-Json
+            $dashboard.assets_discovered | Should -Be 1
+            $dashboard.assets_scanned | Should -Be 1
+            $dashboard.coverage.denominator | Should -Be 1
+            (Get-Content -LiteralPath $csvPath -Raw) | Should -Match '"RecordType","AssetsDiscovered"'
         }
         finally {
             if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
         }
+    }
+
+    It 'computes denominator-safe mixed-fleet KPIs without zero-risk rows' {
+        $now = [datetime]'2026-08-12T12:00:00Z'
+        $rows = @(
+            [pscustomobject]@{
+                ScorePct=80; Stale=$false; Critical=1
+                Findings=@(
+                    [pscustomobject]@{status='Fail';severity='Critical';remediation=[pscustomobject]@{status='Open';due='2026-08-01'}},
+                    [pscustomobject]@{status='Fail';severity='High';remediation=[pscustomobject]@{status='Accepted Risk';due='2026-09-01'}}
+                )
+                Exceptions=@([pscustomobject]@{disposition='Accepted Risk';expiration='2026-09-01'},[pscustomobject]@{disposition='Deferred';expiration='2026-08-01'})
+                Continuous=[pscustomobject]@{delta=[pscustomobject]@{new_criticals=1;resolved_criticals=2};exposure=[ordered]@{A=[pscustomobject]@{severity='Critical';days=12};B=[pscustomobject]@{severity='High';days=40}}}
+            },
+            [pscustomobject]@{ScorePct=40;Stale=$true;Critical=0;Findings=@([pscustomobject]@{status='Fail';severity='High';remediation=[pscustomobject]@{status='Open';due=''}});Exceptions=@();Continuous=$null}
+        )
+
+        $kpis = Get-MspExecutiveKpis -Rows $rows -AssetsValid 3 -AssetsSkipped 1 -AssetsFailed 1 -Now $now
+
+        $kpis.assets_discovered | Should -Be 4
+        $kpis.assets_scanned | Should -Be 2
+        $kpis.coverage.denominator | Should -Be 4
+        $kpis.coverage.percentage | Should -Be 50
+        $kpis.scores.average | Should -Be 60
+        $kpis.scores.median | Should -Be 60
+        $kpis.scores.population | Should -Be 2
+        $kpis.freshness.stale | Should -Be 1
+        $kpis.critical_findings.new | Should -Be 1
+        $kpis.critical_findings.resolved | Should -Be 2
+        $kpis.critical_findings.oldest_high_age_days | Should -Be 40
+        $kpis.critical_findings.oldest_critical_age_days | Should -Be 12
+        $kpis.exceptions.active | Should -Be 1
+        $kpis.exceptions.expired | Should -Be 1
+        $kpis.remediation_aging.denominator | Should -Be 2
+        $kpis.remediation_aging.overdue_1_to_30_days | Should -Be 1
+        $kpis.remediation_aging.no_due_date | Should -Be 1
     }
 }
 

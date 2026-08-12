@@ -53,7 +53,9 @@ public static class DataHandlingManifestWriter
                 ["findings_and_evidence"] = "technical-sensitive",
                 ["source_paths"] = "restricted",
                 ["credentials_and_tokens"] = "secret-excluded",
-                ["scores_and_status"] = "operational"
+                ["scores_and_status"] = "operational",
+                ["fleet_kpis_and_denominators"] = "operational-aggregate",
+                ["dashboard_input_diagnostics"] = "restricted"
             },
             SecretFieldsExcluded = ["access_token", "refresh_token", "client_secret", "password", "private_key", "authorization"],
             Artifacts = artifacts,

@@ -29,7 +29,8 @@ public static class JsonExporter
         string domainMaturityGrade = "N/A",
         string client = "",
         string auditor = "",
-        IntuneStigAuditImport? intuneStigAudit = null)
+        IntuneStigAuditImport? intuneStigAudit = null,
+        IReadOnlyList<RiskWaiver>? waiverHistory = null)
     {
         var checkList = checks.ToList();
         var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
@@ -105,10 +106,27 @@ public static class JsonExporter
                 };
             }).ToArray(),
             ComplianceFrameworks = BuildComplianceSummary(statusLookup),
+            Exceptions = BuildExceptions(waiverHistory),
             IntuneStigAudit = intuneStigAudit
         };
 
         return JsonSerializer.Serialize(report, SerializerOptions);
+    }
+
+    private static ExceptionEntry[] BuildExceptions(IReadOnlyList<RiskWaiver>? waiverHistory)
+    {
+        if (waiverHistory is null)
+            return [];
+
+        return waiverHistory
+            .Where(waiver => waiver.EffectiveStatus is WaiverDispositionState.Approved or WaiverDispositionState.Expired)
+            .Select(waiver => new ExceptionEntry
+            {
+                CheckId = waiver.CheckId,
+                Status = waiver.EffectiveStatus.ToString().ToLowerInvariant(),
+                Expiration = waiver.ExpirationDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            })
+            .ToArray();
     }
 
     private static ScoreSection BuildScoreSection(
@@ -187,7 +205,15 @@ public static class JsonExporter
         public ScoreSection Score { get; set; } = new();
         public FindingEntry[] Findings { get; set; } = [];
         public Dictionary<string, ComplianceFrameworkSummary> ComplianceFrameworks { get; set; } = [];
+        public ExceptionEntry[] Exceptions { get; set; } = [];
         public IntuneStigAuditImport? IntuneStigAudit { get; set; }
+    }
+
+    private sealed class ExceptionEntry
+    {
+        public string CheckId { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string? Expiration { get; set; }
     }
 
     private sealed class EnvironmentSection

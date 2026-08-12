@@ -25,6 +25,7 @@
   "category_scores": {
     "Endpoint Security": {
       "total": 3,
+      "denominator": 3,
       "met": 1,
       "partial": 1,
       "failing": 1,
@@ -35,6 +36,7 @@
     "NIST 800-171": {
       "mapped": 3,
       "total": 3,
+      "denominator": 3,
       "met": 1,
       "partial": 1,
       "failing": 1,
@@ -48,5 +50,18 @@
       "label": "Defender / EDR Deployment + ASR Rules",
       "category": "Endpoint Security"
     }
-  ]
+  ],
+  "executive_kpis": {
+    "assets_discovered": 1,
+    "assets_valid": 1,
+    "assets_scanned": 1,
+    "assets_skipped": 0,
+    "assets_failed": 0,
+    "coverage": { "numerator": 1, "denominator": 1, "percentage": 100 },
+    "freshness": { "fresh": 1, "stale": 0, "unknown": 0, "denominator": 1 },
+    "scores": { "average": 85, "median": 85, "population": 1, "population_definition": "this asset when at least one check is Pass, Partial, or Fail" },
+    "critical_findings": { "open": 1, "open_denominator": 1, "new": 0, "resolved": 0, "change_denominator": 0, "oldest_high_age_days": null, "oldest_critical_age_days": null, "age_denominator": 0 },
+    "exceptions": { "active": 0, "expired": 0, "denominator": 0 },
+    "remediation_aging": { "denominator": 1, "not_due": 0, "overdue_1_to_30_days": 0, "overdue_31_to_60_days": 0, "overdue_61_to_90_days": 0, "overdue_91_plus_days": 0, "no_due_date": 1 }
+  }
 }

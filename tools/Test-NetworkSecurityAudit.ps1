@@ -340,8 +340,8 @@ if ($scriptText -notmatch 'writes\s*=\s*\[ordered\]@\{' -or $scriptText -notmatc
     Add-Failure 'Structured JSON export must disclose write status (writes.any_attempted, write_manifest_only, manifest).'
 }
 # NSA-010: static multi-client dashboard mode.
-if ($scriptText -notmatch '\[switch\]\$Dashboard' -or $scriptText -notmatch 'function Export-MultiClientDashboard' -or $scriptText -notmatch "if \(\`$Dashboard\)\s*\{" -or $scriptText -notmatch "export_type -ne 'structured_findings'") {
-    Add-Failure 'Dashboard mode must expose -Dashboard, define Export-MultiClientDashboard, gate on $Dashboard, and filter to structured_findings exports.'
+if ($scriptText -notmatch '\[switch\]\$Dashboard' -or $scriptText -notmatch 'function Export-MultiClientDashboard' -or $scriptText -notmatch 'function Get-MspExecutiveKpis' -or $scriptText -notmatch "if \(\`$Dashboard\)\s*\{" -or $scriptText -notmatch "Filter '\*_findings\.json'" -or $scriptText -notmatch 'assets_discovered') {
+    Add-Failure 'Dashboard mode must expose -Dashboard, define denominator-safe KPI generation, gate on $Dashboard, and filter findings export inputs.'
 }
 # NSA-008: evidence-grade compliance output.
 if ($scriptText -notmatch 'function Get-AuditExceptions' -or $scriptText -notmatch 'function Get-FrameworkControlSummary' -or $scriptText -notmatch 'function Get-CheckEvidenceMetadata' -or $scriptText -notmatch 'exceptions     = Get-AuditExceptions' -or $scriptText -notmatch 'framework_controls = if' -or $scriptText -notmatch 'mapping_limitations' -or $scriptText -notmatch 'evidence_model' -or $scriptText -notmatch 'assessment_method = \$evidenceMeta\.EvidenceMode' -or $scriptText -notmatch 'score_excludes_na' -or $scriptText -notmatch 'manual_validation_required' -or $scriptText -notmatch 'score_excluding_manual_evidence') {

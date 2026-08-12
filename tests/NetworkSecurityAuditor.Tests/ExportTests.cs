@@ -1108,7 +1108,9 @@ public class ExportTests
                 "grade": "A",
                 "ransomware_readiness": 80
               },
-              "findings": []
+              "findings": [
+                { "status": "Pass", "severity": "Low" }
+              ]
             }
             """);
 
@@ -1132,7 +1134,7 @@ public class ExportTests
     {
         var dir = await WriteDashboardFixtureAsync("""
             {
-              "timestamp": "\t=DATE(2026,7,8)",
+              "timestamp": "2026-07-08T00:00:00Z",
               "client": "\t=DANGEROUS()",
               "environment": {
                 "computer_name": "\r=DANGEROUS()",
@@ -1157,7 +1159,6 @@ public class ExportTests
             Assert.Contains("\"'\r=DANGEROUS()\"", csv);
             Assert.Contains("\"'  =DANGEROUS()\"", csv);
             Assert.Contains("\"'=DANGEROUS()\"", csv);
-            Assert.Contains("\"'\t=DATE(2026,7,8)\"", csv);
         }
         finally
         {
@@ -1181,7 +1182,9 @@ public class ExportTests
                 "grade": "A\" onmouseover=\"alert(1)",
                 "ransomware_readiness": 50
               },
-              "findings": []
+              "findings": [
+                { "status": "Pass", "severity": "Low" }
+              ]
             }
             """);
 
@@ -1210,7 +1213,8 @@ public class ExportTests
 
             Assert.Contains("No scan exports found", emptyHtml);
             Assert.Contains("*_findings.json", emptyHtml);
-            Assert.DoesNotContain("<table>", emptyHtml);
+            Assert.DoesNotContain("Latest scorable scan per client and host", emptyHtml);
+            Assert.Contains("0 discovered; 0 valid; 0 scanned", emptyHtml);
         }
         finally
         {
@@ -1226,13 +1230,11 @@ public class ExportTests
         {
             var html = await DashboardGenerator.GenerateAsync(dir, staleDays: 9999);
 
-            Assert.Contains("<caption>Latest scan per client and host</caption>", html);
-            Assert.Contains("<th scope=\"col\">Client</th>", html);
-            Assert.Contains("Invalid scan date: not-a-date", html);
-            Assert.Contains("[STALE]", html);
-            Assert.Contains("Open report", html);
-            Assert.Contains("href=\"client%20one.html\"", html);
-            Assert.Contains("aria-label=\"Open report for Client One HOST01\"", html);
+            Assert.Contains("No scan exports found", html);
+            Assert.Contains("client one_findings.json", html);
+            Assert.Contains("timestamp is missing or invalid", html);
+            Assert.DoesNotContain("Client One</td>", html);
+            Assert.DoesNotContain("Open report", html);
         }
         finally
         {
@@ -1284,17 +1286,118 @@ public class ExportTests
                 .Where(line => !line.StartsWith('#'))
                 .ToArray();
 
-            Assert.Contains("2 clients", html);
+            Assert.Contains("Assets: 3 discovered; 2 valid; 2 scanned; 0 skipped; 1 failed", html);
             Assert.Contains("60% -&gt; 90%", html);
             Assert.Contains("older duplicate scan(s) hidden", html);
             Assert.Contains("acme_old_findings.json", html);
             Assert.Contains("broken_findings.json", html);
-            Assert.Equal(3, dataRows.Length);
+            Assert.Equal(4, dataRows.Length);
             Assert.Contains("acme_new_findings.json", csv);
             Assert.DoesNotContain("Acme,HOST01,Windows 11 Enterprise,60,", csv);
             Assert.Contains("2026-07-01T00:00:00Z:60|2026-07-08T00:00:00Z:90", csv);
             Assert.Contains("# DUPLICATE:", csv);
-            Assert.Contains("# SKIPPED:", csv);
+            Assert.Contains("# FAILED:", csv);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Dashboard_Kpis_Use_Explicit_Denominators_For_Mixed_Fleet()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nsa-dashboard-kpi-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        await WriteDashboardFixtureAsync(dir, "privacy_old_findings.json", DashboardJson("2026-08-01T00:00:00Z", "CLIENT-A1B2", "HOST-C3D4", 40, "F", 30, "Fail", "Critical"));
+        await WriteDashboardFixtureAsync(dir, "privacy_latest_findings.json", """
+            {
+              "timestamp": "2026-08-10T00:00:00Z",
+              "privacy_redacted": true,
+              "client": "CLIENT-A1B2",
+              "target": "HOST-C3D4",
+              "environment": { "os": "Windows 11" },
+              "score": { "overall": 80, "grade": "B", "ransomware": { "score": 70 } },
+              "findings": [
+                { "id": "A", "status": "Fail", "severity": "Critical", "remediation": { "status": "Open", "due": "2026-08-01" } },
+                { "id": "B", "status": "Fail", "severity": "High", "remediation": { "status": "Accepted Risk", "due": "2026-07-01" } },
+                { "id": "C", "status": "Partial", "severity": "Medium", "remediation": { "status": "Closed" } }
+              ],
+              "exceptions": [
+                { "id": "B", "disposition": "Accepted Risk", "expiration": "2026-09-01" },
+                { "id": "D", "disposition": "Deferred", "expiration": "2026-08-01" }
+              ],
+              "continuous": {
+                "delta": { "new_criticals": 1, "resolved_criticals": 2 },
+                "exposure": {
+                  "A": { "severity": "Critical", "days": 12 },
+                  "B": { "severity": "High", "days": 40 }
+                }
+              }
+            }
+            """);
+        await WriteDashboardFixtureAsync(dir, "stale_findings.json", """
+            {
+              "timestamp": "2026-01-01T00:00:00Z",
+              "client": "Stale Client",
+              "environment": { "computer_name": "STALE-HOST", "os_caption": "Windows Server" },
+              "score": { "overall": 40, "grade": "F", "ransomware_readiness": 20 },
+              "findings": [
+                { "id": "S", "status": "Fail", "severity": "High" }
+              ]
+            }
+            """);
+        await WriteDashboardFixtureAsync(dir, "skipped_findings.json", """
+            {
+              "timestamp": "2026-08-11T00:00:00Z",
+              "client": "Unavailable Client",
+              "environment": { "computer_name": "NO-PERMISSION" },
+              "findings": [
+                { "id": "U", "status": "NotPermitted", "severity": "Critical" }
+              ]
+            }
+            """);
+        await WriteDashboardFixtureAsync(dir, "broken_findings.json", "{ invalid json");
+        var now = new DateTimeOffset(2026, 8, 12, 12, 0, 0, TimeSpan.Zero);
+
+        try
+        {
+            var json = await DashboardGenerator.GenerateJsonAsync(dir, staleDays: 30, generatedAt: now);
+            var csv = await DashboardGenerator.GenerateCsvAsync(dir, staleDays: 30, generatedAt: now);
+            var html = await DashboardGenerator.GenerateAsync(dir, staleDays: 30, generatedAt: now);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            Assert.Equal(4, root.GetProperty("assets_discovered").GetInt32());
+            Assert.Equal(3, root.GetProperty("assets_valid").GetInt32());
+            Assert.Equal(2, root.GetProperty("assets_scanned").GetInt32());
+            Assert.Equal(1, root.GetProperty("assets_skipped").GetInt32());
+            Assert.Equal(1, root.GetProperty("assets_failed").GetInt32());
+            Assert.Equal(2, root.GetProperty("coverage").GetProperty("numerator").GetInt32());
+            Assert.Equal(4, root.GetProperty("coverage").GetProperty("denominator").GetInt32());
+            Assert.Equal(60, root.GetProperty("scores").GetProperty("average").GetDouble());
+            Assert.Equal(60, root.GetProperty("scores").GetProperty("median").GetDouble());
+            Assert.Equal(2, root.GetProperty("scores").GetProperty("population").GetInt32());
+            Assert.Equal(1, root.GetProperty("freshness").GetProperty("fresh").GetInt32());
+            Assert.Equal(1, root.GetProperty("freshness").GetProperty("stale").GetInt32());
+            Assert.Equal(1, root.GetProperty("critical_findings").GetProperty("open").GetInt32());
+            Assert.Equal(1, root.GetProperty("critical_findings").GetProperty("new").GetInt32());
+            Assert.Equal(2, root.GetProperty("critical_findings").GetProperty("resolved").GetInt32());
+            Assert.Equal(40, root.GetProperty("critical_findings").GetProperty("oldest_high_age_days").GetInt32());
+            Assert.Equal(12, root.GetProperty("critical_findings").GetProperty("oldest_critical_age_days").GetInt32());
+            Assert.Equal(1, root.GetProperty("exceptions").GetProperty("active").GetInt32());
+            Assert.Equal(1, root.GetProperty("exceptions").GetProperty("expired").GetInt32());
+            Assert.Equal(2, root.GetProperty("remediation_aging").GetProperty("denominator").GetInt32());
+            Assert.Equal(1, root.GetProperty("remediation_aging").GetProperty("overdue_1_to_30_days").GetInt32());
+            Assert.Equal(1, root.GetProperty("remediation_aging").GetProperty("no_due_date").GetInt32());
+            Assert.Equal(2, root.GetProperty("assets").GetArrayLength());
+            Assert.DoesNotContain("Unavailable Client", root.GetProperty("assets").GetRawText());
+            Assert.DoesNotContain("broken_findings.json\",\"score\":0", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Summary,4,3,2,1,1,50,4", csv);
+            Assert.Contains("Average Score", html);
+            Assert.Contains("n=2; median 60", html);
+            Assert.Contains("CLIENT-A1B2", html);
+            Assert.DoesNotContain("Unavailable Client</td>", html);
         }
         finally
         {

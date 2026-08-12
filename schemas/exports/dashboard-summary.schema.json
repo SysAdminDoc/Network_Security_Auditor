@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/dashboard-summary.schema.json",
+  "title": "Network Security Auditor denominator-safe fleet dashboard",
+  "type": "object",
+  "required": ["schema_version", "tool", "tool_version", "generated_at_utc", "stale_after_days", "assets_discovered", "assets_valid", "assets_scanned", "assets_skipped", "assets_failed", "coverage", "freshness", "scores", "critical_findings", "exceptions", "remediation_aging", "assets", "diagnostics"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tool": { "type": "string" },
+    "tool_version": { "type": "string" },
+    "generated_at_utc": { "type": "string" },
+    "stale_after_days": { "type": "integer", "minimum": 0 },
+    "assets_discovered": { "type": "integer", "minimum": 0 },
+    "assets_valid": { "type": "integer", "minimum": 0 },
+    "assets_scanned": { "type": "integer", "minimum": 0 },
+    "assets_skipped": { "type": "integer", "minimum": 0 },
+    "assets_failed": { "type": "integer", "minimum": 0 },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "freshness": { "$ref": "#/$defs/freshness" },
+    "scores": { "$ref": "#/$defs/scores" },
+    "critical_findings": { "$ref": "#/$defs/criticals" },
+    "exceptions": { "$ref": "#/$defs/exceptions" },
+    "remediation_aging": { "$ref": "#/$defs/remediation" },
+    "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
+    "diagnostics": { "$ref": "#/$defs/diagnostics" }
+  },
+  "$defs": {
+    "nullable_number": { "type": ["number", "null"] },
+    "nullable_integer": { "type": ["integer", "null"] },
+    "coverage": {
+      "type": "object",
+      "required": ["numerator", "denominator", "percentage", "denominator_definition"],
+      "properties": {
+        "numerator": { "type": "integer", "minimum": 0 },
+        "denominator": { "type": "integer", "minimum": 0 },
+        "percentage": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "denominator_definition": { "type": "string" }
+      }
+    },
+    "freshness": {
+      "type": "object",
+      "required": ["fresh", "stale", "unknown", "denominator", "stale_after_days"],
+      "properties": {
+        "fresh": { "type": "integer", "minimum": 0 },
+        "stale": { "type": "integer", "minimum": 0 },
+        "unknown": { "type": "integer", "minimum": 0 },
+        "denominator": { "type": "integer", "minimum": 0 },
+        "stale_after_days": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "required": ["average", "median", "population", "population_definition"],
+      "properties": {
+        "average": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "median": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "population": { "type": "integer", "minimum": 0 },
+        "population_definition": { "type": "string" }
+      }
+    },
+    "criticals": {
+      "type": "object",
+      "required": ["open", "open_denominator", "new", "resolved", "change_denominator", "oldest_high_age_days", "oldest_critical_age_days", "age_denominator"],
+      "properties": {
+        "open": { "type": "integer", "minimum": 0 },
+        "open_denominator": { "type": "integer", "minimum": 0 },
+        "new": { "type": "integer", "minimum": 0 },
+        "resolved": { "type": "integer", "minimum": 0 },
+        "change_denominator": { "type": "integer", "minimum": 0 },
+        "oldest_high_age_days": { "type": ["integer", "null"], "minimum": 0 },
+        "oldest_critical_age_days": { "type": ["integer", "null"], "minimum": 0 },
+        "age_denominator": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "exceptions": {
+      "type": "object",
+      "required": ["active", "expired", "denominator"],
+      "properties": {
+        "active": { "type": "integer", "minimum": 0 },
+        "expired": { "type": "integer", "minimum": 0 },
+        "denominator": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "remediation": {
+      "type": "object",
+      "required": ["denominator", "not_due", "overdue_1_to_30_days", "overdue_31_to_60_days", "overdue_61_to_90_days", "overdue_91_plus_days", "no_due_date", "denominator_definition"],
+      "properties": {
+        "denominator": { "type": "integer", "minimum": 0 },
+        "not_due": { "type": "integer", "minimum": 0 },
+        "overdue_1_to_30_days": { "type": "integer", "minimum": 0 },
+        "overdue_31_to_60_days": { "type": "integer", "minimum": 0 },
+        "overdue_61_to_90_days": { "type": "integer", "minimum": 0 },
+        "overdue_91_plus_days": { "type": "integer", "minimum": 0 },
+        "no_due_date": { "type": "integer", "minimum": 0 },
+        "denominator_definition": { "type": "string" }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "required": ["client", "host", "os", "score", "grade", "ransomware", "critical_fails", "total_fails", "stale", "scan_date", "file", "trend", "duplicate_files"],
+      "properties": {
+        "client": { "type": "string" },
+        "host": { "type": "string" },
+        "os": { "type": "string" },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "grade": { "type": "string" },
+        "ransomware": { "type": "integer" },
+        "critical_fails": { "type": "integer", "minimum": 0 },
+        "total_fails": { "type": "integer", "minimum": 0 },
+        "stale": { "type": "boolean" },
+        "scan_date": { "type": "string" },
+        "file": { "type": "string" },
+        "trend": { "type": "array", "items": { "$ref": "#/$defs/trend" } },
+        "duplicate_files": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "trend": {
+      "type": "object",
+      "required": ["timestamp", "score"],
+      "properties": {
+        "timestamp": { "type": "string" },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "diagnostic_item": {
+      "type": "object",
+      "required": ["file", "reason"],
+      "properties": {
+        "file": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": ["input_files_discovered", "valid_scan_files", "duplicate_scan_files", "failed_input_files", "skipped_assets"],
+      "properties": {
+        "input_files_discovered": { "type": "integer", "minimum": 0 },
+        "valid_scan_files": { "type": "integer", "minimum": 0 },
+        "duplicate_scan_files": { "type": "integer", "minimum": 0 },
+        "failed_input_files": { "type": "array", "items": { "$ref": "#/$defs/diagnostic_item" } },
+        "skipped_assets": { "type": "array", "items": { "$ref": "#/$defs/diagnostic_item" } }
+      }
+    }
+  }
+}

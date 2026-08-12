@@ -18,6 +18,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: PowerShell action buttons and severity badges now choose a foreground that remains readable across normal and hover states, with automated WCAG contrast coverage for all seven themes.
 
 ### Reliability
+- Added denominator-safe MSP executive KPIs across C# and PowerShell dashboard HTML/CSV/JSON, compliance summaries, and PowerShell history. Invalid, unavailable, and duplicate inputs no longer inflate coverage or score populations; freshness, critical-change, exception, exposure-age, and remediation-aging metrics publish explicit denominators.
 - Added a non-invasive diagnostics profile to both delivery surfaces. It emits bounded text/JSON readiness reports for elevation, Windows capabilities, output paths, PDF discovery, import limits, internet policy, and Graph configuration without persisting identities or credentials.
 - Fixed and completed per-target single-flight scan locking across the C# and PowerShell silent paths. Locks now compile cleanly, preserve verified live owners, recover dead or PID-reused stale owners after a bounded age, emit `AlreadyRunning` exit code 68, and are covered for overlapping, canceled, crashed, completed, and unrelated-target runs.
 - Fixed: Individual C# saves and exports now share busy-state gating, contextual failure reporting, crash-log capture, and cleanup; closing the window cancels active scans within a bounded shutdown period.
@@ -38,6 +39,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Fixed: PowerShell dashboard imports now enforce configurable file-count, per-file-byte, and total-byte budgets and show bounded skip diagnostics in the dashboard.
 
 ### Testing
+- Added mixed-fleet and export-contract fixtures covering empty, partial, duplicate, stale, privacy-redacted, malformed, unavailable, exception, and remediation-aging dashboard inputs.
 - Added a repository version-surface test that keeps optional `CLAUDE.md` guidance aligned with the authoritative C# project and PowerShell product versions.
 - Made the Pester quality suite ASCII-safe so all 83 tests parse and pass under both Windows PowerShell 5.1 and PowerShell 7.
 - Added: Export contract tests now enforce the schema validation keywords used by committed contracts, including dynamic maps, references, composition, and negative fixtures.

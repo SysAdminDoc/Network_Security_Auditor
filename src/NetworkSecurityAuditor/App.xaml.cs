@@ -316,6 +316,11 @@ public partial class App : Application
         await AtomicFileWriter.WriteAllTextAsync(csvPath, csv);
         Console.WriteLine($"  CSV: {csvPath}");
 
+        var jsonPath = Path.ChangeExtension(dashPath, ".json");
+        var json = await DashboardGenerator.GenerateJsonAsync(inputDir, args.StaleDays);
+        await AtomicFileWriter.WriteAllTextAsync(jsonPath, json);
+        Console.WriteLine($"  JSON: {jsonPath}");
+
         Console.WriteLine();
         return 0;
     }
@@ -510,7 +515,7 @@ public partial class App : Application
         var baseName = $"SecurityAudit_{SafeFileNameSegment(exportClient, "Client")}_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}";
 
         var jsonPath = Path.Combine(outputDir, $"{baseName}_findings.json");
-        var json = JsonExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade, client: exportClient, auditor: exportAuditor, intuneStigAudit: exportIntuneStigAudit);
+        var json = JsonExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade, args.ScanProfile, dmScore, dmGrade, client: exportClient, auditor: exportAuditor, intuneStigAudit: exportIntuneStigAudit, waiverHistory: exportWaiverHistory);
         await AtomicFileWriter.WriteAllTextAsync(jsonPath, json);
         Console.WriteLine($"  JSON: {jsonPath}");
 
@@ -607,7 +612,7 @@ public partial class App : Application
         if (args.ExportComplianceSummary)
         {
             var summaryPath = Path.Combine(outputDir, $"{baseName}_summary.json");
-            await AtomicFileWriter.WriteAllTextAsync(summaryPath, ComplianceSummaryExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade, dmScore, dmGrade));
+            await AtomicFileWriter.WriteAllTextAsync(summaryPath, ComplianceSummaryExporter.Export(exportChecks, exportEnv, score, grade, rwScore, rwGrade, dmScore, dmGrade, exportWaiverHistory));
             Console.WriteLine($"  Summary: {summaryPath}");
         }
 

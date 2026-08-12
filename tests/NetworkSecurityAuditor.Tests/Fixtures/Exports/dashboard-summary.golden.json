@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "tool": "Network Security Auditor",
+  "tool_version": "5.3.3",
+  "generated_at_utc": "2026-08-12T12:00:00.0000000+00:00",
+  "stale_after_days": 30,
+  "assets_discovered": 3,
+  "assets_valid": 2,
+  "assets_scanned": 1,
+  "assets_skipped": 1,
+  "assets_failed": 1,
+  "coverage": {
+    "numerator": 1,
+    "denominator": 3,
+    "percentage": 33.3,
+    "denominator_definition": "unique latest asset identities plus failed inputs whose identity could not be safely deduplicated"
+  },
+  "freshness": { "fresh": 1, "stale": 0, "unknown": 0, "denominator": 1, "stale_after_days": 30 },
+  "scores": { "average": 85, "median": 85, "population": 1, "population_definition": "latest contract-valid assets with at least one Pass, Partial, or Fail finding" },
+  "critical_findings": { "open": 1, "open_denominator": 1, "new": 1, "resolved": 0, "change_denominator": 1, "oldest_high_age_days": null, "oldest_critical_age_days": 12, "age_denominator": 1 },
+  "exceptions": { "active": 1, "expired": 1, "denominator": 2 },
+  "remediation_aging": { "denominator": 1, "not_due": 0, "overdue_1_to_30_days": 1, "overdue_31_to_60_days": 0, "overdue_61_to_90_days": 0, "overdue_91_plus_days": 0, "no_due_date": 0, "denominator_definition": "open failed findings excluding accepted-risk and deferred exceptions" },
+  "assets": [
+    {
+      "client": "Example Client",
+      "host": "HOST01",
+      "os": "Windows 11 Enterprise",
+      "score": 85,
+      "grade": "B",
+      "ransomware": 70,
+      "critical_fails": 1,
+      "total_fails": 2,
+      "stale": false,
+      "scan_date": "2026-08-12",
+      "file": "example_findings.json",
+      "trend": [{ "timestamp": "2026-08-12T10:00:00Z", "score": 85 }],
+      "duplicate_files": []
+    }
+  ],
+  "diagnostics": { "input_files_discovered": 3, "valid_scan_files": 2, "duplicate_scan_files": 0, "failed_input_files": [{ "file": "broken_findings.json", "reason": "invalid JSON" }], "skipped_assets": [{ "file": "skipped_findings.json", "reason": "no scorable findings" }] }
+}
