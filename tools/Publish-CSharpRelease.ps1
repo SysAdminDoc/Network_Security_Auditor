@@ -13,6 +13,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $solutionPath = Join-Path $repoRoot 'NetworkSecurityAuditor.slnx'
 $projectPath = Join-Path $repoRoot 'src\NetworkSecurityAuditor\NetworkSecurityAuditor.csproj'
+$verifierSourcePath = Join-Path $PSScriptRoot 'Verify-CSharpRelease.ps1'
 
 if ([string]::IsNullOrWhiteSpace($ArtifactsDir)) {
     $ArtifactsDir = Join-Path $repoRoot 'artifacts\csharp-release'
@@ -141,13 +142,14 @@ function Get-CodeSigningCertificate {
 function Set-ReleaseSignature {
     param(
         [string[]]$Paths,
-        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+        [string]$TimestampServerUrl
     )
 
     $signed = @()
     foreach ($path in $Paths) {
         try {
-            $signature = Set-AuthenticodeSignature -LiteralPath $path -Certificate $Certificate -TimestampServer $TimestampServer -ErrorAction Stop
+            $signature = Set-AuthenticodeSignature -LiteralPath $path -Certificate $Certificate -TimestampServer $TimestampServerUrl -ErrorAction Stop
         }
         catch {
             Write-Warning "Timestamped signing failed for $path; retrying without timestamp. $($_.Exception.Message)"
@@ -181,6 +183,24 @@ function Get-Sha256Hex {
     finally {
         $stream.Dispose()
         $sha256.Dispose()
+    }
+}
+
+function Get-ZipMetadata {
+    param([string]$Path)
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        [long]$uncompressedBytes = 0
+        foreach ($entry in $archive.Entries) { $uncompressedBytes += [long]$entry.Length }
+        return [ordered]@{
+            entry_count = $archive.Entries.Count
+            uncompressed_bytes = $uncompressedBytes
+        }
+    }
+    finally {
+        $archive.Dispose()
     }
 }
 
@@ -357,6 +377,7 @@ function Write-CycloneDxSbom {
 
     $rootComponentRef = "pkg:generic/NetworkSecurityAuditor@$Version"
     $bom = [ordered]@{
+        '$schema' = 'https://cyclonedx.org/schema/bom-1.5.schema.json'
         bomFormat = 'CycloneDX'
         specVersion = '1.5'
         serialNumber = "urn:uuid:$([guid]::NewGuid())"
@@ -425,6 +446,7 @@ $zipPath = Join-Path $releaseDir "$packageName.zip"
 $sbomPath = Join-Path $releaseDir "$packageName.cdx.json"
 $checksumPath = Join-Path $releaseDir 'SHA256SUMS.txt'
 $manifestPath = Join-Path $releaseDir 'release-manifest.json'
+$verifierPath = Join-Path $releaseDir 'Verify-CSharpRelease.ps1'
 $commit = (git -C $repoRoot rev-parse HEAD 2>$null)
 if ($LASTEXITCODE -ne 0) {
     $commit = ''
@@ -446,7 +468,7 @@ if ($SkipSigning) {
 else {
     $certificate = Get-CodeSigningCertificate
     if ($certificate) {
-        $signedFiles = Set-ReleaseSignature -Paths $peFiles -Certificate $certificate
+        $signedFiles = Set-ReleaseSignature -Paths $peFiles -Certificate $certificate -TimestampServerUrl $TimestampServer
         $signing.status = 'Signed'
         $signing.signed_files = $signedFiles
         $signing.certificate_subject = $certificate.Subject
@@ -459,13 +481,26 @@ else {
 }
 
 Compress-Archive -Path (Join-Path $publishDir '*') -DestinationPath $zipPath -Force
+if (-not (Test-Path -LiteralPath $verifierSourcePath -PathType Leaf)) {
+    throw "Release verifier not found: $verifierSourcePath"
+}
+Copy-Item -LiteralPath $verifierSourcePath -Destination $verifierPath -Force
 
 $packageInventory = Get-PackageInventory
 Write-CycloneDxSbom -Path $sbomPath -Version $version -TargetFramework $targetFramework -Packages $packageInventory
 
 $zipHash = Get-Sha256Hex -Path $zipPath
 $sbomHash = Get-Sha256Hex -Path $sbomPath
+$verifierHash = Get-Sha256Hex -Path $verifierPath
+$zipMetadata = Get-ZipMetadata -Path $zipPath
+$coveredFiles = @(
+    [System.IO.Path]::GetFileName($zipPath),
+    [System.IO.Path]::GetFileName($sbomPath),
+    [System.IO.Path]::GetFileName($verifierPath),
+    [System.IO.Path]::GetFileName($manifestPath)
+)
 $manifest = [ordered]@{
+    schema_version = '1.0'
     project = 'NetworkSecurityAuditor'
     artifact = 'CSharpRewrite'
     version = $version
@@ -478,6 +513,15 @@ $manifest = [ordered]@{
         instructions = 'Unzip the package on Windows with .NET 10 Desktop Runtime installed, then run NetworkSecurityAuditor.exe.'
         entrypoint = 'NetworkSecurityAuditor.exe'
         framework = '.NET 10 Desktop Runtime'
+    }
+    archive = [ordered]@{
+        format = 'zip'
+        file = [System.IO.Path]::GetFileName($zipPath)
+        entrypoint = 'NetworkSecurityAuditor.exe'
+        runtime_config = 'NetworkSecurityAuditor.runtimeconfig.json'
+        deps_file = 'NetworkSecurityAuditor.deps.json'
+        entry_count = $zipMetadata.entry_count
+        uncompressed_bytes = $zipMetadata.uncompressed_bytes
     }
     runtime_support = [ordered]@{
         framework = '.NET 10 Desktop Runtime'
@@ -495,6 +539,17 @@ $manifest = [ordered]@{
         sha256 = $sbomHash
         component_count = $packageInventory.Count
     }
+    verification = [ordered]@{
+        tool = [System.IO.Path]::GetFileName($verifierPath)
+        sha256 = $verifierHash
+        command = '.\Verify-CSharpRelease.ps1 -ReleaseDir .'
+        require_signature_command = '.\Verify-CSharpRelease.ps1 -ReleaseDir . -RequireSignature'
+    }
+    checksums = [ordered]@{
+        file = [System.IO.Path]::GetFileName($checksumPath)
+        algorithm = 'SHA256'
+        covered_files = $coveredFiles
+    }
     package_inventory = $packageInventory
     artifacts = @(
         [ordered]@{
@@ -504,19 +559,26 @@ $manifest = [ordered]@{
         [ordered]@{
             file = [System.IO.Path]::GetFileName($sbomPath)
             sha256 = $sbomHash
+        },
+        [ordered]@{
+            file = [System.IO.Path]::GetFileName($verifierPath)
+            sha256 = $verifierHash
         }
     )
 }
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 
 $hashes = @()
-foreach ($file in @($zipPath, $sbomPath, $manifestPath)) {
+foreach ($file in @($zipPath, $sbomPath, $verifierPath, $manifestPath)) {
     $hash = Get-Sha256Hex -Path $file
     $hashes += "$hash  $([System.IO.Path]::GetFileName($file))"
 }
 $hashes | Set-Content -LiteralPath $checksumPath -Encoding ASCII
 
+Invoke-Checked powershell.exe @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $verifierPath, '-ReleaseDir', $releaseDir)
+
 Write-Host "Release artifact: $zipPath"
 Write-Host "Checksum file:    $checksumPath"
 Write-Host "Manifest:         $manifestPath"
+Write-Host "Verifier:         $verifierPath"
 Write-Host "Signing status:   $($signing.status)"

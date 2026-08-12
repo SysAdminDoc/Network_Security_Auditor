@@ -131,6 +131,14 @@ Build the local C# installable artifact:
 
 ```powershell
 .\tools\Publish-CSharpRelease.ps1
+
+# Re-verify an existing local or downloaded bundle before extraction
+.\tools\Verify-CSharpRelease.ps1 `
+    -ReleaseDir .\artifacts\csharp-release\release
+
+# Require every packaged EXE/DLL to carry a valid Authenticode signature
+.\tools\Verify-CSharpRelease.ps1 `
+    -ReleaseDir .\artifacts\csharp-release\release -RequireSignature
 ```
 
 The release tool cleans `artifacts/csharp-release`, runs the xUnit suite,
@@ -138,7 +146,14 @@ publishes the C# rewrite, signs `.exe`/`.dll` files when a local code-signing
 certificate is available, then writes
 `artifacts/csharp-release/release/NetworkSecurityAuditor-csharp-v<version>-windows-net10.zip`,
 a CycloneDX SBOM (`*.cdx.json`), `SHA256SUMS.txt`, and
-`release-manifest.json` with package inventory and runtime support metadata.
+`release-manifest.json` with package inventory and runtime support metadata. It
+also copies the standalone `Verify-CSharpRelease.ps1` beside those files and runs
+it before reporting success. The verifier checks every declared/checksummed file,
+manifest artifact hashes, the declared CycloneDX 1.5 schema, safe ZIP entries,
+the entrypoint, `.deps.json`/`.runtimeconfig.json`, Windows Desktop runtime
+metadata, and the Authenticode state. `-RequireSignature` fails when signing was
+skipped or any packaged PE signature is invalid; normal verification reports an
+unsigned state without claiming the package was signed.
 Users install the C# preview by unzipping that package on Windows with the .NET 10 Desktop Runtime installed and running `NetworkSecurityAuditor.exe`.
 
 ### Multi-Client Dashboard
@@ -800,6 +815,7 @@ tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
 tools/NetworkSecurityAudit.Tests.ps1        # Pester v5 quality-gate suite
 tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
 tools/Publish-CSharpRelease.ps1             # Local C# zip/checksum/signing artifact flow
+tools/Verify-CSharpRelease.ps1              # Standalone release hash/SBOM/ZIP/signature verifier
 src/NetworkSecurityAuditor/                 # .NET 10 WPF rewrite
 src/NetworkSecurityAuditor/Data/BenchmarkMetadata.json # C# benchmark/lifecycle source manifest
 tests/NetworkSecurityAuditor.Tests/         # xUnit tests for the C# rewrite

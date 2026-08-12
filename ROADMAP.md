@@ -777,13 +777,6 @@ High.
 
 ---
 
-- [ ] P2 — Ship an independently executable release-bundle verifier
-  Why: The local release script already creates a ZIP, CycloneDX SBOM, checksum manifest, and release manifest, but verification is currently manual and the optional Authenticode state is not the same as an external provenance attestation. Prowler publishes SBOM/provenance attestations and verifies downloaded tool checksums; CISA supply-chain guidance treats consumer verification as a release requirement.
-  Evidence: `tools/Publish-CSharpRelease.ps1:421-517`, `tests/NetworkSecurityAuditor.Tests/ReleaseToolingTests.cs:1-100`, and `README.md:113-121,504-520`; sources: https://github.com/prowler-cloud/prowler/releases, https://github.com/CycloneDX/sbom-utility, and https://www.cisa.gov/topics/cyber-threats-and-advisories/sbom/sbomresourceslibrary.
-  Touches: `tools/Publish-CSharpRelease.ps1`, a new non-markdown `tools/Verify-CSharpRelease.ps1`, release-tool tests, `README.md`, and the release manifest/checksum contract.
-  Acceptance: The verifier exits nonzero for missing/tampered ZIP, SBOM, manifest, or checksum entries; validates every manifest hash against bytes; validates the SBOM against its declared CycloneDX schema/version; checks ZIP entry/entrypoint/runtime metadata; reports Authenticode status and supports `-RequireSignature` without claiming a signature when signing was skipped. README commands work against a locally produced bundle, and a tamper fixture fails before installation.
-  Complexity: M
-
 - [ ] P2 — Establish a repeatable local dependency freshness and vulnerability gate
   Why: The repository's 2026-08-10 package audit found no vulnerable packages but did find available patch updates for the direct `System.*` references and the test SDK. The release script runs tests and emits an SBOM, but no checked-in gate defines how vulnerability findings, patch drift, and accepted exceptions affect a local release.
   Evidence: `src/NetworkSecurityAuditor/NetworkSecurityAuditor.csproj:26-29`, `tests/NetworkSecurityAuditor.Tests/NetworkSecurityAuditor.Tests.csproj:12-15`, `tools/Publish-CSharpRelease.ps1:406-419,463-498`, and the 2026-08-10 `dotnet list ... package --vulnerable/--outdated --include-transitive` results; package source: https://www.nuget.org/packages/Microsoft.NET.Test.Sdk and lifecycle source: https://dotnet.microsoft.com/en-us/platform/support/policy.

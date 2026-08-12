@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## Unreleased
 
 ### Security
+- Added an independently executable C# release-bundle verifier. Release output now self-checks every checksum and manifest hash, CycloneDX 1.5 declarations, safe ZIP entries, entrypoint/runtime metadata, and Authenticode state; `-RequireSignature` rejects unsigned bundles without overstating skipped signing.
 - Fixed: Fleet artifacts now use collision-safe target names, reject missing or schema-invalid child results instead of counting them as completed, and redact aggregate identities and source paths in privacy mode.
 - Fixed: C# release artifact cleanup now rejects repository roots, source directories, and reparse-point paths before any recursive deletion.
 - Fixed: C# audit-state loading now validates schema, machine identity, complete check coverage, and enum values before mutation; state, waiver, and dashboard JSON imports now enforce size/file-count budgets.
