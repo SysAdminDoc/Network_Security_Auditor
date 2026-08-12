@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows.Data;
+using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Models;
 
 namespace NetworkSecurityAuditor.Converters;
@@ -10,9 +11,12 @@ public sealed class CheckStatusLabelConverter : IValueConverter
         value is CheckStatus status
             ? status switch
             {
-                CheckStatus.NotAssessed => "Not assessed",
-                CheckStatus.NA => "N/A",
-                _ => status.ToString()
+                CheckStatus.NotAssessed => UiText.StatusNotAssessed,
+                CheckStatus.NA => UiText.StatusNotApplicable,
+                CheckStatus.Pass => UiText.StatusPass,
+                CheckStatus.Partial => UiText.StatusPartial,
+                CheckStatus.Fail => UiText.StatusFail,
+                _ => UiText.Unknown
             }
             : value;
 

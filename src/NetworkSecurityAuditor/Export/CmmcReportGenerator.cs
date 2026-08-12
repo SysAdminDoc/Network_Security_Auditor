@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NetworkSecurityAuditor.Data;
+using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Scoring;
 using NetworkSecurityAuditor.ViewModels;
@@ -34,33 +35,37 @@ public static class CmmcReportGenerator
         var sb = new StringBuilder();
         sb.AppendLine("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">");
         sb.AppendLine("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
-        sb.AppendLine("<title>CMMC Self-Assessment Report</title>");
+        sb.AppendLine($"<title>{EscapeHtml(UiText.CmmcDocumentTitle)}</title>");
         sb.AppendLine("<style>");
         sb.AppendLine(GetCss());
         sb.AppendLine("</style></head><body>");
 
         sb.AppendLine("<div class=\"header\">");
-        sb.AppendLine("<h1>CMMC Level 2 Self-Assessment Report</h1>");
+        sb.AppendLine($"<h1>{EscapeHtml(UiText.CmmcTitle)}</h1>");
         sb.AppendLine($"<p class=\"subtitle\">NIST SP 800-171 Rev 2 | {EscapeHtml(env.ComputerName)} | {DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}</p>");
         sb.AppendLine("</div>");
 
         var sprsColor = sprsScore >= 88 ? "#a6e3a1" : sprsScore >= 50 ? "#f9e2af" : "#f38ba8";
         sb.AppendLine("<div class=\"summary-grid\">");
-        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{sprsColor};font-size:48px\">{sprsScore}</div><div class=\"score-value\">of 110</div><div class=\"score-label\">SPRS Score ({sprsConf})</div></div>");
+        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{sprsColor};font-size:48px\">{sprsScore}</div><div class=\"score-value\">{EscapeHtml(UiText.ReportOf110)}</div><div class=\"score-label\">{EscapeHtml(UiText.Format(nameof(UiText.ReportSprsScoreFormat), sprsConf))}</div></div>");
         var metCount = controlData.Count(c => c.Status == "Met");
         var notMetCount = controlData.Count(c => c.Status == "Not Met");
         var partialCount = controlData.Count(c => c.Status == "Partially Met");
         var naCount = controlData.Count(c => c.Status == "N/A");
-        sb.AppendLine($"<div class=\"score-card\"><div class=\"stat-row\"><span style=\"color:#a6e3a1\">Met: {metCount}</span></div><div class=\"stat-row\"><span style=\"color:#f9e2af\">Partial: {partialCount}</span></div><div class=\"stat-row\"><span style=\"color:#f38ba8\">Not Met: {notMetCount}</span></div><div class=\"stat-row\"><span style=\"color:#7f839b\">N/A: {naCount}</span></div><div class=\"score-label\">Control Status</div></div>");
-        var eligible = sprsScore >= 110 ? "Eligible (full)" : sprsScore >= 88 ? "Eligible (conditional with POA&M)" : "Not Eligible";
+        sb.AppendLine($"<div class=\"score-card\"><div class=\"stat-row\"><span style=\"color:#a6e3a1\">{EscapeHtml(UiText.CmmcStatusMet)}: {metCount}</span></div><div class=\"stat-row\"><span style=\"color:#f9e2af\">{EscapeHtml(UiText.StatusPartial)}: {partialCount}</span></div><div class=\"stat-row\"><span style=\"color:#f38ba8\">{EscapeHtml(UiText.CmmcStatusNotMet)}: {notMetCount}</span></div><div class=\"stat-row\"><span style=\"color:#7f839b\">{EscapeHtml(UiText.StatusNotApplicable)}: {naCount}</span></div><div class=\"score-label\">{EscapeHtml(UiText.CmmcControlStatus)}</div></div>");
+        var eligible = sprsScore >= 110
+            ? UiText.CmmcEligibleFull
+            : sprsScore >= 88
+                ? UiText.CmmcEligibleConditional
+                : UiText.CmmcNotEligible;
         var eligColor = sprsScore >= 110 ? "#a6e3a1" : sprsScore >= 88 ? "#f9e2af" : "#f38ba8";
-        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{eligColor};font-size:24px\">{eligible}</div><div class=\"score-label\">CMMC Level 2 Eligibility</div></div>");
+        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{eligColor};font-size:24px\">{EscapeHtml(eligible)}</div><div class=\"score-label\">{EscapeHtml(UiText.CmmcEligibility)}</div></div>");
         sb.AppendLine("</div>");
 
-        sb.AppendLine("<h2>Level 1 Practices (FAR 52.204-21)</h2>");
+        sb.AppendLine($"<h2>{EscapeHtml(UiText.CmmcLevelOne)}</h2>");
         AppendControlTable(sb, controlData.Where(c => Level1Controls.Contains(c.ControlId)).ToList());
 
-        sb.AppendLine("<h2>All NIST 800-171 Controls</h2>");
+        sb.AppendLine($"<h2>{EscapeHtml(UiText.CmmcAllControls)}</h2>");
         var families = controlData.GroupBy(c => c.Family).OrderBy(g => g.Key);
         foreach (var family in families)
         {
@@ -68,7 +73,7 @@ public static class CmmcReportGenerator
             AppendControlTable(sb, family.OrderBy(c => c.ControlId).ToList());
         }
 
-        sb.AppendLine($"<div class=\"footer\">Network Security Auditor v{VersionInfo.Version} - CMMC Self-Assessment</div>");
+        sb.AppendLine($"<div class=\"footer\">{EscapeHtml(UiText.Format(nameof(UiText.CmmcFooterFormat), VersionInfo.Version))}</div>");
         sb.AppendLine("</body></html>");
 
         return sb.ToString();
@@ -188,15 +193,15 @@ public static class CmmcReportGenerator
     private static void AppendControlTable(StringBuilder sb, List<ControlAssessment> controls)
     {
         sb.AppendLine("<table>");
-        sb.AppendLine("<caption>CMMC control assessment by NIST 800-171 control</caption>");
-        sb.AppendLine("<thead><tr><th scope=\"col\">Control</th><th scope=\"col\">Family</th><th scope=\"col\">Status</th><th scope=\"col\">Weight</th><th scope=\"col\">Deduction</th><th scope=\"col\">Checks</th><th scope=\"col\">Evidence</th></tr></thead>");
+        sb.AppendLine($"<caption>{EscapeHtml(UiText.CmmcCaption)}</caption>");
+        sb.AppendLine($"<thead><tr><th scope=\"col\">{EscapeHtml(UiText.TableControl)}</th><th scope=\"col\">{EscapeHtml(UiText.TableFamily)}</th><th scope=\"col\">{EscapeHtml(UiText.TableStatus)}</th><th scope=\"col\">{EscapeHtml(UiText.TableWeight)}</th><th scope=\"col\">{EscapeHtml(UiText.TableDeduction)}</th><th scope=\"col\">{EscapeHtml(UiText.TableChecks)}</th><th scope=\"col\">{EscapeHtml(UiText.TableEvidence)}</th></tr></thead>");
         sb.AppendLine("<tbody>");
         foreach (var c in controls)
         {
             var statusColor = c.Status switch { "Met" => "#a6e3a1", "Not Met" => "#f38ba8", "Partially Met" => "#f9e2af", _ => "#7f839b" };
             sb.AppendLine($"<tr><td style=\"font-family:monospace;font-weight:600;color:#cba6f7\">{c.ControlId}</td>");
             sb.AppendLine($"<td>{c.Family}</td>");
-            sb.AppendLine($"<td style=\"color:{statusColor};font-weight:600\">{c.Status}</td>");
+            sb.AppendLine($"<td style=\"color:{statusColor};font-weight:600\">{EscapeHtml(DisplayStatus(c.Status))}</td>");
             sb.AppendLine($"<td>{c.Weight}</td><td style=\"color:{(c.Deduction > 0 ? "#f38ba8" : "#a6e3a1")}\">{(c.Deduction > 0 ? $"-{c.Deduction}" : "0")}</td>");
             sb.AppendLine($"<td style=\"font-size:12px\">{string.Join(", ", c.CheckIds)}</td>");
             sb.AppendLine($"<td style=\"font-size:12px;color:#b5bcd6;max-width:300px;word-wrap:break-word\">{EscapeHtml(c.EvidenceSummary)}</td></tr>");
@@ -211,6 +216,15 @@ public static class CmmcReportGenerator
         CheckStatus.Partial => 2,
         CheckStatus.Pass => 1,
         _ => 0
+    };
+
+    private static string DisplayStatus(string status) => status switch
+    {
+        "Met" => UiText.CmmcStatusMet,
+        "Not Met" => UiText.CmmcStatusNotMet,
+        "Partially Met" => UiText.CmmcStatusPartiallyMet,
+        "N/A" => UiText.StatusNotApplicable,
+        _ => status
     };
 
     private static string GetFamily(string controlId)

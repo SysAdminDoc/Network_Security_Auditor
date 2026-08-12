@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Models;
 
 namespace NetworkSecurityAuditor.ViewModels;
@@ -77,7 +78,8 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
 
     public string AssessedDisplay => $"{CompletedCount}/{Total}";
 
-    public string CompletionDisplay => $"{CompletedCount} of {Total} completed";
+    public string CompletionDisplay => UiText.Format(
+        nameof(UiText.CategoryCompletionFormat), CompletedCount, Total);
 
     public string HealthBrushKey => AssessedCount == 0
         ? "StatusNeutral"
@@ -88,19 +90,24 @@ public sealed partial class CategorySummaryViewModel : ViewModelBase
                 : "ProgressGood";
 
     public string HealthLabel => Total > 0 && NotApplicableCount == Total
-        ? "Not applicable"
+        ? UiText.HealthNotApplicable
         : CompletedCount == 0
-            ? "Open"
+            ? UiText.HealthOpen
             : CompletedCount < Total
-                ? "In progress"
+                ? UiText.HealthInProgress
                 : FailCount > 0
-                    ? "Review"
+                    ? UiText.HealthReview
                     : PartialCount > 0
-                        ? "Partial"
-                        : "Clear";
+                        ? UiText.HealthPartial
+                        : UiText.HealthClear;
 
-    public string AccessibilitySummary =>
-        $"{Name}. {CompletionDisplay}. {HealthLabel}. {(AssessedCount > 0 ? $"Score {Score} percent" : "Score not available")}.";
+    public string AccessibilitySummary => AssessedCount > 0
+        ? UiText.Format(
+            nameof(UiText.CategoryAccessibilityWithScoreFormat),
+            Name, CompletionDisplay, HealthLabel, Score)
+        : UiText.Format(
+            nameof(UiText.CategoryAccessibilityNoScoreFormat),
+            Name, CompletionDisplay, HealthLabel);
 
     internal void RefreshThemeResources() => OnPropertyChanged(nameof(HealthBrushKey));
 

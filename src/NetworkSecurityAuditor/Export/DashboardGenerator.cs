@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Services;
 
 namespace NetworkSecurityAuditor.Export;
@@ -493,7 +494,7 @@ public static class DashboardGenerator
         var sb = new StringBuilder();
         sb.AppendLine("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">");
         sb.AppendLine("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
-        sb.AppendLine("<title>Security Audit Dashboard</title>");
+        sb.AppendLine($"<title>{Esc(UiText.DashboardDocumentTitle)}</title>");
         sb.AppendLine("<style>");
         sb.AppendLine("""
             * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -525,41 +526,54 @@ public static class DashboardGenerator
             """);
         sb.AppendLine("</style></head><body>");
 
-        sb.AppendLine("<h1>Multi-Client Security Dashboard</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">Generated {Esc(now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))} UTC | Stale threshold: {staleDays} days | {data.DuplicateFiles.Count} older scan(s) hidden</p>");
+        sb.AppendLine($"<h1>{Esc(UiText.DashboardTitle)}</h1>");
+        sb.AppendLine($"<p class=\"subtitle\">{Esc(UiText.Format(
+            nameof(UiText.DashboardSubtitleFormat),
+            now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+            staleDays,
+            data.DuplicateFiles.Count))}</p>");
         sb.AppendLine("<div class=\"summary-bar\">");
-        AppendStat(sb, $"{metrics.AssetsScanned}/{metrics.CoverageDenominator}", "Scan Coverage", metrics.CoveragePercentage is null ? "denominator n=0" : $"{D(metrics.CoveragePercentage)}%; denominator n={metrics.CoverageDenominator}");
-        AppendStat(sb, D(metrics.AverageScore), "Average Score", $"n={metrics.ScorePopulation}; median {D(metrics.MedianScore)}");
-        AppendStat(sb, metrics.OpenCriticals.ToString(CultureInfo.InvariantCulture), "Open Criticals", $"new {metrics.NewCriticals}; resolved {metrics.ResolvedCriticals}; delta n={metrics.CriticalChangeDenominator}");
-        AppendStat(sb, metrics.StaleAssets.ToString(CultureInfo.InvariantCulture), "Stale Assets", $"{metrics.FreshAssets} fresh / n={metrics.FreshnessDenominator}");
-        AppendStat(sb, metrics.ActiveExceptions.ToString(CultureInfo.InvariantCulture), "Active Exceptions", $"{metrics.ExpiredExceptions} expired / n={metrics.ExceptionDenominator}");
-        AppendStat(sb, metrics.RemediationDenominator.ToString(CultureInfo.InvariantCulture), "Open Remediations", $"aging denominator n={metrics.RemediationDenominator}");
+        AppendStat(sb, $"{metrics.AssetsScanned}/{metrics.CoverageDenominator}", UiText.DashboardScanCoverage, metrics.CoveragePercentage is null ? "denominator n=0" : $"{D(metrics.CoveragePercentage)}%; denominator n={metrics.CoverageDenominator}");
+        AppendStat(sb, D(metrics.AverageScore), UiText.DashboardAverageScore, $"n={metrics.ScorePopulation}; median {D(metrics.MedianScore)}");
+        AppendStat(sb, metrics.OpenCriticals.ToString(CultureInfo.InvariantCulture), UiText.DashboardOpenCriticals, $"new {metrics.NewCriticals}; resolved {metrics.ResolvedCriticals}; delta n={metrics.CriticalChangeDenominator}");
+        AppendStat(sb, metrics.StaleAssets.ToString(CultureInfo.InvariantCulture), UiText.DashboardStaleAssets, $"{metrics.FreshAssets} fresh / n={metrics.FreshnessDenominator}");
+        AppendStat(sb, metrics.ActiveExceptions.ToString(CultureInfo.InvariantCulture), UiText.DashboardActiveExceptions, $"{metrics.ExpiredExceptions} expired / n={metrics.ExceptionDenominator}");
+        AppendStat(sb, metrics.RemediationDenominator.ToString(CultureInfo.InvariantCulture), UiText.DashboardOpenRemediations, $"aging denominator n={metrics.RemediationDenominator}");
         sb.AppendLine("</div>");
-        sb.AppendLine($"<p class=\"definition\">Assets: {metrics.AssetsDiscovered} discovered; {metrics.AssetsValid} valid; {metrics.AssetsScanned} scanned; {metrics.AssetsSkipped} skipped; {metrics.AssetsFailed} failed. Scores include latest scorable assets only.</p>");
+        sb.AppendLine($"<p class=\"definition\">{Esc(UiText.Format(
+            nameof(UiText.DashboardAssetDefinitionFormat),
+            metrics.AssetsDiscovered,
+            metrics.AssetsValid,
+            metrics.AssetsScanned,
+            metrics.AssetsSkipped,
+            metrics.AssetsFailed))}</p>");
 
-        sb.AppendLine("<h2>Operational aging</h2>");
-        sb.AppendLine("<table><thead><tr><th scope=\"col\">Oldest high</th><th scope=\"col\">Oldest critical</th><th scope=\"col\">Not due</th><th scope=\"col\">1-30 overdue</th><th scope=\"col\">31-60</th><th scope=\"col\">61-90</th><th scope=\"col\">91+</th><th scope=\"col\">No due date</th></tr></thead><tbody><tr>");
+        sb.AppendLine($"<h2>{Esc(UiText.DashboardOperationalAging)}</h2>");
+        sb.AppendLine($"<table><thead><tr><th scope=\"col\">{Esc(UiText.DashboardOldestHigh)}</th><th scope=\"col\">{Esc(UiText.DashboardOldestCritical)}</th><th scope=\"col\">{Esc(UiText.DashboardNotDue)}</th><th scope=\"col\">{Esc(UiText.DashboardOverdue1To30)}</th><th scope=\"col\">{Esc(UiText.DashboardOverdue31To60)}</th><th scope=\"col\">{Esc(UiText.DashboardOverdue61To90)}</th><th scope=\"col\">{Esc(UiText.DashboardOverdue91Plus)}</th><th scope=\"col\">{Esc(UiText.DashboardNoDueDate)}</th></tr></thead><tbody><tr>");
         sb.AppendLine($"<td>{Days(metrics.OldestHighAgeDays)}</td><td>{Days(metrics.OldestCriticalAgeDays)}</td><td>{metrics.RemediationNotDue}</td><td>{metrics.RemediationOverdue1To30}</td><td>{metrics.RemediationOverdue31To60}</td><td>{metrics.RemediationOverdue61To90}</td><td>{metrics.RemediationOverdue91Plus}</td><td>{metrics.RemediationNoDueDate}</td></tr></tbody></table>");
-        sb.AppendLine($"<p class=\"definition\">Exposure ages with evidence: n={metrics.ExposureAgeDenominator}. Remediation buckets: n={metrics.RemediationDenominator}; accepted-risk and deferred exceptions are excluded.</p>");
+        sb.AppendLine($"<p class=\"definition\">{Esc(UiText.Format(
+            nameof(UiText.DashboardExposureDefinitionFormat),
+            metrics.ExposureAgeDenominator,
+            metrics.RemediationDenominator))}</p>");
 
         if (clients.Count == 0)
         {
             sb.AppendLine("<section class=\"empty-state\" aria-live=\"polite\">");
-            sb.AppendLine("<h2>No scan exports found</h2>");
-            sb.AppendLine("<p>Place one or more contract-valid *_findings.json exports with Pass, Partial, or Fail findings in this folder, then regenerate the dashboard.</p>");
+            sb.AppendLine($"<h2>{Esc(UiText.DashboardEmpty)}</h2>");
+            sb.AppendLine($"<p>{Esc(UiText.DashboardEmptyDetail)}</p>");
             sb.AppendLine("</section>");
         }
         else
         {
-            sb.AppendLine("<h2>Scanned assets</h2><table>");
-            sb.AppendLine("<caption>Latest scorable scan per client and host</caption>");
-            sb.AppendLine("<thead><tr><th scope=\"col\">Client</th><th scope=\"col\">Host</th><th scope=\"col\">Score</th><th scope=\"col\">Grade</th><th scope=\"col\">Trend</th><th scope=\"col\">Ransomware</th><th scope=\"col\">Critical</th><th scope=\"col\">Fails</th><th scope=\"col\">Scan Date</th><th scope=\"col\">Report</th></tr></thead><tbody>");
+            sb.AppendLine($"<h2>{Esc(UiText.DashboardScannedAssets)}</h2><table>");
+            sb.AppendLine($"<caption>{Esc(UiText.DashboardScannedAssetsCaption)}</caption>");
+            sb.AppendLine($"<thead><tr><th scope=\"col\">{Esc(UiText.TableClient)}</th><th scope=\"col\">{Esc(UiText.TableHost)}</th><th scope=\"col\">{Esc(UiText.TableScore)}</th><th scope=\"col\">{Esc(UiText.TableGrade)}</th><th scope=\"col\">{Esc(UiText.TableTrend)}</th><th scope=\"col\">{Esc(UiText.Ransomware)}</th><th scope=\"col\">{Esc(UiText.TableCritical)}</th><th scope=\"col\">{Esc(UiText.TableFails)}</th><th scope=\"col\">{Esc(UiText.TableScanDate)}</th><th scope=\"col\">{Esc(UiText.TableReport)}</th></tr></thead><tbody>");
 
             foreach (var c in SortDashboardRows(clients))
             {
-                var staleFlag = c.IsStale ? " <span class=\"stale\">[STALE]</span>" : "";
+                var staleFlag = c.IsStale ? $" <span class=\"stale\">[{Esc(UiText.DashboardStale)}]</span>" : "";
                 var reportLink = c.ReportPath is not null
-                    ? $"<a href=\"{Esc(Uri.EscapeDataString(c.ReportPath))}\" aria-label=\"Open report for {Esc(c.Client)} {Esc(c.Host)}\">Open report</a>"
+                    ? $"<a href=\"{Esc(Uri.EscapeDataString(c.ReportPath))}\" aria-label=\"{Esc(UiText.Format(nameof(UiText.DashboardOpenReportAriaFormat), c.Client, c.Host))}\">{Esc(UiText.DashboardOpenReport)}</a>"
                     : "";
                 sb.AppendLine("<tr>");
                 sb.AppendLine($"<td>{Esc(c.Client)}</td><td>{Esc(c.Host)} <span style=\"font-size:11px;color:#a6adc8\">{Esc(c.OS)}</span></td>");
@@ -572,7 +586,7 @@ public static class DashboardGenerator
         }
 
         AppendDiagnostics(sb, data);
-        sb.AppendLine($"<div class=\"footer\">Network Security Auditor v{VersionInfo.Version} - Dashboard</div>");
+        sb.AppendLine($"<div class=\"footer\">{Esc(UiText.Format(nameof(UiText.DashboardFooterFormat), VersionInfo.Version))}</div>");
         sb.AppendLine("</body></html>");
         return sb.ToString();
     }
@@ -581,15 +595,15 @@ public static class DashboardGenerator
     {
         if (data.DuplicateFiles.Count > 0)
         {
-            sb.AppendLine($"<p style=\"color:#f9e2af;margin-top:16px;font-size:13px\">{data.DuplicateFiles.Count} older duplicate scan(s) hidden from the latest-asset table:</p><ul>");
+            sb.AppendLine($"<p style=\"color:#f9e2af;margin-top:16px;font-size:13px\">{Esc(UiText.Format(nameof(UiText.DashboardOlderDuplicatesFormat), data.DuplicateFiles.Count))}</p><ul>");
             foreach (var duplicate in data.DuplicateFiles.OrderBy(d => d.FileName, StringComparer.OrdinalIgnoreCase))
-                sb.AppendLine($"<li>{Esc(duplicate.FileName)}: latest for {Esc(duplicate.StableKey)} is {Esc(duplicate.LatestFileName)}</li>");
+                sb.AppendLine($"<li>{Esc(UiText.Format(nameof(UiText.DashboardLatestDuplicateFormat), duplicate.FileName, duplicate.StableKey, duplicate.LatestFileName))}</li>");
             sb.AppendLine("</ul>");
         }
 
         if (data.SkippedAssets.Count > 0)
         {
-            sb.AppendLine($"<p style=\"color:#f9e2af;margin-top:16px;font-size:13px\">{data.SkippedAssets.Count} valid asset(s) excluded from score coverage:</p><ul>");
+            sb.AppendLine($"<p style=\"color:#f9e2af;margin-top:16px;font-size:13px\">{Esc(UiText.Format(nameof(UiText.DashboardExcludedAssetsFormat), data.SkippedAssets.Count))}</p><ul>");
             foreach (var skipped in data.SkippedAssets.OrderBy(s => s.FileName, StringComparer.OrdinalIgnoreCase))
                 sb.AppendLine($"<li>{Esc(skipped.FileName)}: {Esc(skipped.Reason)}</li>");
             sb.AppendLine("</ul>");
@@ -597,7 +611,7 @@ public static class DashboardGenerator
 
         if (data.FailedFiles.Count > 0)
         {
-            sb.AppendLine($"<p style=\"color:#f38ba8;margin-top:16px;font-size:13px\">{data.FailedFiles.Count} input file(s) failed validation:</p><ul>");
+            sb.AppendLine($"<p style=\"color:#f38ba8;margin-top:16px;font-size:13px\">{Esc(UiText.Format(nameof(UiText.DashboardFailedFilesFormat), data.FailedFiles.Count))}</p><ul>");
             foreach (var failed in data.FailedFiles.OrderBy(s => s.FileName, StringComparer.OrdinalIgnoreCase))
                 sb.AppendLine($"<li>{Esc(failed.FileName)}: {Esc(failed.Reason)}</li>");
             sb.AppendLine("</ul>");

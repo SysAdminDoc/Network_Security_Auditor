@@ -20,6 +20,9 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Added automatic Windows High Contrast support to the C# workstation. Semantic brushes switch to dynamic system window/control/highlight colors, custom templates retain focus/selected/disabled/error cues, and status/severity remain text-labeled while Catppuccin Mocha stays the saved default.
 - Fixed: PowerShell action buttons and severity badges now choose a foreground that remains readable across normal and hover states, with automated WCAG contrast coverage for all seven themes.
 
+### UX
+- Added named English text-resource boundaries for the C# and PowerShell GUIs, dynamic status/help copy, and HTML dashboard/report headings. Display providers can change presentation text without changing check IDs, status values, JSON keys, ISO timestamps, or CSV headers.
+
 ### Reliability
 - Added denominator-safe MSP executive KPIs across C# and PowerShell dashboard HTML/CSV/JSON, compliance summaries, and PowerShell history. Invalid, unavailable, and duplicate inputs no longer inflate coverage or score populations; freshness, critical-change, exception, exposure-age, and remediation-aging metrics publish explicit denominators.
 - Added a non-invasive diagnostics profile to both delivery surfaces. It emits bounded text/JSON readiness reports for elevation, Windows capabilities, output paths, PDF discovery, import limits, internet policy, and Graph configuration without persisting identities or credentials.

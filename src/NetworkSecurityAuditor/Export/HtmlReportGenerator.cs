@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Mail;
 using System.Text;
 using NetworkSecurityAuditor.Data;
+using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.ViewModels;
 
@@ -31,8 +32,8 @@ public static class HtmlReportGenerator
         sb.AppendLine("<meta charset=\"UTF-8\">");
         sb.AppendLine("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
         var title = branding?.CompanyName.Length > 0
-            ? $"{branding.CompanyName} - Security Audit Report"
-            : "Network Security Audit Report";
+            ? UiText.Format(nameof(UiText.ReportBrandedDocumentTitleFormat), branding.CompanyName)
+            : UiText.ReportDocumentTitle;
         sb.AppendLine($"<title>{EscapeHtml(title)}</title>");
         sb.AppendLine("<style>");
         sb.AppendLine(GetCss());
@@ -50,7 +51,7 @@ public static class HtmlReportGenerator
             sb.AppendLine($"<h1 class=\"cover-title\">{EscapeHtml(branding.CompanyName)}</h1>");
             if (branding.Tagline.Length > 0)
                 sb.AppendLine($"<p class=\"cover-tagline\">{EscapeHtml(branding.Tagline)}</p>");
-            sb.AppendLine($"<p class=\"cover-subtitle\">Security Assessment Report</p>");
+            sb.AppendLine($"<p class=\"cover-subtitle\">{EscapeHtml(UiText.ReportCoverSubtitle)}</p>");
             sb.AppendLine($"<p class=\"cover-date\">{DateTime.UtcNow.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)}</p>");
             sb.AppendLine("</div>");
         }
@@ -59,10 +60,14 @@ public static class HtmlReportGenerator
         if (branding is { HasLogo: true, ShowCoverPage: false })
             sb.AppendLine($"<img src=\"data:image/png;base64,{EscapeHtmlAttribute(branding.LogoBase64)}\" alt=\"\" style=\"height:40px;margin-bottom:12px\" />");
         var h1 = branding?.CompanyName.Length > 0
-            ? $"{branding.CompanyName} Security Audit Report"
-            : "Network Security Audit Report";
+            ? UiText.Format(nameof(UiText.ReportBrandedHeadingFormat), branding.CompanyName)
+            : UiText.ReportDocumentTitle;
         sb.AppendLine($"<h1>{EscapeHtml(h1)}</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">Generated {DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} | {EscapeHtml(env.ComputerName)} | {EscapeHtml(env.OSCaption)}</p>");
+        sb.AppendLine($"<p class=\"subtitle\">{EscapeHtml(UiText.Format(
+            nameof(UiText.ReportGeneratedSubtitleFormat),
+            DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+            env.ComputerName,
+            env.OSCaption))}</p>");
         sb.AppendLine("</div>");
 
         var passCount = checkList.Count(c => c.Status == CheckStatus.Pass);
@@ -98,7 +103,7 @@ public static class HtmlReportGenerator
         }
         else
         {
-            sb.AppendLine($"<div class=\"footer\">Network Security Auditor v{VersionInfo.Version}</div>");
+            sb.AppendLine($"<div class=\"footer\">{EscapeHtml(UiText.Format(nameof(UiText.ReportFooterFormat), VersionInfo.Version))}</div>");
         }
         sb.AppendLine("</body>");
         sb.AppendLine("</html>");
@@ -112,19 +117,19 @@ public static class HtmlReportGenerator
         int passCount, int failCount, int partialCount, int naCount)
     {
         sb.AppendLine("<div class=\"summary-grid\">");
-        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(grade)}\">{grade}</div><div class=\"score-value\">{overallScore}/100</div><div class=\"score-label\">Overall Score</div></div>");
-        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(ransomwareGrade)}\">{ransomwareGrade}</div><div class=\"score-value\">{ransomwareScore}/100</div><div class=\"score-label\">Ransomware Readiness</div></div>");
-        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(domainMaturityGrade)}\">{domainMaturityGrade}</div><div class=\"score-value\">{domainMaturityScore}/100</div><div class=\"score-label\">Domain Maturity</div></div>");
+        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(grade)}\">{grade}</div><div class=\"score-value\">{overallScore}/100</div><div class=\"score-label\">{EscapeHtml(UiText.ReportOverallScore)}</div></div>");
+        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(ransomwareGrade)}\">{ransomwareGrade}</div><div class=\"score-value\">{ransomwareScore}/100</div><div class=\"score-label\">{EscapeHtml(UiText.ReportRansomwareReadiness)}</div></div>");
+        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(domainMaturityGrade)}\">{domainMaturityGrade}</div><div class=\"score-value\">{domainMaturityScore}/100</div><div class=\"score-label\">{EscapeHtml(UiText.ReportDomainMaturity)}</div></div>");
 
         var sprsColor = sprsScore >= 88 ? "#a6e3a1" : sprsScore >= 50 ? "#f9e2af" : "#f38ba8";
-        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{sprsColor};font-size:48px\">{sprsScore}</div><div class=\"score-value\">of 110</div><div class=\"score-label\">SPRS Score ({sprsConf})</div></div>");
+        sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{sprsColor};font-size:48px\">{sprsScore}</div><div class=\"score-value\">{EscapeHtml(UiText.ReportOf110)}</div><div class=\"score-label\">{EscapeHtml(UiText.Format(nameof(UiText.ReportSprsScoreFormat), sprsConf))}</div></div>");
 
         sb.AppendLine("<div class=\"score-card\">");
-        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot pass\"></span> Pass: {passCount}</div>");
-        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot partial\"></span> Partial: {partialCount}</div>");
-        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot fail\"></span> Fail: {failCount}</div>");
-        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot na\"></span> N/A: {naCount}</div>");
-        sb.AppendLine("<div class=\"score-label\">Status Breakdown</div>");
+        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot pass\"></span> {EscapeHtml(UiText.StatusPass)}: {passCount}</div>");
+        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot partial\"></span> {EscapeHtml(UiText.StatusPartial)}: {partialCount}</div>");
+        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot fail\"></span> {EscapeHtml(UiText.StatusFail)}: {failCount}</div>");
+        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot na\"></span> {EscapeHtml(UiText.StatusNotApplicable)}: {naCount}</div>");
+        sb.AppendLine($"<div class=\"score-label\">{EscapeHtml(UiText.ReportStatusBreakdown)}</div>");
         sb.AppendLine("</div>");
         sb.AppendLine("</div>");
 
@@ -137,8 +142,9 @@ public static class HtmlReportGenerator
 
         if (topFindings.Count > 0)
         {
-            sb.AppendLine("<h2>Top Findings</h2>");
-            AppendTableHeader(sb, "category-table", "Top failed and partial findings", ["ID", "Check", "Severity", "Status", "Recommendation"]);
+            sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportTopFindings)}</h2>");
+            AppendTableHeader(sb, "category-table", UiText.ReportTopFindingsCaption,
+                [UiText.Id, UiText.Check, UiText.TableSeverity, UiText.TableStatus, UiText.TableRecommendation]);
             foreach (var check in topFindings)
             {
                 var hint = CheckCatalog.All.TryGetValue(check.Id, out var meta) ? meta.Hint : "";
@@ -153,8 +159,9 @@ public static class HtmlReportGenerator
 
     private static void AppendManagement(StringBuilder sb, List<CheckItemViewModel> checkList)
     {
-        sb.AppendLine("<h2>Score by Category</h2>");
-        AppendTableHeader(sb, "category-table", "Score by category", ["Category", "Pass", "Partial", "Fail", "N/A"]);
+        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportScoreByCategory)}</h2>");
+        AppendTableHeader(sb, "category-table", UiText.ReportScoreByCategoryCaption,
+            [UiText.TableCategory, UiText.StatusPass, UiText.StatusPartial, UiText.StatusFail, UiText.StatusNotApplicable]);
         foreach (var group in checkList.GroupBy(c => c.Category).OrderBy(g => g.Key))
         {
             var gPass = group.Count(c => c.Status == CheckStatus.Pass);
@@ -167,8 +174,9 @@ public static class HtmlReportGenerator
 
         var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
 
-        sb.AppendLine("<h2>Compliance Framework Readiness</h2>");
-        AppendTableHeader(sb, "category-table", "Compliance framework readiness", ["Framework", "Mapped Checks", "Met", "Partial", "Fail", "Not assessed", "Met Coverage"]);
+        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportComplianceReadiness)}</h2>");
+        AppendTableHeader(sb, "category-table", UiText.ReportComplianceReadinessCaption,
+            [UiText.TableFramework, UiText.TableMappedChecks, UiText.TableMet, UiText.StatusPartial, UiText.StatusFail, UiText.TableNotAssessed, UiText.TableMetCoverage]);
         foreach (var (fwName, sel) in FrameworkDefinitions.All)
         {
             var mapped = FrameworkMappings.All.Where(kv => sel(kv.Value) is not null).Select(kv => kv.Key).ToList();
@@ -201,8 +209,9 @@ public static class HtmlReportGenerator
 
         if (roadmapItems.Count > 0)
         {
-            sb.AppendLine("<h2>Remediation Roadmap</h2>");
-            AppendTableHeader(sb, "category-table", "Failed and partial remediation roadmap", ["Priority", "ID", "Check", "Status", "Category", "Assignee", "Due"]);
+            sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportRemediationRoadmap)}</h2>");
+            AppendTableHeader(sb, "category-table", UiText.ReportRemediationRoadmapCaption,
+                [UiText.TablePriority, UiText.Id, UiText.Check, UiText.TableStatus, UiText.TableCategory, UiText.TableAssignee, UiText.TableDue]);
             var priorityOrder = 1;
             foreach (var check in roadmapItems)
             {
@@ -217,11 +226,13 @@ public static class HtmlReportGenerator
 
     private static void AppendTechnical(StringBuilder sb, List<CheckItemViewModel> checkList)
     {
-        sb.AppendLine("<h2>Detailed Findings</h2>");
+        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportDetailedFindings)}</h2>");
         foreach (var group in checkList.GroupBy(c => c.Category).OrderBy(g => g.Key))
         {
             sb.AppendLine($"<h3>{group.Key}</h3>");
-            AppendTableHeader(sb, "findings-table", $"{group.Key} detailed findings", ["ID", "Check", "Severity", "Status", "ATT&CK", "Findings", "Evidence"]);
+            AppendTableHeader(sb, "findings-table",
+                UiText.Format(nameof(UiText.ReportDetailedFindingsCaptionFormat), group.Key),
+                [UiText.Id, UiText.Check, UiText.TableSeverity, UiText.TableStatus, UiText.TableAttack, UiText.TableFindings, UiText.TableEvidence]);
             foreach (var check in group.OrderBy(c => c.Id))
             {
                 var severityClass = check.Severity.ToString().ToLowerInvariant();
@@ -233,7 +244,7 @@ public static class HtmlReportGenerator
                 sb.AppendLine($"<tr>");
                 sb.AppendLine($"<td class=\"id-cell\">{check.Id}</td>");
                 var safeUrl = TryGetHttpHref(check.RemediationUrl) is { } remediationHref
-                    ? $" <a href=\"{EscapeHtmlAttribute(remediationHref)}\" aria-label=\"Remediation guidance for {EscapeHtmlAttribute(check.Id)}\" style=\"color:#89b4fa;font-size:11px\">Remediation guidance</a>" : "";
+                    ? $" <a href=\"{EscapeHtmlAttribute(remediationHref)}\" aria-label=\"{EscapeHtmlAttribute(UiText.Format(nameof(UiText.ReportRemediationGuidanceAriaFormat), check.Id))}\" style=\"color:#89b4fa;font-size:11px\">{EscapeHtml(UiText.ReportRemediationGuidance)}</a>" : "";
                 sb.AppendLine($"<td>{EscapeHtml(check.Label)}{safeUrl}</td>");
                 sb.AppendLine($"<td><span class=\"badge severity-{severityClass}\">{check.SeverityLabel}</span></td>");
                 sb.AppendLine($"<td><span class=\"badge status-{statusClass}\">{DisplayStatus(check.Status)}</span></td>");
@@ -245,8 +256,9 @@ public static class HtmlReportGenerator
             AppendTableEnd(sb);
         }
 
-        sb.AppendLine("<h3>Per-Check Framework Control IDs</h3>");
-        AppendTableHeader(sb, "compliance-table", "Per-check framework control IDs", ["Check ID", "Label", "Framework Controls"]);
+        sb.AppendLine($"<h3>{EscapeHtml(UiText.ReportFrameworkControlIds)}</h3>");
+        AppendTableHeader(sb, "compliance-table", UiText.ReportFrameworkControlIdsCaption,
+            [UiText.TableCheckId, UiText.TableLabel, UiText.TableFrameworkControls]);
         foreach (var check in checkList.OrderBy(c => c.Id))
         {
             var mapping = FrameworkMappings.All.GetValueOrDefault(check.Id);
@@ -256,8 +268,9 @@ public static class HtmlReportGenerator
         }
         AppendTableEnd(sb);
 
-        sb.AppendLine("<h2>MITRE D3FEND Defensive Coverage</h2>");
-        AppendTableHeader(sb, "category-table", "MITRE D3FEND defensive coverage", ["Stage", "Checks", "Techniques"]);
+        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportD3fendCoverage)}</h2>");
+        AppendTableHeader(sb, "category-table", UiText.ReportD3fendCoverageCaption,
+            [UiText.TableStage, UiText.TableChecks, UiText.TableTechniques]);
         var stageChecks = new Dictionary<string, List<(string id, string[] techniques)>>();
         foreach (var check in checkList)
         {
@@ -281,29 +294,30 @@ public static class HtmlReportGenerator
     private static void AppendIntuneStigAudit(StringBuilder sb, IntuneStigAuditImport import)
     {
         var summary = import.Summary;
-        sb.AppendLine("<h2>Intune STIG Audit Baseline Evidence</h2>");
+        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportIntuneStigEvidence)}</h2>");
         sb.AppendLine("<div class=\"score-card\" style=\"margin-bottom:18px\">");
-        sb.AppendLine($"<div><strong>Source:</strong> {EscapeHtml(import.Source)}</div>");
-        sb.AppendLine($"<div><strong>Baseline:</strong> {EscapeHtml(import.BaselineName)} {EscapeHtml(import.BaselineVersion)}</div>");
-        sb.AppendLine($"<div><strong>Policy:</strong> {EscapeHtml(import.PolicyId)}</div>");
-        sb.AppendLine($"<div><strong>Exported:</strong> {EscapeHtml(import.ExportedAtUtc)}</div>");
-        sb.AppendLine($"<div><strong>Status:</strong> {EscapeHtml(import.ImportStatus)} | Pass {summary.Pass} | Fail {summary.Fail} | N/A {summary.NotApplicable} | Error {summary.Error} | Conflict {summary.Conflict} | Unknown {summary.Unknown} | Not licensed {summary.NotLicensed} | Not permitted {summary.NotPermitted}</div>");
+        sb.AppendLine($"<div><strong>{EscapeHtml(UiText.ReportSource)}:</strong> {EscapeHtml(import.Source)}</div>");
+        sb.AppendLine($"<div><strong>{EscapeHtml(UiText.ReportBaseline)}:</strong> {EscapeHtml(import.BaselineName)} {EscapeHtml(import.BaselineVersion)}</div>");
+        sb.AppendLine($"<div><strong>{EscapeHtml(UiText.ReportPolicy)}:</strong> {EscapeHtml(import.PolicyId)}</div>");
+        sb.AppendLine($"<div><strong>{EscapeHtml(UiText.ReportExported)}:</strong> {EscapeHtml(import.ExportedAtUtc)}</div>");
+        sb.AppendLine($"<div><strong>{EscapeHtml(UiText.TableStatus)}:</strong> {EscapeHtml(import.ImportStatus)} | {EscapeHtml(UiText.StatusPass)} {summary.Pass} | {EscapeHtml(UiText.StatusFail)} {summary.Fail} | {EscapeHtml(UiText.StatusNotApplicable)} {summary.NotApplicable} | {EscapeHtml(UiText.ReportError)} {summary.Error} | {EscapeHtml(UiText.ReportConflict)} {summary.Conflict} | {EscapeHtml(UiText.Unknown)} {summary.Unknown} | {EscapeHtml(UiText.ReportNotLicensed)} {summary.NotLicensed} | {EscapeHtml(UiText.ReportNotPermitted)} {summary.NotPermitted}</div>");
         if (import.SkippedRowCount > 0 || import.SkippedHeaderCount > 0)
         {
-            sb.AppendLine($"<div class=\"warning\"><strong>Import warnings:</strong> {import.SkippedRowCount} row(s) skipped; {import.SkippedHeaderCount} header(s) normalized.</div>");
+            sb.AppendLine($"<div class=\"warning\"><strong>{EscapeHtml(UiText.Format(nameof(UiText.ReportImportWarningsFormat), import.SkippedRowCount, import.SkippedHeaderCount))}</strong></div>");
             foreach (var warning in import.ImportWarnings.Take(25))
                 sb.AppendLine($"<div class=\"sub\">{EscapeHtml(warning)}</div>");
         }
         if (TryGetHttpHref(import.SourceUrl) is { } sourceHref)
-            sb.AppendLine($"<div><a href=\"{EscapeHtmlAttribute(sourceHref)}\" style=\"color:#89b4fa\">Microsoft Intune STIG audit baseline source</a></div>");
+            sb.AppendLine($"<div><a href=\"{EscapeHtmlAttribute(sourceHref)}\" style=\"color:#89b4fa\">{EscapeHtml(UiText.ReportIntuneSourceLink)}</a></div>");
         else if (!string.IsNullOrWhiteSpace(import.SourceUrl))
-            sb.AppendLine("<div><strong>Source URL:</strong> Omitted because it is not an HTTP(S) URL.</div>");
+            sb.AppendLine($"<div><strong>{EscapeHtml(UiText.ReportSourceUrl)}:</strong> {EscapeHtml(UiText.ReportSourceUrlOmitted)}</div>");
         sb.AppendLine("</div>");
 
         if (import.Findings.Count == 0)
             return;
 
-        AppendTableHeader(sb, "category-table", "Imported Intune STIG audit evidence", ["Device", "Setting", "Reference", "Severity", "Status", "Last check-in"]);
+        AppendTableHeader(sb, "category-table", UiText.ReportIntuneStigEvidenceCaption,
+            [UiText.TableDevice, UiText.TableSetting, UiText.TableReference, UiText.TableSeverity, UiText.TableStatus, UiText.TableLastCheckIn]);
         foreach (var finding in import.Findings.OrderBy(f => f.DeviceName).ThenBy(f => f.ReferenceId).Take(100))
         {
             sb.AppendLine("<tr>");
@@ -347,9 +361,12 @@ public static class HtmlReportGenerator
 
     private static string DisplayStatus(CheckStatus status) => status switch
     {
-        CheckStatus.NotAssessed => "Not assessed",
-        CheckStatus.NA => "N/A",
-        _ => status.ToString()
+        CheckStatus.NotAssessed => UiText.StatusNotAssessed,
+        CheckStatus.NA => UiText.StatusNotApplicable,
+        CheckStatus.Pass => UiText.StatusPass,
+        CheckStatus.Partial => UiText.StatusPartial,
+        CheckStatus.Fail => UiText.StatusFail,
+        _ => UiText.Unknown
     };
 
     private static string StatusCssClass(CheckStatus status) => status switch

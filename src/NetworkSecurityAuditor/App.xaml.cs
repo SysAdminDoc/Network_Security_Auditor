@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using NetworkSecurityAuditor.Checks;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Export;
+using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Scoring;
 using NetworkSecurityAuditor.Services;
@@ -247,9 +248,9 @@ public partial class App : Application
         }
 
         var message = canContinue
-            ? $"An unexpected error was handled. Your current audit state is still open.\n\nCrash log: {logPath}"
-            : $"A fatal error occurred and was written to the crash log.\n\nCrash log: {logPath}";
-        MessageBox.Show(message, "Network Security Auditor", MessageBoxButton.OK, MessageBoxImage.Error);
+            ? UiText.Format(nameof(UiText.UnexpectedErrorFormat), logPath)
+            : UiText.Format(nameof(UiText.FatalErrorFormat), logPath);
+        MessageBox.Show(message, UiText.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private async Task RunHeadlessAndShutdownAsync(string modeName, Func<Task<int>> runModeAsync)

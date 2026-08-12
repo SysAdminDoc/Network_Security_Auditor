@@ -19,7 +19,7 @@ public class MainWindowXamlTests
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
 
         Assert.Contains("Text=\"{Binding SearchText, UpdateSourceTrigger=PropertyChanged}\"", xaml);
-        Assert.Contains("Search ID, check, or category", xaml);
+        Assert.Contains("Text=\"{x:Static loc:UiText.SearchPlaceholder}\"", xaml);
         Assert.Contains("Text=\"{Binding VisibleChecksDisplay}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding StatusFilters}\"", xaml);
         Assert.Contains("IsChecked=\"{Binding PrivacyMode}\"", xaml);
@@ -30,8 +30,8 @@ public class MainWindowXamlTests
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml);
         Assert.Contains("Content=\"{Binding SelectedCheck}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding CategoryRailItems}\"", xaml);
-        Assert.Contains("Text=\"{Binding NotApplicableCount, StringFormat=N/A: {0}}\"", xaml);
-        Assert.Contains("Text=\"{Binding NotAssessedCount, StringFormat=Not assessed: {0}}\"", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.NotApplicableCountFormat}", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.NotAssessedCountFormat}", xaml);
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class MainWindowXamlTests
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
         var exportOption = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "ExportFormatOption.cs");
 
-        Assert.Contains("Content=\"Export\"", xaml);
+        Assert.Contains("Content=\"{x:Static loc:UiText.ButtonExport}\"", xaml);
         Assert.Contains("ItemsSource=\"{Binding ExportFormats}\"", xaml);
         Assert.Contains("SelectedItem=\"{Binding SelectedExportFormat}\"", xaml);
         Assert.Contains("Text=\"{Binding ExportOutputFolder, UpdateSourceTrigger=PropertyChanged}\"", xaml);
@@ -138,7 +138,7 @@ public class MainWindowXamlTests
         Assert.DoesNotContain("Command=\"{Binding ExportHtmlCommand}\"", xaml);
         Assert.Contains("ExportFormatKind.SiemContentPack", mainVm);
         Assert.Contains("ExportFormatKind.OscalPoam", mainVm);
-        Assert.Contains("OSCAL POA&M JSON", mainVm);
+        Assert.Contains("UiText.ExportOscalPoamJson", mainVm);
         Assert.Contains("ExportFormatKind.CmmcHtml", mainVm);
         Assert.Contains("ExportFormatKind.CmmcJson", mainVm);
         Assert.Contains("public enum ExportFormatKind", exportOption);
@@ -151,9 +151,9 @@ public class MainWindowXamlTests
         var theme = ReadSourceFile("src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
 
-        Assert.Contains("Category progress navigation", xaml);
-        Assert.Contains("Selected check evidence and remediation inspector", xaml);
-        Assert.Contains("Activity Console", xaml);
+        Assert.Contains("AutomationProperties.Name=\"{x:Static loc:UiText.AutomationCategoryProgress}\"", xaml);
+        Assert.Contains("AutomationProperties.Name=\"{x:Static loc:UiText.AutomationSelectedInspector}\"", xaml);
+        Assert.Contains("Text=\"{x:Static loc:UiText.ActivityConsole}\"", xaml);
         Assert.Contains("ActivityLog", xaml);
         Assert.Contains("CategoryRailItems", xaml);
         Assert.Contains("TargetDisplay", xaml);
@@ -166,9 +166,9 @@ public class MainWindowXamlTests
         Assert.Contains("x:Key=\"InspectorCard\"", theme);
         Assert.Contains("<GridSplitter Grid.Column=\"1\"", xaml);
         Assert.Contains("Width=\"1440\" Height=\"900\"", xaml);
-        Assert.Contains("Content=\"Export report\"", xaml);
-        Assert.Contains("Content=\"Save state\"", xaml);
-        Assert.Contains("Content=\"Load state\"", xaml);
+        Assert.Contains("Content=\"{x:Static loc:UiText.ButtonExportReport}\"", xaml);
+        Assert.Contains("Content=\"{x:Static loc:UiText.ButtonSaveState}\"", xaml);
+        Assert.Contains("Content=\"{x:Static loc:UiText.ButtonLoadState}\"", xaml);
         Assert.Contains("x:Name=\"FocusBorder\"", xaml);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml);
         Assert.Contains("public ObservableCollection<CategorySummaryViewModel> CategorySummaries { get; }", mainVm);
@@ -184,8 +184,8 @@ public class MainWindowXamlTests
 
         Assert.Contains("CheckStatusLabelConverter x:Key=\"CheckStatusLabel\"", app);
         Assert.Contains("Converter={StaticResource CheckStatusLabel}", xaml);
-        Assert.Contains("CheckStatus.NotAssessed => \"Not assessed\"", converter);
-        Assert.Contains("CheckStatus.NA => \"N/A\"", converter);
+        Assert.Contains("CheckStatus.NotAssessed => UiText.StatusNotAssessed", converter);
+        Assert.Contains("CheckStatus.NA => UiText.StatusNotApplicable", converter);
     }
 
     [Fact]
@@ -209,9 +209,9 @@ public class MainWindowXamlTests
         var xaml = ReadSourceFile("src", "NetworkSecurityAuditor", "MainWindow.xaml");
 
         Assert.Contains("AutomationProperties.LiveSetting=\"Polite\"", xaml);
-        Assert.Contains("AutomationProperties.Name=\"{Binding ScanProgressDisplay, StringFormat='Scan progress: {0}'}\"", xaml);
-        Assert.Contains("AutomationProperties.Name=\"No matching checks\"", xaml);
-        Assert.Contains("AutomationProperties.Name=\"{Binding VisibleChecksDisplay, StringFormat='Filtered checks: {0}'}\"", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.ScanProgressAutomationFormat}", xaml);
+        Assert.Contains("AutomationProperties.Name=\"{x:Static loc:UiText.AutomationNoMatchingChecks}\"", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.FilteredChecksAutomationFormat}", xaml);
         Assert.Contains("Value=\"{Binding AccessibilitySummary}\"", xaml);
         Assert.Contains("a11y:LiveRegion.Announcement=\"{Binding ScanReadinessText}\"", xaml);
         Assert.Contains("AutomationProperties.ItemStatus=\"{Binding (Validation.Errors)[0].ErrorContent, RelativeSource={RelativeSource Self}}\"", xaml);
@@ -232,9 +232,9 @@ public class MainWindowXamlTests
         Assert.Contains("AutomationProperties.AutomationId=\"InspectorAssigneeTextBox\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"InspectorDueDateTextBox\"", xaml);
         Assert.Contains("AutomationProperties.AutomationId=\"ActivityLogList\"", xaml);
-        Assert.Contains("Fail: {0}", xaml);
-        Assert.Contains("Partial: {0}", xaml);
-        Assert.Contains("Pass: {0}", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.FailCountFormat}", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.PartialCountFormat}", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.PassCountFormat}", xaml);
     }
 
     [Fact]
@@ -286,7 +286,8 @@ public class MainWindowXamlTests
         var mainVm = ReadSourceFile("src", "NetworkSecurityAuditor", "ViewModels", "MainViewModel.cs");
 
         Assert.Contains("is not available in this preview", app);
-        Assert.Contains("is not available in this preview", mainVm);
+        var uiText = ReadSourceFile("src", "NetworkSecurityAuditor", "Localization", "UiText.cs");
+        Assert.Contains("is not available in this preview", uiText);
         Assert.DoesNotContain("not implemented in the C# rewrite yet", app);
         Assert.DoesNotContain("not implemented in the C# rewrite yet", mainVm);
     }

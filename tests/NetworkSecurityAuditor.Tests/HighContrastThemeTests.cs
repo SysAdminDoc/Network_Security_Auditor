@@ -162,9 +162,9 @@ public sealed class HighContrastThemeTests
         Assert.Contains("{DynamicResource StatusOnColor}", xaml);
         Assert.Contains("Text=\"{Binding SeverityLabel}\"", xaml);
         Assert.Contains("Text=\"{Binding StatusLabel}\"", xaml);
-        Assert.Contains("StringFormat=Pass: {0}", xaml);
-        Assert.Contains("StringFormat=Partial: {0}", xaml);
-        Assert.Contains("StringFormat=Fail: {0}", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.PassCountFormat}", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.PartialCountFormat}", xaml);
+        Assert.Contains("StringFormat={x:Static loc:UiText.FailCountFormat}", xaml);
         Assert.Contains("TargetName=\"FocusBorder\" Property=\"BorderThickness\" Value=\"2\"", xaml);
     }
 

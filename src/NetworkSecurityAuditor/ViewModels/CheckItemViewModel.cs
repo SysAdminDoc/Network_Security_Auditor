@@ -1,4 +1,6 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Models;
 
 namespace NetworkSecurityAuditor.ViewModels;
@@ -47,17 +49,26 @@ public partial class CheckItemViewModel : ViewModelBase
 
     public string StatusLabel => Status switch
     {
-        CheckStatus.NotAssessed => "Not assessed",
-        CheckStatus.NA => "N/A",
-        _ => Status.ToString()
+        CheckStatus.NotAssessed => UiText.StatusNotAssessed,
+        CheckStatus.NA => UiText.StatusNotApplicable,
+        CheckStatus.Pass => UiText.StatusPass,
+        CheckStatus.Partial => UiText.StatusPartial,
+        CheckStatus.Fail => UiText.StatusFail,
+        _ => UiText.Unknown
     };
 
     public string DurationDisplay => DurationMs > 0
-        ? $"{DurationMs:0} ms"
-        : "--";
+        ? UiText.Format(nameof(UiText.DurationMillisecondsFormat), DurationMs)
+        : UiText.DurationUnavailable;
 
-    public string AccessibilitySummary =>
-        $"{Id}. {SeverityLabel.ToLowerInvariant()} severity. {Label}. Category {Category}. Status {StatusLabel.ToLowerInvariant()}. Runtime {(DurationMs > 0 ? DurationDisplay : "not run")}.";
+    public string AccessibilitySummary => UiText.Format(
+        nameof(UiText.CheckAccessibilityFormat),
+        Id,
+        SeverityLabel.ToLower(CultureInfo.CurrentCulture),
+        Label,
+        Category,
+        StatusLabel.ToLower(CultureInfo.CurrentCulture),
+        DurationMs > 0 ? DurationDisplay : UiText.RuntimeNotRun);
 
     public string StatusBrushKey => Status switch
     {
@@ -75,11 +86,11 @@ public partial class CheckItemViewModel : ViewModelBase
 
     public string SeverityLabel => Severity switch
     {
-        Severity.Critical => "CRITICAL",
-        Severity.High => "HIGH",
-        Severity.Medium => "MEDIUM",
-        Severity.Low => "LOW",
-        _ => "UNKNOWN"
+        Severity.Critical => UiText.SeverityCritical,
+        Severity.High => UiText.SeverityHigh,
+        Severity.Medium => UiText.SeverityMedium,
+        Severity.Low => UiText.SeverityLow,
+        _ => UiText.SeverityUnknown
     };
 
     public string SeverityBrushKey => Severity switch

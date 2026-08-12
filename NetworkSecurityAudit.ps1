@@ -127,7 +127,182 @@ param(
     [string[]]$BenchmarkImportPath = @()
 )
 
-$script:ProductName = 'Network Security Auditor'
+# Localization catalog start
+$script:EnglishTextCatalog = [ordered]@{
+    'Product.Name' = 'Network Security Auditor'
+    'Product.SubtitleFormat' = 'Windows Security Assessment Tool v{0} - Guided Audit with Compliance Mapping'
+    'Gui.Theme' = 'Theme:'
+    'Gui.ThemeAutomation' = 'Color theme selector'
+    'Gui.Overall' = 'Overall'
+    'Gui.Client' = 'Client'
+    'Gui.ClientAutomation' = 'Client name'
+    'Gui.Auditor' = 'Auditor'
+    'Gui.AuditorAutomation' = 'Auditor name'
+    'Gui.Date' = 'Date'
+    'Gui.DateAutomation' = 'Audit date'
+    'Gui.Save' = 'Save'
+    'Gui.SaveAutomation' = 'Save audit state'
+    'Gui.Load' = 'Load'
+    'Gui.LoadAutomation' = 'Load saved audit'
+    'Gui.Diff' = 'Diff'
+    'Gui.DiffHelp' = 'Compare two saved audits'
+    'Gui.Scan' = '[SCAN]'
+    'Gui.Target' = 'Target:'
+    'Gui.TargetHelp' = "Hostname or IP of scan target. Use 'localhost' for local scans."
+    'Gui.Credentials' = 'Credentials'
+    'Gui.CredentialsHelp' = 'Set domain credentials for remote scans (Get-Credential)'
+    'Gui.Local' = '[Local]'
+    'Gui.WinRM' = 'WinRM'
+    'Gui.WinRMHelp' = 'Auto-configure WinRM on current target'
+    'Gui.Preflight' = 'Pre-flight'
+    'Gui.PreflightHelp' = 'Test connectivity to target - checks WinRM, AD, SMB, DNS reachability'
+    'Gui.Profile' = 'Profile:'
+    'Gui.ProfileAutomation' = 'Scan profile'
+    'Gui.ProfileHelp' = 'Scan profile: Quick, Standard, Full, AD-only, Local-only, or compliance framework'
+    'Gui.Framework' = 'Framework:'
+    'Gui.FrameworkAutomation' = 'Compliance framework'
+    'Gui.FrameworkHelp' = 'Compliance framework to highlight in reports: All, CIS, NIST 800-171, CMMC, HIPAA, PCI-DSS, E8, Cyber Essentials, SOC 2, ISO 27001, STIG, FedRAMP'
+    'Gui.FullAudit' = 'Full Audit'
+    'Gui.FullAuditHelp' = 'One-click: Pre-flight + Scan Profile + Auto-Export to Desktop'
+    'Gui.ScanProfile' = 'Scan Profile'
+    'Gui.ScanProfileHelp' = "Run selected profile's auto-checks"
+    'Gui.ScanAD' = 'Scan AD'
+    'Gui.ScanADHelp' = 'Run Active Directory checks only'
+    'Gui.ScanLocal' = 'Scan Local'
+    'Gui.ScanLocalHelp' = 'Run local endpoint checks only'
+    'Gui.Console' = 'Console'
+    'Gui.Clear' = 'Clear'
+    'Gui.Hide' = 'Hide'
+    'Gui.View' = 'View:'
+    'Gui.All' = 'All'
+    'Gui.Incomplete' = 'Incomplete'
+    'Gui.Failures' = 'Failures'
+    'Gui.Scanned' = 'Scanned'
+    'Gui.Ready' = 'Ready'
+    'Gui.ResetAll' = 'Reset All'
+    'Gui.ExportHtml' = 'Export HTML'
+    'Gui.ExportJson' = 'Export JSON'
+    'Gui.ExportJsonHelp' = 'Export structured findings JSON with full compliance, ATT&amp;CK, and D3FEND metadata'
+    'Gui.ExportCsv' = 'Export CSV'
+    'Gui.ExportCsvHelp' = 'Export CSV for MSP pivot table analysis across clients'
+    'Gui.CategoryProgressFormat' = '{0}/{1}'
+    'Gui.ProgressFormat' = '{0}/{1} ({2}%)'
+    'Gui.WeightFormat' = 'W:{0}'
+    'Gui.ScoreFormat' = 'Score: {0}/{1} ({2}%) Grade: {3}'
+    'Gui.SavedFormat' = 'Saved: {0}'
+    'Gui.MultiLineHelp' = 'Multi-line text. HTML tags are preserved in export.'
+    'Gui.AllCompleted' = 'All items completed!'
+    'Gui.ScanButton' = 'Scan'
+    'Gui.ShowGuidance' = '[?] Show Guidance'
+    'Gui.HideGuidance' = '[-] Hide Guidance'
+    'Gui.ToggleGuidanceFormat' = 'Toggle guidance for {0}'
+    'Gui.StatusLabel' = 'Status:'
+    'Gui.RemediationStatusLabel' = 'Rem Status:'
+    'Gui.AssignLabel' = 'Assign:'
+    'Gui.DueLabel' = 'Due:'
+    'Gui.NotesLabel' = 'Notes:'
+    'Gui.FindingsLabel' = 'Findings:'
+    'Gui.EvidenceLabel' = 'Evidence:'
+    'Gui.StatusNotAssessed' = 'Not Assessed'
+    'Gui.StatusPass' = 'Pass'
+    'Gui.StatusFail' = 'Fail'
+    'Gui.StatusPartial' = 'Partial'
+    'Gui.StatusNotApplicable' = 'N/A'
+    'Gui.RemediationOpen' = 'Open'
+    'Gui.RemediationInProgress' = 'In Progress'
+    'Gui.RemediationComplete' = 'Remediated'
+    'Gui.RemediationAcceptedRisk' = 'Accepted Risk'
+    'Gui.RemediationDeferred' = 'Deferred'
+    'Gui.ExecutiveSummary' = 'Executive Summary'
+    'Gui.RefreshSummary' = 'Refresh Summary'
+    'Gui.ComplianceTargetFormat' = 'Compliance target: {0}'
+    'Gui.LastScanHelpFormat' = 'Last: {0} | {1} - Click to re-scan'
+    'Gui.ScanErrorFormat' = 'SCAN ERROR: {0}'
+    'Gui.ErrorEvidenceFormat' = 'Error during auto-check @ {0}'
+    'Gui.ErrorButton' = 'ERR'
+    'Gui.ErrorRetryHelpFormat' = 'Error: {0} - Click to retry'
+    'Gui.ScanCompleteFormat' = 'Scan complete: {0} checks{1} | {2}'
+    'Gui.Done' = 'Done'
+    'Gui.CloudRunning' = 'Running Microsoft Graph cloud assessment...'
+    'Gui.CloudCompleteFormat' = 'Cloud assessment completed: {0}%'
+    'Gui.CloudErrorFormat' = 'Cloud assessment error: {0}'
+    'Gui.NoProfileChecks' = 'No checks available for selected profile'
+    'Dashboard.DocumentTitleFormat' = '{0} - Multi-Client Dashboard'
+    'Dashboard.Title' = 'Multi-Client Security Dashboard'
+    'Dashboard.SkippedInputs' = 'Skipped input files'
+    'Dashboard.ExcludedAssets' = 'Valid assets excluded from score coverage'
+    'Dashboard.KpiDefinitions' = 'Executive KPI definitions'
+    'Dashboard.Clients' = 'Clients (latest scan, lowest score first)'
+    'Dashboard.CriticalByCategory' = 'Critical Findings by Category (across latest scans)'
+    'Dashboard.ClientTarget' = 'Client / Target'
+    'Dashboard.Grade' = 'Grade'
+    'Dashboard.Score' = 'Score'
+    'Dashboard.Ransomware' = 'Ransomware'
+    'Dashboard.Criticals' = 'Criticals'
+    'Dashboard.Frameworks' = 'Frameworks'
+    'Dashboard.Cloud' = 'Cloud'
+    'Dashboard.Trend' = 'Trend'
+    'Dashboard.LastScan' = 'Last Scan'
+    'Dashboard.Freshness' = 'Freshness'
+    'Report.DocumentTitleFormat' = 'Security Audit - {0}'
+    'Report.ChangeSinceBaseline' = 'Change Since Baseline'
+    'Report.ExecutiveSummary' = 'Executive Summary'
+    'Report.PreflightResults' = 'Pre-flight Connectivity Results'
+    'Report.RemediationRoadmap' = 'Remediation Roadmap'
+    'Report.PhaseImmediateFormat' = 'Phase 1: Immediate (0-7 days) - {0} items'
+    'Report.PhaseShortFormat' = 'Phase 2: Short-term (8-30 days) - {0} items'
+    'Report.PhaseMediumFormat' = 'Phase 3: Medium-term (30-90 days) - {0} items'
+    'Report.TrackedRemediationFormat' = 'Tracked Remediation Items ({0} open)'
+    'Report.ComplianceMapping' = 'Compliance Framework Mapping'
+    'Report.GapAnalysisFormat' = '{0} - Gap Analysis'
+    'Report.MitreCoverage' = 'MITRE ATT&CK Coverage'
+    'Report.CloudAssessment' = 'Cloud Assessment'
+    'Report.ImportedBenchmarks' = 'Imported Benchmark Results'
+    'Report.RansomwarePreparedness' = 'Ransomware Preparedness'
+    'Report.Check' = 'Check'
+    'Report.Result' = 'Result'
+    'Report.Details' = 'Details'
+    'Report.Id' = 'ID'
+    'Report.CheckItem' = 'Check Item'
+    'Report.Status' = 'Status'
+    'Report.Test' = 'Test'
+    'Report.Category' = 'Category'
+    'Report.Name' = 'Name'
+    'Report.Evidence' = 'Evidence'
+    'Report.Severity' = 'Severity'
+    'Report.Expected' = 'Expected'
+    'Report.Actual' = 'Actual'
+    'Report.Item' = 'Item'
+    'Report.SeverityShort' = 'Sev'
+    'Report.Tier' = 'Tier'
+    'Report.Remediation' = 'Remediation'
+    'Report.Ok' = 'OK'
+}
+$script:TextResourceProvider = $null
+function Get-UiText {
+    param(
+        [Parameter(Mandatory=$true, Position=0)][string]$Key,
+        [Parameter(Position=1)][object[]]$FormatArguments = @()
+    )
+
+    if (-not $script:EnglishTextCatalog.Contains($Key)) {
+        throw "Unknown UI text resource '$Key'."
+    }
+
+    $value = [string]$script:EnglishTextCatalog[$Key]
+    if ($null -ne $script:TextResourceProvider) {
+        $provided = & $script:TextResourceProvider $Key $value
+        if ($null -ne $provided) { $value = [string]$provided }
+    }
+
+    if (@($FormatArguments).Count -gt 0) {
+        return [string]::Format([Globalization.CultureInfo]::CurrentCulture, $value, [object[]]$FormatArguments)
+    }
+    return $value
+}
+# Localization catalog end
+
+$script:ProductName = Get-UiText 'Product.Name'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
 $script:ProductVersion = '4.11.4'
@@ -194,7 +369,7 @@ function Get-ExternalVersionManifest {
 }
 $script:WindowTitle = "$($script:ProductTitle) v$($script:ProductVersion)"
 $script:ProductDisplayName = "$($script:ProductName) v$($script:ProductVersion)"
-$script:ProductSubtitle = "Windows Security Assessment Tool v$($script:ProductVersion) - Guided Audit with Compliance Mapping"
+$script:ProductSubtitle = Get-UiText 'Product.SubtitleFormat' @($script:ProductVersion)
 
 # ── Auto-Elevate to Administrator ────────────────────────────────────────────
 $script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -1368,20 +1543,20 @@ function Export-MultiClientDashboard {
 
     $limitHtml = New-Object System.Text.StringBuilder
     if ($skipDetails.Count -gt 0) {
-        [void]$limitHtml.Append("<div class='panel'><h2>Skipped input files</h2><div class='sub'>Limits: $MaxFiles files, $MaxFileBytes bytes per file, $MaxTotalBytes total bytes. $skipped file(s) were not included.</div><ul>")
+        [void]$limitHtml.Append("<div class='panel'><h2>$(Get-UiText 'Dashboard.SkippedInputs')</h2><div class='sub'>Limits: $MaxFiles files, $MaxFileBytes bytes per file, $MaxTotalBytes total bytes. $skipped file(s) were not included.</div><ul>")
         foreach ($detail in $skipDetails) { [void]$limitHtml.Append("<li>$(Convert-DashHtml $detail)</li>") }
         if ($skipped -gt $skipDetails.Count) { [void]$limitHtml.Append("<li>$(Convert-DashHtml ([string]($skipped - $skipDetails.Count) + ' additional skipped file(s)'))</li>") }
         [void]$limitHtml.Append('</ul></div>')
     }
     if ($skippedAssetDetails.Count -gt 0) {
-        [void]$limitHtml.Append("<div class='panel'><h2>Valid assets excluded from score coverage</h2><ul>")
+        [void]$limitHtml.Append("<div class='panel'><h2>$(Get-UiText 'Dashboard.ExcludedAssets')</h2><ul>")
         foreach ($detail in $skippedAssetDetails) { [void]$limitHtml.Append("<li>$(Convert-DashHtml $detail)</li>") }
         [void]$limitHtml.Append('</ul></div>')
     }
 
     $html = @"
 <!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>$($script:ProductName) - Multi-Client Dashboard</title>
+<title>$(Get-UiText 'Dashboard.DocumentTitleFormat' @($script:ProductName))</title>
 <style>
 :root{--bg:#1e1e2e;--panel:#181825;--card:#313244;--text:#cdd6f4;--sub:#9399b2;--accent:#89b4fa;--border:#45475a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Segoe UI,system-ui,Arial,sans-serif;font-size:14px}
@@ -1404,7 +1579,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .catval{flex:0 0 32px;text-align:right;font-weight:700;color:#f38ba8}
 footer{color:var(--sub);font-size:11px;margin-top:24px;text-align:center}
 </style></head><body><div class='wrap'>
-<h1>Multi-Client Security Dashboard</h1>
+<h1>$(Get-UiText 'Dashboard.Title')</h1>
 <div class='muted'>$($script:ProductName) v$($script:ProductVersion) &middot; Generated $generated &middot; Source: $(Convert-DashHtml $SourceDir)</div>
 <div class='cards'>
 <div class='card'><div class='n'>$($kpis.assets_scanned)/$($kpis.coverage.denominator)</div><div class='l'>Scan Coverage ($coveragePct)</div><div class='sub'>valid $($kpis.assets_valid), skipped $($kpis.assets_skipped), failed $($kpis.assets_failed)</div></div>
@@ -1414,11 +1589,11 @@ footer{color:var(--sub);font-size:11px;margin-top:24px;text-align:center}
 <div class='card'><div class='n'>$($kpis.exceptions.active)</div><div class='l'>Active Exceptions</div><div class='sub'>$($kpis.exceptions.expired) expired / n=$($kpis.exceptions.denominator)</div></div>
 <div class='card'><div class='n'>$($kpis.remediation_aging.denominator)</div><div class='l'>Open Remediations</div><div class='sub'>aging denominator n=$($kpis.remediation_aging.denominator)</div></div>
 </div>
-<div class='panel'><h2>Executive KPI definitions</h2><div class='sub'>Assets: $($kpis.assets_discovered) discovered; $($kpis.assets_valid) valid; $($kpis.assets_scanned) scanned; $($kpis.assets_skipped) skipped; $($kpis.assets_failed) failed. Scores use latest scorable assets only. Oldest high: $oldestHigh; oldest critical: $oldestCritical (age n=$($kpis.critical_findings.age_denominator)). Remediation aging: not due $($kpis.remediation_aging.not_due), 1-30 overdue $($kpis.remediation_aging.overdue_1_to_30_days), 31-60 $($kpis.remediation_aging.overdue_31_to_60_days), 61-90 $($kpis.remediation_aging.overdue_61_to_90_days), 91+ $($kpis.remediation_aging.overdue_91_plus_days), no due date $($kpis.remediation_aging.no_due_date).</div></div>
-<div class='panel'><h2>Clients (latest scan, lowest score first)</h2>
-<table><thead><tr><th>Client / Target</th><th>Grade</th><th>Score</th><th>Ransomware</th><th>Criticals</th><th>Frameworks</th><th>Cloud</th><th>Trend</th><th>Last Scan</th><th>Freshness</th></tr></thead>
+<div class='panel'><h2>$(Get-UiText 'Dashboard.KpiDefinitions')</h2><div class='sub'>Assets: $($kpis.assets_discovered) discovered; $($kpis.assets_valid) valid; $($kpis.assets_scanned) scanned; $($kpis.assets_skipped) skipped; $($kpis.assets_failed) failed. Scores use latest scorable assets only. Oldest high: $oldestHigh; oldest critical: $oldestCritical (age n=$($kpis.critical_findings.age_denominator)). Remediation aging: not due $($kpis.remediation_aging.not_due), 1-30 overdue $($kpis.remediation_aging.overdue_1_to_30_days), 31-60 $($kpis.remediation_aging.overdue_31_to_60_days), 61-90 $($kpis.remediation_aging.overdue_61_to_90_days), 91+ $($kpis.remediation_aging.overdue_91_plus_days), no due date $($kpis.remediation_aging.no_due_date).</div></div>
+<div class='panel'><h2>$(Get-UiText 'Dashboard.Clients')</h2>
+<table><thead><tr><th>$(Get-UiText 'Dashboard.ClientTarget')</th><th>$(Get-UiText 'Dashboard.Grade')</th><th>$(Get-UiText 'Dashboard.Score')</th><th>$(Get-UiText 'Dashboard.Ransomware')</th><th>$(Get-UiText 'Dashboard.Criticals')</th><th>$(Get-UiText 'Dashboard.Frameworks')</th><th>$(Get-UiText 'Dashboard.Cloud')</th><th>$(Get-UiText 'Dashboard.Trend')</th><th>$(Get-UiText 'Dashboard.LastScan')</th><th>$(Get-UiText 'Dashboard.Freshness')</th></tr></thead>
 <tbody>$($rowsHtml.ToString())</tbody></table></div>
-<div class='panel'><h2>Critical Findings by Category (across latest scans)</h2>$($catHtml.ToString())</div>
+<div class='panel'><h2>$(Get-UiText 'Dashboard.CriticalByCategory')</h2>$($catHtml.ToString())</div>
 $($limitHtml.ToString())
 <footer>Generated by $($script:ProductName) v$($script:ProductVersion). Aggregate scores only - no finding evidence or notes are embedded.</footer>
 </div></body></html>
@@ -8207,13 +8382,13 @@ $script:SuppressAdvance = $false
                                FontSize="11.5" Margin="0,2,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
-                    <TextBlock x:Name="ThemeLabel" Text="Theme:" FontSize="12"
+                    <TextBlock x:Name="ThemeLabel" Text="$(Get-UiText 'Gui.Theme')" FontSize="12"
                                VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <ComboBox x:Name="ThemeSelector" Width="155" Height="26" FontSize="11.5" AutomationProperties.Name="Color theme selector"/>
+                    <ComboBox x:Name="ThemeSelector" Width="155" Height="26" FontSize="11.5" AutomationProperties.Name="$(Get-UiText 'Gui.ThemeAutomation')"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <StackPanel Orientation="Vertical" Margin="0,0,12,0">
-                        <TextBlock x:Name="ProgLabel" Text="Overall" FontSize="10" Margin="0,0,0,3"/>
+                        <TextBlock x:Name="ProgLabel" Text="$(Get-UiText 'Gui.Overall')" FontSize="10" Margin="0,0,0,3"/>
                         <Grid><Border x:Name="ProgBarBg" CornerRadius="4" Height="10" Width="180"/>
                         <Border x:Name="ProgBarFill" CornerRadius="4" Height="10" HorizontalAlignment="Left" Width="0"/></Grid>
                     </StackPanel>
@@ -8229,21 +8404,21 @@ $script:SuppressAdvance = $false
                     <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                    <TextBlock x:Name="lblClient" Text="Client" FontSize="10.5" Margin="0,0,0,2"/>
-                    <TextBox x:Name="txtClient" Padding="6,4" FontSize="12" AutomationProperties.Name="Client name"/>
+                    <TextBlock x:Name="lblClient" Text="$(Get-UiText 'Gui.Client')" FontSize="10.5" Margin="0,0,0,2"/>
+                    <TextBox x:Name="txtClient" Padding="6,4" FontSize="12" AutomationProperties.Name="$(Get-UiText 'Gui.ClientAutomation')"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Margin="8,0">
-                    <TextBlock x:Name="lblAuditor" Text="Auditor" FontSize="10.5" Margin="0,0,0,2"/>
-                    <TextBox x:Name="txtAuditor" Padding="6,4" FontSize="12" AutomationProperties.Name="Auditor name"/>
+                    <TextBlock x:Name="lblAuditor" Text="$(Get-UiText 'Gui.Auditor')" FontSize="10.5" Margin="0,0,0,2"/>
+                    <TextBox x:Name="txtAuditor" Padding="6,4" FontSize="12" AutomationProperties.Name="$(Get-UiText 'Gui.AuditorAutomation')"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Margin="8,0">
-                    <TextBlock x:Name="lblDate" Text="Date" FontSize="10.5" Margin="0,0,0,2"/>
-                    <TextBox x:Name="txtDate" Padding="6,4" FontSize="12" IsReadOnly="True" AutomationProperties.Name="Audit date"/>
+                    <TextBlock x:Name="lblDate" Text="$(Get-UiText 'Gui.Date')" FontSize="10.5" Margin="0,0,0,2"/>
+                    <TextBox x:Name="txtDate" Padding="6,4" FontSize="12" IsReadOnly="True" AutomationProperties.Name="$(Get-UiText 'Gui.DateAutomation')"/>
                 </StackPanel>
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="8,0,0,0">
-                    <Button x:Name="btnSave" Content="Save" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" AutomationProperties.Name="Save audit state"/>
-                    <Button x:Name="btnLoad" Content="Load" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" AutomationProperties.Name="Load saved audit"/>
-                    <Button x:Name="btnDiff" Content="Diff" Padding="14,5" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="Compare two saved audits" AutomationProperties.Name="Compare two saved audits"/>
+                    <Button x:Name="btnSave" Content="$(Get-UiText 'Gui.Save')" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" AutomationProperties.Name="$(Get-UiText 'Gui.SaveAutomation')"/>
+                    <Button x:Name="btnLoad" Content="$(Get-UiText 'Gui.Load')" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" AutomationProperties.Name="$(Get-UiText 'Gui.LoadAutomation')"/>
+                    <Button x:Name="btnDiff" Content="$(Get-UiText 'Gui.Diff')" Padding="14,5" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="$(Get-UiText 'Gui.DiffHelp')" AutomationProperties.Name="$(Get-UiText 'Gui.DiffHelp')"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -8257,39 +8432,39 @@ $script:SuppressAdvance = $false
                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="lblScanIcon" Grid.Column="0" Text="[SCAN]" FontSize="11" FontWeight="Bold"
+                <TextBlock x:Name="lblScanIcon" Grid.Column="0" Text="$(Get-UiText 'Gui.Scan')" FontSize="11" FontWeight="Bold"
                            VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="lblTarget" Text="Target:" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock x:Name="lblTarget" Text="$(Get-UiText 'Gui.Target')" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBox x:Name="txtScanTarget" Width="180" Padding="6,3" FontSize="11.5" Text="localhost"
-                             ToolTip="Hostname or IP of scan target. Use 'localhost' for local scans."/>
-                    <Button x:Name="btnSetCreds" Content="Credentials" Padding="10,3" Margin="8,0,0,0" FontSize="11" Cursor="Hand"
-                            ToolTip="Set domain credentials for remote scans (Get-Credential)"/>
-                    <TextBlock x:Name="lblCredStatus" Text="[Local]" FontSize="10.5" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    <Button x:Name="btnConfigWinRM" Content="WinRM" Padding="10,3" Margin="8,0,0,0" FontSize="11" Cursor="Hand"
-                            ToolTip="Auto-configure WinRM on current target"/>
-                    <Button x:Name="btnPreflight" Content="Pre-flight" Padding="10,3" Margin="8,0,0,0" FontSize="11" Cursor="Hand"
-                            ToolTip="Test connectivity to target - checks WinRM, AD, SMB, DNS reachability"/>
+                             ToolTip="$(Get-UiText 'Gui.TargetHelp')"/>
+                    <Button x:Name="btnSetCreds" Content="$(Get-UiText 'Gui.Credentials')" Padding="10,3" Margin="8,0,0,0" FontSize="11" Cursor="Hand"
+                            ToolTip="$(Get-UiText 'Gui.CredentialsHelp')"/>
+                    <TextBlock x:Name="lblCredStatus" Text="$(Get-UiText 'Gui.Local')" FontSize="10.5" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <Button x:Name="btnConfigWinRM" Content="$(Get-UiText 'Gui.WinRM')" Padding="10,3" Margin="8,0,0,0" FontSize="11" Cursor="Hand"
+                            ToolTip="$(Get-UiText 'Gui.WinRMHelp')"/>
+                    <Button x:Name="btnPreflight" Content="$(Get-UiText 'Gui.Preflight')" Padding="10,3" Margin="8,0,0,0" FontSize="11" Cursor="Hand"
+                            ToolTip="$(Get-UiText 'Gui.PreflightHelp')"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                    <TextBlock x:Name="lblProfile" Text="Profile:" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock x:Name="lblProfile" Text="$(Get-UiText 'Gui.Profile')" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <ComboBox x:Name="cboProfile" Width="195" FontSize="10.5" Padding="4,2"
-                              AutomationProperties.Name="Scan profile"
-                              ToolTip="Scan profile: Quick, Standard, Full, AD-only, Local-only, or compliance framework"/>
-                    <TextBlock x:Name="lblFramework" Text="Framework:" FontSize="10.5" VerticalAlignment="Center" Margin="12,0,4,0"/>
+                              AutomationProperties.Name="$(Get-UiText 'Gui.ProfileAutomation')"
+                              ToolTip="$(Get-UiText 'Gui.ProfileHelp')"/>
+                    <TextBlock x:Name="lblFramework" Text="$(Get-UiText 'Gui.Framework')" FontSize="10.5" VerticalAlignment="Center" Margin="12,0,4,0"/>
                     <ComboBox x:Name="cboFramework" Width="120" FontSize="10.5" Padding="4,2"
-                              AutomationProperties.Name="Compliance framework"
-                              ToolTip="Compliance framework to highlight in reports: All, CIS, NIST 800-171, CMMC, HIPAA, PCI-DSS, E8, Cyber Essentials, SOC 2, ISO 27001, STIG, FedRAMP"/>
+                              AutomationProperties.Name="$(Get-UiText 'Gui.FrameworkAutomation')"
+                              ToolTip="$(Get-UiText 'Gui.FrameworkHelp')"/>
                 </StackPanel>
-                <Button x:Name="btnFullAudit" Grid.Column="3" Content="Full Audit" Padding="14,4" Margin="8,0,0,0"
+                <Button x:Name="btnFullAudit" Grid.Column="3" Content="$(Get-UiText 'Gui.FullAudit')" Padding="14,4" Margin="8,0,0,0"
                         FontSize="11.5" FontWeight="Bold" Cursor="Hand"
-                        ToolTip="One-click: Pre-flight + Scan Profile + Auto-Export to Desktop"/>
-                <Button x:Name="btnScanAll" Grid.Column="4" Content="Scan Profile" Padding="14,4" Margin="4,0,0,0"
-                        FontSize="11.5" FontWeight="SemiBold" Cursor="Hand" ToolTip="Run selected profile's auto-checks"/>
-                <Button x:Name="btnScanAD" Grid.Column="5" Content="Scan AD" Padding="10,4" Margin="4,0,0,0"
-                        FontSize="11" Cursor="Hand" ToolTip="Run Active Directory checks only"/>
-                <Button x:Name="btnScanLocal" Grid.Column="6" Content="Scan Local" Padding="10,4" Margin="4,0,0,0"
-                        FontSize="11" Cursor="Hand" ToolTip="Run local endpoint checks only"/>
+                        ToolTip="$(Get-UiText 'Gui.FullAuditHelp')"/>
+                <Button x:Name="btnScanAll" Grid.Column="4" Content="$(Get-UiText 'Gui.ScanProfile')" Padding="14,4" Margin="4,0,0,0"
+                        FontSize="11.5" FontWeight="SemiBold" Cursor="Hand" ToolTip="$(Get-UiText 'Gui.ScanProfileHelp')"/>
+                <Button x:Name="btnScanAD" Grid.Column="5" Content="$(Get-UiText 'Gui.ScanAD')" Padding="10,4" Margin="4,0,0,0"
+                        FontSize="11" Cursor="Hand" ToolTip="$(Get-UiText 'Gui.ScanADHelp')"/>
+                <Button x:Name="btnScanLocal" Grid.Column="6" Content="$(Get-UiText 'Gui.ScanLocal')" Padding="10,4" Margin="4,0,0,0"
+                        FontSize="11" Cursor="Hand" ToolTip="$(Get-UiText 'Gui.ScanLocalHelp')"/>
                 <TextBlock x:Name="lblScanProgress" Grid.Column="7" Text="" FontSize="10.5"
                            VerticalAlignment="Center" Margin="10,0,0,0"/>
             </Grid>
@@ -8308,10 +8483,10 @@ $script:SuppressAdvance = $false
                         <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="lblConsole" Grid.Column="0" Text="Console" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                    <TextBlock x:Name="lblConsole" Grid.Column="0" Text="$(Get-UiText 'Gui.Console')" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,0,0"/>
                     <TextBlock x:Name="lblConsoleCount" Grid.Column="1" Text="" FontSize="10" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    <Button x:Name="btnConsoleClear" Grid.Column="2" Content="Clear" Padding="8,2" Margin="4,0,0,0" FontSize="10" Cursor="Hand"/>
-                    <Button x:Name="btnConsoleToggle" Grid.Column="3" Content="Hide" Padding="8,2" Margin="4,0,0,0" FontSize="10" Cursor="Hand"/>
+                    <Button x:Name="btnConsoleClear" Grid.Column="2" Content="$(Get-UiText 'Gui.Clear')" Padding="8,2" Margin="4,0,0,0" FontSize="10" Cursor="Hand"/>
+                    <Button x:Name="btnConsoleToggle" Grid.Column="3" Content="$(Get-UiText 'Gui.Hide')" Padding="8,2" Margin="4,0,0,0" FontSize="10" Cursor="Hand"/>
                 </Grid>
                 <TextBox x:Name="txtConsole" Grid.Row="1" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
@@ -8328,18 +8503,18 @@ $script:SuppressAdvance = $false
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="ScoreText" Grid.Column="0" FontSize="12.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,16,0"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                    <TextBlock x:Name="lblFilter" Text="View:" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <Button x:Name="btnFilterAll" Content="All" Padding="8,3" Margin="0,0,2,0" FontSize="10.5" Cursor="Hand"/>
-                    <Button x:Name="btnFilterIncomplete" Content="Incomplete" Padding="8,3" Margin="0,0,2,0" FontSize="10.5" Cursor="Hand"/>
-                    <Button x:Name="btnFilterFail" Content="Failures" Padding="8,3" Margin="0,0,2,0" FontSize="10.5" Cursor="Hand"/>
-                    <Button x:Name="btnFilterScanned" Content="Scanned" Padding="8,3" FontSize="10.5" Cursor="Hand"/>
+                    <TextBlock x:Name="lblFilter" Text="$(Get-UiText 'Gui.View')" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <Button x:Name="btnFilterAll" Content="$(Get-UiText 'Gui.All')" Padding="8,3" Margin="0,0,2,0" FontSize="10.5" Cursor="Hand"/>
+                    <Button x:Name="btnFilterIncomplete" Content="$(Get-UiText 'Gui.Incomplete')" Padding="8,3" Margin="0,0,2,0" FontSize="10.5" Cursor="Hand"/>
+                    <Button x:Name="btnFilterFail" Content="$(Get-UiText 'Gui.Failures')" Padding="8,3" Margin="0,0,2,0" FontSize="10.5" Cursor="Hand"/>
+                    <Button x:Name="btnFilterScanned" Content="$(Get-UiText 'Gui.Scanned')" Padding="8,3" FontSize="10.5" Cursor="Hand"/>
                 </StackPanel>
-                <TextBlock x:Name="StatusText" Grid.Column="2" Text="Ready" FontSize="11.5" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusText" Grid.Column="2" Text="$(Get-UiText 'Gui.Ready')" FontSize="11.5" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="3" Orientation="Horizontal">
-                    <Button x:Name="btnReset" Content="Reset All" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand"/>
-                    <Button x:Name="btnExportHTML" Content="Export HTML" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand"/>
-                    <Button x:Name="btnExportJSON" Content="Export JSON" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="Export structured findings JSON with full compliance, ATT&amp;CK, and D3FEND metadata"/>
-                    <Button x:Name="btnExportCSV" Content="Export CSV" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="Export CSV for MSP pivot table analysis across clients"/>
+                    <Button x:Name="btnReset" Content="$(Get-UiText 'Gui.ResetAll')" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand"/>
+                    <Button x:Name="btnExportHTML" Content="$(Get-UiText 'Gui.ExportHtml')" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand"/>
+                    <Button x:Name="btnExportJSON" Content="$(Get-UiText 'Gui.ExportJson')" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="$(Get-UiText 'Gui.ExportJsonHelp')"/>
+                    <Button x:Name="btnExportCSV" Content="$(Get-UiText 'Gui.ExportCsv')" Padding="14,5" Margin="0,0,4,0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" ToolTip="$(Get-UiText 'Gui.ExportCsvHelp')"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -8395,7 +8570,7 @@ $el['cboFramework'].SelectedIndex = 0  # Default: All
 $el['cboFramework'].Add_SelectionChanged({
     $fwIdx = $el['cboFramework'].SelectedIndex; if ($fwIdx -lt 0) { $fwIdx = 0 }
     $script:ComplianceTarget = $frameworkOrder[$fwIdx]
-    $el['StatusText'].Text = "Compliance target: $($frameworkLabels[$frameworkOrder[$fwIdx]])"
+    $el['StatusText'].Text = Get-UiText 'Gui.ComplianceTargetFormat' @($frameworkLabels[$frameworkOrder[$fwIdx]])
     Write-Log "Framework target changed: $($script:ComplianceTarget)" 'INFO'
 })
 
@@ -8913,7 +9088,7 @@ function Apply-ScanResult([string]$id, [hashtable]$result) {
     if ($script:StatusCombos.Contains($id)) {
         $combo = $script:StatusCombos[$id]
         for ($i=0; $i -lt $combo.Items.Count; $i++) {
-            if ($combo.Items[$i] -eq $statusText) { $combo.SelectedIndex = $i; break }
+            if ($combo.Items[$i].ToString() -eq $statusText) { $combo.SelectedIndex = $i; break }
         }
     }
     if ($result.Findings -and $script:FindingsBoxes.Contains($id)) { $script:FindingsBoxes[$id].Text = $result.Findings }
@@ -8938,7 +9113,7 @@ function Apply-ScanResult([string]$id, [hashtable]$result) {
         $btn = $script:ScanButtons[$id]
         $resultIcon = switch ($result.Status) { 'Pass' { 'OK' } 'Fail' { 'FAIL' } 'Partial' { '~' } 'N/A' { 'NA' } default { '?' } }
         $btn.Content = "$resultIcon"
-        $btn.ToolTip = "Last: $($script:ScanTimestamps[$id]) | $statusText - Click to re-scan"
+        $btn.ToolTip = Get-UiText 'Gui.LastScanHelpFormat' @($script:ScanTimestamps[$id], $statusText)
         switch ($result.Status) {
             'Pass'    { Apply-ButtonTheme $btn '#16a34a' '#22c55e' }
             'Fail'    { Apply-ButtonTheme $btn '#b91c1c' '#dc2626' }
@@ -8981,14 +9156,14 @@ function Apply-ScanResult([string]$id, [hashtable]$result) {
 }
 
 function Apply-ScanError([string]$id, [string]$errMsg, [switch]$TimedOut) {
-    if ($script:FindingsBoxes.Contains($id)) { $script:FindingsBoxes[$id].Text = "SCAN ERROR: $errMsg" }
-    if ($script:EvidenceBoxes.Contains($id)) { $script:EvidenceBoxes[$id].Text = "Error during auto-check @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+    if ($script:FindingsBoxes.Contains($id)) { $script:FindingsBoxes[$id].Text = Get-UiText 'Gui.ScanErrorFormat' @($errMsg) }
+    if ($script:EvidenceBoxes.Contains($id)) { $script:EvidenceBoxes[$id].Text = Get-UiText 'Gui.ErrorEvidenceFormat' @((Get-Date -f 'yyyy-MM-dd HH:mm')) }
     # Mark as reviewed so it shows in reports (not left as "Not Assessed")
     if ($script:CheckStates.Contains($id)) { $script:CheckStates[$id] = $true }
     $script:ScanTimestamps[$id] = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     if ($script:ScanButtons.Contains($id)) {
-        $script:ScanButtons[$id].Content = "ERR"
-        $script:ScanButtons[$id].ToolTip = "Error: $errMsg - Click to retry"
+        $script:ScanButtons[$id].Content = Get-UiText 'Gui.ErrorButton'
+        $script:ScanButtons[$id].ToolTip = Get-UiText 'Gui.ErrorRetryHelpFormat' @($errMsg)
         Apply-ButtonTheme $script:ScanButtons[$id] '#b91c1c' '#dc2626'
     }
     # Flash tab badge with error
@@ -9148,12 +9323,12 @@ function Process-ScanQueue {
             if ($naCount -gt 0) { $tally += " N/A:$naCount" }
             if ($t.Error -gt 0) { $tally += " Err:$($t.Error)" }
             Write-Log "=== SCAN COMPLETE: $($script:ScanBatchTotal) checks${batchElapsed} | $tally ===" 'INFO'
-            $el['StatusText'].Text = "Scan complete: $($script:ScanBatchTotal) checks${batchElapsed} | $tally"
+            $el['StatusText'].Text = Get-UiText 'Gui.ScanCompleteFormat' @($script:ScanBatchTotal, $batchElapsed, $tally)
         }
         elseif ($script:ScanBatchMode -eq 'Single') {
             # Single scan done - no extra messaging needed
         }
-        $el['lblScanProgress'].Text = "Done"
+        $el['lblScanProgress'].Text = Get-UiText 'Gui.Done'
         $script:ScanBatchMode = $null
 
         # Auto-export HTML report after every batch scan
@@ -9203,7 +9378,7 @@ function Start-ScanBatch([string]$filterType) {
 
         if ($profName -eq 'Cloud') {
             $script:CurrentScanProfile = 'Cloud'
-            $el['StatusText'].Text = 'Running Microsoft Graph cloud assessment...'
+            $el['StatusText'].Text = Get-UiText 'Gui.CloudRunning'
             Write-Log "Scan profile: Cloud ($($prof.Label))" 'INFO'
             Start-RunLogEntry -Id 'CLOUD' -Label 'Microsoft Graph Cloud Assessment' -Type 'Cloud' -Target 'Microsoft Graph' -ProfileName 'Cloud'
             try {
@@ -9211,12 +9386,12 @@ function Start-ScanBatch([string]$filterType) {
                 $script:CloudAssessmentImports = @($script:CloudAssessmentImports) + @($cloudAssessment)
                 Complete-RunLogEntry -Id 'CLOUD' -Status 'Pass'
                 Write-Log "Cloud assessment completed: $($cloudAssessment.Passed) passed | $($cloudAssessment.Failed) failed | $($cloudAssessment.Unavailable) unavailable" 'INFO'
-                $el['StatusText'].Text = "Cloud assessment completed: $($cloudAssessment.Score)%"
+                $el['StatusText'].Text = Get-UiText 'Gui.CloudCompleteFormat' @($cloudAssessment.Score)
             }
             catch {
                 Complete-RunLogEntry -Id 'CLOUD' -Status 'Error' -ErrorMessage $_.Exception.Message
                 Write-Log "Cloud assessment error: $($_.Exception.Message)" 'ERROR'
-                $el['StatusText'].Text = "Cloud assessment error: $($_.Exception.Message)"
+                $el['StatusText'].Text = Get-UiText 'Gui.CloudErrorFormat' @($_.Exception.Message)
             }
             return
         }
@@ -9262,7 +9437,7 @@ function Start-ScanBatch([string]$filterType) {
     $idList = @($ids)
     if ($idList.Count -eq 0) {
         Write-Log "No checks available for this profile/filter combination" 'WARN'
-        $el['StatusText'].Text = "No checks available for selected profile"
+        $el['StatusText'].Text = Get-UiText 'Gui.NoProfileChecks'
         return
     }
 
@@ -9372,6 +9547,15 @@ function New-Label([string]$text, [string]$type='TextSec', [double]$size=11) {
     return $tb
 }
 
+function New-UiChoice([string]$value, [string]$textKey) {
+    $choice = [pscustomobject]@{
+        Value = $value
+        Display = Get-UiText $textKey
+    }
+    $choice | Add-Member -MemberType ScriptMethod -Name ToString -Value { return [string]$this.Value } -Force
+    return $choice
+}
+
 function New-InputBox([bool]$multi=$false, [double]$minH=0) {
     $tb = New-Object System.Windows.Controls.TextBox
     $tb.Padding = [System.Windows.Thickness]::new(6,4,6,4); $tb.FontSize = 11.5
@@ -9380,7 +9564,7 @@ function New-InputBox([bool]$multi=$false, [double]$minH=0) {
     if ($multi) {
         $tb.MinHeight = if ($minH -gt 0) { $minH } else { 48 }
         $tb.MaxHeight = 200; $tb.VerticalScrollBarVisibility = 'Auto'
-        $tb.ToolTip = 'Multi-line text. HTML tags are preserved in export.'
+        $tb.ToolTip = Get-UiText 'Gui.MultiLineHelp'
     }
     $tb.SpellCheck.IsEnabled = $true
     $script:ThemedElements.Add(@{Type='Input';Element=$tb}) | Out-Null
@@ -9471,7 +9655,7 @@ function Advance-ToNext([string]$currentId) {
         }
     }
     # All items in all tabs checked
-    $el['StatusText'].Text = "All items completed!"
+    $el['StatusText'].Text = Get-UiText 'Gui.AllCompleted'
 }
 
 foreach ($catName in $script:AuditCategories.Keys) {
@@ -9506,7 +9690,7 @@ foreach ($catName in $script:AuditCategories.Keys) {
     $bgb = New-Object System.Windows.Controls.Border; $bgb.CornerRadius=[System.Windows.CornerRadius]::new(3); $script:ThemedElements.Add(@{Type='BarBg';Element=$bgb})|Out-Null
     $bfb = New-Object System.Windows.Controls.Border; $bfb.Background=New-Brush $catColor; $bfb.CornerRadius=[System.Windows.CornerRadius]::new(3); $bfb.HorizontalAlignment=[System.Windows.HorizontalAlignment]::Left; $bfb.Width=0
     $bg.Children.Add($bgb)|Out-Null; $bg.Children.Add($bfb)|Out-Null; $rs.Children.Add($bg)|Out-Null
-    $cpt = New-Object System.Windows.Controls.TextBlock; $cpt.Text="0/$($cat.Items.Count)"; $cpt.FontSize=11; $cpt.FontWeight=[System.Windows.FontWeights]::SemiBold
+    $cpt = New-Object System.Windows.Controls.TextBlock; $cpt.Text=Get-UiText 'Gui.CategoryProgressFormat' @(0, $cat.Items.Count); $cpt.FontSize=11; $cpt.FontWeight=[System.Windows.FontWeights]::SemiBold
     $cpt.Foreground=New-Brush $catColor; $cpt.Margin=[System.Windows.Thickness]::new(0,3,0,0); $cpt.HorizontalAlignment=[System.Windows.HorizontalAlignment]::Right
     $rs.Children.Add($cpt)|Out-Null
     $hdrG.Children.Add($ls)|Out-Null; $hdrG.Children.Add($rs)|Out-Null; $hdr.Child=$hdrG; $stack.Children.Add($hdr)|Out-Null
@@ -9558,7 +9742,7 @@ foreach ($catName in $script:AuditCategories.Keys) {
 
         $wb = New-Object System.Windows.Controls.Border; $wb.Background=New-Brush '#334155'; $wb.CornerRadius=[System.Windows.CornerRadius]::new(8)
         $wb.Padding=[System.Windows.Thickness]::new(6,1,6,1); $wb.Margin=[System.Windows.Thickness]::new(4,0,4,0)
-        $wt = New-Object System.Windows.Controls.TextBlock; $wt.Text="W:$($item.Weight)"; $wt.FontSize=10; $wt.Foreground=New-Brush '#94a3b8'; $wb.Child=$wt
+        $wt = New-Object System.Windows.Controls.TextBlock; $wt.Text=Get-UiText 'Gui.WeightFormat' @($item.Weight); $wt.FontSize=10; $wt.Foreground=New-Brush '#94a3b8'; $wb.Child=$wt
         $bp.Children.Add($wb)|Out-Null
 
         $sevClr = $script:SeverityColors[$item.Severity]
@@ -9570,7 +9754,7 @@ foreach ($catName in $script:AuditCategories.Keys) {
         # Per-item scan button (only for items with auto-checks)
         if ($script:AutoCheckIDs.Contains($item.ID)) {
             $scanBtn = New-Object System.Windows.Controls.Button
-            $scanBtn.Content = "Scan"
+            $scanBtn.Content = Get-UiText 'Gui.ScanButton'
             $scanBtn.FontSize = 9.5; $scanBtn.FontWeight = [System.Windows.FontWeights]::SemiBold
             $scanBtn.Padding = [System.Windows.Thickness]::new(8,1,8,1)
             $scanBtn.Margin = [System.Windows.Thickness]::new(6,0,0,0)
@@ -9609,20 +9793,20 @@ foreach ($catName in $script:AuditCategories.Keys) {
 
         # Toggle hint button (real Button for keyboard/screen-reader accessibility)
         $hintBtn = New-Object System.Windows.Controls.Button
-        $hintBtn.Content = "[?] Show Guidance"; $hintBtn.FontSize = 10.5
+        $hintBtn.Content = Get-UiText 'Gui.ShowGuidance'; $hintBtn.FontSize = 10.5
         $hintBtn.Margin = [System.Windows.Thickness]::new(26,0,0,2)
         $hintBtn.Foreground = New-Brush '#0ea5e9'; $hintBtn.Background = [System.Windows.Media.Brushes]::Transparent
         $hintBtn.BorderThickness = [System.Windows.Thickness]::new(0); $hintBtn.Cursor = [System.Windows.Input.Cursors]::Hand
         $hintBtn.Padding = [System.Windows.Thickness]::new(0)
         $hintBtn.Tag = $item.ID
-        [System.Windows.Automation.AutomationProperties]::SetName($hintBtn, "Toggle guidance for $($item.ID)")
+        [System.Windows.Automation.AutomationProperties]::SetName($hintBtn, (Get-UiText 'Gui.ToggleGuidanceFormat' @($item.ID)))
         $hintBtn.Add_Click({
             $id = $this.Tag
             $hb = $script:HintBlocks[$id]
             if ($hb.Visibility -eq [System.Windows.Visibility]::Collapsed) {
-                $hb.Visibility = [System.Windows.Visibility]::Visible; $this.Content = "[-] Hide Guidance"
+                $hb.Visibility = [System.Windows.Visibility]::Visible; $this.Content = Get-UiText 'Gui.HideGuidance'
             } else {
-                $hb.Visibility = [System.Windows.Visibility]::Collapsed; $this.Content = "[?] Show Guidance"
+                $hb.Visibility = [System.Windows.Visibility]::Collapsed; $this.Content = Get-UiText 'Gui.ShowGuidance'
             }
         })
         $is.Children.Add($hintBtn)|Out-Null
@@ -9634,46 +9818,58 @@ foreach ($catName in $script:AuditCategories.Keys) {
         $comboRow = New-Object System.Windows.Controls.StackPanel; $comboRow.Orientation=[System.Windows.Controls.Orientation]::Horizontal
         $comboRow.Margin=[System.Windows.Thickness]::new(0,0,0,6)
 
-        $slbl = New-Label 'Status:'; $slbl.Margin=[System.Windows.Thickness]::new(0,0,6,0); $comboRow.Children.Add($slbl)|Out-Null
-        $scb = New-Object System.Windows.Controls.ComboBox; $scb.Width=130; $scb.Height=26; $scb.FontSize=11
+        $slbl = New-Label (Get-UiText 'Gui.StatusLabel'); $slbl.Margin=[System.Windows.Thickness]::new(0,0,6,0); $comboRow.Children.Add($slbl)|Out-Null
+        $scb = New-Object System.Windows.Controls.ComboBox; $scb.Width=130; $scb.Height=26; $scb.FontSize=11; $scb.DisplayMemberPath='Display'
         $scb.HorizontalAlignment=[System.Windows.HorizontalAlignment]::Left
-        foreach ($sOpt in @('Not Assessed','Pass','Fail','Partial','N/A')) { $scb.Items.Add($sOpt)|Out-Null }; $scb.SelectedIndex=0
+        foreach ($sOpt in @(
+            @('Not Assessed','Gui.StatusNotAssessed'),
+            @('Pass','Gui.StatusPass'),
+            @('Fail','Gui.StatusFail'),
+            @('Partial','Gui.StatusPartial'),
+            @('N/A','Gui.StatusNotApplicable')
+        )) { $scb.Items.Add((New-UiChoice $sOpt[0] $sOpt[1]))|Out-Null }; $scb.SelectedIndex=0
         $comboRow.Children.Add($scb)|Out-Null
         $script:StatusCombos[$item.ID] = $scb
         $script:AllCombos.Add($scb) | Out-Null
 
-        $rsLbl = New-Label 'Rem Status:'; $rsLbl.Margin=[System.Windows.Thickness]::new(18,0,6,0); $comboRow.Children.Add($rsLbl)|Out-Null
-        $rsCb = New-Object System.Windows.Controls.ComboBox; $rsCb.Width=150; $rsCb.Height=26; $rsCb.FontSize=11
+        $rsLbl = New-Label (Get-UiText 'Gui.RemediationStatusLabel'); $rsLbl.Margin=[System.Windows.Thickness]::new(18,0,6,0); $comboRow.Children.Add($rsLbl)|Out-Null
+        $rsCb = New-Object System.Windows.Controls.ComboBox; $rsCb.Width=150; $rsCb.Height=26; $rsCb.FontSize=11; $rsCb.DisplayMemberPath='Display'
         $rsCb.HorizontalAlignment=[System.Windows.HorizontalAlignment]::Left
-        foreach ($rs2 in @('Open','In Progress','Remediated','Accepted Risk','Deferred')) { $rsCb.Items.Add($rs2)|Out-Null }; $rsCb.SelectedIndex=0
+        foreach ($rs2 in @(
+            @('Open','Gui.RemediationOpen'),
+            @('In Progress','Gui.RemediationInProgress'),
+            @('Remediated','Gui.RemediationComplete'),
+            @('Accepted Risk','Gui.RemediationAcceptedRisk'),
+            @('Deferred','Gui.RemediationDeferred')
+        )) { $rsCb.Items.Add((New-UiChoice $rs2[0] $rs2[1]))|Out-Null }; $rsCb.SelectedIndex=0
         $comboRow.Children.Add($rsCb)|Out-Null
         $script:RemStatusCombos[$item.ID] = $rsCb
         $script:AllCombos.Add($rsCb) | Out-Null
 
         # Remediation: Assign + Due on same row as combos
-        $raLbl = New-Label 'Assign:' 'TextSec' 10.5; $raLbl.Margin=[System.Windows.Thickness]::new(18,0,4,0); $comboRow.Children.Add($raLbl)|Out-Null
+        $raLbl = New-Label (Get-UiText 'Gui.AssignLabel') 'TextSec' 10.5; $raLbl.Margin=[System.Windows.Thickness]::new(18,0,4,0); $comboRow.Children.Add($raLbl)|Out-Null
         $raBox = New-InputBox; $raBox.Width=120; $raBox.Height=26; $comboRow.Children.Add($raBox)|Out-Null; $script:RemAssignBoxes[$item.ID]=$raBox
-        $rdLbl = New-Label 'Due:' 'TextSec' 10.5; $rdLbl.Margin=[System.Windows.Thickness]::new(10,0,4,0); $comboRow.Children.Add($rdLbl)|Out-Null
+        $rdLbl = New-Label (Get-UiText 'Gui.DueLabel') 'TextSec' 10.5; $rdLbl.Margin=[System.Windows.Thickness]::new(10,0,4,0); $comboRow.Children.Add($rdLbl)|Out-Null
         $rdBox = New-InputBox; $rdBox.Width=100; $rdBox.Height=26; $comboRow.Children.Add($rdBox)|Out-Null; $script:RemDueBoxes[$item.ID]=$rdBox
 
         $fg.Children.Add($comboRow)|Out-Null
 
         # Notes: full-width multi-line
-        $nlbl = New-Label 'Notes:' 'TextSec' 10.5; $nlbl.Margin=[System.Windows.Thickness]::new(0,0,0,2)
+        $nlbl = New-Label (Get-UiText 'Gui.NotesLabel') 'TextSec' 10.5; $nlbl.Margin=[System.Windows.Thickness]::new(0,0,0,2)
         $fg.Children.Add($nlbl)|Out-Null
         $nbox = New-InputBox $true 40; $nbox.Margin=[System.Windows.Thickness]::new(0,0,10,4)
         $fg.Children.Add($nbox)|Out-Null
         $script:NotesBoxes[$item.ID] = $nbox
 
         # Findings: full-width multi-line
-        $flbl = New-Label 'Findings:' 'TextSec' 10.5; $flbl.Margin=[System.Windows.Thickness]::new(0,0,0,2)
+        $flbl = New-Label (Get-UiText 'Gui.FindingsLabel') 'TextSec' 10.5; $flbl.Margin=[System.Windows.Thickness]::new(0,0,0,2)
         $fg.Children.Add($flbl)|Out-Null
         $fbox = New-InputBox $true 48; $fbox.Margin=[System.Windows.Thickness]::new(0,0,10,4)
         $fg.Children.Add($fbox)|Out-Null
         $script:FindingsBoxes[$item.ID] = $fbox
 
         # Evidence: full-width multi-line
-        $elbl = New-Label 'Evidence:' 'TextSec' 10.5; $elbl.Margin=[System.Windows.Thickness]::new(0,0,0,2)
+        $elbl = New-Label (Get-UiText 'Gui.EvidenceLabel') 'TextSec' 10.5; $elbl.Margin=[System.Windows.Thickness]::new(0,0,0,2)
         $fg.Children.Add($elbl)|Out-Null
         $ebox = New-InputBox $true 48; $ebox.Margin=[System.Windows.Thickness]::new(0,0,10,0)
         $fg.Children.Add($ebox)|Out-Null
@@ -9687,13 +9883,13 @@ foreach ($catName in $script:AuditCategories.Keys) {
 }
 
 # ── Executive Summary Tab ────────────────────────────────────────────────────
-$exTab = New-Object System.Windows.Controls.TabItem; $exTab.Header = "Executive Summary"
+$exTab = New-Object System.Windows.Controls.TabItem; $exTab.Header = Get-UiText 'Gui.ExecutiveSummary'
 $exSv = New-Object System.Windows.Controls.ScrollViewer; $exSv.VerticalScrollBarVisibility = 'Auto'; $exSv.Padding = [System.Windows.Thickness]::new(12)
 $exStack = New-Object System.Windows.Controls.StackPanel
 $script:ExSummaryText = New-Object System.Windows.Controls.TextBlock
 $script:ExSummaryText.TextWrapping = [System.Windows.TextWrapping]::Wrap; $script:ExSummaryText.FontSize = 13
 $script:ThemedElements.Add(@{Type='TextPri';Element=$script:ExSummaryText})|Out-Null
-$script:exRefreshBtn = New-Object System.Windows.Controls.Button; $script:exRefreshBtn.Content = "Refresh Summary"; $script:exRefreshBtn.Margin=[System.Windows.Thickness]::new(0,0,0,12)
+$script:exRefreshBtn = New-Object System.Windows.Controls.Button; $script:exRefreshBtn.Content = Get-UiText 'Gui.RefreshSummary'; $script:exRefreshBtn.Margin=[System.Windows.Thickness]::new(0,0,0,12)
 $script:exRefreshBtn.Padding = [System.Windows.Thickness]::new(14,6,14,6); $script:exRefreshBtn.FontSize=12; $script:exRefreshBtn.FontWeight=[System.Windows.FontWeights]::SemiBold; $script:exRefreshBtn.Cursor=[System.Windows.Input.Cursors]::Hand
 $exStack.Children.Add($script:exRefreshBtn)|Out-Null; $exStack.Children.Add($script:ExSummaryText)|Out-Null
 $exSv.Content=$exStack; $exTab.Content=$exSv; $el['MainTabs'].Items.Add($exTab)|Out-Null
@@ -9718,7 +9914,7 @@ function Update-Progress {
     $t = Get-T; $ck=($script:CheckStates.Values|Where-Object{$_}).Count; $tot=$script:TotalItems
     if ($tot -gt 0) {
         $p=[math]::Round(($ck/$tot)*100); $el['ProgBarFill'].Width=[math]::Round(($ck/$tot)*180)
-        $el['ProgText'].Text="$ck/$tot ($p%)"
+        $el['ProgText'].Text=Get-UiText 'Gui.ProgressFormat' @($ck, $tot, $p)
         $c=if($p -ge 75){$t.ProgressGood}elseif($p -ge 40){$t.ProgressMid}else{'#ef4444'}
         $el['ProgText'].Foreground=New-Brush $c; $el['ProgBarFill'].Background=New-Brush $c
     }
@@ -9726,10 +9922,10 @@ function Update-Progress {
         $inf=$script:CategoryProgress[$cn]; $cc=0
         foreach ($it in $script:AuditCategories[$cn].Items) { if ($script:CheckStates[$it.ID]) { $cc++ } }
         $cp2=if($inf.Total -gt 0){[math]::Round(($cc/$inf.Total)*100)}else{0}
-        $inf.TextBlock.Text="$cc/$($inf.Total) ($cp2%)"
+        $inf.TextBlock.Text=Get-UiText 'Gui.ProgressFormat' @($cc, $inf.Total, $cp2)
         if ($inf.Total -gt 0) { $inf.Bar.Width=[math]::Round(($cc/$inf.Total)*$inf.BarMax) }
     }
-    $r=Get-RiskScore; $el['ScoreText'].Text="Score: $($r.Score)/$($r.Max) ($($r.Pct)%) Grade: $($r.Grade)"
+    $r=Get-RiskScore; $el['ScoreText'].Text=Get-UiText 'Gui.ScoreFormat' @($r.Score, $r.Max, $r.Pct, $r.Grade)
 }
 
 # ── Executive Summary Generator ──────────────────────────────────────────────
@@ -11656,13 +11852,13 @@ function Set-AuditState($state) {
     foreach ($id in $state.Items.Keys) {
         $it=$state.Items[$id]
         if($script:CheckBoxes.Contains($id)){$script:CheckBoxes[$id].IsChecked=$it.Checked}
-        if($script:StatusCombos.Contains($id)){$c=$script:StatusCombos[$id];for($i=0;$i -lt $c.Items.Count;$i++){if($c.Items[$i] -eq $it.Status){$c.SelectedIndex=$i;break}}}
+        if($script:StatusCombos.Contains($id)){$c=$script:StatusCombos[$id];for($i=0;$i -lt $c.Items.Count;$i++){if($c.Items[$i].ToString() -eq $it.Status){$c.SelectedIndex=$i;break}}}
         if($script:NotesBoxes.Contains($id)){$script:NotesBoxes[$id].Text=$it.Notes}
         if($script:FindingsBoxes.Contains($id)){$script:FindingsBoxes[$id].Text=$it.Findings}
         if($script:EvidenceBoxes.Contains($id)){$script:EvidenceBoxes[$id].Text=$it.Evidence}
         if($script:RemAssignBoxes.Contains($id)){$script:RemAssignBoxes[$id].Text=$it.RemAssign}
         if($script:RemDueBoxes.Contains($id)){$script:RemDueBoxes[$id].Text=$it.RemDue}
-        if($script:RemStatusCombos.Contains($id)){$c2=$script:RemStatusCombos[$id];for($i=0;$i -lt $c2.Items.Count;$i++){if($c2.Items[$i] -eq $it.RemStatus){$c2.SelectedIndex=$i;break}}}
+        if($script:RemStatusCombos.Contains($id)){$c2=$script:RemStatusCombos[$id];for($i=0;$i -lt $c2.Items.Count;$i++){if($c2.Items[$i].ToString() -eq $it.RemStatus){$c2.SelectedIndex=$i;break}}}
         # Restore scan timestamp and button state
         if ($it.ScanTime) {
             $safeScanTime = ConvertTo-SafeScanTime $it.ScanTime
@@ -11682,7 +11878,7 @@ function Set-AuditState($state) {
 
 $el['btnSave'].Add_Click({
     $dlg=New-Object Microsoft.Win32.SaveFileDialog; $dlg.Filter='JSON|*.json'; $dlg.FileName="Audit_$($el['txtClient'].Text -replace '\s','_')_$(Get-Date -Format 'yyyyMMdd').json"
-    if($dlg.ShowDialog()){(Get-AuditState)|ConvertTo-Json -Depth 5|Set-Content $dlg.FileName -Encoding UTF8; $el['StatusText'].Text="Saved: $($dlg.FileName)"; Write-Log "Audit saved: $($dlg.FileName)" 'INFO'}
+    if($dlg.ShowDialog()){(Get-AuditState)|ConvertTo-Json -Depth 5|Set-Content $dlg.FileName -Encoding UTF8; $el['StatusText'].Text=Get-UiText 'Gui.SavedFormat' @($dlg.FileName); Write-Log "Audit saved: $($dlg.FileName)" 'INFO'}
 })
 
 $el['btnLoad'].Add_Click({
@@ -11885,7 +12081,7 @@ function Export-HTMLReport([string]$outPath, [switch]$OpenAfter, [string]$Tier =
 
     # ── HTML Head + CSS ──────────────────────────────────────────────────────
     $html = @"
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Security Audit - $([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT')))</title>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>$(Get-UiText 'Report.DocumentTitleFormat' @([System.Net.WebUtility]::HtmlEncode((Get-RedactedIdentity $state.Client 'CLIENT'))))</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:30px;max-width:1200px;margin:0 auto;line-height:1.5}
@@ -12221,7 +12417,7 @@ $(if($reportBranding){
         $sd = $hd.score_delta.overall
         $sdColor = if ($null -eq $sd) { '#94a3b8' } elseif ($sd -gt 0) { '#22c55e' } elseif ($sd -lt 0) { '#ef4444' } else { '#94a3b8' }
         $sdStr = if ($null -eq $sd) { 'n/a' } elseif ($sd -gt 0) { "+$sd" } else { "$sd" }
-        $html += "<div class='sec'><h2>Change Since Baseline</h2>`n"
+        $html += "<div class='sec'><h2>$(Get-UiText 'Report.ChangeSinceBaseline')</h2>`n"
         $html += "<div class='d'>Compared against the previous run (baseline age $($script:HistoryResult.baseline_age_days) days).</div>`n"
         if (-not $hd.schema_compatible) { $html += "<div class='d' style='color:#f59e0b'>Catalog/schema changed since baseline; some deltas may reflect definition changes.</div>`n" }
         $html += "<div style='display:flex;flex-wrap:wrap;gap:10px;margin:10px 0'>"
@@ -12239,7 +12435,7 @@ $(if($reportBranding){
 
     # ── EXECUTIVE SUMMARY (Executive, Management, All) ───────────────────────
     if ($Tier -ne 'Technical') {
-        $html += "<div class='exec'><h2>Executive Summary <span class='tier-label' style='background:#f9731622;color:#f97316;border:1px solid #f9731644'>EXECUTIVE</span></h2>`n"
+        $html += "<div class='exec'><h2>$(Get-UiText 'Report.ExecutiveSummary') <span class='tier-label' style='background:#f9731622;color:#f97316;border:1px solid #f9731644'>EXECUTIVE</span></h2>`n"
 
         if ($totalFindings -eq 0) {
             $html += "<p style='color:#22c55e;font-weight:600'>No non-compliant findings detected. The environment meets baseline security requirements.</p>`n"
@@ -12285,8 +12481,8 @@ $(if($reportBranding){
 
     # ── PRE-FLIGHT RESULTS (all tiers) ───────────────────────────────────────
     if ($script:PreflightResults.Count -gt 0) {
-        $html += "<div class='pfs'><h3>Pre-flight Connectivity Results</h3><table style='font-size:12px'>`n"
-        $html += "<tr><th style='width:140px'>Check</th><th style='width:80px'>Result</th><th>Details</th></tr>`n"
+        $html += "<div class='pfs'><h3>$(Get-UiText 'Report.PreflightResults')</h3><table style='font-size:12px'>`n"
+        $html += "<tr><th style='width:140px'>$(Get-UiText 'Report.Check')</th><th style='width:80px'>$(Get-UiText 'Report.Result')</th><th>$(Get-UiText 'Report.Details')</th></tr>`n"
         $pfMap = @{
             'Ping'='Network reachability (ICMP)'; 'WinRM'='Remote management (PS Remoting port 5985/5986)'
             'AD'='Active Directory module + domain'; 'SMB'='SMB server configuration access'
@@ -12305,13 +12501,13 @@ $(if($reportBranding){
 
     # ── REMEDIATION ROADMAP (Management, All) ────────────────────────────────
     if ($Tier -eq 'Management' -or $Tier -eq 'All') {
-        $html += "<div class='sec'><h2 style='color:#a855f7'>Remediation Roadmap <span class='tier-label' style='background:#a855f722;color:#a855f7;border:1px solid #a855f744'>MANAGEMENT</span></h2>`n"
+        $html += "<div class='sec'><h2 style='color:#a855f7'>$(Get-UiText 'Report.RemediationRoadmap') <span class='tier-label' style='background:#a855f722;color:#a855f7;border:1px solid #a855f744'>MANAGEMENT</span></h2>`n"
         $html += "<div class='d'>Prioritized remediation plan organized by urgency and impact</div>`n"
         $html += "<div class='roadmap'>`n"
 
         # Phase 1: Critical (Immediate)
         if ($critFindings.Count -gt 0) {
-            $html += "<div class='road-phase' style='border-color:#ef4444'><h4 style='color:#ef4444'>Phase 1: Immediate (0-7 days) - $($critFindings.Count) items</h4>`n"
+            $html += "<div class='road-phase' style='border-color:#ef4444'><h4 style='color:#ef4444'>$(Get-UiText 'Report.PhaseImmediateFormat' @($critFindings.Count))</h4>`n"
             foreach ($f in $critFindings) {
                 $html += "<div class='road-item'><span class='badge b-critical'>CRIT</span><span><strong>[$($f.ID)]</strong> $([System.Net.WebUtility]::HtmlEncode($f.Text))</span></div>`n"
             }
@@ -12319,7 +12515,7 @@ $(if($reportBranding){
         }
         # Phase 2: High (30 days)
         if ($highFindings.Count -gt 0) {
-            $html += "<div class='road-phase' style='border-color:#f97316'><h4 style='color:#f97316'>Phase 2: Short-term (8-30 days) - $($highFindings.Count) items</h4>`n"
+            $html += "<div class='road-phase' style='border-color:#f97316'><h4 style='color:#f97316'>$(Get-UiText 'Report.PhaseShortFormat' @($highFindings.Count))</h4>`n"
             foreach ($f in $highFindings) {
                 $html += "<div class='road-item'><span class='badge b-high'>HIGH</span><span><strong>[$($f.ID)]</strong> $([System.Net.WebUtility]::HtmlEncode($f.Text))</span></div>`n"
             }
@@ -12327,7 +12523,7 @@ $(if($reportBranding){
         }
         # Phase 3: Medium (60-90 days)
         if ($medFindings.Count -gt 0) {
-            $html += "<div class='road-phase' style='border-color:#eab308'><h4 style='color:#eab308'>Phase 3: Medium-term (30-90 days) - $($medFindings.Count) items</h4>`n"
+            $html += "<div class='road-phase' style='border-color:#eab308'><h4 style='color:#eab308'>$(Get-UiText 'Report.PhaseMediumFormat' @($medFindings.Count))</h4>`n"
             foreach ($f in $medFindings) {
                 $html += "<div class='road-item'><span class='badge b-medium'>MED</span><span><strong>[$($f.ID)]</strong> $([System.Net.WebUtility]::HtmlEncode($f.Text))</span></div>`n"
             }
@@ -12342,7 +12538,7 @@ $(if($reportBranding){
             if ($rs -ne 'Closed' -and ($assign -or $due)) { $remOpen.Add(@{ID=$id;Status=$rs;Assign=$assign;Due=$due}) | Out-Null }
         }
         if ($remOpen.Count -gt 0) {
-            $html += "<div class='road-phase' style='border-color:#818cf8'><h4 style='color:#818cf8'>Tracked Remediation Items ($($remOpen.Count) open)</h4>`n"
+            $html += "<div class='road-phase' style='border-color:#818cf8'><h4 style='color:#818cf8'>$(Get-UiText 'Report.TrackedRemediationFormat' @($remOpen.Count))</h4>`n"
             foreach ($ro in $remOpen) {
                 $html += "<div class='road-item'><span style='color:#818cf8;font-weight:600'>[$($ro.ID)]</span> $($ro.Status)$(if($ro.Assign){" | Assigned: $([System.Net.WebUtility]::HtmlEncode($ro.Assign))"})$(if($ro.Due){" | Due: $([System.Net.WebUtility]::HtmlEncode($ro.Due))"})</div>`n"
             }
@@ -12352,12 +12548,12 @@ $(if($reportBranding){
 
         # ── COMPLIANCE MATRIX (Management, All) ─────────────────────────────
         $fwTarget = $script:ComplianceTarget
-        $html += "<div class='sec'><h2>Compliance Framework Mapping</h2>`n"
+        $html += "<div class='sec'><h2>$(Get-UiText 'Report.ComplianceMapping')</h2>`n"
         $html += "<div class='d'>Each finding maps to controls across $frameworkCount frameworks. Active target: <strong style='color:#38bdf8'>$(if($fwTarget -eq 'All'){'All Frameworks'}else{$script:FrameworkMeta[$fwTarget].Name})</strong></div>`n"
         $html += "<div class='d' style='border-left:3px solid #f59e0b;padding-left:10px;margin:8px 0;color:#cbd5e1'><strong style='color:#f59e0b'>Mapping limitations:</strong> These mappings are assessment support, not certification. Framework scores exclude N/A controls. Some controls (physical security, backup/DR documentation, and policy/process) rely on heuristic or checklist evidence and require manual validation; automated checks collect machine-verifiable evidence only.</div>`n"
         # Determine which columns to show based on framework target
         $showFw = if ($fwTarget -eq 'All') { @($script:FrameworkMeta.Keys) } else { @($fwTarget) }
-        $html += "<div class='comp-matrix'><table><tr><th style='width:55px'>ID</th><th style='width:160px'>Check Item</th><th style='width:60px'>Status</th>"
+        $html += "<div class='comp-matrix'><table><tr><th style='width:55px'>$(Get-UiText 'Report.Id')</th><th style='width:160px'>$(Get-UiText 'Report.CheckItem')</th><th style='width:60px'>$(Get-UiText 'Report.Status')</th>"
         foreach ($fw in $showFw) {
             $meta = $script:FrameworkMeta[$fw]
             $html += "<th style='color:$($meta.Color)'>$($meta.Short)</th>"
@@ -12402,7 +12598,7 @@ $(if($reportBranding){
         if ($fwTarget -ne 'All') {
             $fwMeta = $script:FrameworkMeta[$fwTarget]
             $fwScore = (Get-FrameworkScores -Framework $fwTarget)[$fwTarget]
-            $html += "<div class='sec'><h2 style='color:$($fwMeta.Color)'>$($fwMeta.Name) - Gap Analysis</h2>`n"
+            $html += "<div class='sec'><h2 style='color:$($fwMeta.Color)'>$(Get-UiText 'Report.GapAnalysisFormat' @($fwMeta.Name))</h2>`n"
             $html += "<div class='d'>Failed and partially compliant controls for $($fwMeta.Name). Score: <strong style='color:$($fwMeta.Color)'>$($fwScore.Score)%</strong> ($($fwScore.Pass) pass, $($fwScore.Fail) fail, $($fwScore.Partial) partial of $($fwScore.Total) applicable checks)</div>`n"
             $html += "<div class='gap-section'>`n"
             $fwChecks = if ($script:FrameworkChecks.Contains($fwTarget)) { $script:FrameworkChecks[$fwTarget] } else { @() }
@@ -12450,7 +12646,7 @@ $(if($reportBranding){
     # ── MITRE ATT&CK COVERAGE (Management, Technical, All) ────────────────
     if ($Tier -ne 'Executive') {
         $mitreCov = Get-MitreCoverage
-        $html += "<div class='sec'><h2 style='color:#ef4444'>MITRE ATT&CK Coverage <span class='tier-label' style='background:#ef444422;color:#ef4444;border:1px solid #ef444444'>THREAT INTEL</span></h2>`n"
+        $html += "<div class='sec'><h2 style='color:#ef4444'>$(Get-UiText 'Report.MitreCoverage') <span class='tier-label' style='background:#ef444422;color:#ef4444;border:1px solid #ef444444'>THREAT INTEL</span></h2>`n"
         $html += "<div class='d'>Technique coverage mapped against MITRE ATT&CK Enterprise framework. Higher coverage = more adversary techniques are mitigated by passing checks.</div>`n"
 
         # Tactic Heatmap Grid
@@ -12519,7 +12715,7 @@ $(if($reportBranding){
 
     # ── IMPORTED CLOUD ASSESSMENT (Management, All) ─────────────────────────
     if (($Tier -eq 'Management' -or $Tier -eq 'All') -and $script:CloudAssessmentImports.Count -gt 0) {
-        $html += "<div class='sec' style='border-left:4px solid #38bdf8'><h2 style='color:#38bdf8'>Cloud Assessment <span class='tier-label' style='background:#38bdf822;color:#38bdf8;border:1px solid #38bdf844'>CLOUD</span></h2>`n"
+        $html += "<div class='sec' style='border-left:4px solid #38bdf8'><h2 style='color:#38bdf8'>$(Get-UiText 'Report.CloudAssessment') <span class='tier-label' style='background:#38bdf822;color:#38bdf8;border:1px solid #38bdf844'>CLOUD</span></h2>`n"
         $html += "<div class='d'>Cloud posture data imported from external assessment tools or collected from Microsoft Graph. These findings complement on-premises checks.</div>`n"
         foreach ($imp in $script:CloudAssessmentImports) {
             $impColor = if ($imp.Score -ge 80) { '#22c55e' } elseif ($imp.Score -ge 60) { '#eab308' } elseif ($imp.Score -ge 40) { '#f97316' } else { '#ef4444' }
@@ -12548,7 +12744,7 @@ $(if($reportBranding){
                 $html += "<div style='color:#bae6fd;font-size:11px;margin-bottom:6px'>Secure Score: $($imp.SecureScore.current_score)/$($imp.SecureScore.max_score) ($($imp.SecureScore.percent)%) | Source timestamp: $([System.Net.WebUtility]::HtmlEncode($imp.SecureScore.source_timestamp)) | Scopes: $([System.Net.WebUtility]::HtmlEncode((@($imp.SecureScore.permission_scopes) -join ', ')))</div>`n"
             }
             if ($imp.Findings.Count -gt 0) {
-                $html += "<table class='tech-table' style='margin-top:8px'><tr><th>Test</th><th>Status</th><th>Category</th><th>Name</th><th>Evidence</th></tr>`n"
+                $html += "<table class='tech-table' style='margin-top:8px'><tr><th>$(Get-UiText 'Report.Test')</th><th>$(Get-UiText 'Report.Status')</th><th>$(Get-UiText 'Report.Category')</th><th>$(Get-UiText 'Report.Name')</th><th>$(Get-UiText 'Report.Evidence')</th></tr>`n"
                 foreach ($f in $imp.Findings | Select-Object -First 25) {
                     $statusColor = if ($f.Status -eq 'Fail') { '#f87171' } elseif ($f.Status -eq 'Error') { '#f97316' } else { '#facc15' }
                     $fEvidence = if ($f.Evidence) { $f.Evidence } else { $f.Remediation }
@@ -12564,7 +12760,7 @@ $(if($reportBranding){
 
     # ── IMPORTED BENCHMARK RESULTS (Management, All) ───────────────────────
     if (($Tier -eq 'Management' -or $Tier -eq 'All') -and $script:BenchmarkImports.Count -gt 0) {
-        $html += "<div class='sec' style='border-left:4px solid #a855f7'><h2 style='color:#a855f7'>Imported Benchmark Results <span class='tier-label' style='background:#a855f722;color:#a855f7;border:1px solid #a855f744'>BENCHMARK</span></h2>`n"
+        $html += "<div class='sec' style='border-left:4px solid #a855f7'><h2 style='color:#a855f7'>$(Get-UiText 'Report.ImportedBenchmarks') <span class='tier-label' style='background:#a855f722;color:#a855f7;border:1px solid #a855f744'>BENCHMARK</span></h2>`n"
         $html += "<div class='d'>External benchmark/baseline results imported from HardeningKitty, Microsoft Policy Analyzer, or DISA STIG checklists. These supplement native NSA checks with exact CIS/STIG-level compliance data.</div>`n"
         foreach ($bm in $script:BenchmarkImports) {
             $bmScore = if ($bm.summary.total -gt 0) { [math]::Round(($bm.summary.pass / $bm.summary.total) * 100) } else { 0 }
@@ -12591,7 +12787,7 @@ $(if($reportBranding){
             if ($bm.import_error) { $html += "<div style='color:#fca5a5;font-size:11px;margin-bottom:6px'>Import diagnostic: $([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $bm.import_error)))</div>`n" }
             $failedBm = @($bm.findings | Where-Object { $_.status -eq 'Fail' })
             if ($failedBm.Count -gt 0) {
-                $html += "<table style='margin-top:8px'><tr><th>ID</th><th>Status</th><th>Severity</th><th>Name</th><th>Expected</th><th>Actual</th></tr>`n"
+                $html += "<table style='margin-top:8px'><tr><th>$(Get-UiText 'Report.Id')</th><th>$(Get-UiText 'Report.Status')</th><th>$(Get-UiText 'Report.Severity')</th><th>$(Get-UiText 'Report.Name')</th><th>$(Get-UiText 'Report.Expected')</th><th>$(Get-UiText 'Report.Actual')</th></tr>`n"
                 foreach ($f in $failedBm | Select-Object -First 50) {
                     $html += "<tr><td style='color:#f87171'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.id)))</td><td style='color:#ef4444'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.status)))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.severity)))</td><td>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.name)))</td><td style='color:#22c55e'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.expected)))</td><td style='color:#ef4444'>$([System.Net.WebUtility]::HtmlEncode((ConvertTo-RedactedText $f.actual)))</td></tr>`n"
                 }
@@ -12609,7 +12805,7 @@ $(if($reportBranding){
         $rwColor = if ($rwScore.Overall -ge 80) { '#22c55e' } elseif ($rwScore.Overall -ge 60) { '#eab308' } elseif ($rwScore.Overall -ge 40) { '#f97316' } else { '#ef4444' }
         $gradeColor = switch($rwScore.Grade) { 'A'{'#22c55e'} 'B'{'#84cc16'} 'C'{'#eab308'} 'D'{'#f97316'} default{'#ef4444'} }
 
-        $html += "<div class='sec' style='border-left:4px solid $rwColor'><h2 style='color:$rwColor'>Ransomware Preparedness <span class='tier-label' style='background:$($rwColor)22;color:$rwColor;border:1px solid $($rwColor)44'>RANSOMWARE</span></h2>`n"
+        $html += "<div class='sec' style='border-left:4px solid $rwColor'><h2 style='color:$rwColor'>$(Get-UiText 'Report.RansomwarePreparedness') <span class='tier-label' style='background:$($rwColor)22;color:$rwColor;border:1px solid $($rwColor)44'>RANSOMWARE</span></h2>`n"
         $html += "<div class='d'>Evaluates organizational readiness across four domains: Prevention, Protection, Detection, and Recovery. Score: 0-100 with letter grade.</div>`n"
 
         # Score Ring + Grade
@@ -12683,7 +12879,7 @@ $(if($reportBranding){
             $html += "<span style='font-size:12px;color:#94a3b8;font-weight:400'>($($cs.Pass+$cs.Fail+$cs.Partial)/$($cs.Total) assessed, Score: $($cs.Score)%)</span> "
             $html += "<span class='tier-label' style='background:#0ea5e922;color:#38bdf8;border:1px solid #0ea5e944'>TECHNICAL</span></h2>`n"
             $html += "<div class='d'>$([System.Net.WebUtility]::HtmlEncode($cat.Desc))</div>`n"
-            $html += "<table><tr><th style='width:28px'>OK</th><th style='width:70px'>ID</th><th>Item</th><th style='width:55px'>Sev</th><th style='width:50px'>Tier</th><th style='width:105px'>Evidence</th><th style='width:90px'>Status</th><th>Details</th><th style='width:120px'>Remediation</th></tr>`n"
+            $html += "<table><tr><th style='width:28px'>$(Get-UiText 'Report.Ok')</th><th style='width:70px'>$(Get-UiText 'Report.Id')</th><th>$(Get-UiText 'Report.Item')</th><th style='width:55px'>$(Get-UiText 'Report.SeverityShort')</th><th style='width:50px'>$(Get-UiText 'Report.Tier')</th><th style='width:105px'>$(Get-UiText 'Report.Evidence')</th><th style='width:90px'>$(Get-UiText 'Report.Status')</th><th>$(Get-UiText 'Report.Details')</th><th style='width:120px'>$(Get-UiText 'Report.Remediation')</th></tr>`n"
 
             foreach($it in $cat.Items){
                 $id=$it.ID; $cm=if($script:CheckStates[$id]){"<span class='ck-y'>[X]</span>"}else{"<span class='ck-n'>[ ]</span>"}
@@ -14014,8 +14210,8 @@ function Export-ComplianceSummary {
         }
         critical_count = $critFindings.Count
         total_checks   = ($script:AuditCategories.Values | ForEach-Object { $_.Items.Count } | Measure-Object -Sum).Sum
-        pass_count     = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Pass' }).Count
-        fail_count     = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
+        pass_count     = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -and $_.SelectedItem.ToString() -eq 'Pass' }).Count
+        fail_count     = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -and $_.SelectedItem.ToString() -eq 'Fail' }).Count
     }
 
     $summary | ConvertTo-Json -Depth 5 | Set-Content $OutPath -Encoding UTF8
@@ -14202,7 +14398,7 @@ function Export-IntuneCompliance {
         RansomwareGrade = $rwData.Grade
         RansomwareScore = $rwData.Overall
         OverallCompliant = ($riskData.Grade -in @('A','B'))
-        CriticalFailures = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
+        CriticalFailures = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -and $_.SelectedItem.ToString() -eq 'Fail' }).Count
         Checks = $checks
         CloudAssessments = @(Get-CloudAssessmentExportRecords)
     }
@@ -15365,7 +15561,7 @@ if ($script:SilentMode) {
                 if ($script:StatusCombos.Contains($id)) {
                     $combo = $script:StatusCombos[$id]
                     for ($i=0; $i -lt $combo.Items.Count; $i++) {
-                        if ($combo.Items[$i] -eq $mappedStatus) { $combo.SelectedIndex = $i; break }
+                        if ($combo.Items[$i].ToString() -eq $mappedStatus) { $combo.SelectedIndex = $i; break }
                     }
                 }
                 if ($result.Findings -and $script:FindingsBoxes.Contains($id)) {
@@ -15614,7 +15810,7 @@ if ($script:SilentMode) {
     # the write is allowed (honoring -NoRmmWrite / -NoRegistryWrite /
     # -WriteManifestOnly) and records the outcome in $script:WriteManifest so the
     # post-run summary and the report can disclose exactly what happened.
-    $failCountForRmm = @($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
+    $failCountForRmm = @($script:StatusCombos.Values | Where-Object { $_.SelectedItem -and $_.SelectedItem.ToString() -eq 'Fail' }).Count
     $scanDateStr = Get-Date -Format 'yyyy-MM-dd'
     $writeIntents = @(
         @{ ActionId='rmm.ninja'; Provider='NinjaRMM'; Destination='Ninja custom fields'; Gate='rmm'; RiskTier=1; RequiresAdmin=$false
@@ -15708,7 +15904,7 @@ if ($script:SilentMode) {
     # 1 = Critical (D/F grade OR ransomware score < 40)
     # 2 = Warning (findings present but grade C+)
     # 3 = Compliance failure (any framework below 60%)
-    $failCount = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -eq 'Fail' }).Count
+    $failCount = ($script:StatusCombos.Values | Where-Object { $_.SelectedItem -and $_.SelectedItem.ToString() -eq 'Fail' }).Count
     $anyFwCritical = ($fwFlags.Values | Where-Object { $_ -eq $false }).Count -gt 0
     $cloudSummary = if ($profName -eq 'Cloud') { @($script:CloudAssessmentImports | Where-Object { $_.Source -eq 'MicrosoftGraph' } | Select-Object -Last 1)[0] } else { $null }
     if ($profName -eq 'Cloud') {

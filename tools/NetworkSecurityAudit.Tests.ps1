@@ -66,6 +66,66 @@ Describe 'Parser health' {
     }
 }
 
+Describe 'Localization-neutral text resources' {
+    It 'resolves named English resources and supports a provider switch' {
+        $localizationBlock = [regex]::Match(
+            $script:Text,
+            '(?s)# Localization catalog start.*?# Localization catalog end').Value
+        $localizationBlock | Should -Not -BeNullOrEmpty
+        $localizationAst = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $choiceFunction = $localizationAst.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'New-UiChoice'
+        }, $true)[0].Extent.Text
+
+        $probe = @'
+$before = Get-UiText 'Gui.ScoreFormat' @(1, 2, 50, 'B')
+$script:TextResourceProvider = { param($Key, $DefaultText) "[TEST:$Key]$DefaultText" }
+$after = Get-UiText 'Gui.Ready'
+$choice = New-UiChoice 'Pass' 'Gui.StatusPass'
+@($before, $after, $choice.Display, $choice.ToString())
+'@
+        $result = & ([scriptblock]::Create("& { $localizationBlock`n$choiceFunction`n$probe }"))
+
+        $result[0] | Should -Be 'Score: 1/2 (50%) Grade: B'
+        $result[1] | Should -Be '[TEST:Gui.Ready]Ready'
+        $result[2] | Should -Be '[TEST:Gui.StatusPass]Pass'
+        $result[3] | Should -Be 'Pass'
+    }
+
+    It 'routes WPF labels and report headings through the catalog' {
+        $xamlBlock = Get-Block $script:Text '\[xml\]\$xaml\s*=\s*@"' '"@\s*\r?\n\s*\$reader'
+        $literalPattern = '(?:Text|Content|ToolTip|AutomationProperties\.Name)="(?!\$\(|\{|localhost"|0/0")([^"\r\n]+)"'
+        @([regex]::Matches($xamlBlock, $literalPattern)).Count | Should -Be 0
+
+        foreach ($key in @(
+            'Dashboard.Title',
+            'Dashboard.KpiDefinitions',
+            'Report.ExecutiveSummary',
+            'Report.RemediationRoadmap',
+            'Report.ComplianceMapping',
+            'Report.MitreCoverage',
+            'Report.CloudAssessment',
+            'Report.ImportedBenchmarks',
+            'Report.RansomwarePreparedness')) {
+            $script:Text | Should -Match "Get-UiText '$([regex]::Escape($key))'"
+        }
+    }
+
+    It 'keeps structured export names and status values invariant' {
+        $jsonBlock = Get-Block $script:Text 'function Export-FindingsJSON' 'function Export-FindingsJSONL'
+        $csvBlock = Get-Block $script:Text 'function Export-FindingsCSV' 'function Export-ComplianceSummary'
+
+        $jsonBlock | Should -Match '(?m)^\s*schema_version\s*='
+        $jsonBlock | Should -Match '(?m)^\s*status\s*=\s*\$sv'
+        $jsonBlock | Should -Not -Match 'Get-UiText'
+        $csvBlock | Should -Match '(?m)^\s*CheckID\s*='
+        $csvBlock | Should -Match '(?m)^\s*Status\s*='
+        $csvBlock | Should -Not -Match 'Get-UiText'
+        $script:Text | Should -Match "ToString\('o'\)"
+    }
+}
+
 Describe 'Check catalog consistency' {
     It "defines exactly <ExpectedCheckCount> unique audit IDs" -TestCases @(@{ ExpectedCheckCount = 69 }) {
         @($script:CatalogIds).Count | Should -Be $ExpectedCheckCount
@@ -156,7 +216,10 @@ Describe 'Version surface consistency' {
                 'WindowTitle'         { $script:Text | Should -Match '\$script:WindowTitle\s*=\s*"[^"]*\$\(\$script:ProductVersion\)' }
                 'HTML report footer'  { $script:Text | Should -Match 'Version:\s*<strong>v\$\(\$script:ProductVersion\)' }
                 'save state'          { $script:Text | Should -Match 'Version\s*=\s*\$script:ProductVersion' }
-                'silent banner'       { $script:Text | Should -Match '\$script:ProductSubtitle\s*=\s*"[^"]*\$\(\$script:ProductVersion\)' }
+                'silent banner'       {
+                    $script:Text | Should -Match "'Product\.SubtitleFormat'\s*=\s*'[^']*v\{0\}"
+                    $script:Text | Should -Match '\$script:ProductSubtitle\s*=\s*Get-UiText ''Product\.SubtitleFormat'' @\(\$script:ProductVersion\)'
+                }
             }
         }
     }
@@ -614,6 +677,10 @@ Describe 'Data-handling manifest coverage' {
 
 Describe 'Multi-client dashboard output safety' {
     BeforeAll {
+        $localizationBlock = [regex]::Match(
+            $script:Text,
+            '(?s)# Localization catalog start.*?# Localization catalog end').Value
+        . ([scriptblock]::Create($localizationBlock))
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
         foreach ($functionName in 'Get-MspExecutiveKpis','Export-MultiClientDashboard') {
             $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $functionName }, $true)[0]

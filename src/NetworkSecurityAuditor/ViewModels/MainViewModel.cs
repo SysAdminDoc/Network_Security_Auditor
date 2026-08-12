@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NetworkSecurityAuditor.Checks;
 using NetworkSecurityAuditor.Data;
+using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Scoring;
 using NetworkSecurityAuditor.Services;
@@ -18,22 +19,22 @@ public partial class MainViewModel : ViewModelBase
 {
     private static readonly ExportFormatOption[] DefaultExportFormats =
     [
-        new(ExportFormatKind.Html, "HTML report", "", "html"),
-        new(ExportFormatKind.Pdf, "PDF report", "", "pdf"),
-        new(ExportFormatKind.Json, "Findings JSON", "", "json"),
-        new(ExportFormatKind.Csv, "Findings CSV", "", "csv"),
-        new(ExportFormatKind.Jsonl, "SIEM JSONL", "_siem", "jsonl"),
-        new(ExportFormatKind.Sarif, "SARIF", "", "sarif"),
-        new(ExportFormatKind.Navigator, "ATT&CK Navigator", "_navigator", "json"),
-        new(ExportFormatKind.DefectDojo, "DefectDojo JSON", "_defectdojo", "json"),
-        new(ExportFormatKind.Ocsf, "OCSF JSONL", "_ocsf", "jsonl"),
-        new(ExportFormatKind.Oscal, "OSCAL JSON", "_oscal", "json"),
-        new(ExportFormatKind.OscalPoam, "OSCAL POA&M JSON", "_oscal_poam", "json"),
-        new(ExportFormatKind.Intune, "Intune JSON", "_intune", "json"),
-        new(ExportFormatKind.ComplianceSummary, "Compliance summary JSON", "_summary", "json"),
-        new(ExportFormatKind.SiemContentPack, "SIEM content pack", "_siem_pack", "", IsFolderExport: true),
-        new(ExportFormatKind.CmmcHtml, "CMMC HTML", "_cmmc", "html"),
-        new(ExportFormatKind.CmmcJson, "CMMC JSON", "_cmmc", "json")
+        new(ExportFormatKind.Html, UiText.ExportHtmlReport, "", "html"),
+        new(ExportFormatKind.Pdf, UiText.ExportPdfReport, "", "pdf"),
+        new(ExportFormatKind.Json, UiText.ExportFindingsJson, "", "json"),
+        new(ExportFormatKind.Csv, UiText.ExportFindingsCsv, "", "csv"),
+        new(ExportFormatKind.Jsonl, UiText.ExportSiemJsonl, "_siem", "jsonl"),
+        new(ExportFormatKind.Sarif, UiText.ExportSarif, "", "sarif"),
+        new(ExportFormatKind.Navigator, UiText.ExportAttackNavigator, "_navigator", "json"),
+        new(ExportFormatKind.DefectDojo, UiText.ExportDefectDojoJson, "_defectdojo", "json"),
+        new(ExportFormatKind.Ocsf, UiText.ExportOcsfJsonl, "_ocsf", "jsonl"),
+        new(ExportFormatKind.Oscal, UiText.ExportOscalJson, "_oscal", "json"),
+        new(ExportFormatKind.OscalPoam, UiText.ExportOscalPoamJson, "_oscal_poam", "json"),
+        new(ExportFormatKind.Intune, UiText.ExportIntuneJson, "_intune", "json"),
+        new(ExportFormatKind.ComplianceSummary, UiText.ExportComplianceSummaryJson, "_summary", "json"),
+        new(ExportFormatKind.SiemContentPack, UiText.ExportSiemContentPack, "_siem_pack", "", IsFolderExport: true),
+        new(ExportFormatKind.CmmcHtml, UiText.ExportCmmcHtml, "_cmmc", "html"),
+        new(ExportFormatKind.CmmcJson, UiText.ExportCmmcJson, "_cmmc", "json")
     ];
 
     private static readonly string DefaultExportOutputFolder = Path.Combine(
@@ -69,7 +70,7 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveFilters), nameof(FilterEmptyStateTitle), nameof(FilterEmptyStateDetail))]
-    private string _selectedCategory = "All";
+    private string _selectedCategory = UiText.FilterAll;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveFilters), nameof(IsSearchWatermarkVisible), nameof(FilterEmptyStateTitle), nameof(FilterEmptyStateDetail))]
@@ -77,7 +78,7 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveFilters), nameof(FilterEmptyStateTitle), nameof(FilterEmptyStateDetail))]
-    private string _statusFilter = "All";
+    private string _statusFilter = UiText.FilterAll;
 
     [ObservableProperty]
     private CheckItemViewModel? _selectedCheck;
@@ -105,7 +106,7 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ScoreSubtitle), nameof(ScanReadinessText), nameof(ScanStatusHeadline))]
-    private string _scanStatus = "Ready";
+    private string _scanStatus = UiText.Ready;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ScanProgressDisplay), nameof(ScanStatusHeadline), nameof(ScanProgressBrushKey))]
@@ -166,9 +167,10 @@ public partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(DomainMaturityGradeDisplay), nameof(DomainMaturityBrushKey))]
     private string _domainMaturityGrade = "N/A";
 
-    public string[] Categories { get; private set; } = ["All"];
+    public string[] Categories { get; private set; } = [UiText.FilterAll];
 
-    public string[] StatusFilters { get; } = ["All", "Pass", "Partial", "Fail", "N/A", "Not Assessed"];
+    public string[] StatusFilters { get; } =
+        [UiText.FilterAll, UiText.StatusPass, UiText.StatusPartial, UiText.StatusFail, UiText.StatusNotApplicable, UiText.FilterNotAssessed];
 
     public string[] AvailableThemes { get; } = ["Catppuccin Mocha"];
 
@@ -229,7 +231,7 @@ public partial class MainViewModel : ViewModelBase
         if (item is not CheckItemViewModel check)
             return false;
 
-        if (SelectedCategory != "All" && check.Category != SelectedCategory)
+        if (SelectedCategory != UiText.FilterAll && check.Category != SelectedCategory)
             return false;
 
         if (!string.IsNullOrWhiteSpace(SearchText))
@@ -243,11 +245,11 @@ public partial class MainViewModel : ViewModelBase
 
         return StatusFilter switch
         {
-            "Pass" => check.Status == CheckStatus.Pass,
-            "Partial" => check.Status == CheckStatus.Partial,
-            "Fail" => check.Status == CheckStatus.Fail,
-            "N/A" => check.Status == CheckStatus.NA,
-            "Not Assessed" => check.Status == CheckStatus.NotAssessed,
+            var value when value == UiText.StatusPass => check.Status == CheckStatus.Pass,
+            var value when value == UiText.StatusPartial => check.Status == CheckStatus.Partial,
+            var value when value == UiText.StatusFail => check.Status == CheckStatus.Fail,
+            var value when value == UiText.StatusNotApplicable => check.Status == CheckStatus.NA,
+            var value when value == UiText.FilterNotAssessed => check.Status == CheckStatus.NotAssessed,
             _ => true
         };
     }
@@ -299,27 +301,27 @@ public partial class MainViewModel : ViewModelBase
     public bool HasNoVisibleChecks => !HasVisibleChecks;
 
     public bool HasActiveFilters =>
-        SelectedCategory != "All" ||
-        StatusFilter != "All" ||
+        SelectedCategory != UiText.FilterAll ||
+        StatusFilter != UiText.FilterAll ||
         !string.IsNullOrWhiteSpace(SearchText);
 
     public bool IsSearchWatermarkVisible => string.IsNullOrWhiteSpace(SearchText);
 
     public string VisibleChecksDisplay => Checks.Count == 0
-        ? "No checks loaded"
-        : $"{VisibleCheckCount}/{Checks.Count} visible";
+        ? UiText.NoChecksLoaded
+        : UiText.Format(nameof(UiText.VisibleChecksFormat), VisibleCheckCount, Checks.Count);
 
     public string FilterEmptyStateTitle => Checks.Count == 0
-        ? "No checks loaded"
-        : "No checks match this view";
+        ? UiText.NoChecksLoaded
+        : UiText.NoChecksMatch;
 
     public string FilterEmptyStateDetail => HasActiveFilters
-        ? "Clear filters or adjust category and status."
-        : "Load the check catalog to begin.";
+        ? UiText.ClearFiltersDetail
+        : UiText.LoadCatalogDetail;
 
     public string Grade => HasAssessedChecks ? RiskScoreEngine.GradeFromScore(OverallScore) : "\u2014";
 
-    public string OverallScoreDisplay => HasAssessedChecks ? $"{OverallScore}/100" : "Not scanned";
+    public string OverallScoreDisplay => HasAssessedChecks ? $"{OverallScore}/100" : UiText.NotScanned;
 
     public string ScoreSubtitle
     {
@@ -329,11 +331,12 @@ public partial class MainViewModel : ViewModelBase
                 return ScanStatus;
 
             if (HasAssessedChecks)
-                return $"{PassCount + PartialCount + FailCount} assessed - {NotAssessedCount} open";
+                return UiText.Format(
+                    nameof(UiText.AssessedOpenFormat), PassCount + PartialCount + FailCount, NotAssessedCount);
 
             return PreflightTotalCount > 0
-                ? $"Pre-flight {PreflightPassedCount}/{PreflightTotalCount} passed"
-                : "Ready for pre-flight";
+                ? UiText.Format(nameof(UiText.PreflightPassedFormat), PreflightPassedCount, PreflightTotalCount)
+                : UiText.ReadyForPreflight;
         }
     }
 
@@ -343,48 +346,48 @@ public partial class MainViewModel : ViewModelBase
         ? "0 / 0"
         : $"{AssessedCount} / {Checks.Count}";
 
-    public string OutcomeSummaryDisplay => $"{PassCount} pass - {PartialCount} partial - {FailCount} fail";
+    public string OutcomeSummaryDisplay => UiText.Format(
+        nameof(UiText.OutcomeSummaryFormat), PassCount, PartialCount, FailCount);
 
-    public string ProfileSummary => $"{SelectedProfile} profile";
+    public string ProfileSummary => UiText.Format(nameof(UiText.ProfileSummaryFormat), SelectedProfile);
 
     public bool CanEditScanOptions => !IsScanning;
 
     public string StartScanHelpText => IsScanning
-        ? "A scan is already running."
+        ? UiText.ScanAlreadyRunning
         : !IsEnvironmentReady
-            ? "Environment detection and pre-flight checks are still running."
-            : $"Run the {SelectedProfile} profile against applicable checks.";
+            ? UiText.EnvironmentStillRunning
+            : UiText.Format(nameof(UiText.RunProfileHelpFormat), SelectedProfile);
 
     public string StopScanHelpText => IsScanning
-        ? "Cancel the running scan after the active check responds."
-        : "No scan is currently running.";
+        ? UiText.CancelRunningScan
+        : UiText.NoScanRunning;
 
     public string ScanProfileHelpText => IsScanning
-        ? "Profile selection is locked until the running scan finishes."
-        : $"Choose the check set for the next scan. Current profile: {SelectedProfile}.";
+        ? UiText.ProfileLocked
+        : UiText.Format(nameof(UiText.ChooseProfileFormat), SelectedProfile);
 
-    public string PrivacyModeHelpText =>
-        "Redacts host, domain, tenant, client, and user identifiers from exported reports.";
+    public string PrivacyModeHelpText => UiText.PrivacyModeHelp;
 
     public string SaveStateHelpText => IsScanning
-        ? "Saving audit state is unavailable while a scan is updating results."
+        ? UiText.SaveUnavailableScanning
         : IsExporting
-            ? "Saving audit state is unavailable while a report is exporting."
-            : "Save statuses, evidence, and remediation tracking to an audit state file.";
+            ? UiText.SaveUnavailableExporting
+            : UiText.SaveStateHelp;
 
     public string LoadStateHelpText => IsScanning
-        ? "Loading audit state is unavailable while a scan is updating results."
+        ? UiText.LoadUnavailableScanning
         : IsExporting
-            ? "Loading audit state is unavailable while a report is exporting."
-            : "Restore statuses, evidence, and remediation tracking from an audit state file.";
+            ? UiText.LoadUnavailableExporting
+            : UiText.LoadStateHelp;
 
     public string StatePersistenceText => IsScanning
-        ? "Assessment changing during scan"
+        ? UiText.AssessmentChanging
         : IsExporting
-            ? "Report export in progress"
+            ? UiText.ExportInProgress
             : HasUnsavedChanges
-                ? "Unsaved assessment changes"
-                : "No unsaved assessment changes";
+                ? UiText.UnsavedChanges
+                : UiText.NoUnsavedChanges;
 
     public string StatePersistenceBrushKey => IsScanning || IsExporting
         ? "InfoAccent"
@@ -393,10 +396,10 @@ public partial class MainViewModel : ViewModelBase
             : "StatusNeutral";
 
     public string ReadinessDisplay => !IsEnvironmentReady
-        ? "Detecting environment"
+        ? UiText.DetectingEnvironment
         : PreflightTotalCount > 0
-            ? $"{PreflightPassedCount}/{PreflightTotalCount} ready"
-            : "Pre-flight pending";
+            ? UiText.Format(nameof(UiText.ReadyCountFormat), PreflightPassedCount, PreflightTotalCount)
+            : UiText.PreflightPending;
 
     public string ReadinessBrushKey
     {
@@ -414,19 +417,19 @@ public partial class MainViewModel : ViewModelBase
 
     public string RansomwareGradeDisplay => HasAssessedChecks ? RansomwareGrade : "\u2014";
 
-    public string RansomwareScoreDisplay => HasAssessedChecks ? $"{RansomwareScore}/100" : "Pending";
+    public string RansomwareScoreDisplay => HasAssessedChecks ? $"{RansomwareScore}/100" : UiText.Pending;
 
     public string RansomwareBrushKey => HasAssessedChecks ? GradeBrushFor(RansomwareGrade) : "StatusNeutral";
 
     public string DomainMaturityGradeDisplay => HasAssessedChecks ? DomainMaturityGrade : "\u2014";
 
-    public string DomainMaturityScoreDisplay => HasAssessedChecks ? $"{DomainMaturityScore}/100" : "Pending";
+    public string DomainMaturityScoreDisplay => HasAssessedChecks ? $"{DomainMaturityScore}/100" : UiText.Pending;
 
     public string DomainMaturityBrushKey => HasAssessedChecks ? GradeBrushFor(DomainMaturityGrade) : "StatusNeutral";
 
     public string ScanProgressDisplay => IsScanning || ScanProgressPercent > 0
         ? $"{ScanProgressPercent:0}%"
-        : "Idle";
+        : UiText.Idle;
 
     public string ScanProgressBrushKey => IsScanning || ScanProgressPercent > 0
         ? "Accent"
@@ -437,22 +440,24 @@ public partial class MainViewModel : ViewModelBase
         get
         {
             if (IsScanning)
-                return ScanProgressPercent > 0 ? $"Scanning {ScanProgressPercent:0}%" : "Scanning";
+                return ScanProgressPercent > 0
+                    ? UiText.Format(nameof(UiText.ScanningPercentFormat), ScanProgressPercent)
+                    : UiText.ScanningStatus;
 
             if (IsExporting)
-                return "Exporting report";
+                return UiText.ExportingReport;
 
-            if (ScanStatus.StartsWith("Pre-flight complete:", StringComparison.OrdinalIgnoreCase))
-                return "Ready";
+            if (StartsWithResourceFormat(ScanStatus, nameof(UiText.PreflightCompleteFormat)))
+                return UiText.Ready;
 
             if (ScanStatus.Contains(" exported", StringComparison.OrdinalIgnoreCase))
-                return "Export complete";
+                return UiText.ExportComplete;
 
-            if (ScanStatus.StartsWith("State loaded", StringComparison.OrdinalIgnoreCase))
-                return "State loaded";
+            if (StartsWithResourceFormat(ScanStatus, nameof(UiText.StateLoadedFormat)))
+                return UiText.StateLoaded;
 
-            if (ScanStatus.StartsWith("State saved", StringComparison.OrdinalIgnoreCase))
-                return "State saved";
+            if (StartsWithResourceFormat(ScanStatus, nameof(UiText.StateSavedFormat)))
+                return UiText.StateSaved;
 
             return CompactStatus(ScanStatus, 30);
         }
@@ -463,16 +468,16 @@ public partial class MainViewModel : ViewModelBase
         get
         {
             if (!HasAssessedChecks)
-                return "Awaiting assessment";
+                return UiText.AwaitingAssessment;
 
             return Grade switch
             {
-                "A" => "Strong posture",
-                "B" => "Managed risk",
-                "C" => "Moderate risk",
-                "D" => "High risk",
-                "F" => "Critical risk",
-                _ => "Unknown"
+                "A" => UiText.StrongPosture,
+                "B" => UiText.ManagedRisk,
+                "C" => UiText.ModerateRisk,
+                "D" => UiText.HighRisk,
+                "F" => UiText.CriticalRisk,
+                _ => UiText.Unknown
             };
         }
     }
@@ -485,30 +490,39 @@ public partial class MainViewModel : ViewModelBase
                 return ScanStatus;
 
             if (IsExporting)
-                return $"Exporting {SelectedExportFormat.DisplayName}...";
+                return UiText.Format(nameof(UiText.ExportingFormat), SelectedExportFormat.DisplayName);
 
             if (!IsEnvironmentReady)
-                return "Preparing the audit workspace";
+                return UiText.PreparingWorkspace;
 
             if (HasAssessedChecks)
-                return $"{PassCount + PartialCount + FailCount} assessed - export ready";
+                return UiText.Format(
+                    nameof(UiText.AssessedExportReadyFormat), PassCount + PartialCount + FailCount);
 
             if (PreflightTotalCount == 0)
-                return "Ready to run local audit checks";
+                return UiText.ReadyLocalChecks;
 
             var advisories = PreflightTotalCount - PreflightPassedCount;
             return advisories == 0
-                ? "Ready to scan"
-                : $"Ready with {advisories} pre-flight advisories";
+                ? UiText.ReadyToScan
+                : UiText.Format(nameof(UiText.ReadyWithAdvisoriesFormat), advisories);
         }
     }
 
     private static string CompactStatus(string value, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
-            return string.IsNullOrWhiteSpace(value) ? "Ready" : value;
+            return string.IsNullOrWhiteSpace(value) ? UiText.Ready : value;
 
         return value[..Math.Max(0, maxLength - 3)].TrimEnd() + "...";
+    }
+
+    private static bool StartsWithResourceFormat(string value, string key)
+    {
+        var format = UiText.Get(key);
+        var placeholder = format.IndexOf('{');
+        var prefix = placeholder >= 0 ? format[..placeholder] : format;
+        return value.StartsWith(prefix, StringComparison.CurrentCultureIgnoreCase);
     }
 
     public string ExportAvailabilityText
@@ -516,17 +530,17 @@ public partial class MainViewModel : ViewModelBase
         get
         {
             if (IsScanning)
-                return "Export pauses while a scan is running.";
+                return UiText.ExportPaused;
 
             if (IsExporting)
-                return $"Exporting {SelectedExportFormat.DisplayName}...";
+                return UiText.Format(nameof(UiText.ExportingFormat), SelectedExportFormat.DisplayName);
 
             if (string.IsNullOrWhiteSpace(ExportOutputFolder))
-                return "Choose an export folder before exporting.";
+                return UiText.ChooseExportFolder;
 
             return HasAssessedChecks
-                ? $"Ready to export {SelectedExportFormat.DisplayName}."
-                : "Run a scan or mark at least one check before exporting.";
+                ? UiText.Format(nameof(UiText.ReadyToExportFormat), SelectedExportFormat.DisplayName)
+                : UiText.RunBeforeExport;
         }
     }
 
@@ -570,7 +584,7 @@ public partial class MainViewModel : ViewModelBase
         : Environment.ComputerName;
 
     public string EnvironmentBadge => Environment.IsDomainJoined
-        ? "Domain joined"
+        ? UiText.DomainJoined
         : Environment.JoinType;
 
     [ObservableProperty]
@@ -580,12 +594,17 @@ public partial class MainViewModel : ViewModelBase
     {
         var results = Services.PreflightChecker.Run(Environment);
         var passed = results.Count(r => r.Passed);
-        var lines = results.Select(r => $"{(r.Passed ? "PASS" : "WARN")}  {r.Name}: {r.Detail}");
+        var lines = results.Select(r => UiText.Format(
+            nameof(UiText.PreflightResultFormat),
+            r.Passed ? UiText.PreflightPassTag : UiText.PreflightWarningTag,
+            r.Name,
+            r.Detail));
         PreflightPassedCount = passed;
         PreflightTotalCount = results.Count;
-        PreflightSummary = $"Pre-flight: {passed}/{results.Count} passed\n{string.Join("\n", lines)}";
-        ScanStatus = $"Pre-flight complete: {passed}/{results.Count} checks passed";
-        AppendActivity($"Pre-flight complete: {passed}/{results.Count} checks passed");
+        PreflightSummary = UiText.Format(
+            nameof(UiText.PreflightSummaryFormat), passed, results.Count, string.Join("\n", lines));
+        ScanStatus = UiText.Format(nameof(UiText.PreflightCompleteFormat), passed, results.Count);
+        AppendActivity(ScanStatus);
         foreach (var line in lines)
         {
             AppendActivity(line);
@@ -606,9 +625,9 @@ public partial class MainViewModel : ViewModelBase
             Checks.Add(check);
         }
 
-        Categories = ["All", .. CheckCatalog.Categories];
+        Categories = [UiText.FilterAll, .. CheckCatalog.Categories];
         OnPropertyChanged(nameof(Categories));
-        CategoryRailItems.Add(new CategorySummaryViewModel { Name = "All" });
+        CategoryRailItems.Add(new CategorySummaryViewModel { Name = UiText.FilterAll });
         foreach (var category in CheckCatalog.Categories)
         {
             var summary = new CategorySummaryViewModel { Name = category };
@@ -620,7 +639,8 @@ public partial class MainViewModel : ViewModelBase
         RefreshFilteredChecks(preserveSelection: true);
         UpdateScoreCounts();
         HasUnsavedChanges = false;
-        AppendActivity($"Catalog loaded: {Checks.Count} checks across {CategorySummaries.Count} categories");
+        AppendActivity(UiText.Format(
+            nameof(UiText.CatalogLoadedFormat), Checks.Count, CategorySummaries.Count));
     }
 
     private void DetachCheckStatusHandlers()
@@ -659,9 +679,9 @@ public partial class MainViewModel : ViewModelBase
         _scanCts = scanCts;
         _scanCompletion = scanCompletion;
         IsScanning = true;
-        ScanStatus = "Scanning...";
+        ScanStatus = UiText.Scanning;
         ScanProgressPercent = 0;
-        AppendActivity($"Scan started: {SelectedProfile} profile");
+        AppendActivity(UiText.Format(nameof(UiText.ScanStartedFormat), SelectedProfile));
 
         var options = new AuditOptions
         {
@@ -687,13 +707,17 @@ public partial class MainViewModel : ViewModelBase
             if (checkLookup.TryGetValue(update.checkId, out var vm))
             {
                 vm.IsRunning = true;
-                ScanStatus = $"Running {update.checkId}: {vm.Label} ({update.index}/{update.total})";
-                AppendActivity($"Running {update.checkId}: {vm.Label}");
+                ScanStatus = UiText.Format(
+                    nameof(UiText.RunningCheckFormat), update.checkId, vm.Label, update.index, update.total);
+                AppendActivity(UiText.Format(
+                    nameof(UiText.RunningCheckActivityFormat), update.checkId, vm.Label));
             }
             else
             {
-                ScanStatus = $"Running {update.checkId} ({update.index}/{update.total})";
-                AppendActivity($"Running {update.checkId}");
+                ScanStatus = UiText.Format(
+                    nameof(UiText.RunningCheckCompactFormat), update.checkId, update.index, update.total);
+                AppendActivity(UiText.Format(
+                    nameof(UiText.RunningCheckActivityCompactFormat), update.checkId));
             }
         });
 
@@ -708,13 +732,17 @@ public partial class MainViewModel : ViewModelBase
                 vm.Evidence = update.result.Evidence;
                 vm.DurationMs = update.result.Duration.TotalMilliseconds;
                 vm.IsRunning = false;
-                ScanStatus = $"Completed {update.checkId}: {vm.Label} ({nextCompleted}/{runningTotal})";
-                AppendActivity($"Completed {update.checkId}: {update.result.Status}");
+                ScanStatus = UiText.Format(
+                    nameof(UiText.CompletedCheckFormat), update.checkId, vm.Label, nextCompleted, runningTotal);
+                AppendActivity(UiText.Format(
+                    nameof(UiText.CompletedCheckActivityFormat), update.checkId, update.result.Status));
             }
             else
             {
-                ScanStatus = $"Completed {update.checkId} ({nextCompleted}/{runningTotal})";
-                AppendActivity($"Completed {update.checkId}: {update.result.Status}");
+                ScanStatus = UiText.Format(
+                    nameof(UiText.CompletedCheckCompactFormat), update.checkId, nextCompleted, runningTotal);
+                AppendActivity(UiText.Format(
+                    nameof(UiText.CompletedCheckActivityFormat), update.checkId, update.result.Status));
             }
 
             completed = nextCompleted;
@@ -732,7 +760,7 @@ public partial class MainViewModel : ViewModelBase
             if (profileIds.Length == 0)
             {
                 unsupportedProfile = true;
-                ScanStatus = $"{options.ScanProfile} profile is not available in this preview. No local or Active Directory checks were run.";
+                ScanStatus = UiText.Format(nameof(UiText.UnsupportedProfileFormat), options.ScanProfile);
                 AppendActivity(ScanStatus);
                 ScanProgressPercent = 0;
                 return;
@@ -743,7 +771,7 @@ public partial class MainViewModel : ViewModelBase
             if (applicableIds.Length == 0)
             {
                 noApplicableChecks = true;
-                ScanStatus = $"No checks in the {options.ScanProfile} profile apply to this host/environment.";
+                ScanStatus = UiText.Format(nameof(UiText.NoApplicableChecksFormat), options.ScanProfile);
                 AppendActivity(ScanStatus);
                 ScanProgressPercent = 0;
                 return;
@@ -762,9 +790,9 @@ public partial class MainViewModel : ViewModelBase
             {
                 scanFailed = true;
                 var logPath = Services.CrashLogWriter.Write(ex, "StartScanAsync");
-                ScanStatus = $"Scan failed. Review the activity log and crash log: {logPath}";
-                AppendActivity($"Scan failed: {ex.Message}");
-                AppendActivity($"Crash log: {logPath}");
+                ScanStatus = UiText.Format(nameof(UiText.ScanFailedFormat), logPath);
+                AppendActivity(UiText.Format(nameof(UiText.ScanFailedActivityFormat), ex.Message));
+                AppendActivity(UiText.Format(nameof(UiText.CrashLogFormat), logPath));
             }
         }
         finally
@@ -778,8 +806,8 @@ public partial class MainViewModel : ViewModelBase
                 {
                     var scanWasCancelled = scanCts.Token.IsCancellationRequested;
                     ScanStatus = scanWasCancelled
-                        ? $"Scan cancelled ({completed}/{total} completed)"
-                        : $"Scan complete ({completed}/{total} checks)";
+                        ? UiText.Format(nameof(UiText.ScanCancelledFormat), completed, total)
+                        : UiText.Format(nameof(UiText.ScanCompleteFormat), completed, total);
                     AppendActivity(ScanStatus);
                     if (!scanWasCancelled && total > 0)
                     {
@@ -810,7 +838,7 @@ public partial class MainViewModel : ViewModelBase
             : ExportOutputFolder;
 
         IsExporting = true;
-        ScanStatus = "Generating HTML report...";
+        ScanStatus = UiText.GeneratingHtmlReport;
         AppendActivity(ScanStatus);
 
         try
@@ -823,14 +851,14 @@ public partial class MainViewModel : ViewModelBase
             await WriteExportAsync(ExportFormatKind.Html, reportPath);
             _openReportFile(reportPath);
 
-            ScanStatus = $"Report generated and opened: {reportPath}";
-            AppendActivity("HTML report generated and opened");
+            ScanStatus = UiText.Format(nameof(UiText.ReportGeneratedAndOpenedFormat), reportPath);
+            AppendActivity(UiText.HtmlReportGeneratedAndOpened);
         }
         catch (Exception ex)
         {
             var logPath = Services.CrashLogWriter.Write(ex, "GenerateAndOpenHtmlReportAsync");
-            ScanStatus = $"Report generation or opening failed. Crash log: {logPath}";
-            AppendActivity($"Report open failed: {ex.Message}");
+            ScanStatus = UiText.Format(nameof(UiText.ReportGenerationFailedFormat), logPath);
+            AppendActivity(UiText.Format(nameof(UiText.ReportOpenFailedFormat), ex.Message));
         }
         finally
         {
@@ -859,8 +887,8 @@ public partial class MainViewModel : ViewModelBase
     private void StopScan()
     {
         _scanCts?.Cancel();
-        ScanStatus = "Cancelling...";
-        AppendActivity("Scan cancellation requested");
+        ScanStatus = UiText.Cancelling;
+        AppendActivity(UiText.ScanCancellationRequested);
     }
 
     private bool CanStopScan() => IsScanning;
@@ -918,7 +946,7 @@ public partial class MainViewModel : ViewModelBase
             return;
 
         IsExporting = true;
-        ScanStatus = $"{operation}...";
+        ScanStatus = UiText.Format(nameof(UiText.OperationProgressFormat), operation);
         AppendActivity(ScanStatus);
         try
         {
@@ -927,13 +955,22 @@ public partial class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             var logPath = Services.CrashLogWriter.Write(ex, operation);
-            ScanStatus = $"{operation} failed. Crash log: {logPath}";
-            AppendActivity($"{operation} failed: {ex.Message}");
+            ScanStatus = UiText.Format(nameof(UiText.OperationFailedFormat), operation, logPath);
+            AppendActivity(UiText.Format(nameof(UiText.OperationFailedActivityFormat), operation, ex.Message));
         }
         finally
         {
             IsExporting = false;
         }
+    }
+
+    private void SetExportSucceeded(string displayName, string path)
+    {
+        ScanStatus = UiText.Format(
+            nameof(UiText.ExportSucceededFormat),
+            displayName,
+            PrivacyMode ? UiText.PrivacyModeSuffix : string.Empty,
+            path);
     }
 
     private sealed class InlineProgress<T>(Action<T> handler) : IProgress<T>
@@ -958,7 +995,7 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "Select export folder",
+            Title = UiText.SelectExportFolder,
             InitialDirectory = Directory.Exists(ExportOutputFolder) ? ExportOutputFolder : ""
         };
 
@@ -970,7 +1007,9 @@ public partial class MainViewModel : ViewModelBase
     private async Task ExportSelectedAsync()
     {
         var option = SelectedExportFormat;
-        await RunGuardedWriteAsync($"Exporting {option.DisplayName}", async () =>
+        await RunGuardedWriteAsync(
+            UiText.Format(nameof(UiText.ExportingOperationFormat), option.DisplayName),
+            async () =>
         {
             Directory.CreateDirectory(ExportOutputFolder);
             var baseName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}";
@@ -984,7 +1023,7 @@ public partial class MainViewModel : ViewModelBase
                     Path.Combine(folder, "data-handling.json"),
                     PrivacyMode,
                     files);
-                ScanStatus = $"SIEM content pack exported: {folder} ({files.Length} files)";
+                ScanStatus = UiText.Format(nameof(UiText.SiemPackExportedFormat), folder, files.Length);
                 AppendActivity(ScanStatus);
                 return;
             }
@@ -995,8 +1034,8 @@ public partial class MainViewModel : ViewModelBase
                 Export.DataHandlingManifestWriter.SidecarPath(path),
                 PrivacyMode,
                 [path]);
-            ScanStatus = $"{option.DisplayName} exported{(PrivacyMode ? " (privacy mode)" : "")}: {path}";
-            AppendActivity($"{option.DisplayName} exported");
+            SetExportSucceeded(option.DisplayName, path);
+            AppendActivity(UiText.Format(nameof(UiText.ExportActivityFormat), option.DisplayName));
         });
     }
 
@@ -1052,7 +1091,7 @@ public partial class MainViewModel : ViewModelBase
                 await AtomicFileWriter.WriteAllTextAsync(path, Export.CmmcReportGenerator.ExportJson(exportChecks, exportEnv));
                 break;
             default:
-                throw new NotSupportedException($"Export format '{kind}' is not supported.");
+                throw new NotSupportedException(UiText.Format(nameof(UiText.UnsupportedExportFormat), kind));
         }
     }
 
@@ -1088,18 +1127,18 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "HTML Report|*.html",
+            Filter = $"{UiText.ExportHtmlReport}|*.html",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.html",
             DefaultExt = ".html"
         };
 
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("HTML export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportHtmlReport, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade);
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, html);
-                ScanStatus = $"HTML report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportHtmlReport, dialog.FileName);
             });
     }
 
@@ -1108,18 +1147,18 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "JSON Report|*.json",
+            Filter = $"{UiText.ExportFindingsJson}|*.json",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.json",
             DefaultExt = ".json"
         };
 
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("JSON export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportFindingsJson, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 var json = Export.JsonExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, SelectedProfile, DomainMaturityScore, DomainMaturityGrade);
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, json);
-                ScanStatus = $"JSON report exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportFindingsJson, dialog.FileName);
             });
     }
 
@@ -1128,16 +1167,16 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "CSV|*.csv",
+            Filter = $"{UiText.ExportFindingsCsv}|*.csv",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.csv",
             DefaultExt = ".csv"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("CSV export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportFindingsCsv, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.CsvExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
-                ScanStatus = $"CSV exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportFindingsCsv, dialog.FileName);
             });
     }
 
@@ -1146,16 +1185,16 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "JSONL|*.jsonl",
+            Filter = $"{UiText.ExportSiemJsonl}|*.jsonl",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_siem.jsonl",
             DefaultExt = ".jsonl"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("JSONL export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportSiemJsonl, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.JsonlExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile));
-                ScanStatus = $"JSONL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportSiemJsonl, dialog.FileName);
             });
     }
 
@@ -1164,16 +1203,16 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "SARIF|*.sarif",
+            Filter = $"{UiText.ExportSarif}|*.sarif",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.sarif",
             DefaultExt = ".sarif"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("SARIF export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportSarif, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.SarifExporter.Export(exportChecks, exportEnv));
-                ScanStatus = $"SARIF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportSarif, dialog.FileName);
             });
     }
 
@@ -1182,16 +1221,16 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "ATT&CK Navigator|*.json",
+            Filter = $"{UiText.ExportAttackNavigator}|*.json",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_navigator.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("Navigator export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportAttackNavigator, async () =>
             {
                 var (exportChecks, _) = GetExportData();
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.NavigatorExporter.Export(exportChecks));
-                ScanStatus = $"Navigator layer exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportAttackNavigator, dialog.FileName);
             });
     }
 
@@ -1200,16 +1239,16 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "DefectDojo JSON|*.json",
+            Filter = $"{UiText.ExportDefectDojoJson}|*.json",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_defectdojo.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("DefectDojo export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportDefectDojoJson, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.DefectDojoExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
-                ScanStatus = $"DefectDojo exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportDefectDojoJson, dialog.FileName);
             });
     }
 
@@ -1218,16 +1257,16 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "OCSF JSONL|*.jsonl",
+            Filter = $"{UiText.ExportOcsfJsonl}|*.jsonl",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_ocsf.jsonl",
             DefaultExt = ".jsonl"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("OCSF export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportOcsfJsonl, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.OcsfExporter.Export(exportChecks, exportEnv, OverallScore, Grade, SelectedProfile.ToString()));
-                ScanStatus = $"OCSF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportOcsfJsonl, dialog.FileName);
             });
     }
 
@@ -1236,16 +1275,16 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "OSCAL JSON|*.json",
+            Filter = $"{UiText.ExportOscalJson}|*.json",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_oscal.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("OSCAL export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportOscalJson, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.OscalExporter.Export(exportChecks, exportEnv, OverallScore, Grade));
-                ScanStatus = $"OSCAL exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportOscalJson, dialog.FileName);
             });
     }
 
@@ -1254,16 +1293,16 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "Compliance Summary JSON|*.json",
+            Filter = $"{UiText.ExportComplianceSummaryJson}|*.json",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_summary.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("Compliance summary export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportComplianceSummaryJson, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.ComplianceSummaryExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade));
-                ScanStatus = $"Compliance summary exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportComplianceSummaryJson, dialog.FileName);
             });
     }
 
@@ -1272,16 +1311,16 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "Intune JSON|*.json",
+            Filter = $"{UiText.ExportIntuneJson}|*.json",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}_intune.json",
             DefaultExt = ".json"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("Intune export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportIntuneJson, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, Export.IntuneExporter.Export(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade));
-                ScanStatus = $"Intune exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                SetExportSucceeded(UiText.ExportIntuneJson, dialog.FileName);
             });
     }
 
@@ -1290,12 +1329,12 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "PDF Report|*.pdf",
+            Filter = $"{UiText.ExportPdfReport}|*.pdf",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.pdf",
             DefaultExt = ".pdf"
         };
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("PDF export", async () =>
+            await RunGuardedWriteAsync(UiText.ExportPdfReport, async () =>
             {
                 var (exportChecks, exportEnv) = GetExportData();
                 var html = Export.HtmlReportGenerator.Generate(exportChecks, exportEnv, OverallScore, Grade, RansomwareScore, RansomwareGrade, DomainMaturityScore, DomainMaturityGrade, tier: Models.ReportTier.All);
@@ -1305,7 +1344,7 @@ public partial class MainViewModel : ViewModelBase
                     await AtomicFileWriter.WriteAllTextAsync(tempHtml, html);
                     var (success, message) = await Export.PdfExporter.ExportAsync(tempHtml, dialog.FileName);
                     if (!success) throw new InvalidOperationException(message);
-                    ScanStatus = $"PDF exported{(PrivacyMode ? " (privacy mode)" : "")}: {dialog.FileName}";
+                    SetExportSucceeded(UiText.ExportPdfReport, dialog.FileName);
                 }
                 finally
                 {
@@ -1319,13 +1358,13 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "Audit State|*.audit.json",
+            Filter = $"{UiText.ExportAuditState}|*.audit.json",
             FileName = $"SecurityAudit_{DateTime.Now.ToString("yyyy-MM-dd_HHmm", CultureInfo.InvariantCulture)}.audit.json",
             DefaultExt = ".audit.json"
         };
 
         if (dialog.ShowDialog() == true)
-            await RunGuardedWriteAsync("Saving audit state", async () =>
+            await RunGuardedWriteAsync(UiText.OperationSavingAuditState, async () =>
             {
                 var state = new AuditState
                 {
@@ -1357,7 +1396,7 @@ public partial class MainViewModel : ViewModelBase
 
                 await AtomicFileWriter.WriteAllTextAsync(dialog.FileName, state.Serialize());
                 HasUnsavedChanges = false;
-                ScanStatus = $"State saved: {dialog.FileName}";
+                ScanStatus = UiText.Format(nameof(UiText.StateSavedFormat), dialog.FileName);
             });
     }
 
@@ -1366,7 +1405,7 @@ public partial class MainViewModel : ViewModelBase
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "Audit State|*.audit.json|All JSON|*.json",
+            Filter = $"{UiText.ExportAuditState}|*.audit.json|{UiText.ExportAllJson}|*.json",
             DefaultExt = ".audit.json"
         };
 
@@ -1377,22 +1416,23 @@ public partial class MainViewModel : ViewModelBase
                 var state = await AuditState.LoadFromFileAsync(dialog.FileName);
                 if (state is null)
                 {
-                    ScanStatus = "Failed to load state file.";
+                    ScanStatus = UiText.StateLoadFailed;
                     return;
                 }
 
                 var restored = ApplyAuditState(state);
-                ScanStatus = $"State loaded: {restored} checks restored from {Path.GetFileName(dialog.FileName)}";
+                ScanStatus = UiText.Format(
+                    nameof(UiText.StateLoadedFormat), restored, Path.GetFileName(dialog.FileName));
             }
             catch (InvalidDataException ex)
             {
-                AppendActivity($"State load rejected: {ex.Message}");
-                ScanStatus = $"State not loaded: {ex.Message}";
+                AppendActivity(UiText.Format(nameof(UiText.StateLoadRejectedFormat), ex.Message));
+                ScanStatus = UiText.Format(nameof(UiText.StateNotLoadedFormat), ex.Message);
             }
             catch (Exception ex)
             {
                 var logPath = Services.CrashLogWriter.Write(ex, "LoadStateAsync");
-                ScanStatus = $"Failed to load state file. Crash log: {logPath}";
+                ScanStatus = UiText.Format(nameof(UiText.StateLoadFailedWithLogFormat), logPath);
             }
         }
     }
@@ -1430,33 +1470,35 @@ public partial class MainViewModel : ViewModelBase
     private void ValidateAuditState(AuditState state)
     {
         if (state is null)
-            throw new InvalidDataException("State payload is empty.");
+            throw new InvalidDataException(UiText.StatePayloadEmpty);
 
         if (!string.Equals(state.SchemaVersion, AuditState.CurrentSchemaVersion, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException($"Unsupported state schema '{state.SchemaVersion}'. Expected '{AuditState.CurrentSchemaVersion}'.");
+            throw new InvalidDataException(UiText.Format(
+                nameof(UiText.StateSchemaUnsupportedFormat), state.SchemaVersion, AuditState.CurrentSchemaVersion));
 
         if (string.IsNullOrWhiteSpace(state.Client))
-            throw new InvalidDataException("State is missing the saved client/machine identity.");
+            throw new InvalidDataException(UiText.StateIdentityMissing);
 
         if (!string.IsNullOrWhiteSpace(Environment.ComputerName) &&
             !state.Client.Equals(Environment.ComputerName, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException($"State belongs to '{state.Client}', not the current machine '{Environment.ComputerName}'.");
+            throw new InvalidDataException(UiText.Format(
+                nameof(UiText.StateWrongMachineFormat), state.Client, Environment.ComputerName));
 
         if (string.IsNullOrWhiteSpace(state.ToolVersion))
-            throw new InvalidDataException("State is missing the tool version.");
+            throw new InvalidDataException(UiText.StateToolVersionMissing);
 
         if (state.SavedAt == default)
-            throw new InvalidDataException("State is missing its saved timestamp.");
+            throw new InvalidDataException(UiText.StateTimestampMissing);
 
         if (!Enum.TryParse<ScanProfileType>(state.ScanProfile, ignoreCase: true, out var profile) ||
             !AvailableProfiles.Contains(profile))
-            throw new InvalidDataException($"State contains unsupported scan profile '{state.ScanProfile}'.");
+            throw new InvalidDataException(UiText.Format(nameof(UiText.StateProfileUnsupportedFormat), state.ScanProfile));
 
         if (!AvailableThemes.Contains(state.Theme, StringComparer.OrdinalIgnoreCase))
-            throw new InvalidDataException($"State contains unsupported theme '{state.Theme}'.");
+            throw new InvalidDataException(UiText.Format(nameof(UiText.StateThemeUnsupportedFormat), state.Theme));
 
         if (state.Checks is null)
-            throw new InvalidDataException("State is missing its check collection.");
+            throw new InvalidDataException(UiText.StateChecksMissing);
 
         var currentChecks = Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1465,24 +1507,26 @@ public partial class MainViewModel : ViewModelBase
         foreach (var checkState in state.Checks)
         {
             if (string.IsNullOrWhiteSpace(checkState.Id))
-                throw new InvalidDataException("State contains a check with no ID.");
+                throw new InvalidDataException(UiText.StateCheckIdMissing);
 
             if (!seen.Add(checkState.Id))
-                throw new InvalidDataException($"State contains duplicate check ID '{checkState.Id}'.");
+                throw new InvalidDataException(UiText.Format(nameof(UiText.StateDuplicateCheckFormat), checkState.Id));
 
             if (!currentChecks.ContainsKey(checkState.Id))
                 unknown.Add(checkState.Id);
 
             if (!Enum.IsDefined(checkState.Status))
-                throw new InvalidDataException($"State contains an invalid status for check '{checkState.Id}'.");
+                throw new InvalidDataException(UiText.Format(nameof(UiText.StateInvalidStatusFormat), checkState.Id));
         }
 
         if (unknown.Count > 0)
-            throw new InvalidDataException($"State contains unknown check ID(s): {string.Join(", ", unknown.Take(5))}.");
+            throw new InvalidDataException(UiText.Format(
+                nameof(UiText.StateUnknownChecksFormat), string.Join(", ", unknown.Take(5))));
 
         var missing = currentChecks.Keys.Where(id => !seen.Contains(id)).Take(5).ToArray();
         if (seen.Count != currentChecks.Count)
-            throw new InvalidDataException($"State is incomplete; missing check ID(s): {string.Join(", ", missing)}.");
+            throw new InvalidDataException(UiText.Format(
+                nameof(UiText.StateIncompleteFormat), string.Join(", ", missing)));
     }
 
     private bool CanManageState() => !IsScanning && !IsExporting;
@@ -1516,7 +1560,7 @@ public partial class MainViewModel : ViewModelBase
             summary.Update(Checks);
         }
 
-        foreach (var summary in CategoryRailItems.Where(s => s.Name.Equals("All", StringComparison.OrdinalIgnoreCase)))
+        foreach (var summary in CategoryRailItems.Where(s => s.Name.Equals(UiText.FilterAll, StringComparison.OrdinalIgnoreCase)))
         {
             summary.Update(Checks);
         }
@@ -1555,9 +1599,9 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void ClearFilters()
     {
-        SelectedCategory = "All";
+        SelectedCategory = UiText.FilterAll;
         SearchText = "";
-        StatusFilter = "All";
+        StatusFilter = UiText.FilterAll;
         RefreshFilteredChecks(preserveSelection: true);
     }
 

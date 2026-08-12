@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Threading;
 using NetworkSecurityAuditor.Services;
+using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.ViewModels;
 
 namespace NetworkSecurityAuditor;
@@ -15,7 +16,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _activityAutoFollowEnabled = enableActivityAutoFollow;
-        Title = $"Network Security Auditor v{VersionInfo.Version}";
+        Title = UiText.Format(nameof(UiText.WindowTitleFormat), UiText.AppName, VersionInfo.Version);
         DataContext = _viewModel;
         ThemeManager.SystemContrastChanged += OnSystemContrastChanged;
         Loaded += OnLoaded;
