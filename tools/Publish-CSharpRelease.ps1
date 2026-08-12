@@ -4,6 +4,7 @@ param(
     [string]$ArtifactsDir = '',
     [switch]$SkipTests,
     [switch]$SkipSigning,
+    [string]$DependencyReportsDirectory = '',
     [string]$TimestampServer = 'http://timestamp.digicert.com'
 )
 
@@ -14,6 +15,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $solutionPath = Join-Path $repoRoot 'NetworkSecurityAuditor.slnx'
 $projectPath = Join-Path $repoRoot 'src\NetworkSecurityAuditor\NetworkSecurityAuditor.csproj'
 $verifierSourcePath = Join-Path $PSScriptRoot 'Verify-CSharpRelease.ps1'
+$dependencyHealthSourcePath = Join-Path $PSScriptRoot 'Test-DependencyHealth.ps1'
 
 if ([string]::IsNullOrWhiteSpace($ArtifactsDir)) {
     $ArtifactsDir = Join-Path $repoRoot 'artifacts\csharp-release'
@@ -69,7 +71,7 @@ function Assert-ReleaseArtifactsPath {
             break
         }
 
-        $parentPath = Split-Path -LiteralPath $existingPath -Parent
+        $parentPath = [System.IO.Path]::GetDirectoryName($existingPath)
         if ([string]::IsNullOrWhiteSpace($parentPath) -or $parentPath.Equals($existingPath, [System.StringComparison]::OrdinalIgnoreCase)) {
             break
         }
@@ -424,6 +426,27 @@ $publishDir = Join-Path $resolvedArtifactsDir 'publish\NetworkSecurityAuditor'
 $releaseDir = Join-Path $resolvedArtifactsDir 'release'
 New-Item -ItemType Directory -Path $publishDir, $releaseDir -Force | Out-Null
 
+if (-not (Test-Path -LiteralPath $dependencyHealthSourcePath -PathType Leaf)) {
+    throw "Dependency health gate not found: $dependencyHealthSourcePath"
+}
+$dependencyHealthPath = Join-Path $releaseDir 'dependency-health.json'
+$dependencyHealthArguments = @(
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    $dependencyHealthSourcePath,
+    '-Release',
+    '-NoRestore',
+    '-OutputPath',
+    $dependencyHealthPath
+)
+if (-not [string]::IsNullOrWhiteSpace($DependencyReportsDirectory)) {
+    $dependencyHealthArguments += @('-OfflineReportsDirectory', (Resolve-RepoPath $DependencyReportsDirectory))
+}
+Invoke-Checked powershell.exe $dependencyHealthArguments
+
 if (-not $SkipTests) {
     Invoke-Checked dotnet @('test', $solutionPath, '-c', $Configuration, '--no-restore')
 }
@@ -492,11 +515,13 @@ Write-CycloneDxSbom -Path $sbomPath -Version $version -TargetFramework $targetFr
 $zipHash = Get-Sha256Hex -Path $zipPath
 $sbomHash = Get-Sha256Hex -Path $sbomPath
 $verifierHash = Get-Sha256Hex -Path $verifierPath
+$dependencyHealthHash = Get-Sha256Hex -Path $dependencyHealthPath
 $zipMetadata = Get-ZipMetadata -Path $zipPath
 $coveredFiles = @(
     [System.IO.Path]::GetFileName($zipPath),
     [System.IO.Path]::GetFileName($sbomPath),
     [System.IO.Path]::GetFileName($verifierPath),
+    [System.IO.Path]::GetFileName($dependencyHealthPath),
     [System.IO.Path]::GetFileName($manifestPath)
 )
 $manifest = [ordered]@{
@@ -545,6 +570,12 @@ $manifest = [ordered]@{
         command = '.\Verify-CSharpRelease.ps1 -ReleaseDir .'
         require_signature_command = '.\Verify-CSharpRelease.ps1 -ReleaseDir . -RequireSignature'
     }
+    dependency_health = [ordered]@{
+        file = [System.IO.Path]::GetFileName($dependencyHealthPath)
+        sha256 = $dependencyHealthHash
+        schema_version = '1.0'
+        release_mode = $true
+    }
     checksums = [ordered]@{
         file = [System.IO.Path]::GetFileName($checksumPath)
         algorithm = 'SHA256'
@@ -563,13 +594,17 @@ $manifest = [ordered]@{
         [ordered]@{
             file = [System.IO.Path]::GetFileName($verifierPath)
             sha256 = $verifierHash
+        },
+        [ordered]@{
+            file = [System.IO.Path]::GetFileName($dependencyHealthPath)
+            sha256 = $dependencyHealthHash
         }
     )
 }
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 
 $hashes = @()
-foreach ($file in @($zipPath, $sbomPath, $verifierPath, $manifestPath)) {
+foreach ($file in @($zipPath, $sbomPath, $verifierPath, $dependencyHealthPath, $manifestPath)) {
     $hash = Get-Sha256Hex -Path $file
     $hashes += "$hash  $([System.IO.Path]::GetFileName($file))"
 }
@@ -581,4 +616,5 @@ Write-Host "Release artifact: $zipPath"
 Write-Host "Checksum file:    $checksumPath"
 Write-Host "Manifest:         $manifestPath"
 Write-Host "Verifier:         $verifierPath"
+Write-Host "Dependency gate:  $dependencyHealthPath"
 Write-Host "Signing status:   $($signing.status)"

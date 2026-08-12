@@ -18,6 +18,7 @@ public class ReleaseToolingTests
         Assert.Contains("Assert-ReleaseArtifactsPath", script);
         Assert.Contains("$artifactsRootWithSeparator", script);
         Assert.Contains("FileAttributes]::ReparsePoint", script);
+        Assert.Contains("[System.IO.Path]::GetDirectoryName($existingPath)", script);
         Assert.Contains("'test', $solutionPath", script);
         Assert.Contains("'publish'", script);
         Assert.Contains("Set-AuthenticodeSignature", script);

@@ -130,6 +130,14 @@ Different fleet targets retain independent locks and can still run in parallel.
 Build the local C# installable artifact:
 
 ```powershell
+# Local inventory/advisory/freshness check. Outdated packages warn; advisories fail.
+.\tools\Test-DependencyHealth.ps1 -NoRestore `
+    -OutputPath .\artifacts\dependency-health-local.json
+
+# Apply release policy without building an artifact.
+.\tools\Test-DependencyHealth.ps1 -Release -NoRestore `
+    -OutputPath .\artifacts\dependency-health-release.json
+
 .\tools\Publish-CSharpRelease.ps1
 
 # Re-verify an existing local or downloaded bundle before extraction
@@ -141,11 +149,30 @@ Build the local C# installable artifact:
     -ReleaseDir .\artifacts\csharp-release\release -RequireSignature
 ```
 
-The release tool cleans `artifacts/csharp-release`, runs the xUnit suite,
+`-NoRestore` prevents a project restore, but NuGet sources may still be queried
+for advisories and latest versions. For a deterministic disconnected check,
+capture `dotnet list <solution> package --include-transitive --format json`, plus
+the corresponding `--vulnerable` and `--outdated` reports, as `inventory.json`,
+`vulnerable.json`, and `outdated.json`. Pass their directory through
+`-OfflineReportsDirectory`; that mode invokes neither `dotnet` nor the network.
+The stable JSON result lists each direct/transitive occurrence, resolved/latest
+versions, advisories, patch/minor/major drift, data-source behavior, and the final
+policy decision.
+
+Vulnerabilities always fail. Drift is warning-only for local checks and fails
+`-Release` unless `tools/dependency-health-exceptions.json` contains a named,
+owned, reasoned, unexpired exception matching the exact package, resolved
+version, latest version, and optional project. A changed latest version therefore
+invalidates the exception instead of silently broadening it. The publisher accepts
+`-DependencyReportsDirectory` when release validation must consume precomputed
+offline reports.
+
+The release tool cleans `artifacts/csharp-release`, applies that dependency gate,
+runs the xUnit suite,
 publishes the C# rewrite, signs `.exe`/`.dll` files when a local code-signing
 certificate is available, then writes
 `artifacts/csharp-release/release/NetworkSecurityAuditor-csharp-v<version>-windows-net10.zip`,
-a CycloneDX SBOM (`*.cdx.json`), `SHA256SUMS.txt`, and
+a CycloneDX SBOM (`*.cdx.json`), `dependency-health.json`, `SHA256SUMS.txt`, and
 `release-manifest.json` with package inventory and runtime support metadata. It
 also copies the standalone `Verify-CSharpRelease.ps1` beside those files and runs
 it before reporting success. The verifier checks every declared/checksummed file,
@@ -814,6 +841,8 @@ PSScriptAnalyzerSettings.psd1               # Lint rule set (correctness/securit
 tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
 tools/NetworkSecurityAudit.Tests.ps1        # Pester v5 quality-gate suite
 tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
+tools/Test-DependencyHealth.ps1             # Package inventory/advisory/freshness release gate
+tools/dependency-health-exceptions.json      # Exact-version, dated dependency drift exceptions
 tools/Publish-CSharpRelease.ps1             # Local C# zip/checksum/signing artifact flow
 tools/Verify-CSharpRelease.ps1              # Standalone release hash/SBOM/ZIP/signature verifier
 src/NetworkSecurityAuditor/                 # .NET 10 WPF rewrite

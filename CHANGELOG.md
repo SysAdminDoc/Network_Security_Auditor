@@ -5,6 +5,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 ## Unreleased
 
 ### Security
+- Added a stable, offline-testable dependency health gate for direct/transitive inventory, vulnerability advisories, and version drift. Vulnerabilities always block; release drift requires named, owned, dated exact-version exceptions, and release bundles now include the gated JSON decision.
 - Added an independently executable C# release-bundle verifier. Release output now self-checks every checksum and manifest hash, CycloneDX 1.5 declarations, safe ZIP entries, entrypoint/runtime metadata, and Authenticode state; `-RequireSignature` rejects unsigned bundles without overstating skipped signing.
 - Fixed: Fleet artifacts now use collision-safe target names, reject missing or schema-invalid child results instead of counting them as completed, and redact aggregate identities and source paths in privacy mode.
 - Fixed: C# release artifact cleanup now rejects repository roots, source directories, and reparse-point paths before any recursive deletion.
