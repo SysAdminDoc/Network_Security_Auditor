@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "tool": "Network Security Auditor",
-  "tool_version": "5.3.3",
+  "tool_version": "5.4.0",
   "generated_at_utc": "2026-08-12T12:00:00.0000000+00:00",
   "stale_after_days": 30,
   "assets_discovered": 3,

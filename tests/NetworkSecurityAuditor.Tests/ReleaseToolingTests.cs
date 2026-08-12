@@ -260,7 +260,7 @@ public class ReleaseToolingTests
 
         Assert.Contains("AssemblyInformationalVersionAttribute", source);
         Assert.DoesNotContain("?? \"5.", source);
-        Assert.Equal("5.3.3", VersionInfo.Version);
+        Assert.Equal("5.4.0", VersionInfo.Version);
     }
 
     [Fact]

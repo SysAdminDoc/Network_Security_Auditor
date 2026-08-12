@@ -4,6 +4,11 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ## Unreleased
 
+## [v5.4.0 / v4.12.0] - 2026-08-12
+
+### Maintenance
+- Released the drained roadmap batch with synchronized C# and PowerShell product metadata.
+
 ### Security
 - Added a stable, offline-testable dependency health gate for direct/transitive inventory, vulnerability advisories, and version drift. Vulnerabilities always block; release drift requires named, owned, dated exact-version exceptions, and release bundles now include the gated JSON decision.
 - Added an independently executable C# release-bundle verifier. Release output now self-checks every checksum and manifest hash, CycloneDX 1.5 declarations, safe ZIP entries, entrypoint/runtime metadata, and Authenticode state; `-RequireSignature` rejects unsigned bundles without overstating skipped signing.

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Network Security Auditor v4.11.4 - Professional GUI Tool
+    Network Security Auditor v4.12.0 - Professional GUI Tool
 .DESCRIPTION
     Comprehensive WPF-based security audit checklist for Windows and domain environments.
     Features: auto system theme detection, 7 dark themes, categorized checks,
@@ -65,7 +65,7 @@
 .AUTHOR
     SysAdminDoc
 .VERSION
-    4.11.4
+    4.12.0
 #>
 param(
     [switch]$Silent,
@@ -305,7 +305,7 @@ function Get-UiText {
 $script:ProductName = Get-UiText 'Product.Name'
 $script:ProductTitle = $script:ProductName
 $script:ProductShortName = 'NetworkSecurityAudit'
-$script:ProductVersion = '4.11.4'
+$script:ProductVersion = '4.12.0'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.1'

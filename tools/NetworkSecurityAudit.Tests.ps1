@@ -1266,7 +1266,7 @@ Describe 'Unattended audit run locking (real functions via AST)' {
         }
     }
     BeforeEach {
-        $script:ProductVersion = '4.11.4'
+        $script:ProductVersion = '4.12.0'
     }
 
     It 'records owner metadata, normalizes identity, and permits unrelated targets' {
