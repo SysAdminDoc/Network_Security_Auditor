@@ -14,6 +14,10 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Left unbumped: the current `v5.4.0 / v4.12.0` heading below already sits ahead of the last real
   GitHub release (v5.3.1), so bumping further would widen the gap between what the docs claim and
   what a visitor can actually download rather than close it.
+- The banner screenshot also 404ed for the same reason (it pointed at a `v5.4.0` release asset that
+  was never uploaded). It now points at `network-security-auditor-v5.3.1.png` from the real v5.3.1
+  release, the newest one that actually has a screenshot, with alt text naming that version instead
+  of the unreleased one.
 
 ## [v5.4.0 / v4.12.0] - 2026-08-12
 

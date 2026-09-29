@@ -21,7 +21,7 @@ The repo also contains an active .NET 10/WPF C# rewrite under `src/NetworkSecuri
   <sub><em>If this project helps you, a coffee helps me keep working on it.</em></sub>
 </p>
 
-![Network Security Auditor v5.4.0 premium workstation](https://github.com/SysAdminDoc/Network_Security_Auditor/releases/download/v5.4.0/network-security-auditor-v5.4.0.png)
+![Network Security Auditor v5.3.1 premium workstation, showing the category rail, environment readiness badge, checks table, selected-check inspector, and activity console](https://github.com/SysAdminDoc/Network_Security_Auditor/releases/download/v5.3.1/network-security-auditor-v5.3.1.png)
 
 The C# workstation uses a resizable checks-and-inspector layout, live environment readiness, neutral unscanned posture states, accessible focus treatment, assessment save-status feedback, and a persistent activity console. Scans remain disabled until environment detection and pre-flight checks finish.
 
