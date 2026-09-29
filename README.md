@@ -32,7 +32,7 @@ The C# workstation uses a resizable checks-and-inspector layout, live environmen
 
 ## Why This Exists
 
-Most security audit tools are either expensive commercial platforms that require agents and infrastructure, or basic scripts that check a handful of settings and dump text to a console. There's nothing in between for the IT professional who needs to walk into any environment — a 5-person office, a healthcare clinic, a 500-seat enterprise — and produce a professional, evidence-backed security assessment in under an hour.
+Most security audit tools are either expensive commercial platforms that require agents and infrastructure, or basic scripts that check a handful of settings and dump text to a console. There's nothing in between for the IT professional who needs to walk into any environment (a 5-person office, a healthcare clinic, a 500-seat enterprise) and produce a professional, evidence-backed security assessment in under an hour.
 
 This tool fills that gap. It auto-detects the environment, runs every check it can, skips what doesn't apply, scores the results against real compliance frameworks, and generates reports suitable for executives, IT managers, and technical staff. It runs silently via RMM for scheduled fleet assessments or interactively through a polished GUI for on-site audits.
 
@@ -42,12 +42,11 @@ This tool fills that gap. It auto-detects the environment, runs every check it c
 
 ### Download
 
-**[Download NetworkSecurityAudit.ps1](https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1)**
+**[NetworkSecurityAudit.ps1](https://github.com/SysAdminDoc/Network_Security_Auditor/blob/main/NetworkSecurityAudit.ps1)**. Open the page and use its download button (or click **Raw**, then save) to get the script without running anything.
 
-Download without executing immediately, then inspect and run it:
+Read it before you run it. Once it's saved locally:
 ```powershell
-$uri = "https://github.com/SysAdminDoc/Network_Security_Auditor/releases/latest/download/NetworkSecurityAudit.ps1"
-Invoke-WebRequest -Uri $uri -OutFile .\NetworkSecurityAudit.ps1 -UseBasicParsing
+Unblock-File .\NetworkSecurityAudit.ps1
 Get-FileHash .\NetworkSecurityAudit.ps1 -Algorithm SHA256
 Get-AuthenticodeSignature .\NetworkSecurityAudit.ps1
 notepad .\NetworkSecurityAudit.ps1
@@ -220,7 +219,7 @@ average and median score with the scored population, open/new/resolved criticals
 oldest high/critical exposure, active/expired exceptions, and remediation-aging
 buckets. Every rate and aging rollup names its denominator. Older scans for the
 same client and host remain trend points but do not increase the asset count. The
-HTML links to an adjacent individual report and embeds only aggregate values —
+HTML links to an adjacent individual report and embeds only aggregate values,
 never finding evidence or notes.
 
 ### Continuous Delta Assessment
@@ -429,31 +428,31 @@ The EP04 patch compliance check automatically downloads the [CISA Known Exploite
 
 Beyond misconfiguration checks, the tool detects active indicators of compromise:
 
-- **Golden Ticket risk** — krbtgt password age monitoring (should rotate every 180 days)
-- **DCSync permissions** — non-standard accounts with Replicating Directory Changes rights
-- **AdminSDHolder tampering** — unexpected ACEs on the AdminSDHolder container
-- **SID History abuse** — accounts with SID History from foreign domains
-- **ADCS vulnerabilities** — ESC1/ESC6/ESC8/ESC9/ESC10/ESC11/ESC13/ESC15 certificate template and CA misconfigurations
-- **Kerberos legacy encryption** — RC4/DES-only or default-dependent accounts, trusts, and KDC event evidence
-- **BadSuccessor / dMSA exposure** — Windows Server 2025 delegated MSA objects, migration links, and OU create/control rights
+- **Golden Ticket risk**: krbtgt password age monitoring (should rotate every 180 days)
+- **DCSync permissions**: non-standard accounts with Replicating Directory Changes rights
+- **AdminSDHolder tampering**: unexpected ACEs on the AdminSDHolder container
+- **SID History abuse**: accounts with SID History from foreign domains
+- **ADCS vulnerabilities**: ESC1/ESC6/ESC8/ESC9/ESC10/ESC11/ESC13/ESC15 certificate template and CA misconfigurations
+- **Kerberos legacy encryption**: RC4/DES-only or default-dependent accounts, trusts, and KDC event evidence
+- **BadSuccessor / dMSA exposure**: Windows Server 2025 delegated MSA objects, migration links, and OU create/control rights
 
 ### Domain Security Maturity Score
 
 A dedicated scoring engine evaluates AD security maturity across four domains:
 
-- **Privileged Access** (30%) — DA minimization, LAPS, Kerberoast risk, service accounts
-- **Identity Hygiene** (25%) — Stale accounts, password policy, MFA, vendor lifecycle
-- **Infrastructure Hardening** (25%) — Credential Guard, SMB/TLS, EDR, patching
-- **Visibility** (20%) — SIEM, audit policy, failed logon monitoring, IDS/IPS
+- **Privileged Access** (30%): DA minimization, LAPS, Kerberoast risk, service accounts
+- **Identity Hygiene** (25%): Stale accounts, password policy, MFA, vendor lifecycle
+- **Infrastructure Hardening** (25%): Credential Guard, SMB/TLS, EDR, patching
+- **Visibility** (20%): SIEM, audit policy, failed logon monitoring, IDS/IPS
 
 ### Ransomware Readiness Score
 
 A dedicated scoring engine evaluates ransomware resilience across four domains:
 
-- **Prevention** — EDR, AppLocker/WDAC, macro restrictions, egress filtering
-- **Protection** — Credential Guard, LSA Protection, BitLocker, local admin controls
-- **Detection** — IDS/IPS, SIEM, logging, alerting
-- **Recovery** — Backup immutability, restore testing, DR planning, RTO/RPO
+- **Prevention**: EDR, AppLocker/WDAC, macro restrictions, egress filtering
+- **Protection**: Credential Guard, LSA Protection, BitLocker, local admin controls
+- **Detection**: IDS/IPS, SIEM, logging, alerting
+- **Recovery**: Backup immutability, restore testing, DR planning, RTO/RPO
 
 The score produces an independent letter grade separate from the overall security score.
 
@@ -473,9 +472,9 @@ Checks are weighted by severity (Critical=10, High=7, Medium=5, Low=3) and categ
 
 Every HTML report can include up to three tiers, each targeting a different audience:
 
-- **Executive** — Letter grade, risk summary, top 5 findings, ransomware readiness, compliance status. One page, no jargon.
-- **Management** — Category breakdowns, remediation roadmap with priority/effort/timeline, framework scorecards, trend indicators.
-- **Technical** — Full findings with evidence, per-check compliance mapping, MITRE technique references, remediation steps, scan timestamps.
+- **Executive**: Letter grade, risk summary, top 5 findings, ransomware readiness, compliance status. One page, no jargon.
+- **Management**: Category breakdowns, remediation roadmap with priority/effort/timeline, framework scorecards, trend indicators.
+- **Technical**: Full findings with evidence, per-check compliance mapping, MITRE technique references, remediation steps, scan timestamps.
 
 ### GUI
 
@@ -483,10 +482,10 @@ Full WPF interface with:
 
 - **Catppuccin Mocha dark theme** in the C# rewrite, with an automatic Windows High Contrast override that follows system window, control, selection, disabled, and focus colors without changing the saved theme; the legacy PowerShell WPF artifact retains the seven-theme selector
 - **Security-operations workstation shell** with a persistent category progress rail, command/status bar, risk score band, dense virtualized check table, selected-check inspector, and integrated activity console
-- **Per-check controls** — status dropdown, findings, evidence, notes, remediation assignment/due date/status
+- **Per-check controls**: status dropdown, findings, evidence, notes, remediation assignment/due date/status
 - **Live risk score dashboard** updated as checks complete
 - **Pre-flight connectivity check** before scanning (ping, WinRM, AD module, SMB, DNS, elevation, Defender)
-- **Turnkey environment setup** — auto-installs RSAT, configures WinRM, sets audit policies
+- **Turnkey environment setup**: auto-installs RSAT, configures WinRM, sets audit policies
 
 ### Headless / Silent Mode
 
@@ -563,11 +562,11 @@ console evidence.
 - **PowerShell** 5.1+ (ships with Windows 10/11 and Server 2016+)
 - **Windows** 10/11 or Server 2016/2019/2022/2025
 - **Administrator** elevation (auto-prompted via UAC)
-- **No external modules required** — the script handles everything
+- **No external modules required**: the script handles everything
 
 Optional for full coverage:
-- **RSAT / Active Directory module** — required for AD-type checks (IA01-IA08, IA10-IA12, CF01, CF04, EP10). The tool auto-offers to install RSAT on first run.
-- **Domain-joined machine** — non-domain machines skip AD checks automatically and run all 55 local checks.
+- **RSAT / Active Directory module**: required for AD-type checks (IA01-IA08, IA10-IA12, CF01, CF04, EP10). The tool auto-offers to install RSAT on first run.
+- **Domain-joined machine**: non-domain machines skip AD checks automatically and run all 55 local checks.
 
 ---
 
@@ -822,7 +821,7 @@ Pass = full points, Partial = half points, Fail = zero, N/A = excluded from calc
 
 ### Ransomware Readiness
 
-A separate 100-point scale evaluates specific ransomware defense capabilities mapped to the four-domain model (Prevention, Protection, Detection, Recovery). This produces an independent grade — an environment can score well overall but poorly on ransomware readiness if backup and recovery controls are weak.
+A separate 100-point scale evaluates specific ransomware defense capabilities mapped to the four-domain model (Prevention, Protection, Detection, Recovery). This produces an independent grade. An environment can score well overall but still score poorly on ransomware readiness if backup and recovery controls are weak.
 
 ### Compliance Scoring
 

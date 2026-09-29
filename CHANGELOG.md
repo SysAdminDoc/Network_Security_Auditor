@@ -4,6 +4,17 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ## Unreleased
 
+### Docs
+- The README no longer asks a visitor to paste an `Invoke-WebRequest` fetch-and-run block. Getting
+  the script is now a download link followed by local-only commands (`Unblock-File`, `Get-FileHash`,
+  `Get-AuthenticodeSignature`, review, then run).
+- That link now points at the script's GitHub page (`blob/main/NetworkSecurityAudit.ps1`) instead of
+  `releases/latest/download/NetworkSecurityAudit.ps1`, which 404s: no release since v4.10.1 has
+  attached the PowerShell script as an asset, so the README's own quick-start link was broken.
+- Left unbumped: the current `v5.4.0 / v4.12.0` heading below already sits ahead of the last real
+  GitHub release (v5.3.1), so bumping further would widen the gap between what the docs claim and
+  what a visitor can actually download rather than close it.
+
 ## [v5.4.0 / v4.12.0] - 2026-08-12
 
 ### Maintenance
