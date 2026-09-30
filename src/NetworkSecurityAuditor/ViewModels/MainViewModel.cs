@@ -151,6 +151,10 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private int _notAssessedCount;
 
+    /// <summary>Checks that threw or timed out. Not scored.</summary>
+    [ObservableProperty]
+    private int _errorCount;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RansomwareScoreDisplay), nameof(RansomwareGradeDisplay), nameof(RansomwareBrushKey))]
     private int _ransomwareScore;
@@ -170,7 +174,7 @@ public partial class MainViewModel : ViewModelBase
     public string[] Categories { get; private set; } = [UiText.FilterAll];
 
     public string[] StatusFilters { get; } =
-        [UiText.FilterAll, UiText.StatusPass, UiText.StatusPartial, UiText.StatusFail, UiText.StatusNotApplicable, UiText.FilterNotAssessed];
+        [UiText.FilterAll, UiText.StatusPass, UiText.StatusPartial, UiText.StatusFail, UiText.StatusNotApplicable, UiText.FilterNotAssessed, UiText.StatusError];
 
     public string[] AvailableThemes { get; } = ["Catppuccin Mocha"];
 
@@ -250,6 +254,7 @@ public partial class MainViewModel : ViewModelBase
             var value when value == UiText.StatusFail => check.Status == CheckStatus.Fail,
             var value when value == UiText.StatusNotApplicable => check.Status == CheckStatus.NA,
             var value when value == UiText.FilterNotAssessed => check.Status == CheckStatus.NotAssessed,
+            var value when value == UiText.StatusError => check.Status == CheckStatus.Error,
             _ => true
         };
     }
@@ -727,7 +732,7 @@ public partial class MainViewModel : ViewModelBase
             var nextCompleted = completed + 1;
             if (checkLookup.TryGetValue(update.checkId, out var vm))
             {
-                vm.Status = update.result.Status;
+                vm.Status = MergeScanStatus(vm.Id, vm.Status, update.result.Status);
                 vm.Findings = update.result.Findings;
                 vm.Evidence = update.result.Evidence;
                 vm.DurationMs = update.result.Duration.TotalMilliseconds;
@@ -1440,6 +1445,10 @@ public partial class MainViewModel : ViewModelBase
     internal int ApplyAuditState(AuditState state)
     {
         ValidateAuditState(state);
+        var fromVersion = state.SchemaVersion;
+        var migrated = state.MigrateToCurrent();
+        if (migrated > 0)
+            AppendActivity(UiText.Format(nameof(UiText.StateMigratedFormat), migrated, fromVersion));
 
         if (Enum.TryParse<ScanProfileType>(state.ScanProfile, ignoreCase: true, out var profile))
             SelectedProfile = profile;
@@ -1472,7 +1481,7 @@ public partial class MainViewModel : ViewModelBase
         if (state is null)
             throw new InvalidDataException(UiText.StatePayloadEmpty);
 
-        if (!string.Equals(state.SchemaVersion, AuditState.CurrentSchemaVersion, StringComparison.OrdinalIgnoreCase))
+        if (!AuditState.SupportedSchemaVersions.Contains(state.SchemaVersion, StringComparer.OrdinalIgnoreCase))
             throw new InvalidDataException(UiText.Format(
                 nameof(UiText.StateSchemaUnsupportedFormat), state.SchemaVersion, AuditState.CurrentSchemaVersion));
 
@@ -1553,6 +1562,7 @@ public partial class MainViewModel : ViewModelBase
         PartialCount = Checks.Count(c => c.Status == CheckStatus.Partial);
         NotApplicableCount = Checks.Count(c => c.Status == CheckStatus.NA);
         NotAssessedCount = Checks.Count(c => c.Status == CheckStatus.NotAssessed);
+        ErrorCount = Checks.Count(c => c.Status == CheckStatus.Error);
         NaCount = NotApplicableCount + NotAssessedCount;
 
         foreach (var summary in CategorySummaries)
@@ -1623,5 +1633,16 @@ public partial class MainViewModel : ViewModelBase
         {
             ActivityLog.RemoveAt(0);
         }
+    }
+
+    /// <summary>
+    /// A questionnaire check has no automated answer, so a rescan keeps the status the operator set.
+    /// </summary>
+    internal static CheckStatus MergeScanStatus(string checkId, CheckStatus current, CheckStatus scanned)
+    {
+        var keepOperatorAnswer = scanned == CheckStatus.NotAssessed &&
+            current is not (CheckStatus.NotAssessed or CheckStatus.Error) &&
+            Data.CheckCatalog.QuestionnaireIds.Contains(checkId);
+        return keepOperatorAnswer ? current : scanned;
     }
 }

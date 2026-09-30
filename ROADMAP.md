@@ -165,13 +165,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P1
 
-- [ ] P1 — NSA-072 Separate unanswered, errored and timed-out checks from scored results
-  Why: 16 questionnaire checks always return `Partial` and earn half credit; `App.xaml.cs:706-707` counts `Partial` as passing in the framework exit-code threshold, contradicting the repo rule that Partial is not Met; errors and timeouts collapse to `NA` and leave the denominator. This resolves the blocked "Errors and timeouts collapse to NA" decision.
-  Evidence: `src/NetworkSecurityAuditor/Scoring/RiskScoreEngine.cs:22-26`; `App.xaml.cs:700-707`; `Models/Enums.cs`; PS1 manual-evidence exclusion at `NetworkSecurityAudit.ps1:7799-7812`; Maester structured skip reasons and denominator-safe KPIs (CHANGELOG v5.4.0).
-  Touches: `Models/Enums.cs` (add `Error`; use existing `NotAssessed` for unanswered questionnaires), `CheckRunner`, scoring engines, framework summaries, exit-code logic, audit-state load migration, exports and schemas, `Data/CheckCatalog.cs` `EvidenceMode` tags (IA04, NP01, NP02 are automated).
-  Acceptance: questionnaire checks return `NotAssessed` until an operator sets a status and earn no credit; `Error` and timeout results are non-scoring, counted in a coverage metric, and listed in the report limitations section; the framework exit threshold counts only `Pass`; saved states from v5.4.0 load with a migration; a structural test ties each `EvidenceMode` to allowed statuses.
-  Complexity: M
-
 - [ ] P1 — NSA-073 Add a directory-reader seam and recorded LDAP fixtures for AD checks
   Why: 51 check classes have no test reference, including every AD check; only EP06, CF02 and CF08 have injectable seams, so the AD fixes below can't ship with regression tests.
   Evidence: test inventory 2026-09-29 (339 xUnit methods, no LDAP or `DirectoryEntry` use in tests); `tests/NetworkSecurityAuditor.Tests/EP06_HostFirewallCheckTests.cs:11` seam pattern.
@@ -369,6 +362,13 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: NP06 on both surfaces, one shared indicator list with a parity test, NP06 tests.
   Acceptance: indicators match whole words (or a documented prefix like `tmp_`); "Template", "Testing" and "Folder" fixtures aren't stale; "TEMP vendor access" is; both surfaces use the same list and the same status rule.
   Complexity: S
+
+- [ ] P2 — NSA-115 Bring the PS1 status model in line with the app (questionnaires, Error, Pass-only thresholds)
+  Why: NSA-072 changed the app only. The PS1's questionnaire checks still return `Partial` when they find nothing (NA04, BR02, BR04, BR05, BR07, CF03, PS01 to PS03 return nothing else), so an unanswered question earns half credit in `Get-FrameworkScores` and the risk score. Some also return Pass or Fail from local hints (PS04, NA07, NP10, BR03, BR08, PS06), which the app treats as questionnaire answers the operator gives. A check whose runspace throws still has no Error state.
+  Evidence: PS1 check blocks for the 16 IDs in `CheckCatalog.QuestionnaireIds`; `Get-FrameworkScores` counts `Partial` as 0.5 and everything else as Not Assessed; app behavior in `StatusModelTests`.
+  Touches: PS1 questionnaire check blocks, the status combo values, `Get-FrameworkScores`, risk score, HTML and JSON coverage fields, Pester.
+  Acceptance: the 16 questionnaire checks return Not Assessed from the scan on the PS1 (hints go in the findings text); a thrown or timed-out check shows as Error, earns nothing and is listed in the report; the PS1 exit code's framework threshold counts only Pass; a Pester parity test checks the questionnaire set against the app's.
+  Complexity: M
 
 ### P3
 

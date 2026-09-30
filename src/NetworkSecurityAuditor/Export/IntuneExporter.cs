@@ -30,9 +30,9 @@ public static class IntuneExporter
             int total = 0, passing = 0;
             foreach (var cid in mapped)
             {
-                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed) continue;
+                if (!statusLookup.TryGetValue(cid, out var st) || !st.IsScored()) continue;
                 total++;
-                if (st is CheckStatus.Pass or CheckStatus.Partial) passing++;
+                if (st == CheckStatus.Pass) passing++;
             }
             complianceFlags[name] = total > 0 && (double)passing / total * 100 >= 60;
         }

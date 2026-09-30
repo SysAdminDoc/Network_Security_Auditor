@@ -127,4 +127,45 @@ public class AuditStateTests
         Assert.NotNull(result);
         Assert.Empty(result.Checks);
     }
+
+    [Fact]
+    public void MigrateToCurrent_Moves_1_0_Errors_And_Unanswered_Questionnaires()
+    {
+        var state = new AuditState
+        {
+            SchemaVersion = "1.0",
+            Checks =
+            [
+                new CheckState { Id = "EP03", Status = CheckStatus.NA, Evidence = "Error @ 2026-09-01 12:00 UTC" },
+                new CheckState { Id = "EP05", Status = CheckStatus.NA, Evidence = "Timeout @ 2026-09-01 12:00 UTC" },
+                new CheckState { Id = "EP07", Status = CheckStatus.NA, Evidence = "Not a server" },
+                new CheckState { Id = "PS01", Status = CheckStatus.Partial },
+                new CheckState { Id = "PS02", Status = CheckStatus.Partial, Notes = "Signed AUPs on file." },
+                new CheckState { Id = "PS03", Status = CheckStatus.Pass },
+                new CheckState { Id = "EP01", Status = CheckStatus.Partial }
+            ]
+        };
+
+        var changed = state.MigrateToCurrent();
+
+        Assert.Equal(3, changed);
+        Assert.Equal(AuditState.CurrentSchemaVersion, state.SchemaVersion);
+        Assert.Equal(
+            [CheckStatus.Error, CheckStatus.Error, CheckStatus.NA, CheckStatus.NotAssessed, CheckStatus.Partial, CheckStatus.Pass, CheckStatus.Partial],
+            state.Checks.Select(c => c.Status));
+    }
+
+    [Fact]
+    public void MigrateToCurrent_Leaves_A_Current_State_Alone()
+    {
+        var state = new AuditState
+        {
+            Checks = [new CheckState { Id = "PS01", Status = CheckStatus.Partial }]
+        };
+
+        Assert.Equal(0, state.MigrateToCurrent());
+        Assert.Equal(CheckStatus.Partial, state.Checks[0].Status);
+        Assert.Contains("1.0", AuditState.SupportedSchemaVersions);
+        Assert.Contains(AuditState.CurrentSchemaVersion, AuditState.SupportedSchemaVersions);
+    }
 }

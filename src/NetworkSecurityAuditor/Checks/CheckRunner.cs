@@ -92,7 +92,7 @@ public sealed class CheckRunner
             sw.Stop();
             return new CheckResult
             {
-                Status = CheckStatus.NA,
+                Status = CheckStatus.Error,
                 Findings = $"Check {check.Id} timed out after {options.CheckTimeoutSeconds}s.",
                 Evidence = $"Timeout @ {CheckResult.EvidenceTimestampUtc()}",
                 Duration = sw.Elapsed,
@@ -114,7 +114,7 @@ public sealed class CheckRunner
 
     private static CheckResult TimeoutResult(string checkId, int timeoutSeconds, TimeSpan duration) => new()
     {
-        Status = CheckStatus.NA,
+        Status = CheckStatus.Error,
         Findings = $"Check {checkId} timed out after {timeoutSeconds}s.",
         Evidence = $"Timeout @ {CheckResult.EvidenceTimestampUtc()}",
         Duration = duration,

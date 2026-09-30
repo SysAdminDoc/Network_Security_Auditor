@@ -39,7 +39,7 @@ public static class JsonExporter
         {
             Tool = "Network Security Auditor",
             ToolVersion = VersionInfo.Version,
-            SchemaVersion = "2.0",
+            SchemaVersion = "2.1",
             Timestamp = DateTime.UtcNow.ToString("o"),
             Client = client,
             Auditor = auditor,
@@ -58,6 +58,7 @@ public static class JsonExporter
                 IntuneManaged = env.IntuneManaged
             },
             Score = BuildScoreSection(checkList, overallScore, grade, ransomwareScore, ransomwareGrade, domainMaturityScore, domainMaturityGrade),
+            Coverage = BuildCoverageSection(checkList),
             Findings = checkList.Select(c =>
             {
                 var mapping = FrameworkMappings.All.GetValueOrDefault(c.Id);
@@ -164,7 +165,7 @@ public static class JsonExporter
             int assessed = 0, met = 0, partial = 0, failing = 0, notAssessed = 0;
             foreach (var checkId in mappedChecks)
             {
-                if (!statusLookup.TryGetValue(checkId, out var status) || status is CheckStatus.NA or CheckStatus.NotAssessed)
+                if (!statusLookup.TryGetValue(checkId, out var status) || !status.IsScored())
                 {
                     notAssessed++;
                     continue;
@@ -192,6 +193,20 @@ public static class JsonExporter
         return result;
     }
 
+    private static CoverageSection BuildCoverageSection(List<CheckItemViewModel> checks)
+    {
+        var coverage = Scoring.CoverageSummary.From(checks);
+        return new CoverageSection
+        {
+            Applicable = coverage.Applicable,
+            Scored = coverage.Scored,
+            NotAssessed = coverage.NotAssessed,
+            Error = coverage.Errors,
+            TimedOut = coverage.TimedOut,
+            Pct = coverage.Pct
+        };
+    }
+
     private sealed class AuditReport
     {
         public string Tool { get; set; } = "";
@@ -203,6 +218,7 @@ public static class JsonExporter
         public string ScanProfile { get; set; } = "";
         public EnvironmentSection Environment { get; set; } = new();
         public ScoreSection Score { get; set; } = new();
+        public CoverageSection Coverage { get; set; } = new();
         public FindingEntry[] Findings { get; set; } = [];
         public Dictionary<string, ComplianceFrameworkSummary> ComplianceFrameworks { get; set; } = [];
         public ExceptionEntry[] Exceptions { get; set; } = [];
@@ -240,6 +256,16 @@ public static class JsonExporter
         public string DomainMaturityGrade { get; set; } = "";
         public int SprsScore { get; set; }
         public string SprsConfidence { get; set; } = "";
+    }
+
+    private sealed class CoverageSection
+    {
+        public int Applicable { get; set; }
+        public int Scored { get; set; }
+        public int NotAssessed { get; set; }
+        public int Error { get; set; }
+        public int TimedOut { get; set; }
+        public double Pct { get; set; }
     }
 
     private sealed class FindingEntry

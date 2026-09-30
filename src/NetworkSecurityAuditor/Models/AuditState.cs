@@ -7,8 +7,11 @@ namespace NetworkSecurityAuditor.Models;
 
 public sealed class AuditState
 {
-    public const string CurrentSchemaVersion = "1.0";
+    public const string CurrentSchemaVersion = "1.1";
     public const long MaxImportBytes = ImportFileGuard.MaxAuditStateBytes;
+
+    /// <summary>Schema versions this build loads. 1.0 (v5.4.0) is migrated on load.</summary>
+    public static readonly IReadOnlyList<string> SupportedSchemaVersions = ["1.0", CurrentSchemaVersion];
 
     public string SchemaVersion { get; set; } = CurrentSchemaVersion;
     public string ToolVersion { get; set; } = VersionInfo.Version;
@@ -36,6 +39,38 @@ public sealed class AuditState
 
     public static AuditState? Deserialize(string json)
         => JsonSerializer.Deserialize<AuditState>(json, SerializerOptions);
+
+    /// <summary>
+    /// Brings a 1.0 state (v5.4.0) up to the current schema and returns how many checks changed.
+    /// Errors and timeouts were saved as NA and become Error. Questionnaire checks were saved with the
+    /// scan's automatic Partial; one with no operator note is taken as unanswered and becomes NotAssessed.
+    /// </summary>
+    public int MigrateToCurrent()
+    {
+        if (string.Equals(SchemaVersion, CurrentSchemaVersion, StringComparison.OrdinalIgnoreCase))
+            return 0;
+
+        var changed = 0;
+        foreach (var check in Checks)
+        {
+            if (check.Status == CheckStatus.NA &&
+                (CheckResult.IsErrorEvidence(check.Evidence) || CheckResult.IsTimeoutEvidence(check.Evidence)))
+            {
+                check.Status = CheckStatus.Error;
+                changed++;
+            }
+            else if (check.Status == CheckStatus.Partial &&
+                Data.CheckCatalog.QuestionnaireIds.Contains(check.Id) &&
+                string.IsNullOrWhiteSpace(check.Notes))
+            {
+                check.Status = CheckStatus.NotAssessed;
+                changed++;
+            }
+        }
+
+        SchemaVersion = CurrentSchemaVersion;
+        return changed;
+    }
 
     public static async Task<AuditState?> LoadFromFileAsync(string path)
     {

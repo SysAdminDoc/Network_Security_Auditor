@@ -6,7 +6,19 @@ public enum CheckStatus
     Pass,
     Partial,
     Fail,
-    NA
+    NA,
+    /// <summary>The check threw or timed out. Not scored; counted in coverage and listed as a limitation.</summary>
+    Error
+}
+
+public static class CheckStatusExtensions
+{
+    /// <summary>
+    /// Pass, Partial and Fail are scored. NotAssessed (no answer yet), NA (doesn't apply) and Error
+    /// (the check couldn't run) stay out of every score and denominator.
+    /// </summary>
+    public static bool IsScored(this CheckStatus status) =>
+        status is CheckStatus.Pass or CheckStatus.Partial or CheckStatus.Fail;
 }
 
 public enum Severity

@@ -38,7 +38,7 @@ public static class DomainMaturityEngine
             foreach (var id in ids)
             {
                 if (!lookup.TryGetValue(id, out var vm)) continue;
-                if (vm.Status is CheckStatus.NA or CheckStatus.NotAssessed) continue;
+                if (!vm.Status.IsScored()) continue;
 
                 possible += 1.0;
                 earned += vm.Status switch

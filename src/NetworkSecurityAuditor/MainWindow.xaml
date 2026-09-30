@@ -1153,6 +1153,8 @@
                                Text="{Binding NotApplicableCount, StringFormat={x:Static loc:UiText.NotApplicableCountFormat}}" />
                     <TextBlock Foreground="{DynamicResource TextMuted}" FontSize="12"
                                Text="{Binding NotAssessedCount, StringFormat={x:Static loc:UiText.NotAssessedCountFormat}}" />
+                    <TextBlock Foreground="{DynamicResource SeverityHigh}" FontSize="12" Margin="12,0,0,0"
+                               Text="{Binding ErrorCount, StringFormat={x:Static loc:UiText.ErrorCountFormat}}" />
                 </StackPanel>
             </Grid>
         </Grid>

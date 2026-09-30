@@ -12,6 +12,17 @@ public static class CheckCatalog
 
     public static FrozenDictionary<string, CheckMetadata> All => s_checks ??= BuildCatalog();
 
+    /// <summary>
+    /// Checks with no automated answer. A scan returns NotAssessed for them and keeps whatever status
+    /// the operator has set. CheckCatalogTests ties this set to each check's EvidenceMode and to the
+    /// statuses its source can return.
+    /// </summary>
+    public static readonly FrozenSet<string> QuestionnaireIds = new[]
+    {
+        "BR02", "BR03", "BR04", "BR05", "BR07", "BR08", "CF03", "NA04",
+        "NA07", "NP10", "PS01", "PS02", "PS03", "PS04", "PS05", "PS06",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
     private static FrozenDictionary<string, CheckMetadata> BuildCatalog()
     {
         var checks = new Dictionary<string, CheckMetadata>(70,StringComparer.OrdinalIgnoreCase);
@@ -73,7 +84,7 @@ public static class CheckCatalog
             Type = CheckType.AD,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-1, PR.AC-6 | CIS Control 5.1, 5.3 | HIPAA 164.312(a)(2)(ii), 164.308(a)(3)(ii)(C)",
-            EvidenceMode = EvidenceMode.InterviewRequired,
+            EvidenceMode = EvidenceMode.Automated,
             RemediationUrl = "https://learn.microsoft.com/en-us/entra/identity/users/clean-up-stale-accounts"
         });
 
@@ -103,7 +114,7 @@ public static class CheckCatalog
             Type = CheckType.AD,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-4, PR.AC-6 | CIS Control 5.4, 5.5, 6.8 | HIPAA 164.312(a)(1)",
-            EvidenceMode = EvidenceMode.Checklist,
+            EvidenceMode = EvidenceMode.Automated,
             RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview"
         });
 
@@ -450,7 +461,7 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF DE.CM-1, DE.CM-5 | CIS Control 3.14 | HIPAA 164.312(b), 164.312(c)(2)",
-            EvidenceMode = EvidenceMode.Checklist,
+            EvidenceMode = EvidenceMode.Heuristic,
             RemediationUrl = "https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon"
         });
 
@@ -480,7 +491,7 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF DE.DP-4, RS.CO-2, RS.CO-3 | CIS Control 17.1, 17.2, 17.4 | HIPAA 164.308(a)(6)(i), 164.308(a)(6)(ii)",
-            EvidenceMode = EvidenceMode.InterviewRequired,
+            EvidenceMode = EvidenceMode.Heuristic,
             RemediationUrl = "https://learn.microsoft.com/en-us/azure/sentinel/create-analytics-rules"
         });
 
@@ -602,7 +613,7 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5, PR.PT-4 | CIS Control 4.4, 4.5, 9.2 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired,
+            EvidenceMode = EvidenceMode.Automated,
             RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/"
         });
 
@@ -617,7 +628,7 @@ public static class CheckCatalog
             Type = CheckType.Local,
             RiskTier = RiskTier.ReadOnly,
             Compliance = "NIST CSF PR.AC-5, DE.CM-7 | CIS Control 4.1, 4.4, 9.2 | HIPAA 164.312(e)(1)",
-            EvidenceMode = EvidenceMode.ExternalRequired,
+            EvidenceMode = EvidenceMode.Automated,
             RemediationUrl = "https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/"
         });
 

@@ -73,19 +73,21 @@ public static class HtmlReportGenerator
         var passCount = checkList.Count(c => c.Status == CheckStatus.Pass);
         var failCount = checkList.Count(c => c.Status == CheckStatus.Fail);
         var partialCount = checkList.Count(c => c.Status == CheckStatus.Partial);
-        var naCount = checkList.Count(c => c.Status is CheckStatus.NA or CheckStatus.NotAssessed);
+        var coverage = Scoring.CoverageSummary.From(checkList);
         var (sprsScore, sprsConf) = Scoring.SprsScoreEngine.Calculate(checkList);
 
         if (tier is ReportTier.Executive or ReportTier.All)
             AppendExecutive(sb, checkList, overallScore, grade, ransomwareScore, ransomwareGrade,
                 domainMaturityScore, domainMaturityGrade, sprsScore, sprsConf,
-                passCount, failCount, partialCount, naCount);
+                passCount, failCount, partialCount, coverage);
 
         if (tier is ReportTier.Management or ReportTier.All)
             AppendManagement(sb, checkList);
 
         if (tier is ReportTier.Technical or ReportTier.All)
             AppendTechnical(sb, checkList);
+
+        AppendLimitations(sb, checkList, coverage);
 
         if (intuneStigAudit is not null)
             AppendIntuneStigAudit(sb, intuneStigAudit);
@@ -114,7 +116,7 @@ public static class HtmlReportGenerator
     private static void AppendExecutive(StringBuilder sb, List<CheckItemViewModel> checkList,
         int overallScore, string grade, int ransomwareScore, string ransomwareGrade,
         int domainMaturityScore, string domainMaturityGrade, int sprsScore, string sprsConf,
-        int passCount, int failCount, int partialCount, int naCount)
+        int passCount, int failCount, int partialCount, Scoring.CoverageSummary coverage)
     {
         sb.AppendLine("<div class=\"summary-grid\">");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(grade)}\">{grade}</div><div class=\"score-value\">{overallScore}/100</div><div class=\"score-label\">{EscapeHtml(UiText.ReportOverallScore)}</div></div>");
@@ -128,7 +130,10 @@ public static class HtmlReportGenerator
         sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot pass\"></span> {EscapeHtml(UiText.StatusPass)}: {passCount}</div>");
         sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot partial\"></span> {EscapeHtml(UiText.StatusPartial)}: {partialCount}</div>");
         sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot fail\"></span> {EscapeHtml(UiText.StatusFail)}: {failCount}</div>");
-        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot na\"></span> {EscapeHtml(UiText.StatusNotApplicable)}: {naCount}</div>");
+        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot na\"></span> {EscapeHtml(UiText.StatusNotApplicable)}: {coverage.NotApplicable}</div>");
+        sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot notassessed\"></span> {EscapeHtml(UiText.StatusNotAssessed)}: {coverage.NotAssessed}</div>");
+        if (coverage.Errors > 0)
+            sb.AppendLine($"<div class=\"stat-row\"><span class=\"dot error\"></span> {EscapeHtml(UiText.StatusError)}: {coverage.Errors}</div>");
         sb.AppendLine($"<div class=\"score-label\">{EscapeHtml(UiText.ReportStatusBreakdown)}</div>");
         sb.AppendLine("</div>");
         sb.AppendLine("</div>");
@@ -157,6 +162,30 @@ public static class HtmlReportGenerator
         }
     }
 
+    // Checks that errored or timed out earn no score; the reader needs to see which ones and how much
+    // of the audit that leaves covered, whatever tier the report was built for.
+    private static void AppendLimitations(StringBuilder sb, List<CheckItemViewModel> checkList, Scoring.CoverageSummary coverage)
+    {
+        if (coverage.Errors == 0)
+            return;
+
+        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportLimitationsHeading)}</h2>");
+        sb.AppendLine($"<p>{EscapeHtml(UiText.Format(nameof(UiText.ReportLimitationsIntroFormat), coverage.Scored, coverage.Applicable))}</p>");
+        if (coverage.NotAssessed > 0)
+            sb.AppendLine($"<p>{EscapeHtml(UiText.Format(nameof(UiText.ReportLimitationsNotAssessedFormat), coverage.NotAssessed))}</p>");
+
+        AppendTableHeader(sb, "limitations-table", UiText.ReportLimitationsHeading,
+            [UiText.Id, UiText.Check, UiText.TableStatus, UiText.TableFindings]);
+        foreach (var check in checkList.Where(c => c.Status == CheckStatus.Error).OrderBy(c => c.Id, StringComparer.OrdinalIgnoreCase))
+        {
+            var label = Models.CheckResult.IsTimeoutEvidence(check.Evidence) ? UiText.StatusTimedOut : UiText.StatusError;
+            sb.AppendLine($"<tr><td class=\"id-cell\">{check.Id}</td><td>{EscapeHtml(check.Label)}</td>");
+            sb.AppendLine($"<td><span class=\"badge status-error\">{EscapeHtml(label)}</span></td>");
+            sb.AppendLine($"<td>{EscapeHtml(check.Findings)}</td></tr>");
+        }
+        AppendTableEnd(sb);
+    }
+
     private static void AppendManagement(StringBuilder sb, List<CheckItemViewModel> checkList)
     {
         sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportScoreByCategory)}</h2>");
@@ -167,7 +196,7 @@ public static class HtmlReportGenerator
             var gPass = group.Count(c => c.Status == CheckStatus.Pass);
             var gPartial = group.Count(c => c.Status == CheckStatus.Partial);
             var gFail = group.Count(c => c.Status == CheckStatus.Fail);
-            var gNa = group.Count(c => c.Status is CheckStatus.NA or CheckStatus.NotAssessed);
+            var gNa = group.Count(c => !c.Status.IsScored());
             sb.AppendLine($"<tr><td>{EscapeHtml(group.Key)}</td><td class=\"pass-cell\">{gPass}</td><td class=\"partial-cell\">{gPartial}</td><td class=\"fail-cell\">{gFail}</td><td>{gNa}</td></tr>");
         }
         AppendTableEnd(sb);
@@ -183,7 +212,7 @@ public static class HtmlReportGenerator
             int fwAssessed = 0, fwMet = 0, fwPartial = 0, fwFail = 0, fwNotAssessed = 0;
             foreach (var cid in mapped)
             {
-                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed)
+                if (!statusLookup.TryGetValue(cid, out var st) || !st.IsScored())
                 {
                     fwNotAssessed++;
                     continue;
@@ -366,6 +395,7 @@ public static class HtmlReportGenerator
         CheckStatus.Pass => UiText.StatusPass,
         CheckStatus.Partial => UiText.StatusPartial,
         CheckStatus.Fail => UiText.StatusFail,
+        CheckStatus.Error => UiText.StatusError,
         _ => UiText.Unknown
     };
 
@@ -480,6 +510,8 @@ public static class HtmlReportGenerator
         .dot.partial { background: #f9e2af; }
         .dot.fail { background: #f38ba8; }
         .dot.na { background: #585b70; }
+        .dot.notassessed { background: #45475a; }
+        .dot.error { background: #fab387; }
         table {
             width: 100%; border-collapse: collapse;
             background: #313244; border-radius: 8px; overflow: hidden;
@@ -515,6 +547,7 @@ public static class HtmlReportGenerator
         .status-fail { background: rgba(243,139,168,0.2); color: #f38ba8; }
         .status-na { background: rgba(147,153,178,0.2); color: #9399b2; }
         .status-notassessed { background: rgba(88,91,112,0.35); color: #cdd6f4; }
+        .status-error { background: rgba(250,179,135,0.2); color: #fab387; }
         .footer {
             text-align: center; padding: 24px; color: #585b70;
             font-size: 12px; margin-top: 32px;

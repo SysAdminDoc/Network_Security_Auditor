@@ -126,6 +126,7 @@ public sealed class EnglishTextResourceProvider : ITextResourceProvider
             [nameof(UiText.FailCountFormat)] = "Fail: {0}",
             [nameof(UiText.NotApplicableCountFormat)] = "N/A: {0}",
             [nameof(UiText.NotAssessedCountFormat)] = "Not assessed: {0}",
+            [nameof(UiText.ErrorCountFormat)] = "Errors: {0}",
             [nameof(UiText.ScanProgressAutomationFormat)] = "Scan progress: {0}",
             [nameof(UiText.ScanReadinessAutomationFormat)] = "Scan readiness: {0}",
             [nameof(UiText.FilteredChecksAutomationFormat)] = "Filtered checks: {0}",
@@ -198,6 +199,12 @@ public sealed class EnglishTextResourceProvider : ITextResourceProvider
             [nameof(UiText.DomainJoined)] = "Domain joined",
             [nameof(UiText.StatusNotAssessed)] = "Not assessed",
             [nameof(UiText.StatusNotApplicable)] = "N/A",
+            [nameof(UiText.StatusError)] = "Error",
+            [nameof(UiText.StatusTimedOut)] = "Timed out",
+            [nameof(UiText.StateMigratedFormat)] = "Updated {0} check statuses from a schema {1} audit state: errors and timeouts now show as Error, and questionnaire checks without a note as Not assessed.",
+            [nameof(UiText.ReportLimitationsHeading)] = "Limitations",
+            [nameof(UiText.ReportLimitationsIntroFormat)] = "These checks couldn't run, so they aren't scored. Coverage: {0} of {1} checks produced a scored result.",
+            [nameof(UiText.ReportLimitationsNotAssessedFormat)] = "{0} questionnaire checks are still waiting on an answer and aren't scored either.",
             [nameof(UiText.RuntimeNotRun)] = "not run",
             [nameof(UiText.HealthNotApplicable)] = "Not applicable",
             [nameof(UiText.HealthOpen)] = "Open",
@@ -551,6 +558,7 @@ public static class UiText
     public static string FailCountFormat => Get(nameof(FailCountFormat));
     public static string NotApplicableCountFormat => Get(nameof(NotApplicableCountFormat));
     public static string NotAssessedCountFormat => Get(nameof(NotAssessedCountFormat));
+    public static string ErrorCountFormat => Get(nameof(ErrorCountFormat));
     public static string ScanProgressAutomationFormat => Get(nameof(ScanProgressAutomationFormat));
     public static string ScanReadinessAutomationFormat => Get(nameof(ScanReadinessAutomationFormat));
     public static string FilteredChecksAutomationFormat => Get(nameof(FilteredChecksAutomationFormat));
@@ -623,6 +631,12 @@ public static class UiText
     public static string DomainJoined => Get(nameof(DomainJoined));
     public static string StatusNotAssessed => Get(nameof(StatusNotAssessed));
     public static string StatusNotApplicable => Get(nameof(StatusNotApplicable));
+    public static string StatusError => Get(nameof(StatusError));
+    public static string StatusTimedOut => Get(nameof(StatusTimedOut));
+    public static string StateMigratedFormat => Get(nameof(StateMigratedFormat));
+    public static string ReportLimitationsHeading => Get(nameof(ReportLimitationsHeading));
+    public static string ReportLimitationsIntroFormat => Get(nameof(ReportLimitationsIntroFormat));
+    public static string ReportLimitationsNotAssessedFormat => Get(nameof(ReportLimitationsNotAssessedFormat));
     public static string RuntimeNotRun => Get(nameof(RuntimeNotRun));
     public static string HealthNotApplicable => Get(nameof(HealthNotApplicable));
     public static string HealthOpen => Get(nameof(HealthOpen));

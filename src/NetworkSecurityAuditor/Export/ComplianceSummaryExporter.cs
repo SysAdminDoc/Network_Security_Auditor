@@ -30,7 +30,7 @@ public static class ComplianceSummaryExporter
                 g => g.Key,
                 g =>
                 {
-                    var assessed = g.Where(c => c.Status is not (CheckStatus.NA or CheckStatus.NotAssessed)).ToList();
+                    var assessed = g.Where(c => c.Status.IsScored()).ToList();
                     var met = assessed.Count(c => c.Status == CheckStatus.Pass);
                     var partial = assessed.Count(c => c.Status == CheckStatus.Partial);
                     var failing = assessed.Count(c => c.Status == CheckStatus.Fail);
@@ -52,7 +52,7 @@ public static class ComplianceSummaryExporter
             int assessed = 0, met = 0, partial = 0, failing = 0, notAssessed = 0;
             foreach (var cid in mapped)
             {
-                if (!statusLookup.TryGetValue(cid, out var st) || st is CheckStatus.NA or CheckStatus.NotAssessed)
+                if (!statusLookup.TryGetValue(cid, out var st) || !st.IsScored())
                 {
                     notAssessed++;
                     continue;
@@ -81,9 +81,10 @@ public static class ComplianceSummaryExporter
             .Select(c => new { c.Id, c.Label, c.Category })
             .ToArray();
 
+        var coverage = Scoring.CoverageSummary.From(checkList);
         var summary = new
         {
-            schema_version = "2.1",
+            schema_version = "2.2",
             tool = "NetworkSecurityAuditor",
             tool_version = VersionInfo.Version,
             timestamp = now.ToString("o"),
@@ -97,8 +98,17 @@ public static class ComplianceSummaryExporter
                 pass = checkList.Count(c => c.Status == CheckStatus.Pass),
                 partial = checkList.Count(c => c.Status == CheckStatus.Partial),
                 fail = checkList.Count(c => c.Status == CheckStatus.Fail),
-                na = checkList.Count(c => c.Status is CheckStatus.NA or CheckStatus.NotAssessed),
+                na = coverage.NotApplicable,
+                not_assessed = coverage.NotAssessed,
+                error = coverage.Errors,
                 critical_failures = criticalFails.Length
+            },
+            coverage = new
+            {
+                applicable = coverage.Applicable,
+                scored = coverage.Scored,
+                timed_out = coverage.TimedOut,
+                pct = coverage.Pct
             },
             category_scores = categoryScores,
             framework_scores = frameworkScores,

@@ -40,7 +40,7 @@ public sealed class PS05_RiskAssessmentCheck : ISecurityCheck
 
             return Task.FromResult(new CheckResult
             {
-                Status = CheckStatus.Partial,
+                Status = CheckStatus.NotAssessed,
                 Findings = sb.ToString().TrimEnd(),
                 Evidence = evidence.ToString().TrimEnd()
             });

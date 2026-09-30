@@ -3,7 +3,7 @@
   "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/findings.schema.json",
   "title": "Network Security Auditor structured findings export",
   "type": "object",
-  "required": ["tool", "tool_version", "schema_version", "timestamp", "client", "auditor", "scan_profile", "environment", "score", "findings", "compliance_frameworks", "exceptions"],
+  "required": ["tool", "tool_version", "schema_version", "timestamp", "client", "auditor", "scan_profile", "environment", "score", "coverage", "findings", "compliance_frameworks", "exceptions"],
   "properties": {
     "tool": { "type": "string" },
     "tool_version": { "type": "string" },
@@ -40,6 +40,18 @@
         "domain_maturity_grade": { "type": "string" },
         "sprs_score": { "type": "integer" },
         "sprs_confidence": { "type": "string" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["applicable", "scored", "not_assessed", "error", "timed_out", "pct"],
+      "properties": {
+        "applicable": { "type": "integer" },
+        "scored": { "type": "integer" },
+        "not_assessed": { "type": "integer" },
+        "error": { "type": "integer" },
+        "timed_out": { "type": "integer" },
+        "pct": { "type": "number" }
       }
     },
     "findings": {

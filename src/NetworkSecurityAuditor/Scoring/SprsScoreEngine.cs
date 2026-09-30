@@ -43,7 +43,7 @@ public static class SprsScoreEngine
         {
             if (mapping.NIST is null) continue;
             if (!statusLookup.TryGetValue(checkId, out var status)) continue;
-            if (status is CheckStatus.NA or CheckStatus.NotAssessed) continue;
+            if (!status.IsScored()) continue;
 
             var controls = mapping.NIST.Split(',', StringSplitOptions.TrimEntries);
             foreach (var control in controls)

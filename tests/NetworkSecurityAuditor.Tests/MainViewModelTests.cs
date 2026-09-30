@@ -610,6 +610,41 @@ public class MainViewModelTests
         Assert.Contains("incomplete", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void ApplyAuditState_Migrates_A_Schema_1_0_State()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+        var state = CompleteState(vm);
+        state.SchemaVersion = "1.0";
+        var errored = state.Checks.Single(c => c.Id == "EP03");
+        errored.Status = CheckStatus.NA;
+        errored.Evidence = "Error @ 2026-09-01 12:00 UTC";
+        var unanswered = state.Checks.Single(c => c.Id == "PS01");
+        unanswered.Status = CheckStatus.Partial;
+        var answered = state.Checks.Single(c => c.Id == "PS02");
+        answered.Status = CheckStatus.Partial;
+        answered.Notes = "AUP signed by all staff, reviewed 2026-08.";
+
+        vm.ApplyAuditState(state);
+
+        Assert.Equal(CheckStatus.Error, vm.Checks.Single(c => c.Id == "EP03").Status);
+        Assert.Equal(CheckStatus.NotAssessed, vm.Checks.Single(c => c.Id == "PS01").Status);
+        Assert.Equal(CheckStatus.Partial, vm.Checks.Single(c => c.Id == "PS02").Status);
+        Assert.Contains(vm.ActivityLog, entry => entry.Contains("from a schema 1.0 audit state", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ApplyAuditState_Rejects_An_Unknown_Schema_Version()
+    {
+        var vm = new MainViewModel();
+        vm.LoadCheckCatalog();
+        var state = CompleteState(vm);
+        state.SchemaVersion = "9.0";
+
+        Assert.Throws<InvalidDataException>(() => vm.ApplyAuditState(state));
+    }
+
     private static AuditState CompleteState(MainViewModel vm)
     {
         var state = new AuditState

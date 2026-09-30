@@ -54,6 +54,7 @@ public partial class CheckItemViewModel : ViewModelBase
         CheckStatus.Pass => UiText.StatusPass,
         CheckStatus.Partial => UiText.StatusPartial,
         CheckStatus.Fail => UiText.StatusFail,
+        CheckStatus.Error => UiText.StatusError,
         _ => UiText.Unknown
     };
 
@@ -76,6 +77,7 @@ public partial class CheckItemViewModel : ViewModelBase
         CheckStatus.Partial => "ProgressMid",
         CheckStatus.Fail => "ProgressBad",
         CheckStatus.NA => "StatusNeutral",
+        CheckStatus.Error => "SeverityHigh",
         CheckStatus.NotAssessed => "BadgeBg",
         _ => "BadgeBg"
     };

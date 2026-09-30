@@ -72,7 +72,7 @@ public sealed class PS04_ComplianceMonitoringCheck : ISecurityCheck
 
             return Task.FromResult(new CheckResult
             {
-                Status = CheckStatus.Partial,
+                Status = CheckStatus.NotAssessed,
                 Findings = sb.ToString().TrimEnd(),
                 Evidence = evidence.ToString().TrimEnd()
             });

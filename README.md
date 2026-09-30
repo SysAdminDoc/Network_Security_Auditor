@@ -818,7 +818,9 @@ Per-category:  (earned points / max points) * 100
 Overall:       weighted average across all categories
 ```
 
-Pass = full points, Partial = half points, Fail = zero, N/A = excluded from calculation.
+Pass = full points, Partial = half points, Fail = zero. N/A, Not assessed and Error are left out of the calculation.
+
+In the app, the 16 questionnaire checks (backup offsite copies and restore tests, written policies, awareness training and the like) come back Not assessed until you pick a status for them, and a rescan keeps the status you picked. A check that throws or times out is Error. It earns nothing either way, but it isn't N/A: the report lists it under Limitations, and the JSON exports carry a `coverage` block with the error, timeout and not-assessed counts and the share of applicable checks that produced a score.
 
 ### Ransomware Readiness
 
@@ -826,7 +828,7 @@ A separate 100-point scale evaluates specific ransomware defense capabilities ma
 
 ### Compliance Scoring
 
-Each framework profile defines which checks map to which controls. C# compliance summaries now separate met, partial, failed, and not-assessed mapped checks so partial coverage is visible without being counted as fully met.
+Each framework profile defines which checks map to which controls. C# compliance summaries now separate met, partial, failed, and not-assessed mapped checks so partial coverage is visible without being counted as fully met. The app's headless exit code 3 (compliance alert) fires when fewer than 60% of a framework's scored checks pass, and only Pass counts toward that 60%.
 
 ---
 
@@ -837,6 +839,8 @@ Audit state (all check statuses, findings, evidence, notes, remediation tracking
 - Pausing and resuming audits across sessions
 - Comparing two audit snapshots to show improvement over time
 - Building a historical record of security posture
+
+The app saves state as schema 1.1. It still opens 1.0 files from v5.4.0 and updates them as they load: checks saved as N/A because they errored or timed out become Error, and a questionnaire check still on the scan's automatic Partial with no note becomes Not assessed. The activity log says how many checks changed.
 
 ---
 

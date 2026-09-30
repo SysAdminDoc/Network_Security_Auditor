@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.1",
+  "schema_version": "2.2",
   "tool": "NetworkSecurityAuditor",
   "tool_version": "5.4.0",
   "timestamp": "2026-07-08T00:00:00Z",
@@ -20,7 +20,15 @@
     "partial": 1,
     "fail": 1,
     "na": 0,
+    "not_assessed": 0,
+    "error": 0,
     "critical_failures": 1
+  },
+  "coverage": {
+    "applicable": 3,
+    "scored": 3,
+    "timed_out": 0,
+    "pct": 100.0
   },
   "category_scores": {
     "Endpoint Security": {

@@ -12,7 +12,7 @@ public static class RiskScoreEngine
 
         foreach (var check in checks)
         {
-            if (check.Status is CheckStatus.NA or CheckStatus.NotAssessed)
+            if (!check.Status.IsScored())
                 continue;
 
             double itemPossible = check.Weight;

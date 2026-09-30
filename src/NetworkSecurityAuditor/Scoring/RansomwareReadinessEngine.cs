@@ -29,7 +29,7 @@ public static class RansomwareReadinessEngine
                 if (!checkLookup.TryGetValue(id, out var check))
                     continue;
 
-                if (check.Status is CheckStatus.NA or CheckStatus.NotAssessed)
+                if (!check.Status.IsScored())
                     continue;
 
                 double statusFactor = check.Status switch

@@ -44,7 +44,7 @@ public class ExportTests
         var root = doc.RootElement;
 
         Assert.Equal("Network Security Auditor", root.GetProperty("tool").GetString());
-        Assert.Equal("2.0", root.GetProperty("schema_version").GetString());
+        Assert.Equal("2.1", root.GetProperty("schema_version").GetString());
         Assert.True(root.TryGetProperty("score", out var score));
         Assert.Equal(85, score.GetProperty("overall").GetInt32());
         Assert.Equal(60, score.GetProperty("domain_maturity").GetInt32());

@@ -425,6 +425,7 @@ public partial class App : Application
                 CheckStatus.Partial => "PART",
                 CheckStatus.Fail => "FAIL",
                 CheckStatus.NA => "N/A ",
+                CheckStatus.Error => "ERR ",
                 _ => "----"
             };
             Console.WriteLine($"  [{completed}/{applicableIds.Length}] [{symbol}] {update.checkId}");
@@ -688,7 +689,7 @@ public partial class App : Application
                 check.Status is not (CheckStatus.Fail or CheckStatus.Partial)));
     }
 
-    private static bool HasFrameworkBelowThreshold(
+    internal static bool HasFrameworkBelowThreshold(
         System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel> checks, int threshold)
     {
         var statusLookup = checks.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
@@ -702,9 +703,10 @@ public partial class App : Application
             foreach (var checkId in mapped)
             {
                 if (!statusLookup.TryGetValue(checkId, out var status)) continue;
-                if (status is Models.CheckStatus.NA or Models.CheckStatus.NotAssessed) continue;
+                if (!status.IsScored()) continue;
                 total++;
-                if (status is Models.CheckStatus.Pass or Models.CheckStatus.Partial)
+                // Partial isn't Met, so only Pass counts toward the threshold.
+                if (status == Models.CheckStatus.Pass)
                     passing++;
             }
             if (total > 0 && (double)passing / total * 100 < threshold)

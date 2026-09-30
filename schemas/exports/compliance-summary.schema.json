@@ -3,7 +3,7 @@
   "$id": "https://sysadmindoc.github.io/network-security-auditor/schemas/exports/compliance-summary.schema.json",
   "title": "Network Security Auditor compliance summary export",
   "type": "object",
-  "required": ["schema_version", "tool", "tool_version", "timestamp", "host", "os", "domain", "score", "counts", "category_scores", "framework_scores", "critical_failures", "executive_kpis"],
+  "required": ["schema_version", "tool", "tool_version", "timestamp", "host", "os", "domain", "score", "counts", "coverage", "category_scores", "framework_scores", "critical_failures", "executive_kpis"],
   "properties": {
     "schema_version": { "type": "string" },
     "tool": { "type": "string" },
@@ -26,14 +26,26 @@
     },
     "counts": {
       "type": "object",
-      "required": ["total", "pass", "partial", "fail", "na", "critical_failures"],
+      "required": ["total", "pass", "partial", "fail", "na", "not_assessed", "error", "critical_failures"],
       "properties": {
         "total": { "type": "integer" },
         "pass": { "type": "integer" },
         "partial": { "type": "integer" },
         "fail": { "type": "integer" },
         "na": { "type": "integer" },
+        "not_assessed": { "type": "integer" },
+        "error": { "type": "integer" },
         "critical_failures": { "type": "integer" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["applicable", "scored", "timed_out", "pct"],
+      "properties": {
+        "applicable": { "type": "integer" },
+        "scored": { "type": "integer" },
+        "timed_out": { "type": "integer" },
+        "pct": { "type": "number" }
       }
     },
     "category_scores": {

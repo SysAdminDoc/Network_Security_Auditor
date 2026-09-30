@@ -19,7 +19,7 @@ public static class DefectDojoExporter
 
         foreach (var check in checks)
         {
-            if (check.Status is CheckStatus.NotAssessed or CheckStatus.NA)
+            if (!check.Status.IsScored())
                 continue;
 
             var meta = CheckCatalog.All.GetValueOrDefault(check.Id);

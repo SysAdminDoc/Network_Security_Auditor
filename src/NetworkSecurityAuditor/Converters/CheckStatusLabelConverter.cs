@@ -16,6 +16,7 @@ public sealed class CheckStatusLabelConverter : IValueConverter
                 CheckStatus.Pass => UiText.StatusPass,
                 CheckStatus.Partial => UiText.StatusPartial,
                 CheckStatus.Fail => UiText.StatusFail,
+                CheckStatus.Error => UiText.StatusError,
                 _ => UiText.Unknown
             }
             : value;
