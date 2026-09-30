@@ -44,6 +44,13 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
     internal const int MaxAclObjects = 1000;
     internal const int MaxDmsaAcls = 200;
     internal const int MaxDcPatchReads = 25;
+
+    /// <summary>
+    /// How long all the DC patch reads may take together. Each read has its own timeout, but one after another they
+    /// could outlast the runner's 90-second check timeout and lose every finding, so DCs past this are reported as
+    /// not read.
+    /// </summary>
+    internal static readonly TimeSpan DcReadBudget = TimeSpan.FromSeconds(45);
     private const int MaxEvidenceGrants = 30;
 
     internal const string DcFilter =
@@ -56,6 +63,9 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
 
     private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
     private readonly IRemoteRegistryReader _registry;
+
+    /// <summary>Times the DC patch reads against <see cref="DcReadBudget"/>. Tests swap in a clock they advance.</summary>
+    internal TimeProvider Clock { get; init; } = TimeProvider.System;
 
     public IA12_DmsaCheck() : this(env => new LdapDirectoryReader(env.DomainName), new RemoteRegistryReader()) { }
 
@@ -193,8 +203,9 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
     {
         try
         {
-            // Serverless RootDSE, matching the pre-seam behavior: it follows the signed-in user's DC.
-            var rootDse = directory.ReadEntry(DirectoryReader.RootDseServerless,
+            // RootDSE on the machine domain's server, the domain every other read here assesses. A serverless bind
+            // follows the signed-in user's domain, which for an auditor from a trusted forest names the wrong forest root.
+            var rootDse = directory.ReadEntry(DirectoryReader.RootDse,
                 ["domainFunctionality", "forestFunctionality", "rootDomainNamingContext"], ct);
             // Informational: the functional level doesn't gate BadSuccessor, one 2025 DC does.
             evidence.AppendLine($"  Domain Functional Level: {rootDse.String("domainFunctionality")}");
@@ -234,7 +245,8 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
             return new DcSummary(0, 0, 0, 0, ListFailed: true);
         }
 
-        int server2025 = 0, unpatched = 0, unknown = 0, reads = 0;
+        int server2025 = 0, unpatched = 0, unknown = 0, reads = 0, notRead = 0;
+        long started = Clock.GetTimestamp();
         foreach (var dc in dcs.OrderBy(d => d.String("dNSHostName") ?? d.String("name"), StringComparer.OrdinalIgnoreCase))
         {
             ct.ThrowIfCancellationRequested();
@@ -249,12 +261,17 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
             }
 
             server2025++;
-            if (reads++ >= MaxDcPatchReads)
+            string? skipped = reads >= MaxDcPatchReads ? $"limit of {MaxDcPatchReads} DCs"
+                : Clock.GetElapsedTime(started) >= DcReadBudget ? $"the {DcReadBudget.TotalSeconds:0}-second budget for DC reads ran out"
+                : null;
+            if (skipped is not null)
             {
                 unknown++;
-                evidence.AppendLine($"  {host} | {os} | {version} | Server 2025: yes | patch level not read (limit of {MaxDcPatchReads} DCs)");
+                notRead++;
+                evidence.AppendLine($"  {host} | {os} | {version} | Server 2025: yes | patch level not read ({skipped})");
                 continue;
             }
+            reads++;
 
             var (ubr, error) = ReadUbr(host, ct);
             switch (PatchStateOf(ubr))
@@ -277,6 +294,11 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
             }
         }
 
+        if (notRead > 0)
+        {
+            review++;
+            sb.AppendLine($"REVIEW: The patch level of {notRead} Windows Server 2025 DC(s) wasn't read, so they aren't counted as patched. Confirm each has KB5063878 (build {Server2025Build}.{FixedUbr}) or a later update.");
+        }
         sb.Insert(0, $"Windows Server 2025 domain controllers: {server2025} of {dcs.Count}{Environment.NewLine}");
         return new DcSummary(dcs.Count, server2025, unpatched, unknown, ListFailed: false);
     }

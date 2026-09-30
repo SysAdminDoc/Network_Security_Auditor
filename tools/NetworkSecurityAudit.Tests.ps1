@@ -2548,11 +2548,26 @@ Describe 'EP11 Secure Boot 2023 certificate transition (nested check helpers via
 Describe 'IA12 BadSuccessor helpers (nested check helpers via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        foreach ($nm in 'Get-Ia12Rid','Test-Ia12Tier0Sid','Test-Ia12Reportable','Get-Ia12PatchState','Test-Ia12Server2025','Get-Ia12RelevantRights','Get-Ia12AceReason','Get-Ia12ParentDn','Get-Ia12SweepList') {
+        foreach ($nm in 'Get-Ia12Rid','Test-Ia12Tier0Sid','Test-Ia12Reportable','Get-Ia12PatchState','Test-Ia12Server2025','Get-Ia12RelevantRights','Get-Ia12AceReason','Get-Ia12ParentDn','Get-Ia12SweepList','Get-Ia12RemoteUbr') {
             $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
             . ([scriptblock]::Create($fn.Extent.Text))
         }
         $script:Dom = 'S-1-5-21-1004336348-1177238915-682003330'
+    }
+
+    It 'gives up on a DC that does not answer on the registry port instead of waiting on remote registry' {
+        # Nothing listens on port 1 here, so the probe fails and remote registry is never opened.
+        $clock = [System.Diagnostics.Stopwatch]::StartNew()
+        $r = Get-Ia12RemoteUbr -ComputerName '127.0.0.1' -Port 1 -TimeoutMs 1500
+        $clock.Stop()
+        $r.Ubr | Should -BeNullOrEmpty
+        $r.Error | Should -Match 'port 1'
+        $clock.Elapsed.TotalSeconds | Should -BeLessThan 10
+        (Get-Ia12RemoteUbr -ComputerName ' ').Error | Should -Be 'no host name'
+        $block = Get-Block -Text $script:Text -Start "'IA12' = @\{ Type='AD'" -End "'EP01' = @\{ Type='Local'"
+        $block | Should -Match '\$readBudgetSeconds = 45'
+        $block | Should -Match 'if \(\$readClock\.Elapsed\.TotalSeconds -ge \$readBudgetSeconds\) \{ \$budgetSkipped\+\+; continue \}'
+        $block | Should -Match 'aren''t counted as patched'
     }
 
     It 'reads each dMSA ACL after the OUs and containers, each under its own cap, as the app does' {

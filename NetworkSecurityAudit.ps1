@@ -4401,9 +4401,23 @@ $script:AutoChecks = @{
                 foreach ($dn in @($DmsaDns | Where-Object { $_ } | Select-Object -First $DmsaLimit)) { [pscustomobject]@{ Dn = $dn; Scope = 'Dmsa' } }
             }
             function Get-Ia12RemoteUbr {
-                param([string]$ComputerName)
+                param([string]$ComputerName, [int]$Port = 445, [int]$TimeoutMs = 5000)
                 $out = @{ Ubr = $null; Error = '' }
                 if ([string]::IsNullOrWhiteSpace($ComputerName)) { $out.Error = 'no host name'; return $out }
+                # Remote registry has no timeout of its own, and a DC whose firewall drops the traffic can hold it for
+                # longer than the whole check may run. Its named pipe rides on SMB, so a quick connect to 445 comes first.
+                $tcp = New-Object System.Net.Sockets.TcpClient
+                try {
+                    $pending = $tcp.BeginConnect($ComputerName, $Port, $null, $null)
+                    if (-not $pending.AsyncWaitHandle.WaitOne($TimeoutMs)) {
+                        $out.Error = "no answer on port $Port within $([int]($TimeoutMs / 1000)) seconds"
+                        return $out
+                    }
+                    $tcp.EndConnect($pending)
+                } catch {
+                    $out.Error = "port $Port unreachable: $($_.Exception.Message)"
+                    return $out
+                } finally { $tcp.Close() }
                 try {
                     $base = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', $ComputerName, 'Registry64')
                     try {
@@ -4461,8 +4475,14 @@ $script:AutoChecks = @{
             $unpatched = 0
             $unknownPatch = 0
             $reads = 0
-            foreach ($dc in ($server2025 | Sort-Object { "$($_.HostName)" } | Select-Object -First 25)) {
+            $readLimit = 25
+            # All DC reads together stay well inside the check's time limit, as in the app. DCs past it are unread, never patched.
+            $readBudgetSeconds = 45
+            $budgetSkipped = 0
+            $readClock = [System.Diagnostics.Stopwatch]::StartNew()
+            foreach ($dc in ($server2025 | Sort-Object { "$($_.HostName)" } | Select-Object -First $readLimit)) {
                 $dcHost = "$($dc.HostName)"
+                if ($readClock.Elapsed.TotalSeconds -ge $readBudgetSeconds) { $budgetSkipped++; continue }
                 $reads++
                 $state = 'Unknown'
                 $detail = ''
@@ -4483,10 +4503,15 @@ $script:AutoChecks = @{
                     [void]$sb.AppendLine("[REVIEW] $dcHost runs Windows Server 2025 but its patch level could not be confirmed ($detail). Verify it has KB5063878 (build 26100.4946) or later.")
                 }
             }
-            if ($server2025.Count -gt $reads) {
+            if ($budgetSkipped -gt 0) {
                 $unknownPatch++
                 $review++
-                [void]$sb.AppendLine("[REVIEW] Patch level was read for the first $reads of $($server2025.Count) Windows Server 2025 DCs; confirm the rest by hand.")
+                [void]$sb.AppendLine("[REVIEW] The patch level of $budgetSkipped Windows Server 2025 DC(s) wasn't read because the $readBudgetSeconds-second budget for DC reads ran out, so they aren't counted as patched. Confirm each has KB5063878 (build 26100.4946) or later.")
+            }
+            if ($server2025.Count -gt $readLimit) {
+                $unknownPatch++
+                $review++
+                [void]$sb.AppendLine("[REVIEW] Patch level was read for at most the first $readLimit of $($server2025.Count) Windows Server 2025 DCs; confirm the rest by hand.")
             }
 
             $exposed = ($dcListFailed -or $server2025.Count -gt 0)

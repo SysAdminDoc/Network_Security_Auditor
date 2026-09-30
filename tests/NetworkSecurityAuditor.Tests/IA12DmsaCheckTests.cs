@@ -20,6 +20,25 @@ public class IA12DmsaCheckTests
         new IA12_DmsaCheck(_ => reader, registry)
             .ExecuteAsync(FixtureDirectoryReader.DomainMember, new AuditOptions(), CancellationToken.None);
 
+    /// <summary>A clock that only moves when a remote registry read advances it.</summary>
+    private sealed class SteppingClock : TimeProvider
+    {
+        private long _ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
+    }
+
+    /// <summary>Answers from the fixture and makes each read take <paramref name="perRead"/> on the clock.</summary>
+    private sealed class SlowRegistry(FixtureRemoteRegistryReader inner, SteppingClock clock, TimeSpan perRead) : IRemoteRegistryReader
+    {
+        public object? ReadMachineValue(string host, string subKey, string valueName, CancellationToken ct)
+        {
+            clock.Advance(perRead);
+            return inner.ReadMachineValue(host, subKey, valueName, ct);
+        }
+    }
+
     private static string FixtureText(string fileName)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -205,14 +224,56 @@ public class IA12DmsaCheckTests
     }
 
     [Fact]
-    public async Task Root_Dse_Is_Read_Serverless_To_Follow_The_Signed_In_Dc()
+    public async Task Root_Dse_Is_Read_On_The_Machine_Domain_Server()
     {
         var reader = FixtureDirectoryReader.Load("IA12-pass.json");
         await Run(reader, FixtureRemoteRegistryReader.Load("IA12-pass.json"));
 
-        // A serverless RootDSE bind matches the pre-seam behavior on a child-domain member.
-        Assert.Contains(DirectoryReader.RootDseServerless, reader.EntryReads);
-        Assert.DoesNotContain(DirectoryReader.RootDse, reader.EntryReads);
+        // A serverless bind follows the signed-in user's domain, so an auditor from a trusted forest would get that
+        // forest's root and count this forest's Enterprise Admins as an outsider.
+        Assert.Contains(DirectoryReader.RootDse, reader.EntryReads);
+        Assert.DoesNotContain(DirectoryReader.RootDseServerless, reader.EntryReads);
+    }
+
+    [Fact]
+    public async Task Dc_Patch_Reads_Stop_At_The_Time_Budget_And_Flag_The_Rest()
+    {
+        var clock = new SteppingClock();
+        var inner = FixtureRemoteRegistryReader.FromJson("""
+            { "remoteRegistry": {
+                "dc01.corp.example": { "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion": { "UBR": 4946 } },
+                "dc02.corp.example": { "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion": { "UBR": 4946 } } } }
+            """);
+        var registry = new SlowRegistry(inner, clock, IA12_DmsaCheck.DcReadBudget + TimeSpan.FromSeconds(1));
+
+        var result = await new IA12_DmsaCheck(_ => FixtureDirectoryReader.Load("IA12-exposed.json"), registry) { Clock = clock }
+            .ExecuteAsync(FixtureDirectoryReader.DomainMember, new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(new[] { "dc01.corp.example" }, inner.Hosts);
+        Assert.Contains("dc02.corp.example | Windows Server 2025 Datacenter | 10.0 (26100) | Server 2025: yes | patch level not read (the 45-second budget for DC reads ran out)", result.Evidence);
+        Assert.Contains("REVIEW: The patch level of 1 Windows Server 2025 DC(s) wasn't read, so they aren't counted as patched.", result.Findings);
+        // An unread DC is never taken as patched, so open delegations stay critical.
+        Assert.Contains("CRITICAL: 6 non-Tier-0 principal(s)", result.Findings);
+        Assert.Equal(CheckStatus.Fail, result.Status);
+    }
+
+    [Fact]
+    public async Task Dc_Patch_Reads_Within_The_Budget_Read_Every_Dc()
+    {
+        var clock = new SteppingClock();
+        var inner = FixtureRemoteRegistryReader.FromJson("""
+            { "remoteRegistry": {
+                "dc01.corp.example": { "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion": { "UBR": 4946 } },
+                "dc02.corp.example": { "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion": { "UBR": 4946 } } } }
+            """);
+        var registry = new SlowRegistry(inner, clock, TimeSpan.FromSeconds(15));
+
+        var result = await new IA12_DmsaCheck(_ => FixtureDirectoryReader.Load("IA12-exposed.json"), registry) { Clock = clock }
+            .ExecuteAsync(FixtureDirectoryReader.DomainMember, new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(new[] { "dc01.corp.example", "dc02.corp.example" }, inner.Hosts);
+        Assert.DoesNotContain("wasn't read", result.Findings);
+        Assert.Contains("WARNING: 6 non-Tier-0 principal(s)", result.Findings);
     }
 
     [Fact]
