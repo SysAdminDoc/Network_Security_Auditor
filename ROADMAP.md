@@ -221,6 +221,12 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: unreadable TPM data reports "couldn't be read without elevation" and doesn't count as an issue or claim TPM 1.2; an elevated run keeps today's checks; a Pester test covers the empty `Get-Tpm` object.
   Complexity: S
 
+- [ ] P1 — NSA-112 Stop C# NP07 passing every host and align NP07 across both surfaces
+  Why: C# NP07 matches service names and display names by substring, and "bro" (for Bro/Zeek) hits `BrokerInfrastructure`, `TimeBrokerSvc` and `SystemEventsBroker`, which run on every Windows 10/11 host, so NP07 always passes. It also counts a service that isn't running. The two surfaces disagree on the rest: C# counts Defender's Network Inspection System and scores "nothing found" as Partial, while the PS1 ignores NIS, counts EDR agents and scores it Fail. Found 2026-09-30 while fixing the PS1 NP07 `cb*` and `Sense` false passes.
+  Evidence: `src/NetworkSecurityAuditor/Checks/NetworkPerimeter/NP07_IdsIpsCheck.cs:75-104,143-175,55`; PS1 NP07 block (`Get-Np07AgentLine`); `Get-CimInstance Win32_Service` on this PC lists 11 services containing "bro".
+  Touches: `NP07_IdsIpsCheck.cs` (exact names, running state, an `Assess` seam with fixtures), the PS1 NP07 block, both test suites.
+  Acceptance: both surfaces use the same exact service list and require a running service (Defender for Endpoint also needs `OnboardingState` 1); NIS and "nothing found" are scored the same way on both; a stock Windows 11 fixture with only built-in services doesn't pass; fixtures cover a running Suricata, a stopped one and an onboarded MDE.
+  Complexity: S
 - [ ] P1 — NSA-080 Port the PS1 AD attack-indicator checks to C#
   Why: DCSync rights for non-default principals, AdminSDHolder ACL tampering, Protected Users coverage of Tier 0 and unconstrained delegation exist only in the PS1; C# EP03 labels the LSA `AllowTgtSessionKey` value as "Kerberos delegation".
   Evidence: `NetworkSecurityAudit.ps1:3524-3530`, `:3538-3553`, `:3596-3606`; `src/NetworkSecurityAuditor/Checks/EndpointSecurity/EP03_SmbNtlmCheck.cs:286-295`.

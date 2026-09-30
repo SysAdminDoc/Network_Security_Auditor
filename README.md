@@ -237,7 +237,8 @@ criticals, a score delta, and a critical-finding exposure window (how long each
 critical has been failing). A run that can't assess a finding (an error, a skip, no
 permission) doesn't reset its window. The entry carries over with
 `evidence_stale: true` and the next failing run keeps counting from the original
-`first_seen`. When a failing finding passes, the delta and the `history.jsonl`
+`first_seen`. Improving to Partial doesn't close the window either, only a Pass
+does. When a failing finding passes, the delta and the `history.jsonl`
 record get a `resolved_exposure` entry with `resolved_at` and the final window
 length. The HTML report gains a "Change Since Baseline"
 section, the findings JSON gains a `continuous` block (delta, exposure, and a

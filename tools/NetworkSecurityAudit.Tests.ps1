@@ -1210,8 +1210,26 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $run3.IA01.first_seen | Should -Be $day1.ToString('o')
         $run3.IA01.days | Should -Be 10
         $run3.IA01.evidence_stale | Should -BeFalse
-        # Partial and Pass still end the open window.
+        # Pass ends the open window.
         (Update-ExposureWindows -PrevExposure (& $roundTrip $run1) -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Pass' 'Critical' 'y') } }) -Now $day5 -NowIso $day5.ToString('o')).Keys | Should -Not -Contain 'IA01'
+    }
+    It 'keeps the window open when a failing finding improves to Partial, until it passes' {
+        $roundTrip = { param($value) $value | ConvertTo-Json -Depth 6 | ConvertFrom-Json }
+        $day1 = [datetime]'2026-06-01T00:00:00'; $day5 = [datetime]'2026-06-05T00:00:00'; $day11 = [datetime]'2026-06-11T00:00:00'
+        $run1 = Update-ExposureWindows -PrevExposure $null -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Fail' 'Critical' 'x') } }) -Now $day1 -NowIso $day1.ToString('o')
+        $partial = Update-ExposureWindows -PrevExposure (& $roundTrip $run1) -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Partial' 'Critical' 'p') } }) -Now $day5 -NowIso $day5.ToString('o')
+        $partial.IA01.first_seen | Should -Be $day1.ToString('o')
+        $partial.IA01.days | Should -Be 4
+        $partial.IA01.status | Should -Be 'Partial'
+        $partial.IA01.evidence_stale | Should -BeFalse
+        $again = Update-ExposureWindows -PrevExposure (& $roundTrip $partial) -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Fail' 'Critical' 'x') } }) -Now $day11 -NowIso $day11.ToString('o')
+        $again.IA01.first_seen | Should -Be $day1.ToString('o')
+        $again.IA01.days | Should -Be 10
+        $resolved = Get-ResolvedExposureWindows -PrevExposure (& $roundTrip $partial) -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Pass' 'Critical' 'y') } }) -Now $day11 -NowIso $day11.ToString('o')
+        $resolved.IA01.first_seen | Should -Be $day1.ToString('o')
+        $resolved.IA01.days | Should -Be 10
+        # A Partial with no open window doesn't start one.
+        (Update-ExposureWindows -PrevExposure $null -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Partial' 'Critical' 'p') } }) -Now $day5 -NowIso $day5.ToString('o')).Keys | Should -Not -Contain 'IA01'
     }
     It 'records resolved_at and the final exposure window when a failing finding passes' {
         $prevExp = @{ IA01 = @{ first_seen='2026-06-01T00:00:00.0000000'; last_seen='2026-06-08T00:00:00.0000000'; days=7; severity='Critical' }; IA02 = @{ first_seen='2026-06-01T00:00:00.0000000'; days=7; severity='High' } } | ConvertTo-Json -Depth 4 | ConvertFrom-Json
@@ -1594,6 +1612,27 @@ Describe 'Audit policy setup (real function via AST)' {
 }
 
 Describe 'NP07 and LM06 agent service names' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Np07AgentLine' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+    }
+    It 'counts an agent only when it runs, and Defender for Endpoint only when onboarded' {
+        # The Sense service exists, stopped, on every Windows 10/11 host that isn't onboarded.
+        $stock = Get-Np07AgentLine -Desc 'Defender for Endpoint' -DisplayName 'Windows Defender Advanced Threat Protection Service' -Status 'Stopped' -IsMde $true -MdeOnboardingState $null
+        $stock.Counted | Should -BeFalse
+        $stock.Line | Should -Match 'not running, not counted'
+        $runningNotOnboarded = Get-Np07AgentLine -Desc 'Defender for Endpoint' -DisplayName 'Sense' -Status 'Running' -IsMde $true -MdeOnboardingState 0
+        $runningNotOnboarded.Counted | Should -BeFalse
+        $runningNotOnboarded.Line | Should -Match 'not onboarded \(OnboardingState 0\)'
+        (Get-Np07AgentLine -Desc 'Defender for Endpoint' -DisplayName 'Sense' -Status 'Running' -IsMde $true -MdeOnboardingState 1).Counted | Should -BeTrue
+        (Get-Np07AgentLine -Desc 'CrowdStrike Falcon' -DisplayName 'CrowdStrike Falcon Sensor Service' -Status 'Stopped' -IsMde $false -MdeOnboardingState $null).Counted | Should -BeFalse
+        (Get-Np07AgentLine -Desc 'CrowdStrike Falcon' -DisplayName 'CrowdStrike Falcon Sensor Service' -Status 'Running' -IsMde $false -MdeOnboardingState $null).Counted | Should -BeTrue
+        $np07 = Get-Block -Text $script:Text -Start "'NP07' = @\{ Type='Local'" -End "'NP08' = @\{"
+        $np07 | Should -Match 'if \(\$agent\.Counted\) \{ \$found = \$true \}'
+        $np07 | Should -Match "-IsMde \(\`$svc\.Name -eq 'Sense'\)"
+        @([regex]::Matches($np07, '\$found = \$true')).Count | Should -Be 1
+    }
     It 'looks agents up by exact service name, not a wildcard that matches built-in services' {
         $np07 = Get-Block -Text $script:Text -Start "'NP07' = @\{ Type='Local'" -End "'NP08' = @\{"
         $np07 | Should -Match "Name='Sense'"

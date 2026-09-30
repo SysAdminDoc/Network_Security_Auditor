@@ -7190,6 +7190,16 @@ $script:AutoChecks = @{
 
     'NP07' = @{ Type='Local'; Label='Scan IDS/IPS Presence'
         Script = {
+            # An agent counts only when its service is running. Defender for Endpoint also needs
+            # OnboardingState 1, because the Sense service ships with every Windows 10/11 and Server 2019+ host.
+            function Get-Np07AgentLine {
+                param([string]$Desc, [string]$DisplayName, [string]$Status, [bool]$IsMde, $MdeOnboardingState)
+                $running = ($Status -eq 'Running')
+                $onboarded = (-not $IsMde) -or ($null -ne $MdeOnboardingState -and [string]$MdeOnboardingState -eq '1')
+                if ($running -and $onboarded) { return @{ Counted=$true; Line="  ${Desc}: $DisplayName ($Status)" } }
+                $why = if (-not $running) { 'not running' } else { "not onboarded (OnboardingState $(if ($null -eq $MdeOnboardingState) { 'absent' } else { $MdeOnboardingState }))" }
+                @{ Counted=$false; Line="  ${Desc}: $DisplayName ($Status) - $why, not counted" }
+            }
             $sb = [System.Text.StringBuilder]::new(); $found = $false
             # Check for IDS/IPS services
             $idsServices = @(
@@ -7201,11 +7211,15 @@ $script:AutoChecks = @{
                 @{Name='SAVService';Desc='Sophos'},@{Name='Sophos Endpoint Defense Service';Desc='Sophos'},@{Name='SepMasterService';Desc='Symantec/Broadcom'}
             )
             [void]$sb.AppendLine("IDS/IPS AND EDR DETECTION:")
+            $mdeOnboarding = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows Advanced Threat Protection\Status' -EA SilentlyContinue).OnboardingState
             foreach ($ids in $idsServices) {
-                $svc = Get-Service $ids.Name -EA SilentlyContinue
-                if ($svc) { $found = $true; [void]$sb.AppendLine("  $($ids.Desc): $($svc.DisplayName) ($($svc.Status))") }
+                foreach ($svc in @(Get-Service $ids.Name -EA SilentlyContinue)) {
+                    $agent = Get-Np07AgentLine -Desc $ids.Desc -DisplayName $svc.DisplayName -Status ([string]$svc.Status) -IsMde ($svc.Name -eq 'Sense') -MdeOnboardingState $mdeOnboarding
+                    if ($agent.Counted) { $found = $true }
+                    [void]$sb.AppendLine($agent.Line)
+                }
             }
-            if (-not $found) { [void]$sb.AppendLine("  No IDS/IPS/EDR agents detected on this host [!]") }
+            if (-not $found) { [void]$sb.AppendLine("  No running IDS/IPS/EDR agents detected on this host [!]") }
             # Check Windows Defender advanced features
             try {
                 $mp = Get-MpPreference -EA SilentlyContinue
@@ -12270,7 +12284,8 @@ function Compare-AuditSnapshot {
 }
 
 # Carries first-seen timestamps forward for findings that are still failing so an
-# exposure window survives across runs. A run that couldn't assess a finding
+# exposure window survives across runs. Only Pass closes a window; a Fail that
+# improves to Partial stays open with its days still counting. A run that couldn't assess a finding
 # (error, skipped, not permitted) keeps its open window with the last confirmed
 # last_seen and days and evidence_stale = $true, so the next Fail continues the same
 # window instead of starting at zero. $Now/$NowIso are passed in to keep the
@@ -12293,11 +12308,17 @@ function Update-ExposureWindows {
             if ($pe -and $pe.first_seen) { $firstSeen = & $isoOf $pe.first_seen }
             $days = 0
             try { $days = [math]::Max(0, [math]::Round(($Now - [datetime]$firstSeen).TotalDays)) } catch { $days = 0 }
-            $exposure[$id] = [ordered]@{ first_seen = $firstSeen; last_seen = $NowIso; days = $days; severity = [string]$f.severity; evidence_stale = $false }
+            $exposure[$id] = [ordered]@{ first_seen = $firstSeen; last_seen = $NowIso; days = $days; severity = [string]$f.severity; evidence_stale = $false; status = 'Fail' }
+        } elseif ($status -eq 'Partial' -and $pe -and $pe.first_seen) {
+            # Partly fixed isn't resolved (Compare-AuditSnapshot calls it Improved), so the window stays open until Pass.
+            $firstSeen = & $isoOf $pe.first_seen
+            $days = 0
+            try { $days = [math]::Max(0, [math]::Round(($Now - [datetime]$firstSeen).TotalDays)) } catch { $days = 0 }
+            $exposure[$id] = [ordered]@{ first_seen = $firstSeen; last_seen = $NowIso; days = $days; severity = [string]$f.severity; evidence_stale = $false; status = 'Partial' }
         } elseif ($pe -and $pe.first_seen -and ($unavailable -contains $status)) {
             $severity = if ($f.severity) { [string]$f.severity } else { [string]$pe.severity }
             $lastSeen = if ($pe.last_seen) { & $isoOf $pe.last_seen } else { & $isoOf $pe.first_seen }
-            $exposure[$id] = [ordered]@{ first_seen = (& $isoOf $pe.first_seen); last_seen = $lastSeen; days = [int]$pe.days; severity = $severity; evidence_stale = $true }
+            $exposure[$id] = [ordered]@{ first_seen = (& $isoOf $pe.first_seen); last_seen = $lastSeen; days = [int]$pe.days; severity = $severity; evidence_stale = $true; status = $(if ($status) { $status } else { 'Unavailable' }) }
         }
     }
     return $exposure
