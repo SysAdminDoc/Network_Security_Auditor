@@ -165,13 +165,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P1
 
-- [ ] P1 — NSA-073 Add a directory-reader seam and recorded LDAP fixtures for AD checks
-  Why: 51 check classes have no test reference, including every AD check; only EP06, CF02 and CF08 have injectable seams, so the AD fixes below can't ship with regression tests.
-  Evidence: test inventory 2026-09-29 (339 xUnit methods, no LDAP or `DirectoryEntry` use in tests); `tests/NetworkSecurityAuditor.Tests/EP06_HostFirewallCheckTests.cs:11` seam pattern.
-  Touches: new `Services/IDirectoryReader.cs` wrapping search, RootDSE, ACL and attribute reads; IA01-IA12, CF01, CF04 and EP10 constructors; fixture JSON under `tests/NetworkSecurityAuditor.Tests/Fixtures/Directory/`.
-  Acceptance: every AD check runs against fixtures in tests; at least one pass and one fail fixture per AD check; production behavior is unchanged (existing tests stay green).
-  Complexity: L
-
 - [ ] P1 — NSA-075 Revalidate ATT&CK mappings for the v19 tactic split and correct external version constants
   Why: ATT&CK v19 (2026-04-28) split Defense Evasion into Stealth (TA0005) and Defense Impairment (TA0112); the mappings reference TA0005 in 14 places and claim version "19.1", which MITRE's versions page doesn't list (current is v19.2); OSCAL 1.2.3 (2026-08-07) is the current patch.
   Evidence: `src/NetworkSecurityAuditor/Export/ExternalVersions.cs`; `Data/MitreMappings.cs`; PS1 `$script:MitreMap`; https://attack.mitre.org/resources/updates/updates-april-2026/; https://attack.mitre.org/resources/versions/; https://github.com/usnistgov/OSCAL/releases.
@@ -234,6 +227,27 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: event-log helper (XPath time filter plus event cap, formatting only for shown samples), `DirectorySearcher.ServerTimeLimit`/`ClientTimeout`, a console cancel handler and per-run deadline, NP03 VPN detection through `Get-VpnConnection` data or the RAS phonebook file.
   Acceptance: event queries stop at a documented cap with the count reported as "at least N"; a Ctrl+C or deadline ends a silent run with partial results flagged and exit code documented; no check launches a windowed process; a test asserts a blocked fake check is cancelled within the timeout.
   Complexity: M
+
+- [ ] P1 — NSA-116 Stop IA01, IA02, IA07 and CF04 from failing every real domain
+  Why: converting the AD checks to recorded fixtures (NSA-073) showed results no real domain can pass, apart from the nested-group and non-English cases NSA-078 covers. IA01's orphaned-adminCount test flags `krbtgt`, which always has adminCount=1. IA02's SPN filter includes `krbtgt` and disabled accounts, so every domain has a "kerberoastable" account, and an account matching two name patterns is counted twice. IA07's "admin" pattern matches the built-in Administrator. CF04 treats `(!(lastLogonTimestamp=*))` as a former employee, so a hire created yesterday is CRITICAL, and it requests `whenCreated` without using it.
+  Evidence: `Checks/IdentityAccess/IA01_PrivilegedGroupsCheck.cs` orphan loop; `IA02_ServiceAccountCheck.cs` filter and pattern count; `IA07_SharedAccountsCheck.cs` pattern list; `Checks/CommonFindings/CF04_FormerEmployeeCheck.cs` filter; fixtures under `tests/NetworkSecurityAuditor.Tests/Fixtures/Directory/`.
+  Touches: the four checks, their fixtures and tests, and the PS1 counterparts where they share the logic.
+  Acceptance: a fixture domain with `krbtgt`, a disabled account with an SPN, the built-in Administrator and a week-old account that never logged on passes IA01, IA02, IA07 and CF04; a real orphaned adminCount account, an enabled user with an SPN, a shared "frontdesk" account and a 200-day-idle account still fail; IA02 counts each account once.
+  Complexity: M
+
+- [ ] P1 — NSA-117 Read IA12's dMSA link from the real attribute and cite the right advisory
+  Why: IA12 reads `msDS-DelegatedManagedServiceAccountSuccessor`, which isn't a schema attribute (the dMSA link is `msDS-ManagedAccountPrecededByLink`), so the successor always reads "None". The class comment cites CVE-2025-21293, which isn't BadSuccessor. NSA-077 covers the OU scope and SID-based principal matching; this is the attribute and the reference.
+  Evidence: `Checks/IdentityAccess/IA12_DmsaCheck.cs` dMSA search properties and class comment; Akamai's BadSuccessor write-up (May 2025).
+  Touches: IA12 on both surfaces, its fixtures and tests.
+  Acceptance: IA12 reads `msDS-ManagedAccountPrecededByLink` and reports the linked account; a fixture dMSA linked to a Domain Admin is flagged; the comment and findings cite the right advisory.
+  Complexity: S
+
+- [ ] P1 — NSA-118 Stop CF01 passing when the directory can't be read
+  Why: CF01 writes every LDAP failure to evidence and carries on, so with the DC unreachable it returns Pass with "No critical service account issues detected". IA08 fails an account whose `accountExpires` is out of range without saying why, because the CRITICAL count only includes "Never".
+  Evidence: `Checks/CommonFindings/CF01_DaServiceAccountsCheck.cs` catch blocks around each search; `IA08_VendorAccountsCheck.cs` Invalid versus Never handling.
+  Touches: CF01, IA08 and their tests.
+  Acceptance: CF01 with an unreachable directory is Error (or Not assessed with the reason), never Pass; IA08 names the invalid-expiry accounts in the findings.
+  Complexity: S
 
 ### P2
 
@@ -369,6 +383,13 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: PS1 questionnaire check blocks, the status combo values, `Get-FrameworkScores`, risk score, HTML and JSON coverage fields, Pester.
   Acceptance: the 16 questionnaire checks return Not Assessed from the scan on the PS1 (hints go in the findings text); a thrown or timed-out check shows as Error, earns nothing and is listed in the report; the PS1 exit code's framework threshold counts only Pass; a Pester parity test checks the questionnaire set against the app's.
   Complexity: M
+
+- [ ] P2 — NSA-119 Match IA03's MFA agents on whole names, and run IA03 and IA09 off the domain
+  Why: IA03 matches installed program names by substring, so "RSA" hits "Universal CRT", "Ping" hits "Snipping Tool" and "Duo" hits "Duolingo"; two false hits make it Pass. It also counts an ADFS registry key as an MFA signal, although ADFS alone isn't MFA. IA03 and IA09 read only the local registry and network adapters, but the catalog types them AD, so a workgroup machine skips both.
+  Evidence: `Checks/IdentityAccess/IA03_MfaSignalsCheck.cs` `MfaAgentPatterns` and the ADFS block; `Data/CheckCatalog.cs` Type for IA03 and IA09; `CheckRunner.ResolveApplicableCheckIds` drops AD checks when not domain-joined.
+  Touches: IA03 patterns (publisher plus product, or anchored names), the ADFS signal, the catalog Type for IA03 and IA09 on both surfaces, scan profile tests.
+  Acceptance: fixtures with "Microsoft Visual C++ Universal CRT" and "Snipping Tool" add no signal; Duo, Okta Verify and YubiKey Manager still do; IA03 and IA09 run on a workgroup host.
+  Complexity: S
 
 ### P3
 

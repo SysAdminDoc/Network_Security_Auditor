@@ -13,6 +13,12 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
 {
     public string Id => "IA03";
 
+    private readonly IRegistryReader _registry;
+
+    public IA03_MfaSignalsCheck() : this(SystemRegistryReader.Instance) { }
+
+    internal IA03_MfaSignalsCheck(IRegistryReader registry) => _registry = registry;
+
     private static readonly Dictionary<string, string> MfaAgentPatterns = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Duo", "Duo Security" },
@@ -40,7 +46,7 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
             // 1. RDP Network Level Authentication
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("[RDP NLA]");
-            int nla = RegistryHelper.GetValue<int>(
+            int nla = _registry.GetValue<int>(
                 @"HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp",
                 "UserAuthentication", -1);
             evidence.AppendLine($"  UserAuthentication = {nla}");
@@ -63,9 +69,9 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("\n[Windows Hello for Business]");
 
-            int helloEnabled = RegistryHelper.GetValue<int>(
+            int helloEnabled = _registry.GetValue<int>(
                 @"HKLM\SOFTWARE\Policies\Microsoft\PassportForWork", "Enabled", -1);
-            int helloRequireSec = RegistryHelper.GetValue<int>(
+            int helloRequireSec = _registry.GetValue<int>(
                 @"HKLM\SOFTWARE\Policies\Microsoft\PassportForWork", "RequireSecurityDevice", 0);
 
             evidence.AppendLine($"  PassportForWork\\Enabled = {helloEnabled}");
@@ -100,11 +106,11 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
 
             foreach (var basePath in uninstallPaths)
             {
-                var subkeys = RegistryHelper.GetSubKeyNames(basePath);
+                var subkeys = _registry.GetSubKeyNames(basePath);
                 foreach (var subkey in subkeys)
                 {
                     ct.ThrowIfCancellationRequested();
-                    string displayName = RegistryHelper.GetValue<string>(
+                    string displayName = _registry.GetValue<string>(
                         $@"{basePath}\{subkey}", "DisplayName", "") ?? "";
 
                     foreach (var (pattern, label) in MfaAgentPatterns)
@@ -135,7 +141,7 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("\n[Smart Card Policy]");
 
-            int scForceOption = RegistryHelper.GetValue<int>(
+            int scForceOption = _registry.GetValue<int>(
                 @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
                 "scforceoption", 0);
             evidence.AppendLine($"  scforceoption = {scForceOption}");
@@ -154,7 +160,7 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("\n[ADFS Service]");
 
-            bool adfsKeyExists = RegistryHelper.KeyExists(@"HKLM\SOFTWARE\Microsoft\ADFS");
+            bool adfsKeyExists = _registry.KeyExists(@"HKLM\SOFTWARE\Microsoft\ADFS");
             evidence.AppendLine($"  ADFS registry key exists = {adfsKeyExists}");
 
             if (adfsKeyExists)

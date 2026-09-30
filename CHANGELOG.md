@@ -51,6 +51,9 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - IA04, IA06, NP01 and NP02 were tagged as needing an interview or outside evidence, and LM06 and LM08 as checklists, although all six decide their result from what they read on the machine or in AD. They're tagged Automated or Heuristic now on both surfaces, and CF05 is Automated in the script too, matching the app. A test now keeps the script's evidence tags in step with the app's.
 - The PowerShell NP01 check passed silently for a standard user, because every per-rule filter read failed quietly and no rule looked like any/any. It now reads the filters once per filter type (much faster than once per rule), and when they can't be read it says so and reports Partial.
 
+### Tests
+- Every Active Directory check now runs in the test suite against recorded directory responses. The checks read AD through one small reader, and the tests swap in fixture files that answer each search by its base and filter, so a changed filter breaks a test instead of quietly passing. Each AD check has at least a passing and a failing fixture (IA01, IA02, IA04 to IA08, IA10 to IA12, CF01, CF04 and EP10's domain sweep), plus cases for access denied, missing containers and an unreachable domain. IA03 and IA09, which only read the local registry and network adapters, run against an in-memory registry. A test fails if a new AD check ships without the reader or without both fixtures. Nothing changes in how the checks read a real domain.
+
 ### Docs
 - The README no longer asks a visitor to paste an `Invoke-WebRequest` fetch-and-run block. Getting
   the script is now a download link followed by local-only commands (`Unblock-File`, `Get-FileHash`,

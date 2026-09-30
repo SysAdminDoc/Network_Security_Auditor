@@ -52,6 +52,19 @@ public sealed class IA09_RemoteAccessCheck : ISecurityCheck
         { "Level.io", "Level" },
     };
 
+    internal sealed record NetworkAdapter(string Name, string Description, NetworkInterfaceType Type, OperationalStatus Status);
+
+    private readonly IRegistryReader _registry;
+    private readonly Func<IReadOnlyList<NetworkAdapter>> _adapters;
+
+    public IA09_RemoteAccessCheck() : this(SystemRegistryReader.Instance, ReadAdapters) { }
+
+    internal IA09_RemoteAccessCheck(IRegistryReader registry, Func<IReadOnlyList<NetworkAdapter>> adapters)
+    {
+        _registry = registry;
+        _adapters = adapters;
+    }
+
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
         try
@@ -64,16 +77,16 @@ public sealed class IA09_RemoteAccessCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("[RDP Configuration]");
 
-            int rdpDisabled = RegistryHelper.GetValue<int>(
+            int rdpDisabled = _registry.GetValue<int>(
                 @"HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server",
                 "fDenyTSConnections", 1);
             bool rdpEnabled = rdpDisabled == 0;
 
-            int nla = RegistryHelper.GetValue<int>(
+            int nla = _registry.GetValue<int>(
                 @"HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp",
                 "UserAuthentication", -1);
 
-            int rdpPort = RegistryHelper.GetValue<int>(
+            int rdpPort = _registry.GetValue<int>(
                 @"HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp",
                 "PortNumber", 3389);
 
@@ -109,8 +122,7 @@ public sealed class IA09_RemoteAccessCheck : ISecurityCheck
 
             try
             {
-                var nics = NetworkInterface.GetAllNetworkInterfaces();
-                foreach (var nic in nics)
+                foreach (var nic in _adapters())
                 {
                     string desc = nic.Description;
                     string name = nic.Name;
@@ -129,12 +141,12 @@ public sealed class IA09_RemoteAccessCheck : ISecurityCheck
                                  desc.Contains("Juniper", StringComparison.OrdinalIgnoreCase) ||
                                  desc.Contains("Pulse Secure", StringComparison.OrdinalIgnoreCase) ||
                                  desc.Contains("ZScaler", StringComparison.OrdinalIgnoreCase) ||
-                                 nic.NetworkInterfaceType == NetworkInterfaceType.Ppp;
+                                 nic.Type == NetworkInterfaceType.Ppp;
 
                     if (isVpn)
                     {
                         vpnAdapters.Add($"{name} ({desc})");
-                        evidence.AppendLine($"  {name} | {desc} | Status={nic.OperationalStatus}");
+                        evidence.AppendLine($"  {name} | {desc} | Status={nic.Status}");
                     }
                 }
             }
@@ -194,7 +206,12 @@ public sealed class IA09_RemoteAccessCheck : ISecurityCheck
         }
     }
 
-    private static List<string> ScanUninstallRegistry(
+    private static IReadOnlyList<NetworkAdapter> ReadAdapters() =>
+        NetworkInterface.GetAllNetworkInterfaces()
+            .Select(nic => new NetworkAdapter(nic.Name, nic.Description, nic.NetworkInterfaceType, nic.OperationalStatus))
+            .ToArray();
+
+    private List<string> ScanUninstallRegistry(
         Dictionary<string, string> patterns, StringBuilder evidence, CancellationToken ct)
     {
         var detected = new List<string>();
@@ -207,11 +224,11 @@ public sealed class IA09_RemoteAccessCheck : ISecurityCheck
 
         foreach (var basePath in uninstallPaths)
         {
-            var subkeys = RegistryHelper.GetSubKeyNames(basePath);
+            var subkeys = _registry.GetSubKeyNames(basePath);
             foreach (var subkey in subkeys)
             {
                 ct.ThrowIfCancellationRequested();
-                string displayName = RegistryHelper.GetValue<string>(
+                string displayName = _registry.GetValue<string>(
                     $@"{basePath}\{subkey}", "DisplayName", "") ?? "";
 
                 foreach (var (pattern, label) in patterns)
