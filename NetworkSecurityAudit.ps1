@@ -4120,21 +4120,42 @@ $script:AutoChecks = @{
                 $pref = $null
                 [void]$sb.AppendLine("Defender preference query unavailable: $($_.Exception.Message)")
             }
+            # Defined inside the check so it survives fresh runspaces and Invoke-Command.
+            # A third-party AV registered with Security Center puts Defender in passive mode or turns it off.
+            function Get-Ep01PrimaryAv {
+                param($AntivirusEnabled, $RealTimeProtectionEnabled, [string]$AmRunningMode = '', [object[]]$Products = @())
+                $active = @()
+                foreach ($p in @($Products)) {
+                    if ([string]$p.Name -match 'Windows Defender|Microsoft Defender') { continue }
+                    $scanner = ([int64]$p.State -shr 8) -band 0xFF
+                    if ($scanner -eq 0x10 -or $scanner -eq 0x11) { $active += [string]$p.Name }
+                }
+                $defenderPrimary = ([bool]$AntivirusEnabled -and [bool]$RealTimeProtectionEnabled -and $AmRunningMode -notmatch 'Passive|EDR Block')
+                return @{ DefenderPrimary=$defenderPrimary; ThirdPartyPrimary=(-not $defenderPrimary -and $active.Count -gt 0); ActiveThirdParty=$active }
+            }
+            $scProducts = @()
+            try { $scProducts = @(Get-CimInstance -Namespace 'root\SecurityCenter2' -ClassName AntiVirusProduct -EA Stop | ForEach-Object { @{ Name=[string]$_.displayName; State=[int64]$_.productState } }) } catch {}
+            $primary = Get-Ep01PrimaryAv -AntivirusEnabled $mp.AntivirusEnabled -RealTimeProtectionEnabled $mp.RealTimeProtectionEnabled -AmRunningMode ([string]$mp.AMRunningMode) -Products $scProducts
+            $thirdPartyPrimary = $primary.ThirdPartyPrimary
             $sigDate = $mp.AntivirusSignatureLastUpdated
             $daysOld = if ($sigDate -is [datetime]) { ((Get-Date) - $sigDate).Days } else { 999 }
             [void]$sb.AppendLine("CORE PROTECTION:")
-            [void]$sb.AppendLine("  AV Enabled        : $($mp.AntivirusEnabled) $(if(-not $mp.AntivirusEnabled){'[DISABLED!]';$issues++} else {'[OK]'})")
-            [void]$sb.AppendLine("  Real-Time Protect  : $($mp.RealTimeProtectionEnabled) $(if(-not $mp.RealTimeProtectionEnabled){'[DISABLED!]';$issues++} else {'[OK]'})")
-            [void]$sb.AppendLine("  Behavior Monitor   : $($mp.BehaviorMonitorEnabled) $(if(-not $mp.BehaviorMonitorEnabled){'[DISABLED]';$issues++} else {'[OK]'})")
+            [void]$sb.AppendLine("  Running Mode      : $(if ($mp.AMRunningMode) { $mp.AMRunningMode } else { 'Unknown' })")
+            if ($thirdPartyPrimary) { [void]$sb.AppendLine("  Primary AV        : $($primary.ActiveThirdParty -join ', ') (registered and enabled; Defender isn't the active engine) [OK]") }
+            [void]$sb.AppendLine("  AV Enabled        : $($mp.AntivirusEnabled) $(if(-not $mp.AntivirusEnabled -and $thirdPartyPrimary){'[third-party AV primary]'} elseif(-not $mp.AntivirusEnabled){'[DISABLED!]';$issues++} else {'[OK]'})")
+            [void]$sb.AppendLine("  Real-Time Protect  : $($mp.RealTimeProtectionEnabled) $(if(-not $mp.RealTimeProtectionEnabled -and $thirdPartyPrimary){'[third-party AV primary]'} elseif(-not $mp.RealTimeProtectionEnabled){'[DISABLED!]';$issues++} else {'[OK]'})")
+            [void]$sb.AppendLine("  Behavior Monitor   : $($mp.BehaviorMonitorEnabled) $(if(-not $mp.BehaviorMonitorEnabled -and $thirdPartyPrimary){'[third-party AV primary]'} elseif(-not $mp.BehaviorMonitorEnabled){'[DISABLED]';$issues++} else {'[OK]'})")
             [void]$sb.AppendLine("  Tamper Protection  : $($mp.IsTamperProtected) $(if(-not $mp.IsTamperProtected){'[NOT PROTECTED]';$issues++} else {'[OK]'})")
-            [void]$sb.AppendLine("  Signature Age      : ${daysOld}d $(if($daysOld -gt 7){'[STALE!]';$issues++} else {'[OK]'})")
+            [void]$sb.AppendLine("  Signature Age      : ${daysOld}d $(if($daysOld -gt 7 -and $thirdPartyPrimary){'[Defender signatures; third-party AV primary]'} elseif($daysOld -gt 7){'[STALE!]';$issues++} else {'[OK]'})")
             [void]$sb.AppendLine("  Signature Updated  : $(if($sigDate -is [datetime]){$sigDate.ToString('yyyy-MM-dd HH:mm')}else{'Unknown'})")
             [void]$sb.AppendLine("  Engine Version     : $($mp.AMEngineVersion)")
             [void]$sb.AppendLine("  Product Version    : $($mp.AMProductVersion)")
-            # Defender for Endpoint (MDE) / Sense service
+            # Defender for Endpoint (MDE): the Sense service ships with Windows, so onboarding needs OnboardingState 1 too
             $mde = Get-Service Sense -EA SilentlyContinue
-            if ($mde -and $mde.Status -eq 'Running') { [void]$sb.AppendLine("  MDE Onboarding    : Active (Sense service running) [OK]") }
-            elseif ($mde) { [void]$sb.AppendLine("  MDE Onboarding    : Sense service $($mde.Status) [!]") }
+            $mdeOnboarding = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows Advanced Threat Protection\Status' -EA SilentlyContinue).OnboardingState
+            if ($mde -and $mde.Status -eq 'Running' -and $mdeOnboarding -eq 1) { [void]$sb.AppendLine("  MDE Onboarding    : Onboarded (OnboardingState 1, Sense running) [OK]") }
+            elseif ($mdeOnboarding -eq 1) { [void]$sb.AppendLine("  MDE Onboarding    : Onboarded but Sense service $(if ($mde) { $mde.Status } else { 'missing' }) [!]") }
+            elseif ($mde) { [void]$sb.AppendLine("  MDE Onboarding    : Not onboarded (Sense service $($mde.Status))") }
             else { [void]$sb.AppendLine("  MDE Onboarding    : Not installed") }
             # AMSI provider check
             try {

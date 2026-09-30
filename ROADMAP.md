@@ -170,13 +170,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P0
 
-- [ ] P0 — NSA-068 Fix EP01 EDR detection false positives
-  Why: the `Windows Advanced Threat Protection` key exists on all Windows 10+ systems, so Defender for Endpoint is always "detected"; `Palo Alto Networks` may be GlobalProtect only; passive-mode Defender beside a third-party AV is reported as a failure; tamper protection and ASR aren't read.
-  Evidence: `src/NetworkSecurityAuditor/Checks/EndpointSecurity/EP01_AvEdrCheck.cs:53-60,109-111,186-194`; PS1 reads tamper protection at `NetworkSecurityAudit.ps1:4129` and ASR at `:4173-4174`.
-  Touches: `EP01_AvEdrCheck.cs`, tests with fake registry and service providers.
-  Acceptance: MDE counts only with `OnboardingState` = 1 and the `Sense` service running; Cortex XDR requires the `cyserver` service; passive-mode Defender with an active registered third-party AV (`root\SecurityCenter2` on workstations) passes; tamper protection state and configured ASR rule count appear in evidence; tests cover each case.
-  Complexity: M
-
 - [ ] P0 — NSA-069 Stop IA06 from reporting "no LAPS" to auditors who can't read passwords
   Why: coverage filters on `msLAPS-EncryptedPassword=*` and `ms-Mcs-AdmPwd=*`, which are confidential and return nothing without the control-access right; the catch blocks turn access-denied into "not deployed"; `Math.Max` stands in for a union.
   Evidence: `src/NetworkSecurityAuditor/Checks/IdentityAccess/IA06_PamCheck.cs:58-95`; https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview.
