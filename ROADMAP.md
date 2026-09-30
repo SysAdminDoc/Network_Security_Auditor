@@ -170,13 +170,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P0
 
-- [ ] P0 — NSA-066 Stop LM02 from passing on inbox Windows services
-  Why: the SIEM agent list includes `EventLog`, `Wecsvc` and `Sense`, which exist on every Windows host, so LM02 passes everywhere.
-  Evidence: `src/NetworkSecurityAuditor/Checks/LoggingMonitoring/LM02_SiemCheck.cs:30-35,91`.
-  Touches: `LM02_SiemCheck.cs`, PS1 LM02 equivalent, new unit tests with a fake service enumerator.
-  Acceptance: `EventLog` alone never passes; `Wecsvc` counts only when subscriptions exist (`wecutil es` or the subscriptions registry key); `Sense` counts only when the service is running and onboarded (`HKLM\SOFTWARE\Microsoft\Windows Advanced Threat Protection\Status\OnboardingState` = 1); a stopped agent service is reported, not counted; tests cover a clean Windows host (Fail), a Splunk UF host (Pass) and an onboarded MDE host (Pass).
-  Complexity: S
-
 - [ ] P0 — NSA-067 Stop NP02 from failing every host on default Windows listeners
   Why: 135, 445 and 5985 listen by default on Windows and on hosts that fleet mode itself needs, yet NP02 treats them as high risk; parsing relies on the English `LISTENING`.
   Evidence: `src/NetworkSecurityAuditor/Checks/NetworkPerimeter/NP02_OpenPortsCheck.cs:15-31,54,69-73,106`.
@@ -447,4 +440,11 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Evidence: https://www.pingcastle.com/terms-and-conditions/; https://www.capterra.com/p/10052219/PingCastle/; README "Why This Exists".
   Touches: README "Why This Exists".
   Acceptance: the README says the MIT license allows auditing client and third-party environments at no cost, without naming competitors' prices.
+  Complexity: S
+
+- [ ] P3 — NSA-105 Replace the box-drawing banner comments in the PS1 with ASCII
+  Why: `NetworkSecurityAudit.ps1` is BOM-less UTF-8 and the repo rule is ASCII-only for Windows PowerShell 5.1, yet 158 section-banner comments use U+2500 (`# ── ... ──`); 5.1 decodes them through the ANSI code page. Harmless while they stay in comments, but it hides real non-ASCII regressions from a simple scan. Found 2026-09-30 during NSA-066.
+  Evidence: `NetworkSecurityAudit.ps1:374` and 157 similar lines (`Select-String -Pattern '[^\x00-\x7F]'`).
+  Touches: `NetworkSecurityAudit.ps1` comments, a Pester test that fails on any non-ASCII byte in the PS1.
+  Acceptance: the PS1 has zero non-ASCII characters; a Pester test enforces it on both hosts.
   Complexity: S

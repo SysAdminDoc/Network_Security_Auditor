@@ -6080,37 +6080,88 @@ $script:AutoChecks = @{
 
     'LM02' = @{ Type='Local'; Label='Scan Centralized Logging / SIEM'
         Script = {
+            # Defined inside the check so it survives fresh runspaces and Invoke-Command.
+            # Only running agents, onboarded Defender for Endpoint and real WEF subscriptions count;
+            # EventLog, an idle Wecsvc and an unonboarded Sense exist on every host.
+            function Get-Lm02ForwardingAssessment {
+                param(
+                    [hashtable]$Services,
+                    [string[]]$ForwardingTargets = @(),
+                    [string[]]$CollectorSubscriptions = @(),
+                    $MdeOnboardingState = $null
+                )
+                $agents = @(
+                    @{Name='SplunkForwarder';Desc='Splunk Universal Forwarder'}
+                    @{Name='ossec*';Desc='Wazuh/OSSEC Agent'}
+                    @{Name='WazuhSvc';Desc='Wazuh Agent'}
+                    @{Name='elastic-agent';Desc='Elastic Agent'}
+                    @{Name='filebeat';Desc='Elastic Filebeat'}
+                    @{Name='winlogbeat';Desc='Elastic Winlogbeat'}
+                    @{Name='nxlog';Desc='NXLog'}
+                    @{Name='snare*';Desc='Snare Agent'}
+                    @{Name='AzureMonitorAgent';Desc='Azure Monitor Agent'}
+                    @{Name='HealthService';Desc='Microsoft Monitoring Agent'}
+                    @{Name='QualysAgent';Desc='Qualys Agent'}
+                    @{Name='TaniumClient';Desc='Tanium Client'}
+                    @{Name='cb*Defense*';Desc='Carbon Black'}
+                )
+                $counted = @(); $notCounted = @(); $lines = @()
+                foreach ($agent in $agents) {
+                    foreach ($name in @($Services.Keys | Where-Object { $_ -like $agent.Name } | Sort-Object)) {
+                        $state = [string]$Services[$name]
+                        if ($state -eq 'Running') { $counted += $agent.Desc; $lines += "$($agent.Desc) ($name): Running [OK]" }
+                        else { $notCounted += "$($agent.Desc) ($state)"; $lines += "$($agent.Desc) ($name): $state - installed but not forwarding, not counted [!]" }
+                    }
+                }
+                if ($Services.ContainsKey('EventLog')) { $lines += "Windows Event Log: $($Services['EventLog']) - local logging only, not counted" }
+                $senseState = if ($Services.ContainsKey('Sense')) { [string]$Services['Sense'] } else { $null }
+                $onboardingText = if ($null -eq $MdeOnboardingState) { 'absent' } else { [string]$MdeOnboardingState }
+                if ($senseState) {
+                    $onboarded = ($null -ne $MdeOnboardingState -and [int]$MdeOnboardingState -eq 1)
+                    if ($onboarded -and $senseState -eq 'Running') { $counted += 'Microsoft Defender for Endpoint (onboarded)'; $lines += "Defender for Endpoint (Sense): Running, OnboardingState 1 [OK]" }
+                    elseif ($onboarded) { $notCounted += "Microsoft Defender for Endpoint ($senseState)"; $lines += "Defender for Endpoint (Sense): $senseState, OnboardingState 1 - not counted [!]" }
+                    else { $lines += "Defender for Endpoint (Sense): $senseState, OnboardingState $onboardingText - not onboarded, not counted" }
+                }
+                $targets = @($ForwardingTargets | Where-Object { $_ })
+                if ($targets.Count -gt 0) {
+                    $counted += 'Windows Event Forwarding (source)'
+                    $lines += "WEF forwarding targets: $($targets.Count) [OK]"
+                    foreach ($t in ($targets | Select-Object -First 5)) { $lines += "  $t" }
+                }
+                $subs = @($CollectorSubscriptions | Where-Object { $_ })
+                $wecState = if ($Services.ContainsKey('Wecsvc')) { [string]$Services['Wecsvc'] } else { 'Not installed' }
+                $lines += "WEF Collector Service: $wecState; subscriptions: $($subs.Count)"
+                foreach ($s in ($subs | Select-Object -First 5)) { $lines += "  $s" }
+                if ($subs.Count -gt 0) {
+                    if ($wecState -eq 'Running') { $counted += 'Windows Event Collector' }
+                    else { $notCounted += "Windows Event Collector ($wecState)"; $lines += "  Subscriptions exist but the collector isn't running - not counted [!]" }
+                }
+                return @{ Counted=@($counted | Select-Object -Unique); NotCounted=@($notCounted | Select-Object -Unique); Lines=$lines }
+            }
+
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
             # Check for Sysmon
             $sysmon = Get-Service Sysmon,Sysmon64 -EA SilentlyContinue | Where-Object { $_.Status -eq 'Running' }
             if ($sysmon) { [void]$sb.AppendLine("Sysmon: RUNNING [OK]") }
             else { [void]$sb.AppendLine("Sysmon: NOT INSTALLED [!]"); $issues++ }
-            # Check Windows Event Forwarding
-            try {
-                $wef = Get-Service wecsvc -EA SilentlyContinue
-                [void]$sb.AppendLine("WEF Collector Service: $(if($wef){$wef.Status}else{'Not installed'})")
-                $subs = wecutil es 2>$null
-                if ($subs) { [void]$sb.AppendLine("WEF Subscriptions: $($subs.Count)"); foreach ($s in ($subs|Select-Object -First 5)) { [void]$sb.AppendLine("  $s") } }
-            } catch {}
-            # Check for SIEM agents
-            $siemServices = @(
-                @{Name='SplunkForwarder';Desc='Splunk Universal Forwarder'}
-                @{Name='ossec*';Desc='Wazuh/OSSEC Agent'}
-                @{Name='filebeat';Desc='Elastic Filebeat'}
-                @{Name='winlogbeat';Desc='Elastic Winlogbeat'}
-                @{Name='nxlog';Desc='NXLog'}
-                @{Name='snare*';Desc='Snare Agent'}
-                @{Name='QualysAgent';Desc='Qualys Agent'}
-                @{Name='TaniumClient';Desc='Tanium Client'}
-                @{Name='cb*Defense*';Desc='Carbon Black'}
-                @{Name='MsSense';Desc='Microsoft Defender for Endpoint'}
-            )
-            $foundAgents = @()
-            foreach ($ss in $siemServices) {
-                $svc = Get-Service $ss.Name -EA SilentlyContinue
-                if ($svc) { $foundAgents += "$($ss.Desc): $($svc.Status)"; [void]$sb.AppendLine("$($ss.Desc): $($svc.Status)") }
+            # SIEM agents, Defender for Endpoint and Windows Event Forwarding
+            $serviceMap = @{}
+            foreach ($svc in @(Get-Service -EA SilentlyContinue)) { $serviceMap[$svc.Name] = [string]$svc.Status }
+            $wefKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\EventForwarding\SubscriptionManager'
+            $forwardTargets = @()
+            $wefProps = Get-ItemProperty -LiteralPath $wefKey -EA SilentlyContinue
+            if ($wefProps) { $forwardTargets = @($wefProps.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object { "$($_.Name) = $($_.Value)" }) }
+            $collectorSubs = @(Get-ChildItem -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\EventCollector\Subscriptions' -EA SilentlyContinue | ForEach-Object { $_.PSChildName })
+            $mdeStatus = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows Advanced Threat Protection\Status' -EA SilentlyContinue
+            $mdeOnboarding = if ($mdeStatus -and $mdeStatus.PSObject.Properties['OnboardingState']) { $mdeStatus.OnboardingState } else { $null }
+            $forwarding = Get-Lm02ForwardingAssessment -Services $serviceMap -ForwardingTargets $forwardTargets -CollectorSubscriptions $collectorSubs -MdeOnboardingState $mdeOnboarding
+            foreach ($line in $forwarding.Lines) { [void]$sb.AppendLine($line) }
+            if ($forwarding.Counted.Count -eq 0) {
+                [void]$sb.AppendLine("`nNo active SIEM/log forwarding detected [!]")
+                if ($forwarding.NotCounted.Count -gt 0) { [void]$sb.AppendLine("Installed but not forwarding: $($forwarding.NotCounted -join ', ')") }
+                $issues++
             }
-            if ($foundAgents.Count -eq 0) { [void]$sb.AppendLine("`nNo SIEM/log forwarding agents detected [!]"); $issues++ }
+            else { [void]$sb.AppendLine("`nActive log forwarding: $($forwarding.Counted -join ', ')") }
             # Check PowerShell logging
             try {
                 $psLog = Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging' -EA SilentlyContinue

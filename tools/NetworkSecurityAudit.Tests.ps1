@@ -1365,6 +1365,62 @@ Describe 'Unattended audit run locking (real functions via AST)' {
     }
 }
 
+Describe 'LM02 log forwarding decision (nested check helper via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Lm02ForwardingAssessment' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+        function New-CleanHostServices { @{ EventLog='Running'; Wecsvc='Stopped'; Sense='Stopped'; WinDefend='Running' } }
+    }
+
+    It 'counts nothing on a clean Windows host with EventLog, Wecsvc and Sense present' {
+        $result = Get-Lm02ForwardingAssessment -Services (New-CleanHostServices)
+        @($result.Counted).Count | Should -Be 0
+        ($result.Lines -join "`n") | Should -Match 'local logging only'
+    }
+    It 'never counts inbox services even when all of them run' {
+        $services = New-CleanHostServices; $services.Wecsvc = 'Running'; $services.Sense = 'Running'
+        $result = Get-Lm02ForwardingAssessment -Services $services -MdeOnboardingState 0
+        @($result.Counted).Count | Should -Be 0
+    }
+    It 'counts a running Splunk Universal Forwarder' {
+        $services = New-CleanHostServices; $services.SplunkForwarder = 'Running'
+        $result = Get-Lm02ForwardingAssessment -Services $services
+        $result.Counted | Should -Be @('Splunk Universal Forwarder')
+    }
+    It 'counts Defender for Endpoint only when Sense runs and OnboardingState is 1' {
+        $services = New-CleanHostServices; $services.Sense = 'Running'
+        (Get-Lm02ForwardingAssessment -Services $services -MdeOnboardingState 1).Counted | Should -Be @('Microsoft Defender for Endpoint (onboarded)')
+        $stopped = Get-Lm02ForwardingAssessment -Services (New-CleanHostServices) -MdeOnboardingState 1
+        @($stopped.Counted).Count | Should -Be 0
+        $stopped.NotCounted | Should -Be @('Microsoft Defender for Endpoint (Stopped)')
+    }
+    It 'reports a stopped agent without counting it' {
+        $services = New-CleanHostServices; $services.ossecsvc = 'Stopped'
+        $result = Get-Lm02ForwardingAssessment -Services $services
+        @($result.Counted).Count | Should -Be 0
+        $result.NotCounted | Should -Be @('Wazuh/OSSEC Agent (Stopped)')
+    }
+    It 'counts the event collector only with subscriptions and a running service' {
+        $running = New-CleanHostServices; $running.Wecsvc = 'Running'
+        @((Get-Lm02ForwardingAssessment -Services $running).Counted).Count | Should -Be 0
+        (Get-Lm02ForwardingAssessment -Services $running -CollectorSubscriptions @('DC-Security')).Counted | Should -Be @('Windows Event Collector')
+        $idle = Get-Lm02ForwardingAssessment -Services (New-CleanHostServices) -CollectorSubscriptions @('DC-Security')
+        @($idle.Counted).Count | Should -Be 0
+        $idle.NotCounted | Should -Be @('Windows Event Collector (Stopped)')
+    }
+    It 'counts a source-initiated forwarding policy' {
+        $result = Get-Lm02ForwardingAssessment -Services (New-CleanHostServices) -ForwardingTargets @('1 = Server=http://wec01:5985/wsman/SubscriptionManager/WEC')
+        $result.Counted | Should -Be @('Windows Event Forwarding (source)')
+    }
+    It 'reads collector subscriptions from the registry instead of launching wecutil' {
+        $block = Get-Block -Text $script:Text -Start "'LM02' = @\{ Type='Local'" -End "'LM06' = @\{"
+        $block | Should -Not -Match 'wecutil'
+        $block | Should -Match 'EventCollector\\Subscriptions'
+        $block | Should -Not -Match "Name='MsSense'"
+    }
+}
+
 Describe 'Lint cleanliness (PSScriptAnalyzer)' {
     It 'has zero analyzer findings under the project settings' -Skip:(-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
         $settings = Join-Path $script:RepoRoot 'PSScriptAnalyzerSettings.psd1'
