@@ -16,18 +16,56 @@ public class IA01PrivilegedGroupsCheckTests
         var result = await Run(reader);
 
         Assert.Equal(CheckStatus.Pass, result.Status);
-        Assert.Contains("Total privileged group members: 6", result.Findings);
+        // Administrators counts a.admin too, now that it's expanded through Domain Admins.
+        Assert.Contains("Total privileged group members: 7", result.Findings);
+        Assert.Contains("Administrators: 4 member(s).", result.Findings);
         Assert.Contains("Schema Admins: 0 member(s).", result.Findings);
         Assert.Contains("INFO: 2 nested group(s) detected (review for hidden privilege).", result.Findings);
         Assert.DoesNotContain("WARNING", result.Findings);
+        // a.admin is already listed under Domain Admins, so reaching it through Administrators isn't hidden privilege.
+        Assert.DoesNotContain("NESTED:", result.Findings);
         Assert.Contains("a.admin | LastLogon=", result.Evidence);
         Assert.Contains("[NESTED GROUP] Domain Admins", result.Evidence);
+        Assert.Contains("| Path=Administrators > Domain Admins > a.admin", result.Evidence);
 
-        // Each group lookup stays a FindOne; the adminCount sweep is a full search.
-        var groupQueries = reader.Queries.Where(q => q.Filter.StartsWith("(&(objectClass=group)", StringComparison.Ordinal)).ToList();
+        // Each group lookup is a FindOne by SID; membership and the adminCount sweep are full searches.
+        var groupQueries = reader.Queries.Where(q => q.Filter.StartsWith("(objectSid=", StringComparison.Ordinal)).ToList();
         Assert.Equal(4, groupQueries.Count);
         Assert.All(groupQueries, q => Assert.Equal(1, q.SizeLimit));
+        Assert.DoesNotContain(reader.Queries, q => q.Filter.Contains("(cn=", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(0, reader.Queries.Single(q => q.Filter.Contains("(adminCount=1)", StringComparison.Ordinal)).SizeLimit);
+        Assert.Equal(4, reader.Queries.Count(q => q.Filter.Contains("(memberOf:1.2.840.113556.1.4.1941:=", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Nested_Members_Show_Their_Path_And_Count_Toward_Staleness()
+    {
+        var result = await Run(FixtureDirectoryReader.Load("IA01-nested.json"));
+
+        Assert.Equal(CheckStatus.Fail, result.Status);
+        Assert.Contains("Domain Admins: 4 member(s).", result.Findings);
+        Assert.Contains("WARNING: 1 member(s) have not logged on in >90 days.", result.Findings);
+        Assert.Contains("NESTED: Domain Admins > Tier0-Ops > alice", result.Findings);
+        Assert.Contains("NESTED: Domain Admins > Tier0-Ops > legacy.ops", result.Findings);
+        // Nested members of a privileged group aren't adminCount orphans.
+        Assert.DoesNotContain("ORPHAN", result.Findings);
+        Assert.Matches(@"legacy\.ops \| LastLogon=\d{4}-\d{2}-\d{2} \[STALE\] \| Path=Domain Admins > Tier0-Ops > legacy\.ops", result.Evidence);
+        Assert.Contains("[NESTED GROUP] Tier0-Ops", result.Evidence);
+    }
+
+    [Theory]
+    [InlineData("IA01-pass")]
+    [InlineData("IA01-fail")]
+    [InlineData("IA01-nested")]
+    public async Task Localized_Group_Names_Give_The_Same_Result(string fixture)
+    {
+        var english = await Run(FixtureDirectoryReader.Load(fixture + ".json"));
+        var german = await Run(FixtureDirectoryReader.Load(fixture + "-de.json"));
+
+        Assert.NotEqual(CheckStatus.Error, german.Status);
+        Assert.Equal(english.Status, german.Status);
+        Assert.Contains("Domänen-Admins:", german.Findings);
+        Assert.Equal(english.Findings, LocalizedDirectoryFixtures.Delocalize(german.Findings));
     }
 
     [Fact]

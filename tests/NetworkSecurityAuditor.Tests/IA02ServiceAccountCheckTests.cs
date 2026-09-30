@@ -22,8 +22,9 @@ public class IA02ServiceAccountCheckTests
         Assert.DoesNotContain("RECOMMENDATION", result.Findings);
         Assert.Contains("svc_print | Enabled=True | PwdAge=120d | Pattern=svc", result.Evidence);
         Assert.Contains("gmsa-iis$", result.Evidence);
-        // One SPN search, one per naming pattern, one gMSA search.
-        Assert.Equal(10, reader.Queries.Count);
+        // Domain Admins by SID and its members, one SPN search, one per naming pattern, one gMSA search.
+        Assert.Equal(12, reader.Queries.Count);
+        Assert.Contains(reader.Queries, q => q.Filter == "(objectSid=S-1-5-21-1004336348-1177238915-682003330-512)");
     }
 
     [Fact]
@@ -36,9 +37,22 @@ public class IA02ServiceAccountCheckTests
         Assert.Contains("CRITICAL: 1 SPN account(s) have passwords older than 1 year.", result.Findings);
         Assert.Contains("CRITICAL: 1 SPN account(s) are in Domain Admins", result.Findings);
         Assert.Contains("RECOMMENDATION: No gMSAs detected.", result.Findings);
-        Assert.Contains("svc_sql | SPN=MSSQLSvc/sql01.corp.example:1433 | PwdAge=900d [PWD>900d] [DOMAIN ADMIN]", result.Evidence);
+        // svc_sql is a Domain Admin only through SQL Admins, which memberOf alone doesn't show.
+        Assert.Contains("svc_sql | SPN=MSSQLSvc/sql01.corp.example:1433 | PwdAge=900d [PWD>900d] [DOMAIN ADMIN] Path=Domain Admins > SQL Admins > svc_sql", result.Evidence);
         Assert.Contains("svc_web | SPN=HTTP/intranet.corp.example | PwdAge=60d", result.Evidence);
+        Assert.DoesNotContain("svc_web | SPN=HTTP/intranet.corp.example | PwdAge=60d [DOMAIN ADMIN]", result.Evidence);
         Assert.Contains("svc_sql | Enabled=True | PwdAge=900d | Pattern=svc", result.Evidence);
+    }
+
+    [Fact]
+    public async Task Localized_Domain_Admins_Give_The_Same_Result()
+    {
+        var english = await Run(FixtureDirectoryReader.Load("IA02-fail.json"));
+        var german = await Run(FixtureDirectoryReader.Load("IA02-fail-de.json"));
+
+        Assert.Equal(CheckStatus.Fail, german.Status);
+        Assert.Contains("CRITICAL: 1 SPN account(s) are in Domänen-Admins", german.Findings);
+        Assert.Equal(english.Findings, LocalizedDirectoryFixtures.Delocalize(german.Findings));
     }
 
     [Fact]

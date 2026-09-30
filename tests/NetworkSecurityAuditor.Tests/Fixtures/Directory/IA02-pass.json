@@ -2,6 +2,48 @@
   "searches": [
     {
       "base": null,
+      "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-512)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Domain Admins",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Domain Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=512))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "Administrator",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 30
+          },
+          "memberOf": [
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
       "filter": "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
       "results": []
     },
@@ -11,11 +53,12 @@
       "results": [
         {
           "$path": "LDAP://CN=svc_print,OU=Service Accounts,DC=corp,DC=example",
+          "distinguishedName": "CN=svc_print,OU=Service Accounts,DC=corp,DC=example",
           "sAMAccountName": "svc_print",
+          "userAccountControl": 512,
           "pwdLastSet": {
             "$fileTimeDaysAgo": 120
-          },
-          "userAccountControl": 512
+          }
         }
       ]
     },
@@ -70,5 +113,16 @@
         }
       ]
     }
-  ]
+  ],
+  "entries": {
+    "(domain)": {
+      "objectSid": {
+        "$sid": "S-1-5-21-1004336348-1177238915-682003330"
+      },
+      "distinguishedName": "DC=corp,DC=example"
+    },
+    "RootDSE": {
+      "rootDomainNamingContext": "DC=corp,DC=example"
+    }
+  }
 }

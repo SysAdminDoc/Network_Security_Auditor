@@ -3506,30 +3506,113 @@ $script:AutoChecks = @{
     # ── Identity & Access ────────────────────────────────────────────────────
     'IA01' = @{ Type='AD'; Label='Scan Privileged Groups + Delegation'
         Script = {
-            $groups = @('Domain Admins','Enterprise Admins','Schema Admins','Administrators')
+            function Get-NsaWellKnownGroupSid {
+                param([string]$Key, [string]$DomainSid, [string]$RootSid)
+                # Well-known groups by SID, never by name: names are localized ("Domaenen-Admins") and can be renamed.
+                # Enterprise and Schema Admins carry the forest root domain's SID.
+                $known = @{
+                    DomainAdmins       = @('Domain', 512, 'Domain Admins')
+                    ProtectedUsers     = @('Domain', 525, 'Protected Users')
+                    EnterpriseAdmins   = @('Root', 519, 'Enterprise Admins')
+                    SchemaAdmins       = @('Root', 518, 'Schema Admins')
+                    Administrators     = @('Builtin', 544, 'Administrators')
+                    AccountOperators   = @('Builtin', 548, 'Account Operators')
+                    ServerOperators    = @('Builtin', 549, 'Server Operators')
+                    BackupOperators    = @('Builtin', 551, 'Backup Operators')
+                    RemoteDesktopUsers = @('Builtin', 555, 'Remote Desktop Users')
+                }
+                $entry = $known[$Key]
+                if (-not $entry) { throw "Unknown well-known group '$Key'." }
+                $scope = $entry[0]; $rid = $entry[1]
+                if ($scope -eq 'Builtin') { return @{ Sid = "S-1-5-32-$rid"; InRoot = $false; Label = $entry[2] } }
+                if ($scope -eq 'Root') {
+                    $base = if ($RootSid) { $RootSid } else { $DomainSid }
+                    return @{ Sid = "$base-$rid"; InRoot = $true; Label = $entry[2] }
+                }
+                return @{ Sid = "$DomainSid-$rid"; InRoot = $false; Label = $entry[2] }
+            }
+            function Expand-NsaGroupMember {
+                param([string]$GroupDn, [string]$GroupName, [scriptblock]$GetMember)
+                # Walks a group's membership breadth-first, nested groups included, and gives each member the path it
+                # came through ("Domain Admins > Tier0-Ops > alice"). Cycles and repeats are visited once. A nested group
+                # whose members can't be read gets a Note; the privileged group itself failing is an error.
+                $results = New-Object System.Collections.ArrayList
+                $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+                [void]$seen.Add($GroupDn)
+                $queue = New-Object System.Collections.Queue
+                $queue.Enqueue(@{ Dn = $GroupDn; Path = $GroupName; Depth = 0; Entry = $null })
+                while ($queue.Count -gt 0) {
+                    $node = $queue.Dequeue()
+                    try { $children = @(& $GetMember $node.Dn) }
+                    catch {
+                        if ($node.Depth -eq 0) { throw }
+                        $node.Entry.Note = "members could not be read: $($_.Exception.Message)"
+                        continue
+                    }
+                    foreach ($m in $children) {
+                        if ($null -eq $m) { continue }
+                        $dn = [string]$m.DistinguishedName
+                        if (-not $dn -or -not $seen.Add($dn)) { continue }
+                        $name = if ($m.SamAccountName) { [string]$m.SamAccountName } elseif ($m.Name) { [string]$m.Name } else { $dn }
+                        $class = [string]$m.objectClass
+                        $entry = [pscustomobject]@{
+                            Name = $name; DistinguishedName = $dn; ObjectClass = $class; Sid = [string]$m.SID
+                            IsGroup = ($class -eq 'group'); Nested = ($node.Depth -gt 0); Path = "$($node.Path) > $name"; Note = ''
+                        }
+                        [void]$results.Add($entry)
+                        if ($entry.IsGroup) { $queue.Enqueue(@{ Dn = $dn; Path = $entry.Path; Depth = $node.Depth + 1; Entry = $entry }) }
+                    }
+                }
+                return $results.ToArray()
+            }
             $sb = [System.Text.StringBuilder]::new()
             $totalPriv = 0; $issues = 0
             $privilegedSam = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
             $protectedSam = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
-            foreach ($g in $groups) {
+            # Groups are found by SID and walked through nested groups, so a localized domain or a nested admin
+            # gives the same answer as an English one.
+            $domain = Get-ADDomain -EA Stop
+            $domainSid = [string]$domain.DomainSID.Value
+            $domainServer = [string]$domain.DNSRoot
+            $rootSid = $domainSid; $rootServer = $domainServer
+            try {
+                $forest = Get-ADForest -EA Stop
+                if ($forest.RootDomain -and $forest.RootDomain -ne $domainServer) {
+                    $rootSid = [string](Get-ADDomain -Identity $forest.RootDomain -Server $forest.RootDomain -EA Stop).DomainSID.Value
+                    $rootServer = [string]$forest.RootDomain
+                }
+            } catch { [void]$sb.AppendLine("Forest root not readable; Enterprise and Schema Admins were looked up in this domain.`n") }
+            foreach ($key in @('DomainAdmins','EnterpriseAdmins','SchemaAdmins','Administrators')) {
+                $spec = Get-NsaWellKnownGroupSid -Key $key -DomainSid $domainSid -RootSid $rootSid
+                $server = if ($spec.InRoot) { $rootServer } else { $domainServer }
                 try {
-                    $members = Get-ADGroupMember $g -Recursive -EA Stop | Select-Object Name,SamAccountName,objectClass
-                    $count = ($members | Measure-Object).Count; $totalPriv += $count
-                    [void]$sb.AppendLine("[$g] ($count members):")
+                    $grp = Get-ADGroup -Identity $spec.Sid -Server $server -EA Stop
+                    $getMember = { param($dn) Get-ADGroupMember -Identity $dn -Server $server -EA Stop }.GetNewClosure()
+                    $members = @(Expand-NsaGroupMember -GroupDn $grp.DistinguishedName -GroupName $grp.Name -GetMember $getMember)
+                    $accounts = @($members | Where-Object { -not $_.IsGroup })
+                    $count = $accounts.Count; $totalPriv += $count
+                    [void]$sb.AppendLine("[$($grp.Name)] ($count members):")
                     foreach ($m in $members) {
-                        [void]$sb.AppendLine("  $($m.SamAccountName) ($($m.objectClass))")
-                        if ($m.SamAccountName) { [void]$privilegedSam.Add([string]$m.SamAccountName) }
+                        if ($m.IsGroup) {
+                            $note = if ($m.Note) { " ($($m.Note))" } else { '' }
+                            [void]$sb.AppendLine("  [nested group] $($m.Path)$note")
+                            continue
+                        }
+                        $via = if ($m.Nested) { " via $($m.Path)" } else { '' }
+                        [void]$sb.AppendLine("  $($m.Name) ($($m.ObjectClass))$via")
+                        [void]$privilegedSam.Add([string]$m.Name)
                     }
                     # CIS: Enterprise Admins and Schema Admins should be empty
-                    if ($g -in @('Enterprise Admins','Schema Admins') -and $count -gt 0) {
-                        $issues++; [void]$sb.AppendLine("  [!] CIS: $g should be EMPTY except during schema changes")
+                    if ($spec.InRoot -and $count -gt 0) {
+                        $issues++; [void]$sb.AppendLine("  [!] CIS: $($grp.Name) should be EMPTY except during schema changes")
                     }
                     [void]$sb.AppendLine("")
-                } catch { [void]$sb.AppendLine("[$g] Error: $_`n") }
+                } catch { [void]$sb.AppendLine("[$($spec.Label)] Error: $_`n") }
             }
             # Protected Users group check
             try {
-                $protectedUsers = @(Get-ADGroupMember 'Protected Users' -EA SilentlyContinue)
+                $protectedSpec = Get-NsaWellKnownGroupSid -Key 'ProtectedUsers' -DomainSid $domainSid -RootSid $rootSid
+                $protectedUsers = @(Get-ADGroupMember -Identity $protectedSpec.Sid -EA SilentlyContinue)
                 foreach ($pu in $protectedUsers) { if ($pu.SamAccountName) { [void]$protectedSam.Add([string]$pu.SamAccountName) } }
                 [void]$sb.AppendLine("[Protected Users] ($($protectedUsers.Count) members)")
                 if ($protectedUsers.Count -eq 0) { $issues++; [void]$sb.AppendLine("  [!] No privileged accounts in Protected Users group - Tier 0 accounts should be members") }
@@ -3636,18 +3719,88 @@ $script:AutoChecks = @{
 
     'IA02' = @{ Type='AD'; Label='Scan Service Accounts + Kerberoast Risk'
         Script = {
+            function Get-NsaWellKnownGroupSid {
+                param([string]$Key, [string]$DomainSid, [string]$RootSid)
+                # Well-known groups by SID, never by name: names are localized ("Domaenen-Admins") and can be renamed.
+                # Enterprise and Schema Admins carry the forest root domain's SID.
+                $known = @{
+                    DomainAdmins       = @('Domain', 512, 'Domain Admins')
+                    ProtectedUsers     = @('Domain', 525, 'Protected Users')
+                    EnterpriseAdmins   = @('Root', 519, 'Enterprise Admins')
+                    SchemaAdmins       = @('Root', 518, 'Schema Admins')
+                    Administrators     = @('Builtin', 544, 'Administrators')
+                    AccountOperators   = @('Builtin', 548, 'Account Operators')
+                    ServerOperators    = @('Builtin', 549, 'Server Operators')
+                    BackupOperators    = @('Builtin', 551, 'Backup Operators')
+                    RemoteDesktopUsers = @('Builtin', 555, 'Remote Desktop Users')
+                }
+                $entry = $known[$Key]
+                if (-not $entry) { throw "Unknown well-known group '$Key'." }
+                $scope = $entry[0]; $rid = $entry[1]
+                if ($scope -eq 'Builtin') { return @{ Sid = "S-1-5-32-$rid"; InRoot = $false; Label = $entry[2] } }
+                if ($scope -eq 'Root') {
+                    $base = if ($RootSid) { $RootSid } else { $DomainSid }
+                    return @{ Sid = "$base-$rid"; InRoot = $true; Label = $entry[2] }
+                }
+                return @{ Sid = "$DomainSid-$rid"; InRoot = $false; Label = $entry[2] }
+            }
+            function Expand-NsaGroupMember {
+                param([string]$GroupDn, [string]$GroupName, [scriptblock]$GetMember)
+                # Walks a group's membership breadth-first, nested groups included, and gives each member the path it
+                # came through ("Domain Admins > Tier0-Ops > alice"). Cycles and repeats are visited once. A nested group
+                # whose members can't be read gets a Note; the privileged group itself failing is an error.
+                $results = New-Object System.Collections.ArrayList
+                $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+                [void]$seen.Add($GroupDn)
+                $queue = New-Object System.Collections.Queue
+                $queue.Enqueue(@{ Dn = $GroupDn; Path = $GroupName; Depth = 0; Entry = $null })
+                while ($queue.Count -gt 0) {
+                    $node = $queue.Dequeue()
+                    try { $children = @(& $GetMember $node.Dn) }
+                    catch {
+                        if ($node.Depth -eq 0) { throw }
+                        $node.Entry.Note = "members could not be read: $($_.Exception.Message)"
+                        continue
+                    }
+                    foreach ($m in $children) {
+                        if ($null -eq $m) { continue }
+                        $dn = [string]$m.DistinguishedName
+                        if (-not $dn -or -not $seen.Add($dn)) { continue }
+                        $name = if ($m.SamAccountName) { [string]$m.SamAccountName } elseif ($m.Name) { [string]$m.Name } else { $dn }
+                        $class = [string]$m.objectClass
+                        $entry = [pscustomobject]@{
+                            Name = $name; DistinguishedName = $dn; ObjectClass = $class; Sid = [string]$m.SID
+                            IsGroup = ($class -eq 'group'); Nested = ($node.Depth -gt 0); Path = "$($node.Path) > $name"; Note = ''
+                        }
+                        [void]$results.Add($entry)
+                        if ($entry.IsGroup) { $queue.Enqueue(@{ Dn = $dn; Path = $entry.Path; Depth = $node.Depth + 1; Entry = $entry }) }
+                    }
+                }
+                return $results.ToArray()
+            }
             $spn = Get-ADUser -Filter {ServicePrincipalName -ne "$null"} -Properties PasswordLastSet,PasswordNeverExpires,ServicePrincipalName,MemberOf,Enabled,AdminCount -EA Stop
             $named = Get-ADUser -Filter 'SamAccountName -like "svc*" -or SamAccountName -like "*service*" -or SamAccountName -like "sql*" -or SamAccountName -like "backup*"' -Properties PasswordLastSet,PasswordNeverExpires,MemberOf,Enabled,AdminCount -EA SilentlyContinue
             $all = @($spn) + @($named) | Sort-Object -Property SamAccountName -Unique
             $sb = [System.Text.StringBuilder]::new(); $issues = 0; $kerberoastable = 0
+            # Domain Admins by SID, nested members included: memberOf only lists direct groups, and the name is localized.
+            $domainSid = [string](Get-ADDomain -EA Stop).DomainSID.Value
+            $daMembers = @{}
+            try {
+                $daGroup = Get-ADGroup -Identity (Get-NsaWellKnownGroupSid -Key 'DomainAdmins' -DomainSid $domainSid).Sid -EA Stop
+                $getMember = { param($dn) Get-ADGroupMember -Identity $dn -EA Stop }
+                foreach ($m in @(Expand-NsaGroupMember -GroupDn $daGroup.DistinguishedName -GroupName $daGroup.Name -GetMember $getMember)) {
+                    if (-not $m.IsGroup) { $daMembers[$m.DistinguishedName] = $m }
+                }
+            } catch { [void]$sb.AppendLine("Domain Admins membership could not be read: $($_.Exception.Message)") }
             foreach ($a in $all) {
                 $age = if ($a.PasswordLastSet) { ((Get-Date) - $a.PasswordLastSet).Days } else { 9999 }
-                $inDA = ($a.MemberOf | Where-Object { $_ -match 'Domain Admins' }).Count -gt 0
+                $daHit = $daMembers[[string]$a.DistinguishedName]
+                $inDA = $null -ne $daHit
                 $hasSPN = ($a.ServicePrincipalName | Measure-Object).Count -gt 0
                 $flags = @()
                 if ($age -gt 365) { $flags += "PW_OLD_${age}d"; $issues++ }
                 if ($a.PasswordNeverExpires) { $flags += 'NO_EXPIRE'; $issues++ }
-                if ($inDA) { $flags += 'DOMAIN_ADMIN'; $issues++ }
+                if ($inDA) { $flags += $(if ($daHit.Nested) { "DOMAIN_ADMIN via $($daHit.Path)" } else { 'DOMAIN_ADMIN' }); $issues++ }
                 # Kerberoast risk: user account with SPN + old password + admin = CRITICAL
                 if ($hasSPN -and $a.Enabled) {
                     $kerberoastable++
@@ -6602,18 +6755,104 @@ $script:AutoChecks = @{
 
     'CF04' = @{ Type='AD'; Label='Scan Former Employee Access Permissions'
         Script = {
+            function Get-NsaWellKnownGroupSid {
+                param([string]$Key, [string]$DomainSid, [string]$RootSid)
+                # Well-known groups by SID, never by name: names are localized ("Domaenen-Admins") and can be renamed.
+                # Enterprise and Schema Admins carry the forest root domain's SID.
+                $known = @{
+                    DomainAdmins       = @('Domain', 512, 'Domain Admins')
+                    ProtectedUsers     = @('Domain', 525, 'Protected Users')
+                    EnterpriseAdmins   = @('Root', 519, 'Enterprise Admins')
+                    SchemaAdmins       = @('Root', 518, 'Schema Admins')
+                    Administrators     = @('Builtin', 544, 'Administrators')
+                    AccountOperators   = @('Builtin', 548, 'Account Operators')
+                    ServerOperators    = @('Builtin', 549, 'Server Operators')
+                    BackupOperators    = @('Builtin', 551, 'Backup Operators')
+                    RemoteDesktopUsers = @('Builtin', 555, 'Remote Desktop Users')
+                }
+                $entry = $known[$Key]
+                if (-not $entry) { throw "Unknown well-known group '$Key'." }
+                $scope = $entry[0]; $rid = $entry[1]
+                if ($scope -eq 'Builtin') { return @{ Sid = "S-1-5-32-$rid"; InRoot = $false; Label = $entry[2] } }
+                if ($scope -eq 'Root') {
+                    $base = if ($RootSid) { $RootSid } else { $DomainSid }
+                    return @{ Sid = "$base-$rid"; InRoot = $true; Label = $entry[2] }
+                }
+                return @{ Sid = "$DomainSid-$rid"; InRoot = $false; Label = $entry[2] }
+            }
+            function Expand-NsaGroupMember {
+                param([string]$GroupDn, [string]$GroupName, [scriptblock]$GetMember)
+                # Walks a group's membership breadth-first, nested groups included, and gives each member the path it
+                # came through ("Domain Admins > Tier0-Ops > alice"). Cycles and repeats are visited once. A nested group
+                # whose members can't be read gets a Note; the privileged group itself failing is an error.
+                $results = New-Object System.Collections.ArrayList
+                $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+                [void]$seen.Add($GroupDn)
+                $queue = New-Object System.Collections.Queue
+                $queue.Enqueue(@{ Dn = $GroupDn; Path = $GroupName; Depth = 0; Entry = $null })
+                while ($queue.Count -gt 0) {
+                    $node = $queue.Dequeue()
+                    try { $children = @(& $GetMember $node.Dn) }
+                    catch {
+                        if ($node.Depth -eq 0) { throw }
+                        $node.Entry.Note = "members could not be read: $($_.Exception.Message)"
+                        continue
+                    }
+                    foreach ($m in $children) {
+                        if ($null -eq $m) { continue }
+                        $dn = [string]$m.DistinguishedName
+                        if (-not $dn -or -not $seen.Add($dn)) { continue }
+                        $name = if ($m.SamAccountName) { [string]$m.SamAccountName } elseif ($m.Name) { [string]$m.Name } else { $dn }
+                        $class = [string]$m.objectClass
+                        $entry = [pscustomobject]@{
+                            Name = $name; DistinguishedName = $dn; ObjectClass = $class; Sid = [string]$m.SID
+                            IsGroup = ($class -eq 'group'); Nested = ($node.Depth -gt 0); Path = "$($node.Path) > $name"; Note = ''
+                        }
+                        [void]$results.Add($entry)
+                        if ($entry.IsGroup) { $queue.Enqueue(@{ Dn = $dn; Path = $entry.Path; Depth = $node.Depth + 1; Entry = $entry }) }
+                    }
+                }
+                return $results.ToArray()
+            }
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
             $threshold = (Get-Date).AddDays(-90)
             # Find stale accounts that STILL have privileged group membership
             $stale = Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonDate,MemberOf,Description -EA Stop |
                 Where-Object { $_.LastLogonDate -and $_.LastLogonDate -lt $threshold }
-            $privGroups = @('Domain Admins','Enterprise Admins','Schema Admins','Administrators','Account Operators','Server Operators','Backup Operators')
+            # Privileged groups by SID, walked through nested groups, so "Domaenen-Admins" or a nested admin still counts.
+            # In priority order: an account in several is reported under the first.
+            $domain = Get-ADDomain -EA Stop
+            $domainSid = [string]$domain.DomainSID.Value
+            $domainServer = [string]$domain.DNSRoot
+            $rootSid = $domainSid; $rootServer = $domainServer
+            try {
+                $forest = Get-ADForest -EA Stop
+                if ($forest.RootDomain -and $forest.RootDomain -ne $domainServer) {
+                    $rootSid = [string](Get-ADDomain -Identity $forest.RootDomain -Server $forest.RootDomain -EA Stop).DomainSID.Value
+                    $rootServer = [string]$forest.RootDomain
+                }
+            } catch {}
+            $privByDn = @{}
+            $groupErrors = @()
+            foreach ($key in @('DomainAdmins','EnterpriseAdmins','SchemaAdmins','Administrators','AccountOperators','ServerOperators','BackupOperators')) {
+                $spec = Get-NsaWellKnownGroupSid -Key $key -DomainSid $domainSid -RootSid $rootSid
+                $server = if ($spec.InRoot) { $rootServer } else { $domainServer }
+                try {
+                    $grp = Get-ADGroup -Identity $spec.Sid -Server $server -EA Stop
+                    $getMember = { param($dn) Get-ADGroupMember -Identity $dn -Server $server -EA Stop }.GetNewClosure()
+                    foreach ($m in @(Expand-NsaGroupMember -GroupDn $grp.DistinguishedName -GroupName $grp.Name -GetMember $getMember)) {
+                        if (-not $m.IsGroup -and -not $privByDn.ContainsKey($m.DistinguishedName)) {
+                            $privByDn[$m.DistinguishedName] = @{ Group = [string]$grp.Name; Member = $m }
+                        }
+                    }
+                } catch { $groupErrors += "$($spec.Label): $($_.Exception.Message)" }
+            }
             $stalePriv = @()
             foreach ($u in $stale) {
-                $groups = $u.MemberOf | ForEach-Object { ($_ -split ',')[0] -replace '^CN=' }
-                $inPriv = $groups | Where-Object { $_ -in $privGroups }
-                if ($inPriv) {
-                    $stalePriv += @{ User=$u.SamAccountName; Last=$u.LastLogonDate; Groups=($inPriv -join ', ') }
+                $hit = $privByDn[[string]$u.DistinguishedName]
+                if ($hit) {
+                    $groupText = if ($hit.Member.Nested) { "$($hit.Group) (via $($hit.Member.Path))" } else { $hit.Group }
+                    $stalePriv += @{ User=$u.SamAccountName; Last=$u.LastLogonDate; Groups=$groupText }
                     $issues++
                 }
             }
@@ -6623,6 +6862,7 @@ $script:AutoChecks = @{
                     [void]$sb.AppendLine("  [!] $($sp.User) | Last: $($sp.Last.ToString('yyyy-MM-dd')) | Groups: $($sp.Groups)")
                 }
             } else { [void]$sb.AppendLine("  None found [OK]") }
+            foreach ($ge in $groupErrors) { [void]$sb.AppendLine("  Could not read privileged group $ge") }
             # Find stale accounts with mailbox / VPN / remote access indicators
             $staleRemote = $stale | Where-Object { $_.MemberOf -match 'VPN|Remote|RAS|DirectAccess' }
             if ($staleRemote) {

@@ -2,12 +2,265 @@
   "searches": [
     {
       "base": null,
+      "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-512)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Domain Admins",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Domain Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=512))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "Administrator",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 2
+          },
+          "whenCreated": {
+            "$daysAgo": 2000
+          },
+          "memberOf": [
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-519)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Enterprise Admins",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Enterprise Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=519))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "Administrator",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 2
+          },
+          "whenCreated": {
+            "$daysAgo": 2000
+          },
+          "memberOf": [
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-518)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Schema Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Schema Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Schema Admins"
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Schema Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=518))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-32-544)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrators,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrators,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Administrators",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example",
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=Enterprise Admins,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Administrators,CN=Builtin,DC=corp,DC=example)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "Administrator",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 2
+          },
+          "whenCreated": {
+            "$daysAgo": 2000
+          },
+          "memberOf": [
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "group"
+          ],
+          "sAMAccountName": "Domain Admins",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-512"
+          },
+          "memberOf": [
+            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "group"
+          ],
+          "sAMAccountName": "Enterprise Admins",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-519"
+          },
+          "memberOf": [
+            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-32-548)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Account Operators,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Account Operators,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Account Operators"
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Account Operators,CN=Builtin,DC=corp,DC=example)",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-32-549)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Server Operators,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Server Operators,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Server Operators"
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Server Operators,CN=Builtin,DC=corp,DC=example)",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-32-551)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Backup Operators,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Backup Operators,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Backup Operators"
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Backup Operators,CN=Builtin,DC=corp,DC=example)",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-32-555)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Remote Desktop Users"
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example)",
+      "results": []
+    },
+    {
+      "base": null,
       "filterPattern": "\\(&\\(objectCategory=person\\)\\(objectClass=user\\)\\(!\\(userAccountControl:1\\.2\\.840\\.113556\\.1\\.4\\.803:=2\\)\\)\\(\\|\\(lastLogonTimestamp<=\\d+\\)\\(!\\(lastLogonTimestamp=\\*\\)\\)\\)\\)",
       "results": [
         {
-          "$path": "LDAP://corp.example/CN=Avery Adams,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "a.adams",
+          "$path": "LDAP://CN=Avery Adams,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Avery Adams,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "a.adams",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -20,9 +273,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Blake Brooks,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "b.brooks",
+          "$path": "LDAP://CN=Blake Brooks,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Blake Brooks,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "b.brooks",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -34,9 +287,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Casey Carter,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "c.carter",
+          "$path": "LDAP://CN=Casey Carter,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Casey Carter,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "c.carter",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -48,9 +301,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Devon Diaz,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "d.diaz",
+          "$path": "LDAP://CN=Devon Diaz,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Devon Diaz,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "d.diaz",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -63,9 +316,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Emerson Evans,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "e.evans",
+          "$path": "LDAP://CN=Emerson Evans,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Emerson Evans,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "e.evans",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -77,9 +330,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Finley Foster,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "f.foster",
+          "$path": "LDAP://CN=Finley Foster,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Finley Foster,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "f.foster",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -91,9 +344,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Harper Garcia,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "h.garcia",
+          "$path": "LDAP://CN=Harper Garcia,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Harper Garcia,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "h.garcia",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -106,9 +359,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Jordan Hughes,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "j.hughes",
+          "$path": "LDAP://CN=Jordan Hughes,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Jordan Hughes,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "j.hughes",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -120,9 +373,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Kendall Irwin,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "k.irwin",
+          "$path": "LDAP://CN=Kendall Irwin,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Kendall Irwin,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "k.irwin",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -134,9 +387,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Logan James,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "l.james",
+          "$path": "LDAP://CN=Logan James,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Logan James,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "l.james",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -149,9 +402,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Morgan Kim,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "m.kim",
+          "$path": "LDAP://CN=Morgan Kim,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Morgan Kim,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "m.kim",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -163,9 +416,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Parker Lopez,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "p.lopez",
+          "$path": "LDAP://CN=Parker Lopez,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Parker Lopez,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "p.lopez",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -177,9 +430,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Quinn Miller,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "q.miller",
+          "$path": "LDAP://CN=Quinn Miller,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Quinn Miller,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "q.miller",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -192,9 +445,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Reese Nguyen,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "r.nguyen",
+          "$path": "LDAP://CN=Reese Nguyen,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Reese Nguyen,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "r.nguyen",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -206,9 +459,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Riley Owens,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "r.owens",
+          "$path": "LDAP://CN=Riley Owens,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Riley Owens,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "r.owens",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -220,9 +473,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Rowan Patel,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "r.patel",
+          "$path": "LDAP://CN=Rowan Patel,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Rowan Patel,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "r.patel",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -235,9 +488,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Sawyer Reed,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "s.reed",
+          "$path": "LDAP://CN=Sawyer Reed,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Sawyer Reed,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "s.reed",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -249,9 +502,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Skyler Shaw,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "s.shaw",
+          "$path": "LDAP://CN=Skyler Shaw,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Skyler Shaw,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "s.shaw",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -263,9 +516,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Taylor Turner,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "t.turner",
+          "$path": "LDAP://CN=Taylor Turner,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Taylor Turner,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "t.turner",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -278,9 +531,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Toby Usher,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "t.usher",
+          "$path": "LDAP://CN=Toby Usher,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Toby Usher,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "t.usher",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -292,9 +545,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Wren Vance,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "w.vance",
+          "$path": "LDAP://CN=Wren Vance,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Wren Vance,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "w.vance",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -306,9 +559,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Ellis Walsh,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "e.walsh",
+          "$path": "LDAP://CN=Ellis Walsh,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Ellis Walsh,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "e.walsh",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -321,9 +574,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Hayden Young,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "h.young",
+          "$path": "LDAP://CN=Hayden Young,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Hayden Young,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "h.young",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -335,9 +588,9 @@
           ]
         },
         {
-          "$path": "LDAP://corp.example/CN=Jamie Zimmer,OU=Staff,DC=corp,DC=example",
-          "sAMAccountName": "j.zimmer",
+          "$path": "LDAP://CN=Jamie Zimmer,OU=Staff,DC=corp,DC=example",
           "distinguishedName": "CN=Jamie Zimmer,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "j.zimmer",
           "whenCreated": {
             "$daysAgo": 900
           },
@@ -350,5 +603,16 @@
         }
       ]
     }
-  ]
+  ],
+  "entries": {
+    "(domain)": {
+      "objectSid": {
+        "$sid": "S-1-5-21-1004336348-1177238915-682003330"
+      },
+      "distinguishedName": "DC=corp,DC=example"
+    },
+    "RootDSE": {
+      "rootDomainNamingContext": "DC=corp,DC=example"
+    }
+  }
 }

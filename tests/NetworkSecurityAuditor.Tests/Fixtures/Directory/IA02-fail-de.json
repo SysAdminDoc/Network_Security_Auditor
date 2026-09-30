@@ -5,9 +5,9 @@
       "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-512)",
       "results": [
         {
-          "$path": "LDAP://CN=Domain Admins,CN=Users,DC=corp,DC=example",
-          "distinguishedName": "CN=Domain Admins,CN=Users,DC=corp,DC=example",
-          "sAMAccountName": "Domain Admins",
+          "$path": "LDAP://CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Domänen-Admins",
           "member": [
             "CN=Administrator,CN=Users,DC=corp,DC=example",
             "CN=SQL Admins,OU=Groups,DC=corp,DC=example"
@@ -17,7 +17,7 @@
     },
     {
       "base": null,
-      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Domain Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=512))",
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Domänen-Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=512))",
       "results": [
         {
           "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
@@ -38,7 +38,7 @@
             "$fileTimeDaysAgo": 30
           },
           "memberOf": [
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example"
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example"
           ]
         },
         {
@@ -53,7 +53,7 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1142"
           },
           "memberOf": [
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example"
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example"
           ]
         },
         {

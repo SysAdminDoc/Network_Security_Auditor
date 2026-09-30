@@ -5,9 +5,9 @@
       "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-512)",
       "results": [
         {
-          "$path": "LDAP://CN=Domain Admins,CN=Users,DC=corp,DC=example",
-          "distinguishedName": "CN=Domain Admins,CN=Users,DC=corp,DC=example",
-          "sAMAccountName": "Domain Admins",
+          "$path": "LDAP://CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Domänen-Admins",
           "member": [
             "CN=Administrator,CN=Users,DC=corp,DC=example",
             "CN=Old Admin,OU=Staff,DC=corp,DC=example"
@@ -17,7 +17,7 @@
     },
     {
       "base": null,
-      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Domain Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=512))",
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Domänen-Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=512))",
       "results": [
         {
           "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
@@ -41,9 +41,9 @@
             "$daysAgo": 2000
           },
           "memberOf": [
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
-            "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
-            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
           ]
         },
         {
@@ -68,7 +68,7 @@
             "$fileTimeDaysAgo": 400
           },
           "memberOf": [
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
             "CN=VPN Users,OU=Groups,DC=corp,DC=example"
           ]
         }
@@ -79,9 +79,9 @@
       "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-519)",
       "results": [
         {
-          "$path": "LDAP://CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
-          "distinguishedName": "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
-          "sAMAccountName": "Enterprise Admins",
+          "$path": "LDAP://CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Organisations-Admins",
           "member": [
             "CN=Administrator,CN=Users,DC=corp,DC=example"
           ]
@@ -90,7 +90,7 @@
     },
     {
       "base": null,
-      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Enterprise Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=519))",
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Organisations-Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=519))",
       "results": [
         {
           "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
@@ -114,9 +114,9 @@
             "$daysAgo": 2000
           },
           "memberOf": [
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
-            "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
-            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
           ]
         }
       ]
@@ -126,15 +126,15 @@
       "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-518)",
       "results": [
         {
-          "$path": "LDAP://CN=Schema Admins,CN=Users,DC=corp,DC=example",
-          "distinguishedName": "CN=Schema Admins,CN=Users,DC=corp,DC=example",
-          "sAMAccountName": "Schema Admins"
+          "$path": "LDAP://CN=Schema-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Schema-Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Schema-Admins"
         }
       ]
     },
     {
       "base": null,
-      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Schema Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=518))",
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Schema-Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=518))",
       "results": []
     },
     {
@@ -142,20 +142,20 @@
       "filter": "(objectSid=S-1-5-32-544)",
       "results": [
         {
-          "$path": "LDAP://CN=Administrators,CN=Builtin,DC=corp,DC=example",
-          "distinguishedName": "CN=Administrators,CN=Builtin,DC=corp,DC=example",
-          "sAMAccountName": "Administrators",
+          "$path": "LDAP://CN=Administratoren,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Administratoren,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Administratoren",
           "member": [
             "CN=Administrator,CN=Users,DC=corp,DC=example",
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
-            "CN=Enterprise Admins,CN=Users,DC=corp,DC=example"
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Organisations-Admins,CN=Users,DC=corp,DC=example"
           ]
         }
       ]
     },
     {
       "base": null,
-      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Administrators,CN=Builtin,DC=corp,DC=example)",
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Administratoren,CN=Builtin,DC=corp,DC=example)",
       "results": [
         {
           "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
@@ -179,39 +179,39 @@
             "$daysAgo": 2000
           },
           "memberOf": [
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
-            "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
-            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
           ]
         },
         {
-          "$path": "LDAP://CN=Domain Admins,CN=Users,DC=corp,DC=example",
-          "distinguishedName": "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "$path": "LDAP://CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
           "objectClass": [
             "top",
             "group"
           ],
-          "sAMAccountName": "Domain Admins",
+          "sAMAccountName": "Domänen-Admins",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-512"
           },
           "memberOf": [
-            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
           ]
         },
         {
-          "$path": "LDAP://CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
-          "distinguishedName": "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+          "$path": "LDAP://CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
           "objectClass": [
             "top",
             "group"
           ],
-          "sAMAccountName": "Enterprise Admins",
+          "sAMAccountName": "Organisations-Admins",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-519"
           },
           "memberOf": [
-            "CN=Administrators,CN=Builtin,DC=corp,DC=example"
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
           ]
         },
         {
@@ -236,7 +236,7 @@
             "$fileTimeDaysAgo": 400
           },
           "memberOf": [
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
             "CN=VPN Users,OU=Groups,DC=corp,DC=example"
           ]
         }
@@ -247,15 +247,15 @@
       "filter": "(objectSid=S-1-5-32-548)",
       "results": [
         {
-          "$path": "LDAP://CN=Account Operators,CN=Builtin,DC=corp,DC=example",
-          "distinguishedName": "CN=Account Operators,CN=Builtin,DC=corp,DC=example",
-          "sAMAccountName": "Account Operators"
+          "$path": "LDAP://CN=Konten-Operatoren,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Konten-Operatoren,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Konten-Operatoren"
         }
       ]
     },
     {
       "base": null,
-      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Account Operators,CN=Builtin,DC=corp,DC=example)",
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Konten-Operatoren,CN=Builtin,DC=corp,DC=example)",
       "results": []
     },
     {
@@ -263,15 +263,15 @@
       "filter": "(objectSid=S-1-5-32-549)",
       "results": [
         {
-          "$path": "LDAP://CN=Server Operators,CN=Builtin,DC=corp,DC=example",
-          "distinguishedName": "CN=Server Operators,CN=Builtin,DC=corp,DC=example",
-          "sAMAccountName": "Server Operators"
+          "$path": "LDAP://CN=Server-Operatoren,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Server-Operatoren,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Server-Operatoren"
         }
       ]
     },
     {
       "base": null,
-      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Server Operators,CN=Builtin,DC=corp,DC=example)",
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Server-Operatoren,CN=Builtin,DC=corp,DC=example)",
       "results": []
     },
     {
@@ -279,15 +279,15 @@
       "filter": "(objectSid=S-1-5-32-551)",
       "results": [
         {
-          "$path": "LDAP://CN=Backup Operators,CN=Builtin,DC=corp,DC=example",
-          "distinguishedName": "CN=Backup Operators,CN=Builtin,DC=corp,DC=example",
-          "sAMAccountName": "Backup Operators"
+          "$path": "LDAP://CN=Sicherungs-Operatoren,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Sicherungs-Operatoren,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Sicherungs-Operatoren"
         }
       ]
     },
     {
       "base": null,
-      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Backup Operators,CN=Builtin,DC=corp,DC=example)",
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Sicherungs-Operatoren,CN=Builtin,DC=corp,DC=example)",
       "results": []
     },
     {
@@ -295,9 +295,9 @@
       "filter": "(objectSid=S-1-5-32-555)",
       "results": [
         {
-          "$path": "LDAP://CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example",
-          "distinguishedName": "CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example",
-          "sAMAccountName": "Remote Desktop Users",
+          "$path": "LDAP://CN=Remotedesktopbenutzer,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Remotedesktopbenutzer,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Remotedesktopbenutzer",
           "member": [
             "CN=RDP Contractor,OU=Contractors,DC=corp,DC=example"
           ]
@@ -306,7 +306,7 @@
     },
     {
       "base": null,
-      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example)",
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Remotedesktopbenutzer,CN=Builtin,DC=corp,DC=example)",
       "results": [
         {
           "$path": "LDAP://CN=RDP Contractor,OU=Contractors,DC=corp,DC=example",
@@ -327,7 +327,7 @@
             "$daysAgo": 300
           },
           "memberOf": [
-            "CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example"
+            "CN=Remotedesktopbenutzer,CN=Builtin,DC=corp,DC=example"
           ]
         }
       ]
@@ -347,7 +347,7 @@
             "$fileTimeDaysAgo": 400
           },
           "memberOf": [
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
             "CN=VPN Users,OU=Groups,DC=corp,DC=example"
           ]
         },
@@ -359,7 +359,7 @@
             "$daysAgo": 300
           },
           "memberOf": [
-            "CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example"
+            "CN=Remotedesktopbenutzer,CN=Builtin,DC=corp,DC=example"
           ]
         },
         {

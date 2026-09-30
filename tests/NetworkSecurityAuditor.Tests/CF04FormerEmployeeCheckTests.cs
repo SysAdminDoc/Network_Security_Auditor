@@ -48,6 +48,32 @@ public class CF04FormerEmployeeCheckTests
     }
 
     [Fact]
+    public async Task Stale_Admin_Through_A_Nested_Group_Fails_With_Its_Path()
+    {
+        var result = await Run("CF04-nested.json");
+
+        Assert.Equal(CheckStatus.Fail, result.Status);
+        Assert.Contains("Stale account analysis: 2 enabled accounts with no logon in >90 days, 1 in privileged groups.", result.Findings);
+        Assert.Contains("CRITICAL: \"m.idle\" - no logon in >90 days, member of Domain Admins (Domain Admins > Tier0-Ops > m.idle).", result.Findings);
+        Assert.DoesNotContain("r.active", result.Findings);
+        Assert.DoesNotContain("j.doe", result.Findings);
+        Assert.Matches(@"STALE PRIVILEGED: m\.idle \| Group: Domain Admins \| LastLogon: \d{4}-\d{2}-\d{2} \| Path: Domain Admins > Tier0-Ops > m\.idle", result.Evidence);
+    }
+
+    [Theory]
+    [InlineData("CF04-fail")]
+    [InlineData("CF04-nested")]
+    public async Task Localized_Group_Names_Give_The_Same_Result(string fixture)
+    {
+        var english = await Run(fixture + ".json");
+        var german = await Run(fixture + "-de.json");
+
+        Assert.Equal(CheckStatus.Fail, german.Status);
+        Assert.Contains("member of Domänen-Admins", german.Findings);
+        Assert.Equal(english.Findings, LocalizedDirectoryFixtures.Delocalize(german.Findings));
+    }
+
+    [Fact]
     public async Task Directory_Failure_Is_An_Error()
     {
         var result = await new CF04_FormerEmployeeCheck(_ => throw new COMException("The server is not operational.", unchecked((int)0x8007203A)))

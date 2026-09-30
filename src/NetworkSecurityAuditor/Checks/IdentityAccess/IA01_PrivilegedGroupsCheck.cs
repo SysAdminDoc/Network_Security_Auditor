@@ -6,7 +6,8 @@ using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA01 - Privileged Groups Review: Domain Admins, Enterprise Admins, Schema Admins,
-/// Administrators. Flags stale members, nested groups, PasswordNeverExpires.
+/// Administrators, found by SID and expanded through nested groups. Flags stale members,
+/// nested groups, PasswordNeverExpires.
 /// </summary>
 public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
 {
@@ -18,13 +19,18 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
 
     internal IA01_PrivilegedGroupsCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
-    private static readonly string[] PrivilegedGroups =
+    private static readonly WellKnownGroup[] PrivilegedGroups =
     [
-        "Domain Admins",
-        "Enterprise Admins",
-        "Schema Admins",
-        "Administrators"
+        WellKnownGroup.DomainAdmins,
+        WellKnownGroup.EnterpriseAdmins,
+        WellKnownGroup.SchemaAdmins,
+        WellKnownGroup.Administrators
     ];
+
+    private static readonly string[] MemberProperties = ["lastLogonTimestamp", "userAccountControl", "pwdLastSet"];
+
+    // Findings list at most this many nested members per group; the evidence lists them all.
+    private const int NestedFindingLimit = 10;
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -48,27 +54,24 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
             var allPrivMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var directory = _directory(env);
+            var resolver = PrivilegedGroupResolver.Create(directory, ct);
 
-            foreach (var groupName in PrivilegedGroups)
+            foreach (var wellKnown in PrivilegedGroups)
             {
                 ct.ThrowIfCancellationRequested();
-                evidence.AppendLine($"[{groupName}]");
+                var group = resolver.Resolve(wellKnown, ct);
+                evidence.AppendLine($"[{group.Name}]");
 
-                var groupQuery = new DirectoryQuery($"(&(objectClass=group)(cn={groupName}))", ["distinguishedName", "member"])
+                if (!group.Found)
                 {
-                    SizeLimit = 1
-                };
-                var groupResult = directory.Search(groupQuery, ct).FirstOrDefault();
-                if (groupResult == null)
-                {
-                    evidence.AppendLine("  Group not found.");
+                    evidence.AppendLine($"  Group not found. Looked up by SID {group.Sid}.");
                     continue;
                 }
 
-                var members = groupResult.Strings("member");
+                var members = resolver.Members(group, MemberProperties, ct);
                 int memberCount = members.Count;
                 totalPrivileged += memberCount;
-                sb.AppendLine($"{groupName}: {memberCount} member(s).");
+                sb.AppendLine($"{group.Name}: {memberCount} member(s).");
                 evidence.AppendLine($"  Member count: {memberCount}");
 
                 if (memberCount == 0) continue;
@@ -76,57 +79,46 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
                 int staleCount = 0;
                 int neverExpireCount = 0;
                 int nestedGroupCount = 0;
+                var nestedAccounts = new List<GroupMember>();
 
-                foreach (string? memberDn in members)
+                foreach (var member in members)
                 {
-                    if (string.IsNullOrEmpty(memberDn)) continue;
                     ct.ThrowIfCancellationRequested();
-                    allPrivMembers.Add(memberDn);
+                    // A member already reported under an earlier group (Domain Admins inside Administrators)
+                    // isn't hidden privilege, so only first sightings go in the findings.
+                    bool firstSighting = allPrivMembers.Add(member.DistinguishedName);
+                    string via = member.IsNested ? $" | Path={member.Path}" : member.ViaPrimaryGroup ? " | PrimaryGroup" : "";
 
-                    try
+                    if (member.Record is not { } memberEntry)
                     {
-                        var memberEntry = directory.ReadEntry(memberDn, ["objectClass", "sAMAccountName", "lastLogonTimestamp",
-                            "userAccountControl", "pwdLastSet"], ct);
-
-                        bool isGroup = false;
-                        foreach (var oc in memberEntry.Strings("objectClass"))
-                        {
-                            if (string.Equals(oc, "group", StringComparison.OrdinalIgnoreCase))
-                            {
-                                isGroup = true;
-                                break;
-                            }
-                        }
-
-                        string sam = memberEntry.String("sAMAccountName") ?? memberDn;
-
-                        if (isGroup)
-                        {
-                            nestedGroupCount++;
-                            evidence.AppendLine($"  [NESTED GROUP] {sam}");
-                            continue;
-                        }
-
-                        var lastLogon = memberEntry.FileTimeUtc("lastLogonTimestamp");
-                        bool isStale = !lastLogon.HasValue || lastLogon.Value < staleThreshold;
-                        if (isStale) staleCount++;
-
-                        // Check PasswordNeverExpires (bit 0x10000 of userAccountControl)
-                        int uac = memberEntry.Int("userAccountControl");
-                        bool pwdNeverExpires = (uac & 0x10000) != 0;
-                        if (pwdNeverExpires) neverExpireCount++;
-
-                        string flags = "";
-                        if (isStale) flags += " [STALE]";
-                        if (pwdNeverExpires) flags += " [PwdNeverExpires]";
-
-                        var lastLogonLabel = lastLogon.HasValue ? lastLogon.Value.ToString("yyyy-MM-dd") : "Never";
-                        evidence.AppendLine($"  {sam} | LastLogon={lastLogonLabel}{flags}");
+                        evidence.AppendLine($"  {member.DistinguishedName} (could not read details)");
+                        continue;
                     }
-                    catch
+
+                    if (member.IsGroup)
                     {
-                        evidence.AppendLine($"  {memberDn} (could not read details)");
+                        nestedGroupCount++;
+                        evidence.AppendLine($"  [NESTED GROUP] {member.Name}{via}");
+                        continue;
                     }
+
+                    if (member.IsNested && firstSighting) nestedAccounts.Add(member);
+
+                    var lastLogon = memberEntry.FileTimeUtc("lastLogonTimestamp");
+                    bool isStale = !lastLogon.HasValue || lastLogon.Value < staleThreshold;
+                    if (isStale) staleCount++;
+
+                    // Check PasswordNeverExpires (bit 0x10000 of userAccountControl)
+                    int uac = memberEntry.Int("userAccountControl");
+                    bool pwdNeverExpires = (uac & 0x10000) != 0;
+                    if (pwdNeverExpires) neverExpireCount++;
+
+                    string flags = "";
+                    if (isStale) flags += " [STALE]";
+                    if (pwdNeverExpires) flags += " [PwdNeverExpires]";
+
+                    var lastLogonLabel = lastLogon.HasValue ? lastLogon.Value.ToString("yyyy-MM-dd") : "Never";
+                    evidence.AppendLine($"  {member.Name} | LastLogon={lastLogonLabel}{flags}{via}");
                 }
 
                 if (staleCount > 0)
@@ -142,6 +134,14 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
                 if (nestedGroupCount > 0)
                 {
                     sb.AppendLine($"  INFO: {nestedGroupCount} nested group(s) detected (review for hidden privilege).");
+                }
+                foreach (var nested in nestedAccounts.Take(NestedFindingLimit))
+                {
+                    sb.AppendLine($"  NESTED: {nested.Path}");
+                }
+                if (nestedAccounts.Count > NestedFindingLimit)
+                {
+                    sb.AppendLine($"  ... and {nestedAccounts.Count - NestedFindingLimit} more nested member(s); see the evidence.");
                 }
             }
 

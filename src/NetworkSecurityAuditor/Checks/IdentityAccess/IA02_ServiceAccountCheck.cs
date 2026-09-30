@@ -43,12 +43,21 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
 
             var directory = _directory(env);
 
+            // Domain Admins by SID, nested members included, so a localized or nested DA still counts.
+            var resolver = PrivilegedGroupResolver.Create(directory, ct);
+            var domainAdmins = resolver.Resolve(WellKnownGroup.DomainAdmins, ct);
+            var daMembers = new Dictionary<string, GroupMember>(StringComparer.OrdinalIgnoreCase);
+            foreach (var member in resolver.Members(domainAdmins, [], ct))
+            {
+                if (!member.IsGroup) daMembers.TryAdd(member.DistinguishedName, member);
+            }
+
             // 1. Find Kerberoastable accounts (users with SPNs set)
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("[Kerberoastable Accounts (SPN set)]");
             var spnQuery = new DirectoryQuery(
                 "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
-                ["sAMAccountName", "servicePrincipalName", "pwdLastSet", "memberOf", "userAccountControl"]);
+                ["sAMAccountName", "distinguishedName", "servicePrincipalName", "pwdLastSet", "userAccountControl"]);
 
             int kerberoastable = 0;
             int oldPassword = 0;
@@ -69,23 +78,15 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
                 if (isPwdOld) oldPassword++;
 
                 // Check Domain Admins membership
-                bool isDa = false;
-                foreach (var g in sr.Strings("memberOf"))
-                {
-                    if (g.Contains("CN=Domain Admins", StringComparison.OrdinalIgnoreCase))
-                    {
-                        isDa = true;
-                        inDomainAdmins++;
-                        break;
-                    }
-                }
+                bool isDa = daMembers.TryGetValue(sr.String("distinguishedName") ?? "", out var daMember);
+                if (isDa) inDomainAdmins++;
 
                 // First SPN for evidence
                 string firstSpn = sr.String("servicePrincipalName") ?? "";
 
                 string flags = "";
                 if (isPwdOld) flags += " [PWD>" + pwdAgeDays + "d]";
-                if (isDa) flags += " [DOMAIN ADMIN]";
+                if (isDa) flags += daMember!.IsNested ? $" [DOMAIN ADMIN] Path={daMember.Path}" : " [DOMAIN ADMIN]";
 
                 evidence.AppendLine($"  {sam} | SPN={firstSpn} | PwdAge={pwdAgeDays}d{flags}");
             }
@@ -101,7 +102,7 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
             if (inDomainAdmins > 0)
             {
                 hasIssue = true;
-                sb.AppendLine($"  CRITICAL: {inDomainAdmins} SPN account(s) are in Domain Admins (Kerberoast → DA compromise).");
+                sb.AppendLine($"  CRITICAL: {inDomainAdmins} SPN account(s) are in {domainAdmins.Name} (Kerberoast → DA compromise).");
             }
 
             // 2. Check for naming-pattern service accounts

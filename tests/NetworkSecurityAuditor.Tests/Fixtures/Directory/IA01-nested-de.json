@@ -1,0 +1,375 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-512)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Domänen-Admins",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example",
+            "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Domänen-Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=512))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "Administrator",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 3
+          },
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 30
+          },
+          "adminCount": 1,
+          "memberOf": [
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Tier0-Ops,OU=Groups,DC=corp,DC=example",
+          "distinguishedName": "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "group"
+          ],
+          "sAMAccountName": "Tier0-Ops",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1106"
+          },
+          "memberOf": [
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Alice Ops,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=Alice Ops,OU=Admins,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "alice",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1107"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 2
+          },
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 20
+          },
+          "adminCount": 1,
+          "memberOf": [
+            "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Legacy Ops,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=Legacy Ops,OU=Admins,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "legacy.ops",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1108"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 150
+          },
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 160
+          },
+          "adminCount": 1,
+          "memberOf": [
+            "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-519)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Organisations-Admins",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Organisations-Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=519))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "Administrator",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 3
+          },
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 30
+          },
+          "adminCount": 1,
+          "memberOf": [
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-21-1004336348-1177238915-682003330-518)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Schema-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Schema-Admins,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Schema-Admins"
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(|(memberOf:1.2.840.113556.1.4.1941:=CN=Schema-Admins,CN=Users,DC=corp,DC=example)(primaryGroupID=518))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(objectSid=S-1-5-32-544)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administratoren,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Administratoren,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Administratoren",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example",
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Organisations-Admins,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Administratoren,CN=Builtin,DC=corp,DC=example)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "Administrator",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 3
+          },
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 30
+          },
+          "adminCount": 1,
+          "memberOf": [
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "group"
+          ],
+          "sAMAccountName": "Domänen-Admins",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-512"
+          },
+          "memberOf": [
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "group"
+          ],
+          "sAMAccountName": "Organisations-Admins",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-519"
+          },
+          "memberOf": [
+            "CN=Administratoren,CN=Builtin,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Tier0-Ops,OU=Groups,DC=corp,DC=example",
+          "distinguishedName": "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "group"
+          ],
+          "sAMAccountName": "Tier0-Ops",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1106"
+          },
+          "memberOf": [
+            "CN=Domänen-Admins,CN=Users,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Alice Ops,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=Alice Ops,OU=Admins,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "alice",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1107"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 2
+          },
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 20
+          },
+          "adminCount": 1,
+          "memberOf": [
+            "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Legacy Ops,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=Legacy Ops,OU=Admins,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "legacy.ops",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1108"
+          },
+          "primaryGroupID": 513,
+          "userAccountControl": 512,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 150
+          },
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 160
+          },
+          "adminCount": 1,
+          "memberOf": [
+            "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(adminCount=1))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Administrator",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
+          },
+          "primaryGroupID": 513
+        },
+        {
+          "$path": "LDAP://CN=Alice Ops,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=Alice Ops,OU=Admins,DC=corp,DC=example",
+          "sAMAccountName": "alice",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1107"
+          },
+          "primaryGroupID": 513
+        },
+        {
+          "$path": "LDAP://CN=Legacy Ops,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=Legacy Ops,OU=Admins,DC=corp,DC=example",
+          "sAMAccountName": "legacy.ops",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1108"
+          },
+          "primaryGroupID": 513
+        }
+      ]
+    }
+  ],
+  "entries": {
+    "(domain)": {
+      "objectSid": {
+        "$sid": "S-1-5-21-1004336348-1177238915-682003330"
+      },
+      "distinguishedName": "DC=corp,DC=example"
+    },
+    "RootDSE": {
+      "rootDomainNamingContext": "DC=corp,DC=example"
+    }
+  }
+}

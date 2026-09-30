@@ -6,7 +6,7 @@ using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// CF04 - Former Employee Access: Find stale AD accounts (>90d no logon) with
-/// privileged group membership. AD-dependent.
+/// privileged group membership, direct or nested, with groups found by SID. AD-dependent.
 /// </summary>
 public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
 {
@@ -18,11 +18,12 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
 
     internal CF04_FormerEmployeeCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
-    private static readonly string[] PrivilegedGroups =
+    // In priority order: an account in several of these is reported under the first.
+    private static readonly WellKnownGroup[] PrivilegedGroups =
     [
-        "Domain Admins", "Enterprise Admins", "Schema Admins",
-        "Administrators", "Account Operators", "Server Operators",
-        "Backup Operators", "Remote Desktop Users"
+        WellKnownGroup.DomainAdmins, WellKnownGroup.EnterpriseAdmins, WellKnownGroup.SchemaAdmins,
+        WellKnownGroup.Administrators, WellKnownGroup.AccountOperators, WellKnownGroup.ServerOperators,
+        WellKnownGroup.BackupOperators, WellKnownGroup.RemoteDesktopUsers
     ];
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
@@ -50,6 +51,20 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
 
             var directory = _directory(env);
 
+            // Every account in a privileged group, nested ones included, keyed by DN. Groups are found by SID,
+            // so a localized domain ("Domänen-Admins") gives the same answer.
+            var resolver = PrivilegedGroupResolver.Create(directory, ct);
+            var privileged = new Dictionary<string, (ResolvedGroup Group, GroupMember Member)>(StringComparer.OrdinalIgnoreCase);
+            foreach (var wellKnown in PrivilegedGroups)
+            {
+                ct.ThrowIfCancellationRequested();
+                var group = resolver.Resolve(wellKnown, ct);
+                foreach (var member in resolver.Members(group, [], ct))
+                {
+                    if (!member.IsGroup) privileged.TryAdd(member.DistinguishedName, (group, member));
+                }
+            }
+
             // Find enabled user accounts with no logon in >90 days
             // FileTime for 90 days ago
             long fileTimeThreshold = staleThreshold.ToFileTimeUtc();
@@ -58,7 +73,7 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
                 $"(&(objectCategory=person)(objectClass=user)" +
                 $"(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
                 $"(|(lastLogonTimestamp<={fileTimeThreshold})(!(lastLogonTimestamp=*))))",
-                ["sAMAccountName", "lastLogonTimestamp", "memberOf", "whenCreated", "distinguishedName"]);
+                ["sAMAccountName", "lastLogonTimestamp", "whenCreated", "distinguishedName"]);
 
             ct.ThrowIfCancellationRequested();
 
@@ -70,29 +85,13 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
                 staleEnabledCount++;
 
                 // Check if member of any privileged groups
-                var memberOf = sr.Strings("memberOf");
-                bool isPrivileged = false;
-                string matchedGroup = "";
-
-                foreach (string groupDn in memberOf)
-                {
-                    foreach (string pg in PrivilegedGroups)
-                    {
-                        if (groupDn.Contains($"CN={pg}", StringComparison.OrdinalIgnoreCase))
-                        {
-                            isPrivileged = true;
-                            matchedGroup = pg;
-                            break;
-                        }
-                    }
-                    if (isPrivileged) break;
-                }
-
-                if (isPrivileged)
+                if (privileged.TryGetValue(sr.String("distinguishedName") ?? "", out var hit))
                 {
                     stalePrivilegedCount++;
                     hasIssue = true;
 
+                    string matchedGroup = hit.Group.Name;
+                    string via = hit.Member.IsNested ? $" ({hit.Member.Path})" : "";
                     long lastLogon = sr.Long("lastLogonTimestamp");
 
                     DateTime lastLogonDate = lastLogon > 0
@@ -100,11 +99,12 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
                         : DateTime.MinValue;
 
                     evidence.AppendLine($"  STALE PRIVILEGED: {sam} | Group: {matchedGroup} | " +
-                        $"LastLogon: {(lastLogon > 0 ? lastLogonDate.ToString("yyyy-MM-dd") : "Never")}");
+                        $"LastLogon: {(lastLogon > 0 ? lastLogonDate.ToString("yyyy-MM-dd") : "Never")}" +
+                        (hit.Member.IsNested ? $" | Path: {hit.Member.Path}" : ""));
 
                     if (stalePrivilegedCount <= 20)
                     {
-                        sb.AppendLine($"CRITICAL: \"{sam}\" - no logon in >90 days, member of {matchedGroup}. " +
+                        sb.AppendLine($"CRITICAL: \"{sam}\" - no logon in >90 days, member of {matchedGroup}{via}. " +
                             "Possible former employee with active privileged access.");
                     }
                 }

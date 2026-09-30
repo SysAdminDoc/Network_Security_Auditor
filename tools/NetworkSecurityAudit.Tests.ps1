@@ -1903,6 +1903,81 @@ Describe 'EP06 listener findings (nested check helpers via AST)' {
     }
 }
 
+Describe 'Privileged groups by SID with nested membership (IA01, IA02, CF04 nested helpers via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $script:SidHelperNames = @('Get-NsaWellKnownGroupSid', 'Expand-NsaGroupMember')
+        $script:SidHelperDefs = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in @('Get-NsaWellKnownGroupSid', 'Expand-NsaGroupMember') }, $true))
+        foreach ($name in $script:SidHelperNames) {
+            . ([scriptblock]::Create(@($script:SidHelperDefs | Where-Object Name -eq $name)[0].Extent.Text))
+        }
+        $script:Ia01Block = Get-Block -Text $script:Text -Start "'IA01' = @\{ Type='AD'" -End "'IA02' = @\{ Type='AD'"
+        $script:Ia02Block = Get-Block -Text $script:Text -Start "'IA02' = @\{ Type='AD'" -End "'IA04' = @\{ Type='AD'"
+        $script:Cf04Block = Get-Block -Text $script:Text -Start "'CF04' = @\{ Type='AD'" -End "'CF06' = @\{ Type='Local'"
+        $script:DomainSid = 'S-1-5-21-1004336348-1177238915-682003330'
+        # A German domain names Domain Admins "Domaenen-Admins" (with an a-umlaut); the test file stays ASCII.
+        $script:German = "Dom$([char]0x00E4)nen-Admins"
+        function New-Member([string]$Dn, [string]$Sam, [string]$Class = 'user') {
+            @{ DistinguishedName = $Dn; SamAccountName = $Sam; objectClass = $Class }
+        }
+    }
+
+    It 'carries identical copies of the shared helpers in IA01, IA02 and CF04' {
+        foreach ($name in $script:SidHelperNames) {
+            $defs = @($script:SidHelperDefs | Where-Object Name -eq $name)
+            $defs.Count | Should -Be 3
+            foreach ($def in $defs) { $def.Extent.Text | Should -BeExactly $defs[0].Extent.Text }
+            foreach ($block in @($script:Ia01Block, $script:Ia02Block, $script:Cf04Block)) { $block | Should -Match "function $name \{" }
+        }
+    }
+    It 'builds domain, forest root and builtin group SIDs from the RID' {
+        $root = 'S-1-5-21-111-222-333'
+        (Get-NsaWellKnownGroupSid -Key 'DomainAdmins' -DomainSid $script:DomainSid).Sid | Should -Be "$($script:DomainSid)-512"
+        $ea = Get-NsaWellKnownGroupSid -Key 'EnterpriseAdmins' -DomainSid $script:DomainSid -RootSid $root
+        $ea.Sid | Should -Be "$root-519"
+        $ea.InRoot | Should -BeTrue
+        (Get-NsaWellKnownGroupSid -Key 'SchemaAdmins' -DomainSid $script:DomainSid).Sid | Should -Be "$($script:DomainSid)-518"
+        (Get-NsaWellKnownGroupSid -Key 'Administrators' -DomainSid $script:DomainSid).Sid | Should -Be 'S-1-5-32-544'
+        (Get-NsaWellKnownGroupSid -Key 'BackupOperators' -DomainSid $script:DomainSid).Sid | Should -Be 'S-1-5-32-551'
+        (Get-NsaWellKnownGroupSid -Key 'ProtectedUsers' -DomainSid $script:DomainSid).Sid | Should -Be "$($script:DomainSid)-525"
+        { Get-NsaWellKnownGroupSid -Key 'NoSuchGroup' -DomainSid $script:DomainSid } | Should -Throw
+    }
+    It 'walks nested groups once each and gives every member the path it came through' {
+        $tree = @{
+            'CN=DA'  = @((New-Member 'CN=Administrator' 'Administrator'), (New-Member 'CN=Ops' 'Tier0-Ops' 'group'))
+            'CN=Ops' = @((New-Member 'CN=Alice' 'alice'), (New-Member 'CN=DA' $script:German 'group'), (New-Member 'CN=Administrator' 'Administrator'))
+        }
+        $get = { param($dn) $tree[$dn] }.GetNewClosure()
+        $members = @(Expand-NsaGroupMember -GroupDn 'CN=DA' -GroupName $script:German -GetMember $get)
+        $members.Count | Should -Be 3
+        $members[0].Path | Should -Be "$($script:German) > Administrator"
+        $members[0].Nested | Should -BeFalse
+        $members[1].IsGroup | Should -BeTrue
+        $members[2].Path | Should -Be "$($script:German) > Tier0-Ops > alice"
+        $members[2].Nested | Should -BeTrue
+        @(Expand-NsaGroupMember -GroupDn 'CN=Empty' -GroupName 'Schema Admins' -GetMember $get).Count | Should -Be 0
+    }
+    It 'notes a nested group it cannot read, but fails when the privileged group itself cannot be read' {
+        $ops = New-Member 'CN=Ops' 'Tier0-Ops' 'group'
+        $get = { param($dn) if ($dn -eq 'CN=Ops') { throw 'Access is denied.' } else { $ops } }.GetNewClosure()
+        $members = @(Expand-NsaGroupMember -GroupDn 'CN=DA' -GroupName 'Domain Admins' -GetMember $get)
+        $members.Count | Should -Be 1
+        $members[0].Note | Should -Match 'Access is denied'
+        { Expand-NsaGroupMember -GroupDn 'CN=Ops' -GroupName 'Tier0-Ops' -GetMember $get } | Should -Throw '*Access is denied*'
+    }
+    It 'finds the IA01, IA02 and CF04 groups by SID instead of by English name' {
+        $script:Ia01Block | Should -Not -Match 'Get-ADGroupMember \$g -Recursive'
+        $script:Ia01Block | Should -Not -Match "Get-ADGroupMember 'Protected Users'"
+        $script:Ia01Block | Should -Match "foreach \(\`$key in @\('DomainAdmins','EnterpriseAdmins','SchemaAdmins','Administrators'\)\)"
+        $script:Ia01Block | Should -Match 'Get-ADGroup -Identity \$spec\.Sid -Server \$server -EA Stop'
+        $script:Ia01Block | Should -Match 'Get-ADGroupMember -Identity \$protectedSpec\.Sid'
+        $script:Ia02Block | Should -Not -Match "-match 'Domain Admins'"
+        $script:Ia02Block | Should -Match "Get-NsaWellKnownGroupSid -Key 'DomainAdmins'"
+        $script:Cf04Block | Should -Not -Match '\$privGroups'
+        $script:Cf04Block | Should -Match 'Get-ADGroup -Identity \$spec\.Sid -Server \$server -EA Stop'
+    }
+}
+
 Describe 'IA06 LAPS coverage (nested check helper via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
