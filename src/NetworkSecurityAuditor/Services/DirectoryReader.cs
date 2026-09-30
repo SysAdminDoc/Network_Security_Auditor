@@ -42,12 +42,17 @@ public sealed record DirectoryQuery(string Filter, IReadOnlyList<string> Propert
     public int PageSize { get; init; } = 1000;
 }
 
+/// <summary>
+/// One access rule. <see cref="Identity"/> is the account name for display (the SID string when it can't be
+/// translated); <see cref="Sid"/> is what checks should compare, since group names are localized.
+/// </summary>
 public sealed record DirectoryAccessRule(
     string Identity,
     ActiveDirectoryRights Rights,
     AccessControlType Type,
     Guid ObjectType,
-    bool IsInherited);
+    bool IsInherited,
+    string? Sid = null);
 
 /// <summary>
 /// One directory object's attributes, matched case-insensitively. Integer8 values arrive as <see cref="long"/>
@@ -98,6 +103,9 @@ public sealed class DirectoryRecord
     public DateTime? Time(string name) => First(name) is DateTime value ? value : null;
 
     public byte[]? Bytes(string name) => First(name) as byte[];
+
+    /// <summary>A binary SID attribute such as objectSid, in S-1-5-... form.</summary>
+    public string? Sid(string name) => Bytes(name) is { } bytes ? new SecurityIdentifier(bytes, 0).Value : null;
 }
 
 /// <summary>Reads Active Directory over LDAP, bound to the machine's domain.</summary>
@@ -173,22 +181,40 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
         ct.ThrowIfCancellationRequested();
         using var entry = new DirectoryEntry(Bind(distinguishedName));
         entry.RefreshCache(["ntSecurityDescriptor"]);
-        var rules = entry.ObjectSecurity.GetAccessRules(true, true, typeof(NTAccount));
+        var rules = entry.ObjectSecurity.GetAccessRules(true, true, typeof(SecurityIdentifier));
 
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<DirectoryAccessRule>(rules.Count);
         foreach (AuthorizationRule rule in rules)
         {
-            if (rule is ActiveDirectoryAccessRule adRule)
+            if (rule is ActiveDirectoryAccessRule adRule && adRule.IdentityReference is SecurityIdentifier sid)
             {
+                if (!names.TryGetValue(sid.Value, out var name))
+                    names[sid.Value] = name = AccountName(sid);
                 result.Add(new DirectoryAccessRule(
-                    adRule.IdentityReference?.Value ?? "Unknown",
+                    name,
                     adRule.ActiveDirectoryRights,
                     adRule.AccessControlType,
                     adRule.ObjectType,
-                    adRule.IsInherited));
+                    adRule.IsInherited,
+                    sid.Value));
             }
         }
         return result;
+    }
+
+    // Same display as GetAccessRules(NTAccount): the account name, or the SID when it doesn't resolve.
+    private static string AccountName(SecurityIdentifier sid)
+    {
+        try
+        {
+            return sid.Translate(typeof(NTAccount)).Value;
+        }
+        // Translate throws IdentityNotMappedException, or a plain SystemException for a Win32 lookup error.
+        catch (SystemException ex) when (ex is IdentityNotMappedException || ex.GetType() == typeof(SystemException))
+        {
+            return sid.Value;
+        }
     }
 
     private static DirectoryRecord ToRecord(SearchResult result)

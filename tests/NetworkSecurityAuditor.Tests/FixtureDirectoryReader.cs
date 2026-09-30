@@ -20,7 +20,7 @@ namespace NetworkSecurityAuditor.Tests;
 /// {
 ///   "entries":  { "(domain)": { "attr": [values] }, "RootDSE": { ... }, "CN=...,DC=...": { ... } },
 ///   "searches": [ { "base": "CN=...", "filter": "(...)", "results": [ { "$path": "...", "attr": [values] } ] } ],
-///   "acls":     { "CN=...": [ { "identity": "CORP\\Helpdesk", "rights": "CreateChild", "type": "Allow" } ] }
+///   "acls":     { "CN=...": [ { "identity": "CORP\\Helpdesk", "sid": "S-1-5-21-...-1110", "rights": "CreateChild", "type": "Allow" } ] }
 /// }
 /// </code>
 /// Any entry, search or ACL can carry "$error": { "hresult": "0x80070005", "message": "..." } instead, which throws a
@@ -47,7 +47,13 @@ internal sealed class FixtureDirectoryReader : IDirectoryReader
             dir = dir.Parent;
         var path = Path.Combine(dir?.FullName ?? throw new DirectoryNotFoundException("Repo root not found."),
             "tests", "NetworkSecurityAuditor.Tests", "Fixtures", "Directory", fileName);
-        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        return FromJson(File.ReadAllText(path));
+    }
+
+    /// <summary>A fixture written inline in a test, in the same shape as the files.</summary>
+    public static FixtureDirectoryReader FromJson(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
         return new FixtureDirectoryReader(doc.RootElement.Clone());
     }
 
@@ -101,7 +107,8 @@ internal sealed class FixtureDirectoryReader : IDirectoryReader
             Enum.Parse<ActiveDirectoryRights>(rule.GetProperty("rights").GetString()!),
             Enum.Parse<AccessControlType>(rule.TryGetProperty("type", out var type) ? type.GetString()! : "Allow"),
             rule.TryGetProperty("objectType", out var objectType) ? Guid.Parse(objectType.GetString()!) : Guid.Empty,
-            rule.TryGetProperty("inherited", out var inherited) && inherited.GetBoolean())).ToList();
+            rule.TryGetProperty("inherited", out var inherited) && inherited.GetBoolean(),
+            rule.TryGetProperty("sid", out var sid) ? sid.GetString() : null)).ToList();
     }
 
     private static bool Matches(JsonElement search, DirectoryQuery query)
