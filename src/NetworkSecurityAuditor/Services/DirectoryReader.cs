@@ -154,13 +154,13 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
     }
 
     /// <summary>
-    /// How long a domain controller may spend on a search request (a paged search sends one per page). It sits
-    /// under the runner's default 90-second check timeout, so a stalled DC ends the search rather than the check.
+    /// How long a domain controller may spend on one page of a paged search. When it runs out, the DC returns
+    /// that page early with a cookie and the search carries on, so nothing is dropped. ServerTimeLimit and
+    /// ClientTimeout stay at their defaults on purpose: when either runs out, the whole search ends with what it
+    /// has so far and no error, and a check would score a partial list as complete. A stalled DC is left to the
+    /// runner's check timeout, which reports the check as timed out.
     /// </summary>
-    internal static readonly TimeSpan SearchServerTimeLimit = TimeSpan.FromSeconds(60);
-
-    /// <summary>How long the client waits for a DC to answer one search request before it gives up.</summary>
-    internal static readonly TimeSpan SearchClientTimeout = TimeSpan.FromSeconds(75);
+    internal static readonly TimeSpan SearchServerPageTimeLimit = TimeSpan.FromSeconds(60);
 
     public IReadOnlyList<DirectoryRecord> Search(DirectoryQuery query, CancellationToken ct)
     {
@@ -194,8 +194,7 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
             SearchScope = query.Scope,
             PageSize = query.SizeLimit == 1 ? 0 : query.PageSize,
             SizeLimit = query.SizeLimit,
-            ServerTimeLimit = SearchServerTimeLimit,
-            ClientTimeout = SearchClientTimeout
+            ServerPageTimeLimit = SearchServerPageTimeLimit
         };
         searcher.PropertiesToLoad.AddRange([.. query.Properties]);
         return searcher;

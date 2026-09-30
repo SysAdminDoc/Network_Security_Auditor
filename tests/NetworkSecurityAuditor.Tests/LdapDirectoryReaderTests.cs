@@ -7,21 +7,23 @@ using NetworkSecurityAuditor.Services;
 public sealed class LdapDirectoryReaderTests
 {
     [Fact]
-    public void Searches_Carry_Server_And_Client_Time_Limits_Below_The_Check_Timeout()
+    public void Searches_Bound_Each_Page_But_Never_Cut_A_Search_Short()
     {
         // Neither the entry nor the searcher contacts a DC until a search runs.
         using var root = new DirectoryEntry("LDAP://dc.example.invalid");
         var query = new DirectoryQuery("(objectClass=user)", ["sAMAccountName"]);
 
         using var searcher = LdapDirectoryReader.CreateSearcher(root, query);
+        using var defaults = new DirectorySearcher();
 
         var checkTimeout = TimeSpan.FromSeconds(new AuditOptions().CheckTimeoutSeconds);
-        Assert.Equal(LdapDirectoryReader.SearchServerTimeLimit, searcher.ServerTimeLimit);
-        Assert.Equal(LdapDirectoryReader.SearchClientTimeout, searcher.ClientTimeout);
-        Assert.True(searcher.ServerTimeLimit > TimeSpan.Zero);
-        Assert.True(searcher.ServerTimeLimit < searcher.ClientTimeout);
-        Assert.True(searcher.ClientTimeout < checkTimeout,
-            "A stalled DC should end the search before the runner abandons the check.");
+        Assert.Equal(LdapDirectoryReader.SearchServerPageTimeLimit, searcher.ServerPageTimeLimit);
+        Assert.True(searcher.ServerPageTimeLimit > TimeSpan.Zero);
+        Assert.True(searcher.ServerPageTimeLimit < checkTimeout,
+            "A slow page should come back before the runner abandons the check.");
+        // Either of these ends the whole search early with partial results and no error.
+        Assert.Equal(defaults.ServerTimeLimit, searcher.ServerTimeLimit);
+        Assert.Equal(defaults.ClientTimeout, searcher.ClientTimeout);
     }
 
     [Fact]
@@ -40,7 +42,9 @@ public sealed class LdapDirectoryReaderTests
         Assert.Equal(new[] { "member", "cn" }, pagedSearcher.PropertiesToLoad.Cast<string>());
         Assert.Equal(0, findOneSearcher.PageSize);
         Assert.Equal(1, findOneSearcher.SizeLimit);
-        Assert.Equal(LdapDirectoryReader.SearchServerTimeLimit, findOneSearcher.ServerTimeLimit);
+        using var defaults = new DirectorySearcher();
+        Assert.Equal(defaults.ServerTimeLimit, findOneSearcher.ServerTimeLimit);
+        Assert.Equal(defaults.ClientTimeout, findOneSearcher.ClientTimeout);
     }
 
     [Theory]
