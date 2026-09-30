@@ -7,11 +7,29 @@ using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// NP06 - Temporary Firewall Rules: Check firewall rules for stale/temporary indicators --
-/// rules with "temp", "test", "old" in names, or very old creation dates.
+/// rules with "temp", "test", "old" in names, or very old creation dates. Only names and
+/// descriptions are needed, so the rules are read from the active store without their filters,
+/// which works without elevation and includes Group Policy and service-added rules.
 /// </summary>
 public sealed class NP06_TempRulesCheck : ISecurityCheck
 {
+    private readonly Func<CancellationToken, string?, IReadOnlyList<FirewallRuleSnapshot>> _readRules;
+    private readonly Func<string, string, CancellationToken, string> _runCommand;
+
     public string Id => "NP06";
+
+    public NP06_TempRulesCheck()
+        : this(null, null)
+    {
+    }
+
+    internal NP06_TempRulesCheck(
+        Func<CancellationToken, string?, IReadOnlyList<FirewallRuleSnapshot>>? readRules,
+        Func<string, string, CancellationToken, string>? runCommand = null)
+    {
+        _readRules = readRules ?? ((ct, store) => FirewallRuleReader.GetEnabledRules(ct, store, includeFilters: false));
+        _runCommand = runCommand ?? ((file, args, ct) => CommandRunner.RunForOutput(file, args, TimeSpan.FromSeconds(30), ct));
+    }
 
     private static readonly string[] StaleIndicators =
     [
@@ -30,11 +48,11 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
             int totalRules = 0;
 
             ct.ThrowIfCancellationRequested();
-            evidence.AppendLine("[Firewall Rule Staleness Analysis]");
+            evidence.AppendLine("[Firewall Rule Staleness Analysis - active store (local, Group Policy and service rules)]");
 
             try
             {
-                foreach (var rule in FirewallRuleReader.GetEnabledRules(ct))
+                foreach (var rule in _readRules(ct, FirewallRuleReader.ActiveStore))
                 {
                     ct.ThrowIfCancellationRequested();
                     totalRules++;
@@ -48,6 +66,7 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
             catch (ManagementException ex)
             {
                 evidence.AppendLine($"  WMI error: {ex.Message}");
+                evidence.AppendLine("  netsh reads the local store only; Group Policy and service-added rules aren't included.");
                 QueryViaNetsh(evidence, staleRules, ref totalRules, ct);
             }
 
@@ -112,7 +131,7 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
         return false;
     }
 
-    private static void QueryViaNetsh(
+    private void QueryViaNetsh(
         StringBuilder evidence,
         List<string> staleRules,
         ref int totalRules,
@@ -120,11 +139,7 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
     {
         try
         {
-            string output = CommandRunner.RunForOutput(
-                "netsh",
-                "advfirewall firewall show rule name=all",
-                TimeSpan.FromSeconds(30),
-                ct);
+            string output = _runCommand("netsh", "advfirewall firewall show rule name=all", ct);
 
             evidence.AppendLine("  [Parsed from netsh output]");
 

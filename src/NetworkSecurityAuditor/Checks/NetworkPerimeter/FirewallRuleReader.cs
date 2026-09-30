@@ -61,17 +61,20 @@ internal static class FirewallRuleReader
     /// <summary>
     /// Reads enabled rules. With <paramref name="policyStore"/> null the provider's default
     /// (local persistent) store is used; pass <see cref="ActiveStore"/> to include Group Policy rules.
+    /// The rules themselves are readable by any user, but the filters need elevation. With
+    /// <paramref name="includeFilters"/> false only the rules are read, and port, address and
+    /// application fields are left empty.
     /// </summary>
-    public static IReadOnlyList<FirewallRuleSnapshot> GetEnabledRules(CancellationToken ct, string? policyStore = null)
+    public static IReadOnlyList<FirewallRuleSnapshot> GetEnabledRules(CancellationToken ct, string? policyStore = null, bool includeFilters = true)
     {
         using var searcher = CreateSearcher(RuleQuery, policyStore);
 
         var rules = new List<FirewallRuleSnapshot>();
-        var portFilters = LoadProtocolPortFilters(ct, policyStore);
-        var addressFilters = LoadAddressFilters(ct, policyStore);
-        var applicationFilters = LoadApplicationFilters(ct, policyStore);
-        var serviceFilters = LoadServiceFilters(ct, policyStore);
-        var interfaceScoped = LoadInterfaceScopedRules(ct, policyStore);
+        var portFilters = includeFilters ? LoadProtocolPortFilters(ct, policyStore) : [];
+        var addressFilters = includeFilters ? LoadAddressFilters(ct, policyStore) : [];
+        var applicationFilters = includeFilters ? LoadApplicationFilters(ct, policyStore) : [];
+        var serviceFilters = includeFilters ? LoadServiceFilters(ct, policyStore) : [];
+        var interfaceScoped = includeFilters ? LoadInterfaceScopedRules(ct, policyStore) : [];
 
         using var results = searcher.Get();
         foreach (ManagementObject rule in results)

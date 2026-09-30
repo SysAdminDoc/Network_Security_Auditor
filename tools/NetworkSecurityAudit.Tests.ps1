@@ -1756,6 +1756,42 @@ Describe 'NP02 listener classification (nested check helper via AST)' {
     }
 }
 
+Describe 'NP01, NP05 and NP06 read the active store (nested check helper via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Np01AnyAnyRules' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+    }
+
+    It 'counts an unscoped inbound allow as any/any, but not one tied to a program, package, service or user' {
+        $rules = @(
+            @{ Name='Wide open'; Direction='Inbound'; Action='Allow'; LocalPorts=@('Any'); RemoteAddresses=@('Any'); Program='Any' },
+            @{ Name='Google Chrome (mDNS-In)'; Direction='Inbound'; Action='Allow'; LocalPorts=@('Any'); RemoteAddresses=@('Any'); Program='C:\Program Files\Google\Chrome\Application\chrome.exe' },
+            @{ Name='Xbox Game Bar'; Direction='Inbound'; Action='Allow'; LocalPorts=@(); RemoteAddresses=@(); Program='Any'; Package='S-1-15-2-1861897761' },
+            @{ Name='Delivery Optimization (TCP-In)'; Direction='Inbound'; Action='Allow'; LocalPorts=@(); RemoteAddresses=@(); Service='DoSvc' },
+            @{ Name='Per-user app'; Direction='Inbound'; Action='Allow'; LocalPorts=@(); RemoteAddresses=@(); Owner='S-1-5-21-1-2-3-1001' },
+            @{ Name='RDP'; Direction='Inbound'; Action='Allow'; LocalPorts=@('3389'); RemoteAddresses=@('Any') },
+            @{ Name='LAN only'; Direction='Inbound'; Action='Allow'; LocalPorts=@('Any'); RemoteAddresses=@('LocalSubnet') },
+            @{ Name='Block all'; Direction='Inbound'; Action='Block'; LocalPorts=@('Any'); RemoteAddresses=@('Any') }
+        )
+        @((Get-Np01AnyAnyRules -Rules $rules).Name) | Should -Be @('Wide open')
+    }
+    It 'reads rules and profiles from ActiveStore in all three checks' {
+        $np01 = Get-Block -Text $script:Text -Start "'NP01' = @\{ Type='Local'" -End "'IA07' = @\{ Type='AD'"
+        $np01 | Should -Match 'Get-NetFirewallRule -Enabled True -PolicyStore ActiveStore -EA Stop'
+        $np01 | Should -Match 'Get-NetFirewallPortFilter -All -PolicyStore ActiveStore'
+        $np01 | Should -Match 'Get-NetFirewallApplicationFilter -All -PolicyStore ActiveStore'
+        $np01 | Should -Not -Match '\$r \| Get-NetFirewallPortFilter'
+        # A standard user can't read filters; that's Partial, not a silent pass.
+        $np01 | Should -Match "if \(\`$filterError\) \{\s+\`$issues\+\+"
+        $np05 = Get-Block -Text $script:Text -Start "'NP05' = @\{ Type='Local'" -End "'NP06' = @\{ Type='Local'"
+        $np05 | Should -Match 'Get-NetFirewallProfile -PolicyStore ActiveStore -EA Stop'
+        $np05 | Should -Match 'Get-NetFirewallRule -Direction Outbound -Action Block -Enabled True -PolicyStore ActiveStore'
+        $np06 = Get-Block -Text $script:Text -Start "'NP06' = @\{ Type='Local'" -End "'NP07' = @\{ Type='Local'"
+        $np06 | Should -Match 'Get-NetFirewallRule -Enabled True -PolicyStore ActiveStore -EA Stop'
+    }
+}
+
 Describe 'EP06 listener findings (nested check helper via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)

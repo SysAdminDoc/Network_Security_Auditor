@@ -6,12 +6,29 @@ using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Services;
 
 /// <summary>
-/// NP01 - Firewall rule analysis: count inbound allow rules, find any/any rules
-///        with no port restriction and remote address = Any.
+/// NP01 - Firewall rule analysis: count inbound allow rules, find any/any rules with no port
+///        restriction, remote address = Any and no program, package, service or owner scope.
+///        Rules come from the active store, so Group Policy and service-added rules count.
 /// </summary>
 public sealed class NP01_FirewallRulesCheck : ISecurityCheck
 {
+    private readonly Func<CancellationToken, string?, IReadOnlyList<FirewallRuleSnapshot>> _readRules;
+    private readonly Func<string, string, CancellationToken, string> _runCommand;
+
     public string Id => "NP01";
+
+    public NP01_FirewallRulesCheck()
+        : this(null, null)
+    {
+    }
+
+    internal NP01_FirewallRulesCheck(
+        Func<CancellationToken, string?, IReadOnlyList<FirewallRuleSnapshot>>? readRules,
+        Func<string, string, CancellationToken, string>? runCommand = null)
+    {
+        _readRules = readRules ?? ((ct, store) => FirewallRuleReader.GetEnabledRules(ct, store));
+        _runCommand = runCommand ?? ((file, args, ct) => CommandRunner.RunForOutput(file, args, TimeSpan.FromSeconds(30), ct));
+    }
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -21,7 +38,7 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasIssue = false;
 
-            evidence.AppendLine("[Windows Firewall Rules Analysis]");
+            evidence.AppendLine("[Windows Firewall Rules Analysis - active store (local, Group Policy and service rules)]");
 
             ct.ThrowIfCancellationRequested();
 
@@ -32,7 +49,7 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
 
             try
             {
-                foreach (var rule in FirewallRuleReader.GetEnabledRules(ct))
+                foreach (var rule in _readRules(ct, FirewallRuleReader.ActiveStore))
                 {
                     ct.ThrowIfCancellationRequested();
 
@@ -44,7 +61,8 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
 
                     inboundAllow++;
 
-                    if (rule.HasAnyLocalPort && rule.HasAnyRemoteAddress)
+                    // A program-, package-, service- or owner-scoped rule only opens ports to that one thing.
+                    if (rule.HasAnyLocalPort && rule.HasAnyRemoteAddress && rule.HasNoApplicationScope)
                     {
                         anyAnyRules++;
                         anyAnyNames.Add(rule.Name);
@@ -54,10 +72,13 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
                     }
                 }
             }
-            catch (ManagementException)
+            catch (ManagementException ex)
             {
-                // Fallback: use netsh parsing
+                // Rule filters need elevation. netsh shows the local store only.
                 ct.ThrowIfCancellationRequested();
+                evidence.AppendLine($"  WMI error: {ex.Message}");
+                evidence.AppendLine("  netsh reads the local store only; Group Policy and service-added rules aren't included.");
+                sb.AppendLine("NOTE: Rule filters couldn't be read (run elevated to include them), so this covers local rules only, not Group Policy or service-added ones.");
                 QueryViaNetsh(sb, evidence, ref totalInbound, ref inboundAllow, ref anyAnyRules, anyAnyNames, ct);
             }
 
@@ -98,27 +119,25 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
         }
     }
 
-    private static void QueryViaNetsh(
+    private void QueryViaNetsh(
         StringBuilder sb, StringBuilder evidence,
         ref int totalInbound, ref int inboundAllow, ref int anyAnyRules,
         List<string> anyAnyNames, CancellationToken ct)
     {
         try
         {
-            string output = CommandRunner.RunForOutput(
-                "netsh",
-                "advfirewall firewall show rule name=all dir=in",
-                TimeSpan.FromSeconds(30),
-                ct);
+            string output = _runCommand("netsh", "advfirewall firewall show rule name=all dir=in verbose", ct);
 
             evidence.AppendLine("\n  [Parsed from netsh output]");
 
-            // Parse netsh output into rule blocks
+            // Parse netsh output into rule blocks. Verbose output adds Program and Service lines.
             string currentName = "";
             bool currentEnabled = false;
             string currentAction = "";
             string currentLocalPort = "";
             string currentRemoteAddr = "";
+            string currentProgram = "";
+            string currentService = "";
 
             foreach (var rawLine in output.Split('\n'))
             {
@@ -128,13 +147,24 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
                 {
                     // Process previous rule
                     ProcessNetshRule(ref totalInbound, ref inboundAllow, ref anyAnyRules,
-                        anyAnyNames, currentName, currentEnabled, currentAction, currentLocalPort, currentRemoteAddr);
+                        anyAnyNames, currentName, currentEnabled, currentAction, currentLocalPort, currentRemoteAddr,
+                        currentProgram, currentService);
 
                     currentName = line[10..].Trim();
                     currentEnabled = false;
                     currentAction = "";
                     currentLocalPort = "";
                     currentRemoteAddr = "";
+                    currentProgram = "";
+                    currentService = "";
+                }
+                else if (line.StartsWith("Program:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentProgram = line[8..].Trim();
+                }
+                else if (line.StartsWith("Service:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentService = line[8..].Trim();
                 }
                 else if (line.StartsWith("Enabled:", StringComparison.OrdinalIgnoreCase))
                 {
@@ -156,7 +186,8 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
 
             // Process last rule
             ProcessNetshRule(ref totalInbound, ref inboundAllow, ref anyAnyRules,
-                anyAnyNames, currentName, currentEnabled, currentAction, currentLocalPort, currentRemoteAddr);
+                anyAnyNames, currentName, currentEnabled, currentAction, currentLocalPort, currentRemoteAddr,
+                currentProgram, currentService);
         }
         catch (Exception ex)
         {
@@ -167,7 +198,8 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
     private static void ProcessNetshRule(
         ref int totalInbound, ref int inboundAllow, ref int anyAnyRules,
         List<string> anyAnyNames,
-        string name, bool enabled, string action, string localPort, string remoteAddr)
+        string name, bool enabled, string action, string localPort, string remoteAddr,
+        string program, string service)
     {
         if (string.IsNullOrEmpty(name) || !enabled) return;
 
@@ -179,8 +211,9 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
 
         bool isAnyPort = string.IsNullOrEmpty(localPort) || localPort == "Any";
         bool isAnyRemote = string.IsNullOrEmpty(remoteAddr) || remoteAddr == "Any";
+        bool isUnscoped = FirewallRuleReader.IsUnscoped(program) && FirewallRuleReader.IsUnscoped(service);
 
-        if (isAnyPort && isAnyRemote)
+        if (isAnyPort && isAnyRemote && isUnscoped)
         {
             anyAnyRules++;
             anyAnyNames.Add(name);

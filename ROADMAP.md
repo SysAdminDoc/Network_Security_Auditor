@@ -242,13 +242,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: event queries stop at a documented cap with the count reported as "at least N"; a Ctrl+C or deadline ends a silent run with partial results flagged and exit code documented; no check launches a windowed process; a test asserts a blocked fake check is cancelled within the timeout.
   Complexity: M
 
-- [ ] P1 — NSA-107 Read NP01, NP05 and NP06 firewall rules from the active store
-  Why: those three call `FirewallRuleReader.GetEnabledRules(ct)` with no policy store, which reads the local persistent store, so rules pushed by Group Policy are invisible (on this PC ActiveStore had 519 rules against 516). A domain host whose any/any allow or temporary rule comes from a GPO passes NP01/NP06, and NP05 misses GPO egress rules. NP01 and NP06 also don't use the new application scope fields, so a program-scoped any-port allow may still read as any/any. Found 2026-09-30 during the NSA-067 follow-up.
-  Evidence: `src/NetworkSecurityAuditor/Checks/NetworkPerimeter/NP01_FirewallRulesCheck.cs:35`, `NP05_EgressFilteringCheck.cs:39`, `NP06_TempRulesCheck.cs:37`; NP02 already passes `FirewallRuleReader.ActiveStore`. The PS1 NP01/NP05/NP06 blocks call `Get-NetFirewallRule` without `-PolicyStore`.
-  Touches: the three checks and their tests, the PS1 blocks, evidence text naming the store read.
-  Acceptance: all three read `ActiveStore` on both surfaces; NP01's any/any finding requires `HasNoApplicationScope`; a fixture with a GPO-sourced rule (or an ActiveStore-only rule) is seen; a live test confirms the ActiveStore read completes.
-  Complexity: S
-
 ### P2
 
 - [ ] P2 — NSA-084 Add an LDAP signing and channel binding check for domain controllers
@@ -369,6 +362,13 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: PS1 `$stigMap`, the C# STIG mapping if one exists, README STIG row, tests.
   Acceptance: every STIG reference names a real rule from a named STIG release (checked against the published XCCDF) or says plainly that no rule maps; a test pins the source release.
   Complexity: M
+
+- [ ] P2 — NSA-113 Match NP06 stale-rule indicators on words, not substrings
+  Why: both surfaces test each indicator with a substring match, so "temp" hits "Droplet Template", "test" hits "Google Chrome for Testing" and "old" would hit "Folder" or "Hold". On this PC six rules came back as stale for that reason and the PS1 NP06 said Fail. The PS1 also counts one issue per stale rule (four or more is Fail) where the app caps NP06 at Partial, and the two indicator lists differ ("troubleshoot", "vendor", "fixme", "TODO" vs "tmp", "debug", "deprecated", "disable", "unused", "copy of").
+  Evidence: `src/NetworkSecurityAuditor/Checks/NetworkPerimeter/NP06_TempRulesCheck.cs` `ProcessRuleForStaleness`; PS1 NP06 `$staleIndicators` loop; live PS1 NP06 run 2026-09-30.
+  Touches: NP06 on both surfaces, one shared indicator list with a parity test, NP06 tests.
+  Acceptance: indicators match whole words (or a documented prefix like `tmp_`); "Template", "Testing" and "Folder" fixtures aren't stale; "TEMP vendor access" is; both surfaces use the same list and the same status rule.
+  Complexity: S
 
 ### P3
 

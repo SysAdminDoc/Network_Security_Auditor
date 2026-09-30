@@ -86,6 +86,19 @@ public class FirewallRuleReaderTests
         }
     }
 
+    // The rules themselves are readable by any user; only the filters need elevation.
+    [Fact]
+    public void Active_Store_Rules_Read_Without_Filters_On_The_Live_Host()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var rules = FirewallRuleReader.GetEnabledRules(CancellationToken.None, FirewallRuleReader.ActiveStore, includeFilters: false);
+
+        Assert.NotEmpty(rules);
+        Assert.All(rules, r => Assert.Empty(r.LocalPorts));
+    }
+
     [Fact]
     public void Snapshot_Treats_Wildcard_Remote_Networks_As_Any()
     {

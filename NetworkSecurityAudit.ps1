@@ -5728,29 +5728,64 @@ $script:AutoChecks = @{
 
     'NP01' = @{ Type='Local'; Label='Scan Firewall Rules'
         Script = {
+            # Defined inside the check so it survives fresh runspaces and Invoke-Command.
+            # An inbound allow is any/any when it opens every local port to every remote address and
+            # isn't tied to a program, Store app package, service or user (the app's HasNoApplicationScope).
+            function Get-Np01AnyAnyRules {
+                param([object[]]$Rules = @())
+                $isAny = {
+                    param($values)
+                    $seen = @($values | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { ([string]$_).Trim() })
+                    $seen.Count -eq 0 -or @($seen | Where-Object { $_ -in @('Any','*','0.0.0.0/0','::/0') }).Count -gt 0
+                }
+                $isUnscoped = { param($v) $s = ([string]$v).Trim(); [string]::IsNullOrEmpty($s) -or $s -eq 'Any' -or $s -eq '*' }
+                @($Rules | Where-Object {
+                    [string]$_.Direction -eq 'Inbound' -and [string]$_.Action -eq 'Allow' -and
+                    (& $isAny $_.LocalPorts) -and (& $isAny $_.RemoteAddresses) -and
+                    (& $isUnscoped $_.Program) -and (& $isUnscoped $_.Package) -and (& $isUnscoped $_.Service) -and (& $isUnscoped $_.Owner)
+                })
+            }
+
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
-            $rules = Get-NetFirewallRule -Enabled True -EA Stop
+            # ActiveStore is what the firewall enforces: local, Group Policy and service-added rules.
+            $rules = @(Get-NetFirewallRule -Enabled True -PolicyStore ActiveStore -EA Stop)
             $inbound = $rules | Where-Object { $_.Direction -eq 'Inbound' }
             $outbound = $rules | Where-Object { $_.Direction -eq 'Outbound' }
-            [void]$sb.AppendLine("FIREWALL RULES SUMMARY:")
+            [void]$sb.AppendLine("FIREWALL RULES SUMMARY (active store: local, Group Policy and service rules):")
             [void]$sb.AppendLine("  Total enabled  : $($rules.Count)")
             [void]$sb.AppendLine("  Inbound Allow  : $(($inbound | Where-Object Action -eq 'Allow').Count)")
             [void]$sb.AppendLine("  Inbound Block  : $(($inbound | Where-Object Action -eq 'Block').Count)")
             [void]$sb.AppendLine("  Outbound Allow : $(($outbound | Where-Object Action -eq 'Allow').Count)")
             [void]$sb.AppendLine("  Outbound Block : $(($outbound | Where-Object Action -eq 'Block').Count)")
-            # Check for any/any rules (inbound allow with no port restriction)
-            $anyAny = @()
-            foreach ($r in ($inbound | Where-Object Action -eq 'Allow')) {
-                $ports = ($r | Get-NetFirewallPortFilter -EA SilentlyContinue)
-                $addr = ($r | Get-NetFirewallAddressFilter -EA SilentlyContinue)
-                if ($ports.LocalPort -eq 'Any' -and $addr.RemoteAddress -eq 'Any') {
-                    $anyAny += $r; $issues++
+            # Any/any inbound allow rules. The filters need elevation, so they're read once per filter type
+            # (not once per rule); a standard user gets Partial instead of a silent pass.
+            $rows = @(); $filterError = ''
+            try {
+                $portFilters = @{}; foreach ($pf in @(Get-NetFirewallPortFilter -All -PolicyStore ActiveStore -EA Stop)) { $portFilters[$pf.InstanceID] = $pf }
+                $addrFilters = @{}; foreach ($xf in @(Get-NetFirewallAddressFilter -All -PolicyStore ActiveStore -EA Stop)) { $addrFilters[$xf.InstanceID] = $xf }
+                $appFilters = @{}; foreach ($af in @(Get-NetFirewallApplicationFilter -All -PolicyStore ActiveStore -EA Stop)) { $appFilters[$af.InstanceID] = $af }
+                $svcFilters = @{}; foreach ($sf in @(Get-NetFirewallServiceFilter -All -PolicyStore ActiveStore -EA Stop)) { $svcFilters[$sf.InstanceID] = [string]$sf.Service }
+                foreach ($r in @($inbound | Where-Object Action -eq 'Allow')) {
+                    $pf = $portFilters[$r.InstanceID]; $xf = $addrFilters[$r.InstanceID]; $af = $appFilters[$r.InstanceID]
+                    $rows += @{
+                        Name=[string]$r.DisplayName; Direction='Inbound'; Action='Allow'; Profile=[string]$r.Profile
+                        LocalPorts=$(if ($pf) { @($pf.LocalPort) } else { @() }); RemoteAddresses=$(if ($xf) { @($xf.RemoteAddress) } else { @() })
+                        Program=$(if ($af) { [string]$af.Program } else { '' }); Package=$(if ($af) { [string]$af.Package } else { '' })
+                        Service=[string]$svcFilters[$r.InstanceID]; Owner=[string]$r.Owner
+                    }
                 }
+            } catch { $filterError = $_.Exception.Message.Trim() }
+            if ($filterError) {
+                $issues++
+                [void]$sb.AppendLine("`nRule filters couldn't be read ($filterError). Run elevated to check for inbound any/any allow rules.")
+            } else {
+                $anyAny = @(Get-Np01AnyAnyRules -Rules $rows)
+                $issues += $anyAny.Count
+                if ($anyAny.Count -gt 0) {
+                    [void]$sb.AppendLine("`n[!] INBOUND ANY/ANY ALLOW RULES ($($anyAny.Count)):")
+                    foreach ($a in ($anyAny | Select-Object -First 15)) { [void]$sb.AppendLine("  $($a.Name) | Profile:$($a.Profile)") }
+                } else { [void]$sb.AppendLine("`nNo inbound any/any allow rules found. Good.") }
             }
-            if ($anyAny.Count -gt 0) {
-                [void]$sb.AppendLine("`n[!] INBOUND ANY/ANY ALLOW RULES ($($anyAny.Count)):")
-                foreach ($a in ($anyAny | Select-Object -First 15)) { [void]$sb.AppendLine("  $($a.DisplayName) | Profile:$($a.Profile) | Program:$($a.Program)") }
-            } else { [void]$sb.AppendLine("`nNo inbound any/any allow rules found. Good.") }
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 3) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Get-NetFirewallRule scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
@@ -7221,15 +7256,17 @@ $script:AutoChecks = @{
     'NP05' = @{ Type='Local'; Label='Scan Egress / Outbound Rules'
         Script = {
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
-            $profiles = Get-NetFirewallProfile -EA Stop
-            [void]$sb.AppendLine("FIREWALL DEFAULT OUTBOUND ACTIONS:")
+            # ActiveStore is what the firewall enforces, Group Policy included. Profiles and rules (not
+            # their filters) are readable without elevation.
+            $profiles = Get-NetFirewallProfile -PolicyStore ActiveStore -EA Stop
+            [void]$sb.AppendLine("FIREWALL DEFAULT OUTBOUND ACTIONS (active store):")
             foreach ($p in $profiles) {
                 $blockOut = $p.DefaultOutboundAction -eq 'Block'
                 if (-not $blockOut) { $issues++ }
                 [void]$sb.AppendLine("  $($p.Name): DefaultOutbound=$($p.DefaultOutboundAction) $(if($blockOut){'[RESTRICTIVE - Good]'}else{'[ALLOW ALL - No egress filtering]'})")
             }
             # Check outbound block rules
-            $outBlock = Get-NetFirewallRule -Direction Outbound -Action Block -Enabled True -EA SilentlyContinue
+            $outBlock = Get-NetFirewallRule -Direction Outbound -Action Block -Enabled True -PolicyStore ActiveStore -EA SilentlyContinue
             [void]$sb.AppendLine("`nOutbound BLOCK rules (enabled): $(($outBlock | Measure-Object).Count)")
             if ($outBlock) {
                 foreach ($r in ($outBlock | Select-Object -First 10)) { [void]$sb.AppendLine("  $($r.DisplayName)") }
@@ -7249,7 +7286,8 @@ $script:AutoChecks = @{
     'NP06' = @{ Type='Local'; Label='Scan Stale Firewall Rules'
         Script = {
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
-            $rules = Get-NetFirewallRule -Enabled True -EA Stop
+            # ActiveStore includes Group Policy and service-added rules, and is readable without elevation.
+            $rules = @(Get-NetFirewallRule -Enabled True -PolicyStore ActiveStore -EA Stop)
             # Find potentially stale rules (common indicators)
             $staleIndicators = @('temp','test','troubleshoot','vendor','old','backup','delete','remove','fixme','TODO','trial')
             $staleRules = @()

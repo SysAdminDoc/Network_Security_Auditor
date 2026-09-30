@@ -1,5 +1,6 @@
 namespace NetworkSecurityAuditor.Checks.NetworkPerimeter;
 
+using System.Globalization;
 using System.Management;
 using System.Text;
 using NetworkSecurityAuditor.Models;
@@ -7,11 +8,34 @@ using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// NP05 - Egress Filtering: Check outbound firewall rules. Look for default "Allow All"
-/// outbound. Count outbound block rules.
+/// outbound. Count outbound block rules. Profiles and rules come from the active store, so
+/// Group Policy settings and rules count.
 /// </summary>
 public sealed class NP05_EgressFilteringCheck : ISecurityCheck
 {
+    private readonly Func<CancellationToken, string?, IReadOnlyList<FirewallRuleSnapshot>> _readRules;
+    private readonly Func<string, string, CancellationToken, string> _runCommand;
+    private readonly Func<IReadOnlyList<OutboundDefault>> _readOutboundDefaults;
+
     public string Id => "NP05";
+
+    /// <summary>A profile's default outbound action. Blocks is null when it couldn't be read.</summary>
+    internal sealed record OutboundDefault(string Profile, bool? Blocks, string Source);
+
+    public NP05_EgressFilteringCheck()
+        : this(null, null, null)
+    {
+    }
+
+    internal NP05_EgressFilteringCheck(
+        Func<CancellationToken, string?, IReadOnlyList<FirewallRuleSnapshot>>? readRules,
+        Func<string, string, CancellationToken, string>? runCommand = null,
+        Func<IReadOnlyList<OutboundDefault>>? readOutboundDefaults = null)
+    {
+        _readRules = readRules ?? ((ct, store) => FirewallRuleReader.GetEnabledRules(ct, store));
+        _runCommand = runCommand ?? ((file, args, ct) => CommandRunner.RunForOutput(file, args, TimeSpan.FromSeconds(30), ct));
+        _readOutboundDefaults = readOutboundDefaults ?? ReadOutboundDefaults;
+    }
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -32,11 +56,11 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
 
             // 2. Enumerate outbound rules
             ct.ThrowIfCancellationRequested();
-            evidence.AppendLine("\n[Outbound Firewall Rules]");
+            evidence.AppendLine("\n[Outbound Firewall Rules - active store (local, Group Policy and service rules)]");
 
             try
             {
-                foreach (var rule in FirewallRuleReader.GetEnabledRules(ct))
+                foreach (var rule in _readRules(ct, FirewallRuleReader.ActiveStore))
                 {
                     ct.ThrowIfCancellationRequested();
 
@@ -48,7 +72,8 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
                     {
                         outboundAllow++;
 
-                        if (rule.HasAnyRemotePort && rule.HasAnyRemoteAddress)
+                        // A rule tied to one program, package, service or owner is application-aware egress, not any/any.
+                        if (rule.HasAnyRemotePort && rule.HasAnyRemoteAddress && rule.HasNoApplicationScope)
                         {
                             anyAnyAllow++;
                             evidence.AppendLine($"  ANY/ANY ALLOW OUT: {rule.Name} " +
@@ -64,7 +89,10 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
             }
             catch (ManagementException ex)
             {
+                // Rule filters need elevation. netsh shows the local store only.
                 evidence.AppendLine($"  WMI error: {ex.Message}");
+                evidence.AppendLine("  netsh reads the local store only; Group Policy and service-added rules aren't included.");
+                sb.AppendLine("NOTE: Rule filters couldn't be read (run elevated to include them), so the rule counts cover local rules only, not Group Policy or service-added ones.");
                 QueryOutboundViaNetsh(evidence, ref totalOutbound, ref outboundAllow, ref outboundBlock, ref anyAnyAllow, ct);
             }
 
@@ -83,7 +111,7 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
             if (anyAnyAllow > 3)
             {
                 hasIssue = true;
-                sb.AppendLine($"WARNING: {anyAnyAllow} outbound ALLOW rules with no port/address restriction. " +
+                sb.AppendLine($"WARNING: {anyAnyAllow} outbound ALLOW rules with no port, address or program restriction. " +
                     "Recommend implementing application-aware egress filtering.");
             }
 
@@ -105,41 +133,86 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
         }
     }
 
-    private static void CheckDefaultOutbound(StringBuilder sb, StringBuilder evidence, ref bool hasIssue)
+    private void CheckDefaultOutbound(StringBuilder sb, StringBuilder evidence, ref bool hasIssue)
     {
         evidence.AppendLine("[Default Outbound Action per Profile]");
 
-        string[] profiles = ["DomainProfile", "StandardProfile", "PublicProfile"];
-        string basePath = @"HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy";
-
-        foreach (string profile in profiles)
+        foreach (var profile in _readOutboundDefaults())
         {
-            string path = $@"{basePath}\{profile}";
-            int defaultOutbound = Services.RegistryHelper.GetValue<int>(path, "DefaultOutboundAction", -1);
-
-            string action = defaultOutbound switch
+            string action = profile.Blocks switch
             {
-                0 => "Allow (default)",
-                1 => "Block",
-                _ => "Unknown"
+                true => "Block",
+                false => "Allow",
+                null => "Unknown"
             };
 
-            evidence.AppendLine($"  {profile}: DefaultOutboundAction = {action}");
+            evidence.AppendLine($"  {profile.Profile}: DefaultOutboundAction = {action} ({profile.Source})");
 
-            if (defaultOutbound == 0)
+            if (profile.Blocks == false)
             {
                 hasIssue = true;
-                sb.AppendLine($"WARNING: {profile} default outbound action is ALLOW. " +
+                sb.AppendLine($"WARNING: {profile.Profile} default outbound action is ALLOW. " +
                     "Best practice is to set default outbound to BLOCK and whitelist required traffic.");
             }
-            else if (defaultOutbound == 1)
+            else if (profile.Blocks == true)
             {
-                sb.AppendLine($"{profile}: Default outbound is BLOCK (good).");
+                sb.AppendLine($"{profile.Profile}: Default outbound is BLOCK (good).");
             }
         }
     }
 
-    private static void QueryOutboundViaNetsh(
+    /// <summary>
+    /// Reads the enforced default outbound action from the active store (local and Group Policy
+    /// settings merged), which any user can read. Falls back to the local policy in the registry.
+    /// </summary>
+    private static IReadOnlyList<OutboundDefault> ReadOutboundDefaults()
+    {
+        try
+        {
+            var profiles = new List<OutboundDefault>();
+            using var searcher = FirewallRuleReader.CreateSearcher("SELECT Name, DefaultOutboundAction FROM MSFT_NetFirewallProfile", FirewallRuleReader.ActiveStore);
+            using var results = searcher.Get();
+            foreach (ManagementObject obj in results)
+            {
+                using (obj)
+                    profiles.Add(new OutboundDefault(obj["Name"]?.ToString() ?? "Unknown", BlocksOutbound(obj["DefaultOutboundAction"]), "active store"));
+            }
+            if (profiles.Count > 0)
+                return profiles;
+        }
+        catch (Exception ex) when (ex is ManagementException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+        {
+        }
+
+        string basePath = @"HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy";
+        return [.. new[] { ("Domain", "DomainProfile"), ("Private", "StandardProfile"), ("Public", "PublicProfile") }
+            .Select(p =>
+            {
+                int value = RegistryHelper.GetValue<int>($@"{basePath}\{p.Item2}", "DefaultOutboundAction", -1);
+                return new OutboundDefault(p.Item1, value switch { 0 => false, 1 => true, _ => null }, "local policy in the registry");
+            })];
+    }
+
+    /// <summary>MSFT_NetFirewallProfile actions: 2 Allow, 4 Block; 0 (not configured) means the Windows default, Allow.</summary>
+    internal static bool? BlocksOutbound(object? value)
+    {
+        if (value is null) return null;
+        try
+        {
+            return Convert.ToUInt16(value, CultureInfo.InvariantCulture) switch
+            {
+                4 => true,
+                0 or 2 => false,
+                _ => null
+            };
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+        {
+            return null;
+        }
+    }
+
+    private void QueryOutboundViaNetsh(
         StringBuilder evidence,
         ref int totalOutbound,
         ref int outboundAllow,
@@ -149,11 +222,7 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
     {
         try
         {
-            string output = CommandRunner.RunForOutput(
-                "netsh",
-                "advfirewall firewall show rule name=all dir=out",
-                TimeSpan.FromSeconds(30),
-                ct);
+            string output = _runCommand("netsh", "advfirewall firewall show rule name=all dir=out verbose", ct);
 
             evidence.AppendLine("  [Parsed from netsh output]");
 
@@ -162,6 +231,8 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
             string currentAction = "";
             string currentRemotePort = "";
             string currentRemoteAddr = "";
+            string currentProgram = "";
+            string currentService = "";
 
             foreach (var rawLine in output.Split('\n'))
             {
@@ -170,13 +241,16 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
                 if (line.StartsWith("Rule Name:", StringComparison.OrdinalIgnoreCase))
                 {
                     ProcessNetshOutboundRule(evidence, ref totalOutbound, ref outboundAllow, ref outboundBlock,
-                        ref anyAnyAllow, currentName, currentEnabled, currentAction, currentRemotePort, currentRemoteAddr);
+                        ref anyAnyAllow, currentName, currentEnabled, currentAction, currentRemotePort, currentRemoteAddr,
+                        currentProgram, currentService);
 
                     currentName = line[10..].Trim();
                     currentEnabled = false;
                     currentAction = "";
                     currentRemotePort = "";
                     currentRemoteAddr = "";
+                    currentProgram = "";
+                    currentService = "";
                 }
                 else if (line.StartsWith("Enabled:", StringComparison.OrdinalIgnoreCase))
                 {
@@ -194,10 +268,19 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
                 {
                     currentRemoteAddr = line[9..].Trim();
                 }
+                else if (line.StartsWith("Program:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentProgram = line[8..].Trim();
+                }
+                else if (line.StartsWith("Service:", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentService = line[8..].Trim();
+                }
             }
 
             ProcessNetshOutboundRule(evidence, ref totalOutbound, ref outboundAllow, ref outboundBlock,
-                ref anyAnyAllow, currentName, currentEnabled, currentAction, currentRemotePort, currentRemoteAddr);
+                ref anyAnyAllow, currentName, currentEnabled, currentAction, currentRemotePort, currentRemoteAddr,
+                currentProgram, currentService);
         }
         catch (Exception ex)
         {
@@ -215,7 +298,9 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
         bool enabled,
         string action,
         string remotePort,
-        string remoteAddr)
+        string remoteAddr,
+        string program,
+        string service)
     {
         if (string.IsNullOrEmpty(name) || !enabled) return;
 
@@ -225,7 +310,8 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
         {
             outboundAllow++;
 
-            if (FirewallRuleReader.IsAnyValue([remotePort]) && FirewallRuleReader.IsAnyValue([remoteAddr]))
+            if (FirewallRuleReader.IsAnyValue([remotePort]) && FirewallRuleReader.IsAnyValue([remoteAddr]) &&
+                FirewallRuleReader.IsUnscoped(program) && FirewallRuleReader.IsUnscoped(service))
             {
                 anyAnyAllow++;
                 evidence.AppendLine($"  ANY/ANY ALLOW OUT: {name} (RemotePort={ValueOrAny(remotePort)}, RemoteAddr={ValueOrAny(remoteAddr)})");
