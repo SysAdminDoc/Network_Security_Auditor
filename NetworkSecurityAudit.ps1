@@ -4313,7 +4313,9 @@ $script:AutoChecks = @{
                 $fixed = @('S-1-5-18','S-1-5-9','S-1-5-32-544','S-1-5-32-548','S-1-5-32-549','S-1-5-32-550','S-1-5-32-551','S-1-5-32-552')
                 if ($fixed -contains $Sid) { return $true }
                 $domainRids = @(500,502,512,516,521,526,527)
-                $forestRids = @(518,519,527)
+                # The forest root's Administrator and Domain Admins control Enterprise and Schema Admins, so they are
+                # Tier 0 in every domain of the forest (the same set as the app's Tier0Principals).
+                $forestRids = @(500,512,518,519,527)
                 $rid = Get-Ia12Rid -Sid $Sid -DomainSid $DomainSid
                 if ($null -ne $rid -and (($domainRids -contains $rid) -or ($forestRids -contains $rid))) { return $true }
                 if (-not [string]::IsNullOrEmpty($ForestRootSid)) {
@@ -4390,6 +4392,13 @@ $script:AutoChecks = @{
                     if ($Dn[$i] -eq ',') { return $Dn.Substring($i + 1) }
                 }
                 return $null
+            }
+            function Get-Ia12SweepList {
+                # OUs, containers and the domain root are checked for rights that create a dMSA, then each dMSA's own
+                # ACL for rights that rewrite its link, each list under its own cap, the same as the app.
+                param([string[]]$ContainerDns, [string[]]$DmsaDns, [int]$ContainerLimit = 1000, [int]$DmsaLimit = 200)
+                foreach ($dn in @($ContainerDns | Where-Object { $_ } | Select-Object -First $ContainerLimit)) { [pscustomobject]@{ Dn = $dn; Scope = 'Container' } }
+                foreach ($dn in @($DmsaDns | Where-Object { $_ } | Select-Object -First $DmsaLimit)) { [pscustomobject]@{ Dn = $dn; Scope = 'Dmsa' } }
             }
             function Get-Ia12RemoteUbr {
                 param([string]$ComputerName)
@@ -4540,12 +4549,15 @@ $script:AutoChecks = @{
                 }
 
                 $limit = 1000
+                $dmsaLimit = 200
                 $ordered = @($targets)
-                if ($ordered.Count -gt $limit) { $capHit = $true }
-                $dmsaDns = @($dmsaObjects | ForEach-Object { "$($_.DistinguishedName)" })
-                foreach ($dn in ($ordered | Select-Object -First $limit)) {
-                    $inspected++
-                    $scope = if ($dmsaDns -contains $dn) { 'Dmsa' } else { 'Container' }
+                $dmsaDns = @($dmsaObjects | ForEach-Object { "$($_.DistinguishedName)" } | Where-Object { $_ })
+                if ($ordered.Count -gt $limit -or $dmsaDns.Count -gt $dmsaLimit) { $capHit = $true }
+                $dmsaInspected = 0
+                foreach ($item in @(Get-Ia12SweepList -ContainerDns $ordered -DmsaDns $dmsaDns -ContainerLimit $limit -DmsaLimit $dmsaLimit)) {
+                    $dn = $item.Dn
+                    $scope = $item.Scope
+                    if ($scope -eq 'Dmsa') { $dmsaInspected++ } else { $inspected++ }
                     try {
                         $acl = Get-Acl -Path ("AD:\{0}" -f $dn) -EA Stop
                     } catch {
@@ -4588,8 +4600,9 @@ $script:AutoChecks = @{
                         }
                     }
                 }
-                [void]$sb.AppendLine("Objects inspected for dMSA create/control rights: $inspected of $($ordered.Count)")
-                if ($capHit) { $review++; [void]$sb.AppendLine("[REVIEW] The ACL sweep stopped at its limit of $limit objects; review the rest with a targeted scan.") }
+                [void]$sb.AppendLine("OUs, containers and domain root inspected: $inspected of $($ordered.Count)")
+                [void]$sb.AppendLine("dMSA objects inspected: $dmsaInspected of $($dmsaDns.Count)")
+                if ($capHit) { $review++; [void]$sb.AppendLine("[REVIEW] The ACL sweep stopped at its limit ($inspected of $($ordered.Count) OUs and containers, $dmsaInspected of $($dmsaDns.Count) dMSAs). Review the rest with a targeted scan.") }
                 if ($unreadable -gt 0) { $review++; [void]$sb.AppendLine("[REVIEW] $unreadable ACL(s) could not be read, so rights on those objects were not checked.") }
             } elseif ($exposed) {
                 $review++

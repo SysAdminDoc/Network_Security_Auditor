@@ -2548,11 +2548,24 @@ Describe 'EP11 Secure Boot 2023 certificate transition (nested check helpers via
 Describe 'IA12 BadSuccessor helpers (nested check helpers via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        foreach ($nm in 'Get-Ia12Rid','Test-Ia12Tier0Sid','Test-Ia12Reportable','Get-Ia12PatchState','Test-Ia12Server2025','Get-Ia12RelevantRights','Get-Ia12AceReason','Get-Ia12ParentDn') {
+        foreach ($nm in 'Get-Ia12Rid','Test-Ia12Tier0Sid','Test-Ia12Reportable','Get-Ia12PatchState','Test-Ia12Server2025','Get-Ia12RelevantRights','Get-Ia12AceReason','Get-Ia12ParentDn','Get-Ia12SweepList') {
             $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
             . ([scriptblock]::Create($fn.Extent.Text))
         }
         $script:Dom = 'S-1-5-21-1004336348-1177238915-682003330'
+    }
+
+    It 'reads each dMSA ACL after the OUs and containers, each under its own cap, as the app does' {
+        $root = 'DC=corp,DC=example'
+        $list = @(Get-Ia12SweepList -ContainerDns @($root, "OU=Apps,$root") -DmsaDns @("CN=dmsa_sql,OU=Apps,$root"))
+        ($list | ForEach-Object { "$($_.Scope):$($_.Dn)" }) -join '|' | Should -Be "Container:$root|Container:OU=Apps,$root|Dmsa:CN=dmsa_sql,OU=Apps,$root"
+        $capped = @(Get-Ia12SweepList -ContainerDns @('OU=A', 'OU=B', 'OU=C') -DmsaDns @('CN=d1', 'CN=d2', 'CN=d3') -ContainerLimit 2 -DmsaLimit 1)
+        ($capped | ForEach-Object { "$($_.Scope):$($_.Dn)" }) -join '|' | Should -Be 'Container:OU=A|Container:OU=B|Dmsa:CN=d1'
+        @(Get-Ia12SweepList -ContainerDns @($root) -DmsaDns @()).Count | Should -Be 1
+        $block = Get-Block -Text $script:Text -Start "'IA12' = @\{ Type='AD'" -End "'EP01' = @\{ Type='Local'"
+        $block | Should -Match 'foreach \(\$item in @\(Get-Ia12SweepList -ContainerDns \$ordered -DmsaDns \$dmsaDns'
+        $block | Should -Match '\$scope = \$item\.Scope'
+        $block | Should -Match 'dMSA objects inspected: \$dmsaInspected'
     }
 
     It 'reads the real dMSA link attribute, not a nonexistent successor attribute' {
@@ -2573,6 +2586,10 @@ Describe 'IA12 BadSuccessor helpers (nested check helpers via AST)' {
         # Enterprise Admins live in the forest root domain.
         $child = 'S-1-5-21-2222222222-3333333333-4444444444'
         Test-Ia12Tier0Sid -Sid "$script:Dom-519" -DomainSid $child -ForestRootSid $script:Dom | Should -BeTrue
+        # So do the root's Domain Admins and built-in Administrator, as in the app, but not its Domain Users.
+        Test-Ia12Tier0Sid -Sid "$script:Dom-512" -DomainSid $child -ForestRootSid $script:Dom | Should -BeTrue
+        Test-Ia12Tier0Sid -Sid "$script:Dom-500" -DomainSid $child -ForestRootSid $script:Dom | Should -BeTrue
+        Test-Ia12Tier0Sid -Sid "$script:Dom-513" -DomainSid $child -ForestRootSid $script:Dom | Should -BeFalse
         Test-Ia12Tier0Sid -Sid "$script:Dom-513" -DomainSid $script:Dom -ForestRootSid '' | Should -BeFalse
         Test-Ia12Tier0Sid -Sid "$script:Dom-1105" -DomainSid $script:Dom -ForestRootSid '' | Should -BeFalse
         # A different domain whose SID merely starts the same must not match.
