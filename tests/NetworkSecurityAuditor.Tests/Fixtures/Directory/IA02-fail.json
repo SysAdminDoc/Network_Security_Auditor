@@ -1,0 +1,108 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=svc_sql,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_sql",
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 900
+          },
+          "userAccountControl": 66048,
+          "servicePrincipalName": [
+            "MSSQLSvc/sql01.corp.example:1433",
+            "MSSQLSvc/sql01.corp.example"
+          ],
+          "memberOf": [
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=SQL Admins,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=svc_web,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_web",
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 60
+          },
+          "userAccountControl": 512,
+          "servicePrincipalName": [
+            "HTTP/intranet.corp.example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*svc*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=svc_sql,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_sql",
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 900
+          },
+          "userAccountControl": 66048
+        },
+        {
+          "$path": "LDAP://CN=svc_web,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_web",
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 60
+          },
+          "userAccountControl": 512
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*service*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*sql*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=svc_sql,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_sql",
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 900
+          },
+          "userAccountControl": 66048
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*backup*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*batch*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*task*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*scan*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*agent*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(objectClass=msDS-GroupManagedServiceAccount)",
+      "results": []
+    }
+  ]
+}

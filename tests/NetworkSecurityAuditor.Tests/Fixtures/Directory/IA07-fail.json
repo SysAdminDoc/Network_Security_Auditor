@@ -1,0 +1,110 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*shared*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Front Desk Shared,OU=Shared,DC=corp,DC=example",
+          "sAMAccountName": "shared.frontdesk",
+          "distinguishedName": "CN=Front Desk Shared,OU=Shared,DC=corp,DC=example",
+          "userAccountControl": 512,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 400
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 2
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*generic*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*admin*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Administrator",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "userAccountControl": 66048,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 45
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 1
+          }
+        },
+        {
+          "$path": "LDAP://CN=Temp Admin,OU=Contractors,DC=corp,DC=example",
+          "sAMAccountName": "temp.admin",
+          "distinguishedName": "CN=Temp Admin,OU=Contractors,DC=corp,DC=example",
+          "userAccountControl": 514,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 250
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 240
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*scanner*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Scanner,OU=Shared,DC=corp,DC=example",
+          "sAMAccountName": "scanner",
+          "distinguishedName": "CN=Scanner,OU=Shared,DC=corp,DC=example",
+          "userAccountControl": 66048,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 1000
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*reception*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*kiosk*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*training*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*test*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*temp*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Temp Admin,OU=Contractors,DC=corp,DC=example",
+          "sAMAccountName": "temp.admin",
+          "distinguishedName": "CN=Temp Admin,OU=Contractors,DC=corp,DC=example",
+          "userAccountControl": 514,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 250
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 240
+          }
+        }
+      ]
+    }
+  ]
+}

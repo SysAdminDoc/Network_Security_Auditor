@@ -1,0 +1,22 @@
+{
+  "entries": {
+    "(domain)": {
+      "minPwdLength": 7,
+      "maxPwdAge": -36288000000000,
+      "minPwdAge": -864000000000,
+      "pwdHistoryLength": 24,
+      "pwdProperties": 1,
+      "lockoutThreshold": 0,
+      "lockoutDuration": -6000000000,
+      "lockOutObservationWindow": -6000000000,
+      "distinguishedName": "DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": "CN=Password Settings Container,CN=System,DC=corp,DC=example",
+      "filter": "(objectClass=msDS-PasswordSettings)",
+      "results": []
+    }
+  ]
+}

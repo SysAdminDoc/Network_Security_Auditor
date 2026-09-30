@@ -1,0 +1,119 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Domain Admins))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example",
+            "CN=Old Admin,OU=Admins,DC=corp,DC=example",
+            "CN=Partner Admin,OU=Admins,DC=emea,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Enterprise Admins))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Schema Admins))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Administrators))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrators,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrators,CN=Builtin,DC=corp,DC=example",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example",
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(adminCount=1))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Administrator",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example"
+        },
+        {
+          "$path": "LDAP://CN=Old Admin,OU=Admins,DC=corp,DC=example",
+          "sAMAccountName": "old.admin",
+          "distinguishedName": "CN=Old Admin,OU=Admins,DC=corp,DC=example"
+        },
+        {
+          "$path": "LDAP://CN=Former Admin,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "former.admin",
+          "distinguishedName": "CN=Former Admin,OU=Staff,DC=corp,DC=example"
+        }
+      ]
+    }
+  ],
+  "entries": {
+    "CN=Administrator,CN=Users,DC=corp,DC=example": {
+      "objectClass": [
+        "top",
+        "person",
+        "organizationalPerson",
+        "user"
+      ],
+      "sAMAccountName": "Administrator",
+      "userAccountControl": 512,
+      "lastLogonTimestamp": {
+        "$fileTimeDaysAgo": 2
+      },
+      "pwdLastSet": {
+        "$fileTimeDaysAgo": 20
+      }
+    },
+    "CN=Old Admin,OU=Admins,DC=corp,DC=example": {
+      "objectClass": [
+        "top",
+        "person",
+        "organizationalPerson",
+        "user"
+      ],
+      "sAMAccountName": "old.admin",
+      "userAccountControl": 66048,
+      "lastLogonTimestamp": {
+        "$fileTimeDaysAgo": 200
+      },
+      "pwdLastSet": {
+        "$fileTimeDaysAgo": 900
+      }
+    },
+    "CN=Partner Admin,OU=Admins,DC=emea,DC=corp,DC=example": {
+      "$error": {
+        "hresult": "0x8007203A",
+        "message": "The server is not operational."
+      }
+    },
+    "CN=Domain Admins,CN=Users,DC=corp,DC=example": {
+      "objectClass": [
+        "top",
+        "group"
+      ],
+      "sAMAccountName": "Domain Admins"
+    }
+  }
+}

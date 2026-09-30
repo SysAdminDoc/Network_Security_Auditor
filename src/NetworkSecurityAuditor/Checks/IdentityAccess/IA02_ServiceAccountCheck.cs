@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
-using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA02 - Service Account Audit: Kerberoastable SPNs, password age, DA membership,
@@ -11,6 +11,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class IA02_ServiceAccountCheck : ISecurityCheck
 {
     public string Id => "IA02";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA02_ServiceAccountCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA02_ServiceAccountCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     private static readonly string[] ServicePatterns =
     [
@@ -35,32 +41,27 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasIssue = false;
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry) { PageSize = 1000 };
+            var directory = _directory(env);
 
             // 1. Find Kerberoastable accounts (users with SPNs set)
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("[Kerberoastable Accounts (SPN set)]");
-            searcher.Filter = "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))";
-            searcher.PropertiesToLoad.Clear();
-            searcher.PropertiesToLoad.AddRange(["sAMAccountName", "servicePrincipalName",
-                "pwdLastSet", "memberOf", "userAccountControl"]);
+            var spnQuery = new DirectoryQuery(
+                "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
+                ["sAMAccountName", "servicePrincipalName", "pwdLastSet", "memberOf", "userAccountControl"]);
 
             int kerberoastable = 0;
             int oldPassword = 0;
             int inDomainAdmins = 0;
 
-            using var spnResults = searcher.FindAll();
-            foreach (SearchResult sr in spnResults)
+            foreach (var sr in directory.Search(spnQuery, ct))
             {
                 ct.ThrowIfCancellationRequested();
                 kerberoastable++;
-                string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
+                string sam = sr.String("sAMAccountName") ?? "";
 
                 // Password age
-                long pwdLastSet = 0;
-                if (sr.Properties["pwdLastSet"].Count > 0)
-                    pwdLastSet = (long)sr.Properties["pwdLastSet"][0];
+                long pwdLastSet = sr.Long("pwdLastSet");
                 DateTime pwdDate = pwdLastSet > 0 ? DateTime.FromFileTimeUtc(pwdLastSet) : DateTime.MinValue;
                 int pwdAgeDays = pwdLastSet > 0 ? (int)(DateTime.UtcNow - pwdDate).TotalDays : -1;
 
@@ -69,23 +70,18 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
 
                 // Check Domain Admins membership
                 bool isDa = false;
-                if (sr.Properties["memberOf"] != null)
+                foreach (var g in sr.Strings("memberOf"))
                 {
-                    foreach (var g in sr.Properties["memberOf"])
+                    if (g.Contains("CN=Domain Admins", StringComparison.OrdinalIgnoreCase))
                     {
-                        if (g?.ToString()?.Contains("CN=Domain Admins", StringComparison.OrdinalIgnoreCase) == true)
-                        {
-                            isDa = true;
-                            inDomainAdmins++;
-                            break;
-                        }
+                        isDa = true;
+                        inDomainAdmins++;
+                        break;
                     }
                 }
 
                 // First SPN for evidence
-                string firstSpn = sr.Properties["servicePrincipalName"].Count > 0
-                    ? sr.Properties["servicePrincipalName"][0]?.ToString() ?? ""
-                    : "";
+                string firstSpn = sr.String("servicePrincipalName") ?? "";
 
                 string flags = "";
                 if (isPwdOld) flags += " [PWD>" + pwdAgeDays + "d]";
@@ -115,20 +111,17 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
             foreach (var pattern in ServicePatterns)
             {
                 ct.ThrowIfCancellationRequested();
-                searcher.Filter = $"(&(objectCategory=person)(objectClass=user)(sAMAccountName=*{pattern}*))";
-                searcher.PropertiesToLoad.Clear();
-                searcher.PropertiesToLoad.AddRange(["sAMAccountName", "pwdLastSet", "userAccountControl"]);
+                var patternQuery = new DirectoryQuery(
+                    $"(&(objectCategory=person)(objectClass=user)(sAMAccountName=*{pattern}*))",
+                    ["sAMAccountName", "pwdLastSet", "userAccountControl"]);
 
-                using var patResults = searcher.FindAll();
-                foreach (SearchResult sr in patResults)
+                foreach (var sr in directory.Search(patternQuery, ct))
                 {
-                    string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
-                    int uac = sr.Properties["userAccountControl"].Count > 0
-                        ? (int)sr.Properties["userAccountControl"][0] : 0;
+                    string sam = sr.String("sAMAccountName") ?? "";
+                    int uac = sr.Int("userAccountControl");
                     bool enabled = (uac & 0x2) == 0; // ADS_UF_ACCOUNTDISABLE = 0x2
 
-                    long pwdTs = sr.Properties["pwdLastSet"].Count > 0
-                        ? (long)sr.Properties["pwdLastSet"][0] : 0;
+                    long pwdTs = sr.Long("pwdLastSet");
                     int pwdAge = pwdTs > 0 ? (int)(DateTime.UtcNow - DateTime.FromFileTimeUtc(pwdTs)).TotalDays : -1;
 
                     evidence.AppendLine($"  {sam} | Enabled={enabled} | PwdAge={pwdAge}d | Pattern={pattern}");
@@ -140,16 +133,15 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
             // 3. gMSA adoption
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("\n[Group Managed Service Accounts (gMSA)]");
-            searcher.Filter = "(objectClass=msDS-GroupManagedServiceAccount)";
-            searcher.PropertiesToLoad.Clear();
-            searcher.PropertiesToLoad.AddRange(["sAMAccountName", "msDS-ManagedPasswordInterval"]);
+            var gmsaQuery = new DirectoryQuery(
+                "(objectClass=msDS-GroupManagedServiceAccount)",
+                ["sAMAccountName", "msDS-ManagedPasswordInterval"]);
 
             int gmsaCount = 0;
-            using var gmsaResults = searcher.FindAll();
-            foreach (SearchResult sr in gmsaResults)
+            foreach (var sr in directory.Search(gmsaQuery, ct))
             {
                 gmsaCount++;
-                string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
+                string sam = sr.String("sAMAccountName") ?? "";
                 evidence.AppendLine($"  {sam}");
             }
 

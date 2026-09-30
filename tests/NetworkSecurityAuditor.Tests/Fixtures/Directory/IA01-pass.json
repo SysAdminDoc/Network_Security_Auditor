@@ -1,0 +1,120 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Domain Admins))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example",
+            "CN=Alex Admin,OU=Admins,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Enterprise Admins))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Schema Admins))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Schema Admins,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=Schema Admins,CN=Users,DC=corp,DC=example"
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Administrators))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrators,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Administrators,CN=Builtin,DC=corp,DC=example",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example",
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=Enterprise Admins,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(adminCount=1))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Administrator",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example"
+        },
+        {
+          "$path": "LDAP://CN=Alex Admin,OU=Admins,DC=corp,DC=example",
+          "sAMAccountName": "a.admin",
+          "distinguishedName": "CN=Alex Admin,OU=Admins,DC=corp,DC=example"
+        }
+      ]
+    }
+  ],
+  "entries": {
+    "CN=Administrator,CN=Users,DC=corp,DC=example": {
+      "objectClass": [
+        "top",
+        "person",
+        "organizationalPerson",
+        "user"
+      ],
+      "sAMAccountName": "Administrator",
+      "userAccountControl": 512,
+      "lastLogonTimestamp": {
+        "$fileTimeDaysAgo": 3
+      },
+      "pwdLastSet": {
+        "$fileTimeDaysAgo": 30
+      }
+    },
+    "CN=Alex Admin,OU=Admins,DC=corp,DC=example": {
+      "objectClass": [
+        "top",
+        "person",
+        "organizationalPerson",
+        "user"
+      ],
+      "sAMAccountName": "a.admin",
+      "userAccountControl": 512,
+      "lastLogonTimestamp": {
+        "$fileTimeDaysAgo": 1
+      },
+      "pwdLastSet": {
+        "$fileTimeDaysAgo": 45
+      }
+    },
+    "CN=Domain Admins,CN=Users,DC=corp,DC=example": {
+      "objectClass": [
+        "top",
+        "group"
+      ],
+      "sAMAccountName": "Domain Admins"
+    },
+    "CN=Enterprise Admins,CN=Users,DC=corp,DC=example": {
+      "objectClass": [
+        "top",
+        "group"
+      ],
+      "sAMAccountName": "Enterprise Admins"
+    }
+  }
+}

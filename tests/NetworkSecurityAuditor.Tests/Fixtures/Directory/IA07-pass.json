@@ -1,0 +1,75 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*shared*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*generic*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*admin*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Administrator,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Administrator",
+          "distinguishedName": "CN=Administrator,CN=Users,DC=corp,DC=example",
+          "userAccountControl": 514,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 700
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 650
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*scanner*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*reception*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*kiosk*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*training*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*test*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Test User,OU=Disabled,DC=corp,DC=example",
+          "sAMAccountName": "test.user",
+          "distinguishedName": "CN=Test User,OU=Disabled,DC=corp,DC=example",
+          "userAccountControl": 514,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 400
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 380
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*temp*))",
+      "results": []
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "entries": {
+    "(domain)": {
+      "minPwdLength": 12,
+      "maxPwdAge": -9223372036854775808,
+      "minPwdAge": -864000000000,
+      "pwdHistoryLength": 12,
+      "pwdProperties": 0,
+      "lockoutThreshold": 3,
+      "lockoutDuration": -6000000000,
+      "lockOutObservationWindow": -6000000000,
+      "distinguishedName": "DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": "CN=Password Settings Container,CN=System,DC=corp,DC=example",
+      "filter": "(objectClass=msDS-PasswordSettings)",
+      "$error": {
+        "hresult": "0x80070005",
+        "message": "General access denied error"
+      }
+    }
+  ]
+}

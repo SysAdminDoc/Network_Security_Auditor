@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
-using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA05 - Password Policy Audit: Default Domain Password Policy benchmarks
@@ -12,6 +12,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
 {
     public string Id => "IA05";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA05_PasswordPolicyCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA05_PasswordPolicyCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -31,17 +37,20 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasIssue = false;
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            rootEntry.RefreshCache([
+            var directory = _directory(env);
+
+            // distinguishedName isn't in the policy set: the DirectoryEntry used to fetch it with an implicit
+            // GetInfo on first access, and the reader returns only the attributes it was asked for.
+            var rootEntry = directory.ReadEntry(null, [
                 "minPwdLength", "maxPwdAge", "minPwdAge", "pwdHistoryLength",
                 "pwdProperties", "lockoutThreshold", "lockoutDuration",
-                "lockOutObservationWindow"
-            ]);
+                "lockOutObservationWindow", "distinguishedName"
+            ], ct);
 
             evidence.AppendLine("[Default Domain Password Policy]");
 
             // Min password length
-            int minLen = GetIntProperty(rootEntry, "minPwdLength");
+            int minLen = rootEntry.Int("minPwdLength");
             evidence.AppendLine($"  minPwdLength = {minLen}");
             if (minLen < 12)
             {
@@ -54,7 +63,7 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
             }
 
             // Max password age (stored as negative 100-nanosecond intervals)
-            long maxPwdAgeTicks = GetLongProperty(rootEntry, "maxPwdAge");
+            long maxPwdAgeTicks = rootEntry.Long("maxPwdAge");
             int maxPwdAgeDays = ConvertDirectoryIntervalToWholeUnits(maxPwdAgeTicks, TimeSpan.TicksPerDay);
             evidence.AppendLine($"  maxPwdAge = {maxPwdAgeTicks} ({maxPwdAgeDays} days)");
 
@@ -74,7 +83,7 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
             }
 
             // Password history
-            int historyLen = GetIntProperty(rootEntry, "pwdHistoryLength");
+            int historyLen = rootEntry.Int("pwdHistoryLength");
             evidence.AppendLine($"  pwdHistoryLength = {historyLen}");
             if (historyLen < 12)
             {
@@ -87,7 +96,7 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
             }
 
             // Complexity (pwdProperties bit 1 = DOMAIN_PASSWORD_COMPLEX)
-            int pwdProps = GetIntProperty(rootEntry, "pwdProperties");
+            int pwdProps = rootEntry.Int("pwdProperties");
             bool complexityEnabled = (pwdProps & 1) != 0;
             evidence.AppendLine($"  pwdProperties = {pwdProps} (complexity={(complexityEnabled ? "on" : "off")})");
 
@@ -102,7 +111,7 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
             }
 
             // Lockout threshold
-            int lockoutThreshold = GetIntProperty(rootEntry, "lockoutThreshold");
+            int lockoutThreshold = rootEntry.Int("lockoutThreshold");
             evidence.AppendLine($"  lockoutThreshold = {lockoutThreshold}");
             if (lockoutThreshold == 0)
             {
@@ -119,7 +128,7 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
             }
 
             // Lockout duration
-            long lockoutDurTicks = GetLongProperty(rootEntry, "lockoutDuration");
+            long lockoutDurTicks = rootEntry.Long("lockoutDuration");
             int lockoutDurMin = ConvertDirectoryIntervalToWholeUnits(lockoutDurTicks, TimeSpan.TicksPerMinute);
             evidence.AppendLine($"  lockoutDuration = {lockoutDurTicks} ({lockoutDurMin} min)");
             if (lockoutThreshold > 0)
@@ -135,27 +144,22 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
             evidence.AppendLine("\n[Fine-Grained Password Policies (PSO)]");
             try
             {
-                string domainDn = rootEntry.Properties["distinguishedName"]?.Value?.ToString() ?? "";
-                string psoCn = $"LDAP://CN=Password Settings Container,CN=System,{domainDn}";
-                using var psoContainer = new DirectoryEntry(psoCn);
-                using var psoSearcher = new DirectorySearcher(psoContainer)
+                string domainDn = rootEntry.String("distinguishedName") ?? "";
+                var psoQuery = new DirectoryQuery(
+                    "(objectClass=msDS-PasswordSettings)",
+                    ["cn", "msDS-PasswordSettingsPrecedence", "msDS-MinimumPasswordLength", "msDS-MaximumPasswordAge"])
                 {
-                    Filter = "(objectClass=msDS-PasswordSettings)",
+                    SearchBase = $"CN=Password Settings Container,CN=System,{domainDn}",
                     PageSize = 100
                 };
-                psoSearcher.PropertiesToLoad.AddRange(["cn", "msDS-PasswordSettingsPrecedence",
-                    "msDS-MinimumPasswordLength", "msDS-MaximumPasswordAge"]);
 
                 int psoCount = 0;
-                using var psoResults = psoSearcher.FindAll();
-                foreach (SearchResult pso in psoResults)
+                foreach (var pso in directory.Search(psoQuery, ct))
                 {
                     psoCount++;
-                    string cn = pso.Properties["cn"].Count > 0 ? pso.Properties["cn"][0]?.ToString() ?? "" : "";
-                    int precedence = pso.Properties["msDS-PasswordSettingsPrecedence"].Count > 0
-                        ? (int)pso.Properties["msDS-PasswordSettingsPrecedence"][0] : 0;
-                    int psoMinLen = pso.Properties["msDS-MinimumPasswordLength"].Count > 0
-                        ? (int)pso.Properties["msDS-MinimumPasswordLength"][0] : 0;
+                    string cn = pso.String("cn") ?? "";
+                    int precedence = pso.Int("msDS-PasswordSettingsPrecedence");
+                    int psoMinLen = pso.Int("msDS-MinimumPasswordLength");
                     evidence.AppendLine($"  PSO: {cn} | Precedence={precedence} | MinLen={psoMinLen}");
                 }
 
@@ -180,28 +184,6 @@ public sealed class IA05_PasswordPolicyCheck : ISecurityCheck
         {
             return Task.FromResult(CheckResult.FromError(Id, ex));
         }
-    }
-
-    private static int GetIntProperty(DirectoryEntry entry, string name)
-    {
-        try
-        {
-            var val = entry.Properties[name]?.Value;
-            if (val == null) return 0;
-            return Convert.ToInt32(val);
-        }
-        catch { return 0; }
-    }
-
-    private static long GetLongProperty(DirectoryEntry entry, string name)
-    {
-        try
-        {
-            var val = entry.Properties[name]?.Value;
-            if (val == null) return 0;
-            return ActiveDirectoryValueConverter.GetLargeIntegerValue(val);
-        }
-        catch { return 0; }
     }
 
     internal static int ConvertDirectoryIntervalToWholeUnits(long intervalTicks, long ticksPerUnit)

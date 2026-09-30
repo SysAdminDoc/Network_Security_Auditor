@@ -1,0 +1,74 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*svc*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=svc_print,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_print",
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 120
+          },
+          "userAccountControl": 512
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*service*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*sql*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*backup*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*batch*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*task*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*scan*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*agent*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(objectClass=msDS-GroupManagedServiceAccount)",
+      "results": [
+        {
+          "$path": "LDAP://CN=gmsa-sql,CN=Managed Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "gmsa-sql$",
+          "msDS-ManagedPasswordInterval": 30
+        },
+        {
+          "$path": "LDAP://CN=gmsa-iis,CN=Managed Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "gmsa-iis$",
+          "msDS-ManagedPasswordInterval": 30
+        }
+      ]
+    }
+  ]
+}

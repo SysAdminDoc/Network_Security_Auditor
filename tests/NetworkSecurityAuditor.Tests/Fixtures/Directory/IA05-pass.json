@@ -1,0 +1,30 @@
+{
+  "entries": {
+    "(domain)": {
+      "minPwdLength": 14,
+      "maxPwdAge": -51840000000000,
+      "minPwdAge": -864000000000,
+      "pwdHistoryLength": 24,
+      "pwdProperties": 1,
+      "lockoutThreshold": 10,
+      "lockoutDuration": -18000000000,
+      "lockOutObservationWindow": -18000000000,
+      "distinguishedName": "DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": "CN=Password Settings Container,CN=System,DC=corp,DC=example",
+      "filter": "(objectClass=msDS-PasswordSettings)",
+      "results": [
+        {
+          "$path": "LDAP://CN=PSO-Admins,CN=Password Settings Container,CN=System,DC=corp,DC=example",
+          "cn": "PSO-Admins",
+          "msDS-PasswordSettingsPrecedence": 10,
+          "msDS-MinimumPasswordLength": 20,
+          "msDS-MaximumPasswordAge": -25920000000000
+        }
+      ]
+    }
+  ]
+}

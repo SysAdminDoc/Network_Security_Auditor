@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
-using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA07 - Shared/Generic Accounts: Search AD for accounts matching shared/generic
@@ -11,6 +11,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class IA07_SharedAccountsCheck : ISecurityCheck
 {
     public string Id => "IA07";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA07_SharedAccountsCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA07_SharedAccountsCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     private static readonly string[] SharedPatterns =
     [
@@ -36,8 +42,7 @@ public sealed class IA07_SharedAccountsCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasIssue = false;
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry) { PageSize = 1000 };
+            var directory = _directory(env);
 
             evidence.AppendLine("[Shared/Generic Account Scan]");
 
@@ -48,29 +53,24 @@ public sealed class IA07_SharedAccountsCheck : ISecurityCheck
             foreach (var pattern in SharedPatterns)
             {
                 ct.ThrowIfCancellationRequested();
-                searcher.Filter = $"(&(objectCategory=person)(objectClass=user)(sAMAccountName=*{pattern}*))";
-                searcher.PropertiesToLoad.Clear();
-                searcher.PropertiesToLoad.AddRange(["sAMAccountName", "distinguishedName",
-                    "userAccountControl", "pwdLastSet", "lastLogonTimestamp"]);
+                var query = new DirectoryQuery(
+                    $"(&(objectCategory=person)(objectClass=user)(sAMAccountName=*{pattern}*))",
+                    ["sAMAccountName", "distinguishedName", "userAccountControl", "pwdLastSet", "lastLogonTimestamp"]);
 
-                using var results = searcher.FindAll();
-                foreach (SearchResult sr in results)
+                foreach (var sr in directory.Search(query, ct))
                 {
-                    string dn = sr.Properties["distinguishedName"][0]?.ToString() ?? "";
+                    string dn = sr.String("distinguishedName") ?? "";
                     if (!seen.Add(dn)) continue;
 
-                    string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
+                    string sam = sr.String("sAMAccountName") ?? "";
 
-                    int uac = sr.Properties["userAccountControl"].Count > 0
-                        ? (int)sr.Properties["userAccountControl"][0] : 0;
+                    int uac = sr.Int("userAccountControl");
                     bool enabled = (uac & 0x2) == 0;
 
-                    long pwdTs = sr.Properties["pwdLastSet"].Count > 0
-                        ? (long)sr.Properties["pwdLastSet"][0] : 0;
+                    long pwdTs = sr.Long("pwdLastSet");
                     int pwdAge = pwdTs > 0 ? (int)(DateTime.UtcNow - DateTime.FromFileTimeUtc(pwdTs)).TotalDays : -1;
 
-                    long logonTs = sr.Properties["lastLogonTimestamp"].Count > 0
-                        ? (long)sr.Properties["lastLogonTimestamp"][0] : 0;
+                    long logonTs = sr.Long("lastLogonTimestamp");
                     string lastLogon = logonTs > 0
                         ? DateTime.FromFileTimeUtc(logonTs).ToString("yyyy-MM-dd")
                         : "Never";

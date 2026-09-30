@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
-using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA01 - Privileged Groups Review: Domain Admins, Enterprise Admins, Schema Admins,
@@ -11,6 +11,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
 {
     public string Id => "IA01";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA01_PrivilegedGroupsCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA01_PrivilegedGroupsCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     private static readonly string[] PrivilegedGroups =
     [
@@ -41,35 +47,31 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
             var staleThreshold = DateTime.UtcNow.AddDays(-90);
             var allPrivMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry)
-            {
-                PageSize = 1000
-            };
+            var directory = _directory(env);
 
             foreach (var groupName in PrivilegedGroups)
             {
                 ct.ThrowIfCancellationRequested();
                 evidence.AppendLine($"[{groupName}]");
 
-                searcher.Filter = $"(&(objectClass=group)(cn={groupName}))";
-                searcher.PropertiesToLoad.Clear();
-                searcher.PropertiesToLoad.AddRange(["distinguishedName", "member"]);
-
-                var groupResult = searcher.FindOne();
+                var groupQuery = new DirectoryQuery($"(&(objectClass=group)(cn={groupName}))", ["distinguishedName", "member"])
+                {
+                    SizeLimit = 1
+                };
+                var groupResult = directory.Search(groupQuery, ct).FirstOrDefault();
                 if (groupResult == null)
                 {
                     evidence.AppendLine("  Group not found.");
                     continue;
                 }
 
-                var members = groupResult.Properties["member"];
-                int memberCount = members?.Count ?? 0;
+                var members = groupResult.Strings("member");
+                int memberCount = members.Count;
                 totalPrivileged += memberCount;
                 sb.AppendLine($"{groupName}: {memberCount} member(s).");
                 evidence.AppendLine($"  Member count: {memberCount}");
 
-                if (memberCount == 0 || members == null) continue;
+                if (memberCount == 0) continue;
 
                 int staleCount = 0;
                 int neverExpireCount = 0;
@@ -83,25 +85,20 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
 
                     try
                     {
-                        using var memberEntry = new DirectoryEntry("LDAP://" + EscapeDn(memberDn));
-                        memberEntry.RefreshCache(["objectClass", "sAMAccountName", "lastLogonTimestamp",
-                            "userAccountControl", "pwdLastSet"]);
+                        var memberEntry = directory.ReadEntry(memberDn, ["objectClass", "sAMAccountName", "lastLogonTimestamp",
+                            "userAccountControl", "pwdLastSet"], ct);
 
-                        var objectClasses = memberEntry.Properties["objectClass"];
                         bool isGroup = false;
-                        if (objectClasses != null)
+                        foreach (var oc in memberEntry.Strings("objectClass"))
                         {
-                            foreach (var oc in objectClasses)
+                            if (string.Equals(oc, "group", StringComparison.OrdinalIgnoreCase))
                             {
-                                if (string.Equals(oc?.ToString(), "group", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    isGroup = true;
-                                    break;
-                                }
+                                isGroup = true;
+                                break;
                             }
                         }
 
-                        string sam = memberEntry.Properties["sAMAccountName"]?.Value?.ToString() ?? memberDn;
+                        string sam = memberEntry.String("sAMAccountName") ?? memberDn;
 
                         if (isGroup)
                         {
@@ -110,16 +107,12 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
                             continue;
                         }
 
-                        var lastLogonVal = memberEntry.Properties["lastLogonTimestamp"]?.Value;
-                        var lastLogon = ActiveDirectoryValueConverter.GetFileTimeUtc(lastLogonVal);
+                        var lastLogon = memberEntry.FileTimeUtc("lastLogonTimestamp");
                         bool isStale = !lastLogon.HasValue || lastLogon.Value < staleThreshold;
                         if (isStale) staleCount++;
 
                         // Check PasswordNeverExpires (bit 0x10000 of userAccountControl)
-                        int uac = 0;
-                        var uacVal = memberEntry.Properties["userAccountControl"]?.Value;
-                        if (uacVal is int uacInt)
-                            uac = uacInt;
+                        int uac = memberEntry.Int("userAccountControl");
                         bool pwdNeverExpires = (uac & 0x10000) != 0;
                         if (pwdNeverExpires) neverExpireCount++;
 
@@ -155,20 +148,19 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
             // Check for accounts with adminCount=1 not in expected privileged groups
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("\n[adminCount=1 Orphans]");
-            searcher.Filter = "(&(objectCategory=person)(objectClass=user)(adminCount=1))";
-            searcher.PropertiesToLoad.Clear();
-            searcher.PropertiesToLoad.AddRange(["sAMAccountName", "distinguishedName"]);
+            var adminCountQuery = new DirectoryQuery(
+                "(&(objectCategory=person)(objectClass=user)(adminCount=1))",
+                ["sAMAccountName", "distinguishedName"]);
 
             int orphanCount = 0;
-            using var adminCountResults = searcher.FindAll();
-            foreach (SearchResult sr in adminCountResults)
+            foreach (var sr in directory.Search(adminCountQuery, ct))
             {
                 ct.ThrowIfCancellationRequested();
-                string dn = sr.Properties["distinguishedName"][0]?.ToString() ?? "";
+                string dn = sr.String("distinguishedName") ?? "";
                 if (!allPrivMembers.Contains(dn))
                 {
                     orphanCount++;
-                    string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? dn;
+                    string sam = sr.String("sAMAccountName") ?? dn;
                     evidence.AppendLine($"  {sam} (adminCount=1 but not in expected privileged groups)");
                     if (orphanCount <= 20)
                         sb.AppendLine($"  ORPHAN: {sam} has adminCount=1 but is not in a known privileged group.");
@@ -194,11 +186,5 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
         {
             return Task.FromResult(CheckResult.FromError(Id, ex));
         }
-    }
-
-    private static string EscapeDn(string dn)
-    {
-        // Forward slashes in DN components must be escaped for LDAP binding
-        return dn.Replace("/", "\\/");
     }
 }
