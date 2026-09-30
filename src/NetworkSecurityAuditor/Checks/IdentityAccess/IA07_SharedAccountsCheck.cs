@@ -43,19 +43,21 @@ public sealed class IA07_SharedAccountsCheck : ISecurityCheck
             bool hasIssue = false;
 
             var directory = _directory(env);
+            var domainSid = Tier0Principals.ReadDomainSid(directory, ct);
 
             evidence.AppendLine("[Shared/Generic Account Scan]");
 
             // Deduplicate by DN since patterns may overlap
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var accounts = new List<(string Sam, bool Enabled, int PwdAgeDays, string LastLogon, string Pattern)>();
+            int builtinAdminSkipped = 0;
 
             foreach (var pattern in SharedPatterns)
             {
                 ct.ThrowIfCancellationRequested();
                 var query = new DirectoryQuery(
                     $"(&(objectCategory=person)(objectClass=user)(sAMAccountName=*{pattern}*))",
-                    ["sAMAccountName", "distinguishedName", "userAccountControl", "pwdLastSet", "lastLogonTimestamp"]);
+                    ["sAMAccountName", "distinguishedName", "userAccountControl", "pwdLastSet", "lastLogonTimestamp", "objectSid"]);
 
                 foreach (var sr in directory.Search(query, ct))
                 {
@@ -63,6 +65,15 @@ public sealed class IA07_SharedAccountsCheck : ISecurityCheck
                     if (!seen.Add(dn)) continue;
 
                     string sam = sr.String("sAMAccountName") ?? "";
+
+                    // The built-in Administrator matches "admin" but isn't a shared account; IA01 reviews it. It's
+                    // known by RID 500 rather than by name, since it's often renamed.
+                    if (Tier0Principals.Rid(sr.Sid("objectSid"), domainSid) == Tier0Principals.AdministratorRid)
+                    {
+                        builtinAdminSkipped++;
+                        evidence.AppendLine($"  {sam} | skipped: built-in Administrator (RID 500), reviewed under IA01");
+                        continue;
+                    }
 
                     int uac = sr.Int("userAccountControl");
                     bool enabled = (uac & 0x2) == 0;
@@ -105,6 +116,8 @@ public sealed class IA07_SharedAccountsCheck : ISecurityCheck
 
             if (accounts.Count == 0)
                 sb.AppendLine("No shared/generic accounts detected matching common naming patterns.");
+            if (builtinAdminSkipped > 0)
+                sb.AppendLine("Not counted: the built-in Administrator (RID 500), which IA01 reviews.");
 
             return Task.FromResult(new CheckResult
             {

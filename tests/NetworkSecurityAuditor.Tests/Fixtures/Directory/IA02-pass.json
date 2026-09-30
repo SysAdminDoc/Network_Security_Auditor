@@ -32,10 +32,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "pwdLastSet": {
-            "$fileTimeDaysAgo": 30
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example"
           ]
@@ -45,7 +41,38 @@
     {
       "base": null,
       "filter": "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
-      "results": []
+      "results": [
+        {
+          "$path": "LDAP://CN=krbtgt,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=krbtgt,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "krbtgt",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-502"
+          },
+          "userAccountControl": 514,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 1200
+          },
+          "servicePrincipalName": [
+            "kadmin/changepw"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=Legacy Web,OU=Retired,DC=corp,DC=example",
+          "distinguishedName": "CN=Legacy Web,OU=Retired,DC=corp,DC=example",
+          "sAMAccountName": "legacy.web",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1131"
+          },
+          "userAccountControl": 514,
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 1500
+          },
+          "servicePrincipalName": [
+            "HTTP/oldweb.corp.example"
+          ]
+        }
+      ]
     },
     {
       "base": null,

@@ -10,7 +10,8 @@
           "sAMAccountName": "Domain Admins",
           "member": [
             "CN=Administrator,CN=Users,DC=corp,DC=example",
-            "CN=Old Admin,OU=Staff,DC=corp,DC=example"
+            "CN=Old Admin,OU=Staff,DC=corp,DC=example",
+            "CN=New Admin,OU=Admins,DC=corp,DC=example"
           ]
         }
       ]
@@ -33,13 +34,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -60,16 +54,27 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1201"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "whenCreated": {
-            "$daysAgo": 900
-          },
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 400
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=VPN Users,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=New Admin,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=New Admin,OU=Admins,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "new.admin",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1302"
+          },
+          "primaryGroupID": 513,
+          "memberOf": [
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example"
           ]
         }
       ]
@@ -106,13 +111,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -171,13 +169,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -228,16 +219,27 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1201"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "whenCreated": {
-            "$daysAgo": 900
-          },
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 400
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=VPN Users,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://CN=New Admin,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=New Admin,OU=Admins,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "new.admin",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1302"
+          },
+          "primaryGroupID": 513,
+          "memberOf": [
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example"
           ]
         }
       ]
@@ -322,10 +324,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1203"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "whenCreated": {
-            "$daysAgo": 300
-          },
           "memberOf": [
             "CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example"
           ]
@@ -345,11 +343,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 400
-          },
-          "memberOf": [
-            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=RDP Contractor,OU=Contractors,DC=corp,DC=example",
@@ -357,10 +351,7 @@
           "sAMAccountName": "rdp.contractor",
           "whenCreated": {
             "$daysAgo": 300
-          },
-          "memberOf": [
-            "CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Jane Doe,OU=Staff,DC=corp,DC=example",
@@ -371,10 +362,15 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 120
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example"
-          ]
+          }
+        },
+        {
+          "$path": "LDAP://CN=New Admin,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=New Admin,OU=Admins,DC=corp,DC=example",
+          "sAMAccountName": "new.admin",
+          "whenCreated": {
+            "$daysAgo": 1
+          }
         }
       ]
     }

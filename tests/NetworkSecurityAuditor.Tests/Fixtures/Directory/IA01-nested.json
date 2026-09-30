@@ -40,7 +40,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 30
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -83,7 +82,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 20
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
           ]
@@ -109,7 +107,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 160
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
           ]
@@ -155,7 +152,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 30
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -221,7 +217,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 30
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -294,7 +289,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 20
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
           ]
@@ -320,7 +314,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 160
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
           ]
@@ -337,8 +330,7 @@
           "sAMAccountName": "Administrator",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
-          },
-          "primaryGroupID": 513
+          }
         },
         {
           "$path": "LDAP://CN=Alice Ops,OU=Admins,DC=corp,DC=example",
@@ -346,8 +338,7 @@
           "sAMAccountName": "alice",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1107"
-          },
-          "primaryGroupID": 513
+          }
         },
         {
           "$path": "LDAP://CN=Legacy Ops,OU=Admins,DC=corp,DC=example",
@@ -355,8 +346,7 @@
           "sAMAccountName": "legacy.ops",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1108"
-          },
-          "primaryGroupID": 513
+          }
         }
       ]
     }

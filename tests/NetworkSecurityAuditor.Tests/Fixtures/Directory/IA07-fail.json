@@ -14,6 +14,9 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 2
+          },
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1151"
           }
         }
       ]
@@ -37,6 +40,9 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 1
+          },
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           }
         },
         {
@@ -49,6 +55,9 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 240
+          },
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1152"
           }
         }
       ]
@@ -64,6 +73,9 @@
           "userAccountControl": 66048,
           "pwdLastSet": {
             "$fileTimeDaysAgo": 1000
+          },
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1153"
           }
         }
       ]
@@ -102,9 +114,19 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 240
+          },
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1152"
           }
         }
       ]
     }
-  ]
+  ],
+  "entries": {
+    "(domain)": {
+      "objectSid": {
+        "$sid": "S-1-5-21-1004336348-1177238915-682003330"
+      }
+    }
+  }
 }

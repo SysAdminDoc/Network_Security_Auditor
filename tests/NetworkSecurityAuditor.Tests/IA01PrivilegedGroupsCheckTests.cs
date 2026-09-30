@@ -27,6 +27,10 @@ public class IA01PrivilegedGroupsCheckTests
         Assert.Contains("a.admin | LastLogon=", result.Evidence);
         Assert.Contains("[NESTED GROUP] Domain Admins", result.Evidence);
         Assert.Contains("| Path=Administrators > Domain Admins > a.admin", result.Evidence);
+        // krbtgt always has adminCount=1, and a Backup Operators member is protected too: neither is an orphan.
+        Assert.DoesNotContain("ORPHAN", result.Findings);
+        Assert.Contains("krbtgt: protected account (RID 502), adminCount=1 is expected", result.Evidence);
+        Assert.Contains("b.backup: protected through Backup Operators, adminCount=1 is expected", result.Evidence);
 
         // Each group lookup is a FindOne by SID; membership and the adminCount sweep are full searches.
         var groupQueries = reader.Queries.Where(q => q.Filter.StartsWith("(objectSid=", StringComparison.Ordinal)).ToList();
@@ -76,6 +80,7 @@ public class IA01PrivilegedGroupsCheckTests
         Assert.Equal(CheckStatus.Fail, result.Status);
         Assert.Contains("WARNING: 1 member(s) have not logged on in >90 days.", result.Findings);
         Assert.Contains("WARNING: 1 member(s) have PasswordNeverExpires set.", result.Findings);
+        // former.admin is only in VPN Users, which isn't a protected group, so it's a real orphan.
         Assert.Contains("ORPHAN: former.admin has adminCount=1 but is not in a known privileged group.", result.Findings);
         Assert.Contains("WARNING: 1 account(s) with adminCount=1 not in expected privileged groups.", result.Findings);
         Assert.DoesNotContain("Schema Admins:", result.Findings);

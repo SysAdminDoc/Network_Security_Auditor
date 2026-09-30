@@ -15,10 +15,15 @@ public class CF04FormerEmployeeCheckTests
     {
         var result = await Run("CF04-pass.json");
 
+        // n.hire was created a week ago, is in Remote Desktop Users and hasn't logged on yet: a new hire, not a
+        // former employee.
         Assert.Equal(CheckStatus.Pass, result.Status);
         Assert.Contains("Stale account analysis: 3 enabled accounts with no logon in >90 days, 0 in privileged groups.", result.Findings);
         Assert.DoesNotContain("CRITICAL", result.Findings);
+        Assert.DoesNotContain("n.hire", result.Findings);
         Assert.Contains("Total stale enabled accounts: 3", result.Evidence);
+        Assert.Matches(@"NEW, NOT STALE: n\.hire \| Created: \d{4}-\d{2}-\d{2} \| no logon yet", result.Evidence);
+        Assert.Contains("Created in the last 90 days with no logon yet (not counted): 1", result.Evidence);
     }
 
     [Fact]
@@ -43,6 +48,9 @@ public class CF04FormerEmployeeCheckTests
         Assert.Contains("CRITICAL: \"rdp.contractor\" - no logon in >90 days, member of Remote Desktop Users.", result.Findings);
         Assert.Contains("WARNING: 2 stale account(s) retain privileged access.", result.Findings);
         Assert.DoesNotContain("j.doe", result.Findings);
+        // new.admin joined Domain Admins yesterday and hasn't logged on; rdp.contractor was created 300 days ago
+        // and never has, so only the second is stale.
+        Assert.DoesNotContain("new.admin", result.Findings);
         Assert.Contains("STALE PRIVILEGED: rdp.contractor | Group: Remote Desktop Users | LastLogon: Never", result.Evidence);
         Assert.Matches(@"STALE PRIVILEGED: old\.admin \| Group: Domain Admins \| LastLogon: \d{4}-\d{2}-\d{2}", result.Evidence);
     }

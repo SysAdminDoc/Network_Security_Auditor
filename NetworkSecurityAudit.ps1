@@ -3778,12 +3778,43 @@ $script:AutoChecks = @{
                 }
                 return $results.ToArray()
             }
+            function Get-NsaSidRid {
+                param([string]$Sid, [string]$DomainSid)
+                # The RID of an account SID from this domain, or -1 for a SID from anywhere else (or none).
+                if (-not $Sid -or -not $DomainSid) { return -1 }
+                $prefix = "$DomainSid-"
+                if (-not $Sid.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return -1 }
+                $rid = [long]0
+                if ([long]::TryParse($Sid.Substring($prefix.Length), [ref]$rid)) { return $rid }
+                return -1
+            }
+            function Select-Ia02ServiceAccount {
+                param([object[]]$Accounts, [string]$DomainSid)
+                # Each account once (the SPN and naming searches overlap), leaving out the KDC account (RID 502) and
+                # disabled accounts: every domain's krbtgt carries an SPN but can't be kerberoasted, and a disabled
+                # account can't log on. Both come back as Skipped so the output still shows them.
+                $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+                $kept = New-Object System.Collections.ArrayList
+                $skipped = New-Object System.Collections.ArrayList
+                foreach ($a in $Accounts) {
+                    if ($null -eq $a) { continue }
+                    $key = if ($a.DistinguishedName) { [string]$a.DistinguishedName } else { [string]$a.SamAccountName }
+                    if (-not $key -or -not $seen.Add($key)) { continue }
+                    if ((Get-NsaSidRid -Sid ([string]$a.SID) -DomainSid $DomainSid) -eq 502) {
+                        [void]$skipped.Add([pscustomobject]@{ Account = $a; Reason = 'KDC account (RID 502)' })
+                    } elseif ($a.Enabled -eq $false) {
+                        [void]$skipped.Add([pscustomobject]@{ Account = $a; Reason = 'disabled' })
+                    } else { [void]$kept.Add($a) }
+                }
+                return @{ Accounts = $kept.ToArray(); Skipped = $skipped.ToArray() }
+            }
             $spn = Get-ADUser -Filter {ServicePrincipalName -ne "$null"} -Properties PasswordLastSet,PasswordNeverExpires,ServicePrincipalName,MemberOf,Enabled,AdminCount -EA Stop
             $named = Get-ADUser -Filter 'SamAccountName -like "svc*" -or SamAccountName -like "*service*" -or SamAccountName -like "sql*" -or SamAccountName -like "backup*"' -Properties PasswordLastSet,PasswordNeverExpires,MemberOf,Enabled,AdminCount -EA SilentlyContinue
-            $all = @($spn) + @($named) | Sort-Object -Property SamAccountName -Unique
+            $domainSid = [string](Get-ADDomain -EA Stop).DomainSID.Value
+            $selection = Select-Ia02ServiceAccount -Accounts @(@($spn) + @($named) | Sort-Object -Property SamAccountName) -DomainSid $domainSid
+            $all = $selection.Accounts
             $sb = [System.Text.StringBuilder]::new(); $issues = 0; $kerberoastable = 0
             # Domain Admins by SID, nested members included: memberOf only lists direct groups, and the name is localized.
-            $domainSid = [string](Get-ADDomain -EA Stop).DomainSID.Value
             $daMembers = @{}
             try {
                 $daGroup = Get-ADGroup -Identity (Get-NsaWellKnownGroupSid -Key 'DomainAdmins' -DomainSid $domainSid).Sid -EA Stop
@@ -3812,6 +3843,9 @@ $script:AutoChecks = @{
                 }
                 $f = if ($flags) { " [$(($flags -join ', '))]" } else { '' }
                 [void]$sb.AppendLine("$($a.SamAccountName) | Enabled:$($a.Enabled) | PW Age:${age}d$f")
+            }
+            foreach ($s in $selection.Skipped) {
+                [void]$sb.AppendLine("$($s.Account.SamAccountName) | Enabled:$($s.Account.Enabled) | skipped: $($s.Reason)")
             }
             # gMSA adoption check
             try {
@@ -6395,18 +6429,52 @@ $script:AutoChecks = @{
 
     'IA07' = @{ Type='AD'; Label='Scan Shared/Generic Accounts'
         Script = {
+            function Get-NsaSidRid {
+                param([string]$Sid, [string]$DomainSid)
+                # The RID of an account SID from this domain, or -1 for a SID from anywhere else (or none).
+                if (-not $Sid -or -not $DomainSid) { return -1 }
+                $prefix = "$DomainSid-"
+                if (-not $Sid.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return -1 }
+                $rid = [long]0
+                if ([long]::TryParse($Sid.Substring($prefix.Length), [ref]$rid)) { return $rid }
+                return -1
+            }
+            function Select-Ia07SharedAccount {
+                param([object[]]$Accounts, [string]$DomainSid)
+                # Each account once (one account can match several patterns), leaving out the built-in Administrator.
+                # It's known by RID 500, not by name, because it can be renamed: every domain has one, it matches
+                # "admin", and IA01 reviews it with the privileged groups.
+                $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+                $kept = New-Object System.Collections.ArrayList
+                $builtin = $null
+                foreach ($a in $Accounts) {
+                    if ($null -eq $a) { continue }
+                    $key = if ($a.DistinguishedName) { [string]$a.DistinguishedName } else { [string]$a.SamAccountName }
+                    if (-not $key -or -not $seen.Add($key)) { continue }
+                    if ((Get-NsaSidRid -Sid ([string]$a.SID) -DomainSid $DomainSid) -eq 500) { $builtin = $a; continue }
+                    [void]$kept.Add($a)
+                }
+                return @{ Accounts = $kept.ToArray(); BuiltinAdmin = $builtin }
+            }
             $patterns = @('shared','generic','admin','scanner','reception','front*desk','warehouse','conference','kiosk','training','test','temp')
-            $sb = [System.Text.StringBuilder]::new(); $found = 0
+            $sb = [System.Text.StringBuilder]::new()
+            $domainSid = ''
+            try { $domainSid = [string](Get-ADDomain -EA Stop).DomainSID.Value }
+            catch { [void]$sb.AppendLine("Domain SID could not be read, so the built-in Administrator is not left out: $($_.Exception.Message)") }
+            $matched = New-Object System.Collections.ArrayList
             foreach ($p in $patterns) {
                 $accts = Get-ADUser -Filter "SamAccountName -like '*$p*' -or Name -like '*$p*'" -Properties Enabled,LastLogonDate,Description,PasswordLastSet -EA SilentlyContinue
-                foreach ($a in $accts) {
-                    $found++
-                    $age = if ($a.PasswordLastSet) { ((Get-Date) - $a.PasswordLastSet).Days } else { 9999 }
-                    [void]$sb.AppendLine("$($a.SamAccountName) | Enabled:$($a.Enabled) | PW Age:${age}d | Last:$(if($a.LastLogonDate){$a.LastLogonDate.ToString('yyyy-MM-dd')}else{'Never'}) | Desc:$($a.Description)")
-                }
+                foreach ($a in @($accts)) { [void]$matched.Add($a) }
+            }
+            $selection = Select-Ia07SharedAccount -Accounts $matched.ToArray() -DomainSid $domainSid
+            $found = $selection.Accounts.Count
+            foreach ($a in $selection.Accounts) {
+                $age = if ($a.PasswordLastSet) { ((Get-Date) - $a.PasswordLastSet).Days } else { 9999 }
+                [void]$sb.AppendLine("$($a.SamAccountName) | Enabled:$($a.Enabled) | PW Age:${age}d | Last:$(if($a.LastLogonDate){$a.LastLogonDate.ToString('yyyy-MM-dd')}else{'Never'}) | Desc:$($a.Description)")
             }
             if ($found -eq 0) { [void]$sb.AppendLine("No shared/generic accounts found by pattern matching.") }
             else { [void]$sb.Insert(0, "Potential shared/generic accounts ($found found):`n") }
+            if ($selection.BuiltinAdmin) { [void]$sb.AppendLine("Not counted: $($selection.BuiltinAdmin.SamAccountName), the built-in Administrator (RID 500), which IA01 reviews.") }
             $status = if ($found -eq 0) {'Pass'} elseif ($found -le 3) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="AD shared account scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
@@ -6814,11 +6882,21 @@ $script:AutoChecks = @{
                 }
                 return $results.ToArray()
             }
+            function Test-Cf04StaleAccount {
+                param([Nullable[datetime]]$LastLogon, [Nullable[datetime]]$Created, [datetime]$Threshold)
+                # Stale means no logon since the threshold. An account that has never logged on is stale only when it
+                # was created before the threshold (or its creation date is unknown): a new hire who hasn't signed in
+                # yet isn't a former employee.
+                if ($LastLogon) { return ($LastLogon -lt $Threshold) }
+                if ($Created) { return ($Created -lt $Threshold) }
+                return $true
+            }
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
             $threshold = (Get-Date).AddDays(-90)
             # Find stale accounts that STILL have privileged group membership
-            $stale = Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonDate,MemberOf,Description -EA Stop |
-                Where-Object { $_.LastLogonDate -and $_.LastLogonDate -lt $threshold }
+            $enabledUsers = @(Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonDate,WhenCreated,MemberOf,Description -EA Stop)
+            $stale = @($enabledUsers | Where-Object { $null -ne $_ -and (Test-Cf04StaleAccount -LastLogon $_.LastLogonDate -Created $_.WhenCreated -Threshold $threshold) })
+            $newNoLogon = @($enabledUsers | Where-Object { $null -ne $_ -and -not $_.LastLogonDate -and $_.WhenCreated -and $_.WhenCreated -ge $threshold })
             # Privileged groups by SID, walked through nested groups, so "Domaenen-Admins" or a nested admin still counts.
             # In priority order: an account in several is reported under the first.
             $domain = Get-ADDomain -EA Stop
@@ -6859,7 +6937,7 @@ $script:AutoChecks = @{
             [void]$sb.AppendLine("STALE ACCOUNTS WITH PRIVILEGED GROUP MEMBERSHIP ($($stalePriv.Count)):")
             if ($stalePriv.Count -gt 0) {
                 foreach ($sp in ($stalePriv | Select-Object -First 20)) {
-                    [void]$sb.AppendLine("  [!] $($sp.User) | Last: $($sp.Last.ToString('yyyy-MM-dd')) | Groups: $($sp.Groups)")
+                    [void]$sb.AppendLine("  [!] $($sp.User) | Last: $(if ($sp.Last) { $sp.Last.ToString('yyyy-MM-dd') } else { 'Never' }) | Groups: $($sp.Groups)")
                 }
             } else { [void]$sb.AppendLine("  None found [OK]") }
             foreach ($ge in $groupErrors) { [void]$sb.AppendLine("  Could not read privileged group $ge") }
@@ -6869,10 +6947,11 @@ $script:AutoChecks = @{
                 $issues += $staleRemote.Count
                 [void]$sb.AppendLine("`nSTALE ACCOUNTS WITH REMOTE ACCESS ($($staleRemote.Count)):")
                 foreach ($sr in ($staleRemote | Select-Object -First 10)) {
-                    [void]$sb.AppendLine("  [!] $($sr.SamAccountName) | Last: $($sr.LastLogonDate.ToString('yyyy-MM-dd'))")
+                    [void]$sb.AppendLine("  [!] $($sr.SamAccountName) | Last: $(if ($sr.LastLogonDate) { $sr.LastLogonDate.ToString('yyyy-MM-dd') } else { 'Never' })")
                 }
             }
             [void]$sb.AppendLine("`nTOTAL STALE ACCOUNTS (90d+): $($stale.Count)")
+            if ($newNoLogon.Count -gt 0) { [void]$sb.AppendLine("Created in the last 90 days with no logon yet (not counted): $($newNoLogon.Count)") }
             $status = if ($issues -eq 0 -and $stale.Count -le 5) {'Pass'} elseif ($issues -eq 0) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Former employee permission scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }

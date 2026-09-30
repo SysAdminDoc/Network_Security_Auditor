@@ -41,7 +41,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 20
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -69,7 +68,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 900
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example"
           ]
@@ -115,7 +113,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 20
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -169,7 +166,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 20
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -212,7 +208,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 900
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example"
           ]
@@ -229,8 +224,7 @@
           "sAMAccountName": "Administrator",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
-          },
-          "primaryGroupID": 513
+          }
         },
         {
           "$path": "LDAP://CN=Old Admin,OU=Admins,DC=corp,DC=example",
@@ -238,8 +232,7 @@
           "sAMAccountName": "old.admin",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1110"
-          },
-          "primaryGroupID": 513
+          }
         },
         {
           "$path": "LDAP://CN=Former Admin,OU=Staff,DC=corp,DC=example",
@@ -247,8 +240,21 @@
           "sAMAccountName": "former.admin",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1111"
-          },
-          "primaryGroupID": 513
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:=CN=Former Admin,OU=Staff,DC=corp,DC=example))",
+      "results": [
+        {
+          "$path": "LDAP://CN=VPN Users,OU=Groups,DC=corp,DC=example",
+          "distinguishedName": "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+          "sAMAccountName": "VPN Users",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1120"
+          }
         }
       ]
     }

@@ -33,13 +33,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -75,13 +68,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1310"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 200
-          },
-          "whenCreated": {
-            "$daysAgo": 1500
-          },
           "memberOf": [
             "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
           ]
@@ -100,13 +86,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1311"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 5
-          },
-          "whenCreated": {
-            "$daysAgo": 1500
-          },
           "memberOf": [
             "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
           ]
@@ -145,13 +124,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -210,13 +182,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -282,13 +247,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1310"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 200
-          },
-          "whenCreated": {
-            "$daysAgo": 1500
-          },
           "memberOf": [
             "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
           ]
@@ -307,13 +265,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1311"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 5
-          },
-          "whenCreated": {
-            "$daysAgo": 1500
-          },
           "memberOf": [
             "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
           ]
@@ -397,10 +348,7 @@
           },
           "whenCreated": {
             "$daysAgo": 1500
-          },
-          "memberOf": [
-            "CN=Tier0-Ops,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Jane Doe,OU=Staff,DC=corp,DC=example",
@@ -411,10 +359,7 @@
           },
           "whenCreated": {
             "$daysAgo": 900
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         }
       ]
     }

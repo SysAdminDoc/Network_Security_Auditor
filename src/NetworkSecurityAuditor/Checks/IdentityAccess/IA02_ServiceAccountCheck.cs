@@ -57,17 +57,34 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
             evidence.AppendLine("[Kerberoastable Accounts (SPN set)]");
             var spnQuery = new DirectoryQuery(
                 "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
-                ["sAMAccountName", "distinguishedName", "servicePrincipalName", "pwdLastSet", "userAccountControl"]);
+                ["sAMAccountName", "distinguishedName", "servicePrincipalName", "pwdLastSet", "userAccountControl", "objectSid"]);
 
             int kerberoastable = 0;
             int oldPassword = 0;
             int inDomainAdmins = 0;
+            int skippedKrbtgt = 0;
+            int skippedDisabled = 0;
 
             foreach (var sr in directory.Search(spnQuery, ct))
             {
                 ct.ThrowIfCancellationRequested();
-                kerberoastable++;
                 string sam = sr.String("sAMAccountName") ?? "";
+
+                // Every domain has krbtgt (RID 502, always disabled, SPN kadmin/changepw), and a disabled account
+                // can't be used. Neither is a kerberoasting finding.
+                if (resolver.Identity.Rid(sr.Sid("objectSid")) == Tier0Principals.KrbtgtRid)
+                {
+                    skippedKrbtgt++;
+                    evidence.AppendLine($"  {sam} | skipped: KDC account (RID 502)");
+                    continue;
+                }
+                if ((sr.Int("userAccountControl") & 0x2) != 0) // ADS_UF_ACCOUNTDISABLE
+                {
+                    skippedDisabled++;
+                    evidence.AppendLine($"  {sam} | SPN={sr.String("servicePrincipalName")} | skipped: disabled");
+                    continue;
+                }
+                kerberoastable++;
 
                 // Password age
                 long pwdLastSet = sr.Long("pwdLastSet");
@@ -93,6 +110,13 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
 
             sb.AppendLine($"Kerberoastable accounts (user with SPN): {kerberoastable}");
             if (kerberoastable > 0) hasIssue = true;
+            if (skippedKrbtgt + skippedDisabled > 0)
+            {
+                var skipped = new List<string>();
+                if (skippedKrbtgt > 0) skipped.Add("krbtgt");
+                if (skippedDisabled > 0) skipped.Add($"{skippedDisabled} disabled account(s)");
+                sb.AppendLine($"  Not counted: {string.Join(" and ", skipped)} with an SPN.");
+            }
 
             if (oldPassword > 0)
             {
@@ -109,15 +133,18 @@ public sealed class IA02_ServiceAccountCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("\n[Service Account Naming Patterns]");
             int patternMatches = 0;
+            var seenPatternAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var pattern in ServicePatterns)
             {
                 ct.ThrowIfCancellationRequested();
                 var patternQuery = new DirectoryQuery(
                     $"(&(objectCategory=person)(objectClass=user)(sAMAccountName=*{pattern}*))",
-                    ["sAMAccountName", "pwdLastSet", "userAccountControl"]);
+                    ["sAMAccountName", "distinguishedName", "pwdLastSet", "userAccountControl"]);
 
                 foreach (var sr in directory.Search(patternQuery, ct))
                 {
+                    // svc_sql matches both "svc" and "sql"; it's still one account, listed under its first match.
+                    if (!seenPatternAccounts.Add(sr.String("distinguishedName") ?? sr.Path)) continue;
                     string sam = sr.String("sAMAccountName") ?? "";
                     int uac = sr.Int("userAccountControl");
                     bool enabled = (uac & 0x2) == 0; // ADS_UF_ACCOUNTDISABLE = 0x2

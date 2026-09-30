@@ -32,13 +32,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -79,13 +72,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -144,13 +130,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -244,14 +223,36 @@
         {
           "$path": "LDAP://CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example",
           "distinguishedName": "CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example",
-          "sAMAccountName": "Remote Desktop Users"
+          "sAMAccountName": "Remote Desktop Users",
+          "member": [
+            "CN=New Hire,OU=Staff,DC=corp,DC=example"
+          ]
         }
       ]
     },
     {
       "base": null,
       "filter": "(memberOf:1.2.840.113556.1.4.1941:=CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example)",
-      "results": []
+      "results": [
+        {
+          "$path": "LDAP://CN=New Hire,OU=Staff,DC=corp,DC=example",
+          "distinguishedName": "CN=New Hire,OU=Staff,DC=corp,DC=example",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user"
+          ],
+          "sAMAccountName": "n.hire",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1301"
+          },
+          "primaryGroupID": 513,
+          "memberOf": [
+            "CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example"
+          ]
+        }
+      ]
     },
     {
       "base": null,
@@ -266,11 +267,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 120
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Miguel Ortiz,OU=Staff,DC=corp,DC=example",
@@ -281,10 +278,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 210
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Lobby Kiosk,OU=Shared,DC=corp,DC=example",
@@ -292,6 +286,14 @@
           "sAMAccountName": "kiosk.lobby",
           "whenCreated": {
             "$daysAgo": 900
+          }
+        },
+        {
+          "$path": "LDAP://CN=New Hire,OU=Staff,DC=corp,DC=example",
+          "distinguishedName": "CN=New Hire,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "n.hire",
+          "whenCreated": {
+            "$daysAgo": 7
           }
         }
       ]

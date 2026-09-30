@@ -150,21 +150,36 @@ public sealed class IA01_PrivilegedGroupsCheck : ISecurityCheck
             evidence.AppendLine("\n[adminCount=1 Orphans]");
             var adminCountQuery = new DirectoryQuery(
                 "(&(objectCategory=person)(objectClass=user)(adminCount=1))",
-                ["sAMAccountName", "distinguishedName"]);
+                ["sAMAccountName", "distinguishedName", "objectSid"]);
 
             int orphanCount = 0;
             foreach (var sr in directory.Search(adminCountQuery, ct))
             {
                 ct.ThrowIfCancellationRequested();
                 string dn = sr.String("distinguishedName") ?? "";
-                if (!allPrivMembers.Contains(dn))
+                if (allPrivMembers.Contains(dn)) continue;
+                string sam = sr.String("sAMAccountName") ?? dn;
+
+                // AdminSDHolder protects krbtgt and the built-in Administrator themselves, by SID, so their
+                // adminCount=1 is expected whatever they're called.
+                var sid = sr.Sid("objectSid");
+                if (resolver.Identity.IsTier0(sid))
                 {
-                    orphanCount++;
-                    string sam = sr.String("sAMAccountName") ?? dn;
-                    evidence.AppendLine($"  {sam} (adminCount=1 but not in expected privileged groups)");
-                    if (orphanCount <= 20)
-                        sb.AppendLine($"  ORPHAN: {sam} has adminCount=1 but is not in a known privileged group.");
+                    evidence.AppendLine($"  {sam}: protected account (RID {resolver.Identity.Rid(sid)}), adminCount=1 is expected");
+                    continue;
                 }
+
+                // So are members of the other protected groups, such as Backup Operators.
+                if (dn.Length > 0 && resolver.Tier0GroupOf(dn, ct) is { } protectingGroup)
+                {
+                    evidence.AppendLine($"  {sam}: protected through {protectingGroup}, adminCount=1 is expected");
+                    continue;
+                }
+
+                orphanCount++;
+                evidence.AppendLine($"  {sam} (adminCount=1 but not in expected privileged groups)");
+                if (orphanCount <= 20)
+                    sb.AppendLine($"  ORPHAN: {sam} has adminCount=1 but is not in a known privileged group.");
             }
 
             if (orphanCount > 0)

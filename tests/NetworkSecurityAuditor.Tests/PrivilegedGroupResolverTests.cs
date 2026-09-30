@@ -165,6 +165,36 @@ public class PrivilegedGroupResolverTests
         Assert.Empty(resolver.Members(resolver.Resolve(WellKnownGroup.Administrators, CancellationToken.None), [], CancellationToken.None));
     }
 
+    [Fact]
+    public void Tier0GroupOf_Finds_A_Protected_Group_By_Sid_In_The_Domain_And_The_Forest_Root()
+    {
+        var reader = FixtureDirectoryReader.FromJson($$"""
+            {
+              "entries": {
+                "(domain)": { "objectSid": { "$sid": "{{Child}}" }, "distinguishedName": "DC=emea,DC=corp,DC=example" },
+                "RootDSE": { "rootDomainNamingContext": "DC=corp,DC=example" },
+                "DC=corp,DC=example": { "objectSid": { "$sid": "{{Root}}" } }
+              },
+              "searches": [
+                { "base": null, "filter": "(&(objectClass=group)(member:{{Chain}}:=CN=Bea,OU=Staff,DC=emea,DC=corp,DC=example))", "results": [
+                  { "sAMAccountName": "Backup-Team", "objectSid": { "$sid": "{{Child}}-1200" } },
+                  { "sAMAccountName": "Sicherungs-Operatoren", "objectSid": { "$sid": "S-1-5-32-551" } } ] },
+                { "base": null, "filter": "(&(objectClass=group)(member:{{Chain}}:=CN=Eve,OU=Staff,DC=emea,DC=corp,DC=example))", "results": [] },
+                { "base": "DC=corp,DC=example", "filter": "(&(objectClass=group)(member:{{Chain}}:=CN=Eve,OU=Staff,DC=emea,DC=corp,DC=example))", "results": [
+                  { "sAMAccountName": "Organisations-Admins", "objectSid": { "$sid": "{{Root}}-519" } } ] },
+                { "base": null, "filter": "(&(objectClass=group)(member:{{Chain}}:=CN=Doe\\5c, Sam \\28old\\29,OU=Staff,DC=emea,DC=corp,DC=example))", "results": [
+                  { "sAMAccountName": "VPN Users", "objectSid": { "$sid": "{{Child}}-1201" } } ] },
+                { "base": "DC=corp,DC=example", "filter": "(&(objectClass=group)(member:{{Chain}}:=CN=Doe\\5c, Sam \\28old\\29,OU=Staff,DC=emea,DC=corp,DC=example))", "results": [] }
+              ]
+            }
+            """);
+        var resolver = Resolver(reader);
+
+        Assert.Equal("Sicherungs-Operatoren", resolver.Tier0GroupOf("CN=Bea,OU=Staff,DC=emea,DC=corp,DC=example", CancellationToken.None));
+        Assert.Equal("Organisations-Admins", resolver.Tier0GroupOf("CN=Eve,OU=Staff,DC=emea,DC=corp,DC=example", CancellationToken.None));
+        Assert.Null(resolver.Tier0GroupOf(@"CN=Doe\, Sam (old),OU=Staff,DC=emea,DC=corp,DC=example", CancellationToken.None));
+    }
+
     [Theory]
     [InlineData("CN=Domain Admins,CN=Users,DC=corp,DC=example", "CN=Domain Admins,CN=Users,DC=corp,DC=example")]
     [InlineData(@"CN=Doe\, Jane (IT),OU=*Staff,DC=corp,DC=example", @"CN=Doe\5c, Jane \28IT\29,OU=\2aStaff,DC=corp,DC=example")]

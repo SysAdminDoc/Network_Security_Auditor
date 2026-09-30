@@ -40,7 +40,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 30
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
             "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
@@ -68,7 +67,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 45
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domänen-Admins,CN=Users,DC=corp,DC=example"
           ]
@@ -114,7 +112,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 30
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
             "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
@@ -180,7 +177,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 30
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domänen-Admins,CN=Users,DC=corp,DC=example",
             "CN=Organisations-Admins,CN=Users,DC=corp,DC=example",
@@ -238,7 +234,6 @@
           "pwdLastSet": {
             "$fileTimeDaysAgo": 45
           },
-          "adminCount": 1,
           "memberOf": [
             "CN=Domänen-Admins,CN=Users,DC=corp,DC=example"
           ]
@@ -255,8 +250,7 @@
           "sAMAccountName": "Administrator",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
-          },
-          "primaryGroupID": 513
+          }
         },
         {
           "$path": "LDAP://CN=Alex Admin,OU=Admins,DC=corp,DC=example",
@@ -264,8 +258,37 @@
           "sAMAccountName": "a.admin",
           "objectSid": {
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-1105"
-          },
-          "primaryGroupID": 513
+          }
+        },
+        {
+          "$path": "LDAP://CN=krbtgt,CN=Users,DC=corp,DC=example",
+          "distinguishedName": "CN=krbtgt,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "krbtgt",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-502"
+          }
+        },
+        {
+          "$path": "LDAP://CN=Bea Backup,OU=Admins,DC=corp,DC=example",
+          "distinguishedName": "CN=Bea Backup,OU=Admins,DC=corp,DC=example",
+          "sAMAccountName": "b.backup",
+          "objectSid": {
+            "$sid": "S-1-5-21-1004336348-1177238915-682003330-1109"
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:=CN=Bea Backup,OU=Admins,DC=corp,DC=example))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Sicherungs-Operatoren,CN=Builtin,DC=corp,DC=example",
+          "distinguishedName": "CN=Sicherungs-Operatoren,CN=Builtin,DC=corp,DC=example",
+          "sAMAccountName": "Sicherungs-Operatoren",
+          "objectSid": {
+            "$sid": "S-1-5-32-551"
+          }
         }
       ]
     }

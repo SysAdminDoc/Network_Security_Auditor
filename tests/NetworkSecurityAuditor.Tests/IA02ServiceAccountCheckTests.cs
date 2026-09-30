@@ -15,8 +15,12 @@ public class IA02ServiceAccountCheckTests
         var reader = FixtureDirectoryReader.Load("IA02-pass.json");
         var result = await Run(reader);
 
+        // krbtgt and a disabled account both carry SPNs, but neither can be kerberoasted.
         Assert.Equal(CheckStatus.Pass, result.Status);
         Assert.Contains("Kerberoastable accounts (user with SPN): 0", result.Findings);
+        Assert.Contains("Not counted: krbtgt and 1 disabled account(s) with an SPN.", result.Findings);
+        Assert.Contains("krbtgt | skipped: KDC account (RID 502)", result.Evidence);
+        Assert.Contains("legacy.web | SPN=HTTP/oldweb.corp.example | skipped: disabled", result.Evidence);
         Assert.Contains("Service-pattern accounts found: 1", result.Findings);
         Assert.Contains("gMSA accounts: 2", result.Findings);
         Assert.DoesNotContain("RECOMMENDATION", result.Findings);
@@ -42,6 +46,10 @@ public class IA02ServiceAccountCheckTests
         Assert.Contains("svc_web | SPN=HTTP/intranet.corp.example | PwdAge=60d", result.Evidence);
         Assert.DoesNotContain("svc_web | SPN=HTTP/intranet.corp.example | PwdAge=60d [DOMAIN ADMIN]", result.Evidence);
         Assert.Contains("svc_sql | Enabled=True | PwdAge=900d | Pattern=svc", result.Evidence);
+        Assert.DoesNotContain("Not counted", result.Findings);
+        // svc_sql matches "svc" and "sql" but is one account.
+        Assert.Contains("Service-pattern accounts found: 2", result.Findings);
+        Assert.DoesNotContain("Pattern=sql", result.Evidence);
     }
 
     [Fact]

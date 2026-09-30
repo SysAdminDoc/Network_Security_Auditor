@@ -32,13 +32,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -79,13 +72,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -144,13 +130,6 @@
             "$sid": "S-1-5-21-1004336348-1177238915-682003330-500"
           },
           "primaryGroupID": 513,
-          "userAccountControl": 512,
-          "lastLogonTimestamp": {
-            "$fileTimeDaysAgo": 2
-          },
-          "whenCreated": {
-            "$daysAgo": 2000
-          },
           "memberOf": [
             "CN=Domain Admins,CN=Users,DC=corp,DC=example",
             "CN=Enterprise Admins,CN=Users,DC=corp,DC=example",
@@ -266,11 +245,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 95
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Blake Brooks,OU=Staff,DC=corp,DC=example",
@@ -281,10 +256,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 106
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Casey Carter,OU=Staff,DC=corp,DC=example",
@@ -295,10 +267,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 117
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Devon Diaz,OU=Staff,DC=corp,DC=example",
@@ -309,11 +278,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 128
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Emerson Evans,OU=Staff,DC=corp,DC=example",
@@ -324,10 +289,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 139
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Finley Foster,OU=Staff,DC=corp,DC=example",
@@ -338,10 +300,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 150
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Harper Garcia,OU=Staff,DC=corp,DC=example",
@@ -352,11 +311,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 161
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Jordan Hughes,OU=Staff,DC=corp,DC=example",
@@ -367,10 +322,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 172
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Kendall Irwin,OU=Staff,DC=corp,DC=example",
@@ -381,10 +333,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 183
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Logan James,OU=Staff,DC=corp,DC=example",
@@ -395,11 +344,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 194
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Morgan Kim,OU=Staff,DC=corp,DC=example",
@@ -410,10 +355,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 205
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Parker Lopez,OU=Staff,DC=corp,DC=example",
@@ -424,10 +366,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 216
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Quinn Miller,OU=Staff,DC=corp,DC=example",
@@ -438,11 +377,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 227
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Reese Nguyen,OU=Staff,DC=corp,DC=example",
@@ -453,10 +388,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 238
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Riley Owens,OU=Staff,DC=corp,DC=example",
@@ -467,10 +399,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 249
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Rowan Patel,OU=Staff,DC=corp,DC=example",
@@ -481,11 +410,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 260
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Sawyer Reed,OU=Staff,DC=corp,DC=example",
@@ -496,10 +421,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 271
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Skyler Shaw,OU=Staff,DC=corp,DC=example",
@@ -510,10 +432,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 282
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Taylor Turner,OU=Staff,DC=corp,DC=example",
@@ -524,11 +443,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 293
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Toby Usher,OU=Staff,DC=corp,DC=example",
@@ -539,10 +454,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 304
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Wren Vance,OU=Staff,DC=corp,DC=example",
@@ -553,10 +465,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 315
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Ellis Walsh,OU=Staff,DC=corp,DC=example",
@@ -567,11 +476,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 326
-          },
-          "memberOf": [
-            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Hayden Young,OU=Staff,DC=corp,DC=example",
@@ -582,10 +487,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 337
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         },
         {
           "$path": "LDAP://CN=Jamie Zimmer,OU=Staff,DC=corp,DC=example",
@@ -596,10 +498,7 @@
           },
           "lastLogonTimestamp": {
             "$fileTimeDaysAgo": 348
-          },
-          "memberOf": [
-            "CN=All Staff,OU=Groups,DC=corp,DC=example"
-          ]
+          }
         }
       ]
     }

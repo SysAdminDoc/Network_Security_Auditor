@@ -76,12 +76,24 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
                 ["sAMAccountName", "lastLogonTimestamp", "whenCreated", "distinguishedName"]);
 
             ct.ThrowIfCancellationRequested();
+            int newAccountCount = 0;
 
             foreach (var sr in directory.Search(query, ct))
             {
                 ct.ThrowIfCancellationRequested();
 
                 string sam = sr.String("sAMAccountName") ?? "";
+                long lastLogon = sr.Long("lastLogonTimestamp");
+
+                // Never logged on and created inside the idle window: a new hire who hasn't signed in yet,
+                // not a former employee.
+                if (lastLogon <= 0 && sr.Time("whenCreated") is { } created && created > staleThreshold)
+                {
+                    newAccountCount++;
+                    evidence.AppendLine($"  NEW, NOT STALE: {sam} | Created: {created:yyyy-MM-dd} | no logon yet");
+                    continue;
+                }
+
                 staleEnabledCount++;
 
                 // Check if member of any privileged groups
@@ -92,7 +104,6 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
 
                     string matchedGroup = hit.Group.Name;
                     string via = hit.Member.IsNested ? $" ({hit.Member.Path})" : "";
-                    long lastLogon = sr.Long("lastLogonTimestamp");
 
                     DateTime lastLogonDate = lastLogon > 0
                         ? DateTime.FromFileTimeUtc(lastLogon)
@@ -112,6 +123,8 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
 
             evidence.AppendLine($"\n  Total stale enabled accounts: {staleEnabledCount}");
             evidence.AppendLine($"  Stale accounts with privileged group membership: {stalePrivilegedCount}");
+            if (newAccountCount > 0)
+                evidence.AppendLine($"  Created in the last 90 days with no logon yet (not counted): {newAccountCount}");
 
             sb.Insert(0, $"Stale account analysis: {staleEnabledCount} enabled accounts with no logon in >90 days, " +
                 $"{stalePrivilegedCount} in privileged groups.\n");

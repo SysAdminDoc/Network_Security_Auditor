@@ -1978,6 +1978,99 @@ Describe 'Privileged groups by SID with nested membership (IA01, IA02, CF04 nest
     }
 }
 
+Describe 'Accounts every domain has are not findings (IA02, IA07, CF04 nested helpers via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $script:QuietNames = @('Get-NsaSidRid', 'Select-Ia02ServiceAccount', 'Select-Ia07SharedAccount', 'Test-Cf04StaleAccount')
+        $script:QuietDefs = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in @('Get-NsaSidRid', 'Select-Ia02ServiceAccount', 'Select-Ia07SharedAccount', 'Test-Cf04StaleAccount') }, $true))
+        foreach ($name in $script:QuietNames) {
+            . ([scriptblock]::Create(@($script:QuietDefs | Where-Object Name -eq $name)[0].Extent.Text))
+        }
+        $script:Ia02Block = Get-Block -Text $script:Text -Start "'IA02' = @\{ Type='AD'" -End "'IA04' = @\{ Type='AD'"
+        $script:Ia07Block = Get-Block -Text $script:Text -Start "'IA07' = @\{ Type='AD'" -End "'IA08' = @\{ Type='AD'"
+        $script:Cf04Block = Get-Block -Text $script:Text -Start "'CF04' = @\{ Type='AD'" -End "'CF06' = @\{ Type='Local'"
+        $script:DomainSid = 'S-1-5-21-1004336348-1177238915-682003330'
+        function New-Account([string]$Sam, [int]$Rid, $Enabled = $true, [string]$Sid = '') {
+            if (-not $Sid) { $Sid = "$($script:DomainSid)-$Rid" }
+            [pscustomobject]@{ SamAccountName = $Sam; DistinguishedName = "CN=$Sam,CN=Users,DC=corp,DC=example"; SID = $Sid; Enabled = $Enabled }
+        }
+    }
+
+    It 'carries identical copies of Get-NsaSidRid in IA02 and IA07 and one copy of each selector' {
+        $rid = @($script:QuietDefs | Where-Object Name -eq 'Get-NsaSidRid')
+        $rid.Count | Should -Be 2
+        $rid[1].Extent.Text | Should -BeExactly $rid[0].Extent.Text
+        foreach ($name in @('Select-Ia02ServiceAccount', 'Select-Ia07SharedAccount', 'Test-Cf04StaleAccount')) {
+            @($script:QuietDefs | Where-Object Name -eq $name).Count | Should -Be 1
+        }
+        $script:Ia02Block | Should -Match 'function Select-Ia02ServiceAccount \{'
+        $script:Ia07Block | Should -Match 'function Select-Ia07SharedAccount \{'
+        $script:Cf04Block | Should -Match 'function Test-Cf04StaleAccount \{'
+    }
+    It 'reads the RID only from a SID in this domain' {
+        Get-NsaSidRid -Sid "$($script:DomainSid)-502" -DomainSid $script:DomainSid | Should -Be 502
+        Get-NsaSidRid -Sid "$($script:DomainSid)-500" -DomainSid $script:DomainSid | Should -Be 500
+        Get-NsaSidRid -Sid 'S-1-5-21-111-222-333-500' -DomainSid $script:DomainSid | Should -Be -1
+        Get-NsaSidRid -Sid "$($script:DomainSid)5-500" -DomainSid $script:DomainSid | Should -Be -1
+        Get-NsaSidRid -Sid 'S-1-5-32-544' -DomainSid $script:DomainSid | Should -Be -1
+        Get-NsaSidRid -Sid '' -DomainSid $script:DomainSid | Should -Be -1
+        Get-NsaSidRid -Sid "$($script:DomainSid)-500" -DomainSid '' | Should -Be -1
+    }
+    It 'IA02 leaves out krbtgt and disabled SPN accounts, and counts an account in both searches once' {
+        $krbtgt = New-Account 'krbtgt' 502 $false
+        $legacy = New-Account 'legacy.web' 1107 $false
+        $clean = Select-Ia02ServiceAccount -Accounts @($krbtgt, $legacy) -DomainSid $script:DomainSid
+        @($clean.Accounts).Count | Should -Be 0
+        @($clean.Skipped).Count | Should -Be 2
+        ($clean.Skipped | Where-Object { $_.Account.SamAccountName -eq 'krbtgt' }).Reason | Should -Be 'KDC account (RID 502)'
+        ($clean.Skipped | Where-Object { $_.Account.SamAccountName -eq 'legacy.web' }).Reason | Should -Be 'disabled'
+
+        $sql = New-Account 'svc_sql' 1105
+        $unknown = New-Account 'svc_backup' 1106 $null
+        $mixed = Select-Ia02ServiceAccount -Accounts @($krbtgt, $sql, $null, $sql, $unknown) -DomainSid $script:DomainSid
+        @($mixed.Accounts | ForEach-Object SamAccountName) | Should -Be @('svc_sql', 'svc_backup')
+        @($mixed.Skipped).Count | Should -Be 1
+    }
+    It 'IA07 leaves out the built-in Administrator by RID 500 whatever it is called, and counts each account once' {
+        $renamed = New-Account 'corp-admin' 500
+        $lookalike = New-Account 'Administrator' 1105
+        $frontdesk = New-Account 'frontdesk' 1110
+        $picked = Select-Ia07SharedAccount -Accounts @($renamed, $lookalike, $frontdesk, $frontdesk) -DomainSid $script:DomainSid
+        @($picked.Accounts | ForEach-Object SamAccountName) | Should -Be @('Administrator', 'frontdesk')
+        $picked.BuiltinAdmin.SamAccountName | Should -Be 'corp-admin'
+
+        $clean = Select-Ia07SharedAccount -Accounts @($renamed, $renamed) -DomainSid $script:DomainSid
+        @($clean.Accounts).Count | Should -Be 0
+
+        $otherDomain = New-Account 'Administrator' 500 $true 'S-1-5-21-111-222-333-500'
+        @((Select-Ia07SharedAccount -Accounts @($otherDomain) -DomainSid $script:DomainSid).Accounts).Count | Should -Be 1
+        $noSid = Select-Ia07SharedAccount -Accounts @($renamed) -DomainSid ''
+        @($noSid.Accounts).Count | Should -Be 1
+        $noSid.BuiltinAdmin | Should -BeNullOrEmpty
+    }
+    It 'CF04 counts a never-used account as stale only when it was created before the threshold' {
+        $now = Get-Date
+        $threshold = $now.AddDays(-90)
+        Test-Cf04StaleAccount -LastLogon $now.AddDays(-200) -Created $now.AddDays(-900) -Threshold $threshold | Should -BeTrue
+        Test-Cf04StaleAccount -LastLogon $now.AddDays(-1) -Created $now.AddDays(-900) -Threshold $threshold | Should -BeFalse
+        Test-Cf04StaleAccount -LastLogon $null -Created $now.AddDays(-7) -Threshold $threshold | Should -BeFalse
+        Test-Cf04StaleAccount -LastLogon $null -Created $now.AddDays(-200) -Threshold $threshold | Should -BeTrue
+        Test-Cf04StaleAccount -LastLogon $null -Created $null -Threshold $threshold | Should -BeTrue
+    }
+    It 'wires the selectors into the IA02, IA07 and CF04 blocks' {
+        $script:Ia02Block | Should -Not -Match 'Sort-Object -Property SamAccountName -Unique'
+        $script:Ia02Block | Should -Match '\$selection = Select-Ia02ServiceAccount -Accounts'
+        $script:Ia02Block | Should -Match 'foreach \(\$s in \$selection\.Skipped\)'
+        $script:Ia07Block | Should -Not -Match '\$found\+\+'
+        $script:Ia07Block | Should -Match '\$selection = Select-Ia07SharedAccount -Accounts'
+        $script:Ia07Block | Should -Match '\$found = \$selection\.Accounts\.Count'
+        $script:Cf04Block | Should -Match '-Properties LastLogonDate,WhenCreated,'
+        $script:Cf04Block | Should -Match 'Test-Cf04StaleAccount -LastLogon \$_\.LastLogonDate -Created \$_\.WhenCreated'
+        $script:Cf04Block | Should -Not -Match 'Last: \$\(\$sp\.Last\.ToString'
+        $script:Cf04Block | Should -Not -Match 'Last: \$\(\$sr\.LastLogonDate\.ToString'
+    }
+}
+
 Describe 'IA06 LAPS coverage (nested check helper via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)

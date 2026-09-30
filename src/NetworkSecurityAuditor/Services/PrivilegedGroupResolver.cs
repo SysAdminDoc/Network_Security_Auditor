@@ -239,6 +239,26 @@ public sealed class PrivilegedGroupResolver
         return members;
     }
 
+    /// <summary>
+    /// A Tier 0 group the account belongs to, directly or nested, in the domain or the forest root; null when
+    /// there's none. AdminSDHolder protects members of these groups (Backup Operators, Account Operators and the
+    /// rest, not only the admin groups), so their adminCount=1 is expected.
+    /// </summary>
+    public string? Tier0GroupOf(string accountDn, CancellationToken ct)
+    {
+        var filter = $"(&(objectClass=group)(member:{InChainRule}:={EscapeFilterValue(accountDn)}))";
+        string?[] bases = Identity.IsForestRoot || Identity.ForestRootDn is null ? [null] : [null, Identity.ForestRootDn];
+        foreach (var searchBase in bases)
+        {
+            foreach (var group in _reader.Search(new DirectoryQuery(filter, ["objectSid", "sAMAccountName"]) { SearchBase = searchBase }, ct))
+            {
+                if (Identity.IsTier0(group.Sid("objectSid")))
+                    return group.String("sAMAccountName") ?? group.Path;
+            }
+        }
+        return null;
+    }
+
     /// <summary>Escapes a value for an LDAP filter (RFC 4515), for example a DN holding parentheses.</summary>
     public static string EscapeFilterValue(string value)
     {
