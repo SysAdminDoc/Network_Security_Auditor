@@ -121,6 +121,8 @@ Run the C# silent mode:
 .\publish\NetworkSecurityAuditor\NetworkSecurityAuditor.exe --silent --profile Full --output C:\Reports --intune-stig-import C:\Exports\stig-audit.json --export-oscal --export-csv
 ```
 
+Add `--export-pptx` (or `-ExportPPTX`) to also get a six-slide PowerPoint summary for the client meeting: scores, the top five risks, compliance gaps and a phased fix plan. Office doesn't need to be installed to build it.
+
 Use `Start-Process -Wait -PassThru` when automating C# headless runs from
 PowerShell so Windows reports the WPF executable's exit code. Missing dashboard
 input folders return 64, and scans with no applicable/scorable checks return

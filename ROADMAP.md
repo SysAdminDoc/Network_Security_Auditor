@@ -75,13 +75,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: mock-fixture tests prove header, version routing, paging summary and throttle counts land in the envelope; every CL ID has framework and ATT&CK entries; no live tenant is needed.
   Complexity: M
 
-- [ ] P2 — NSA-053 Bring the C# HTML report to the PS1 report's navigation and accessibility level
-  Why: the C# report has breakpoints and overflow handling only; it has no sticky table headers, check anchors, table of contents, status legend, `:focus-visible` styles, WCAG 2.2 target sizes, or a scan-limitations section (the PS1 report has most of these).
-  Evidence: `src/NetworkSecurityAuditor/Export/HtmlReportGenerator.cs`; `NetworkSecurityAudit.ps1:12217-12239`, `:12397`, `:12901`; https://www.w3.org/TR/WCAG22/.
-  Touches: `HtmlReportGenerator.cs`, `CmmcReportGenerator.cs` shared CSS, HTML report tests.
-  Acceptance: the report has a linked table of contents, per-check anchors, sticky headers, a status legend, visible focus styles, interactive targets of at least 24 by 24 CSS pixels, and a limitations section naming skipped, manual and errored checks; HTML tests assert each element.
-  Complexity: M
-
 - [ ] P2 — NSA-054 Verify keyboard order, focus visibility and reduced motion on both GUIs
   Why: tab order is untested on both surfaces; PS1 flash timers ignore the Windows reduced-animation setting; `tools/Test-ThemeContrast.ps1` checks text but not focus indicators.
   Evidence: `tests/NetworkSecurityAuditor.Tests/WpfUiAutomationSmokeTests.cs` (launch and names only), `NetworkSecurityAudit.ps1:9057` (flash timer), `tools/Test-ThemeContrast.ps1`.
@@ -117,13 +110,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: status (Open, In progress, Fixed, Accepted) saves, loads older state files, and appears in HTML, JSON, CSV and POA&M; branding can be set and previewed in the GUI and round-trips to the config JSON.
   Complexity: M
 
-- [ ] P3 — NSA-059 Export an executive PowerPoint deck from one scan
-  Why: MSPs present results in QBRs; the deck is the one tiered deliverable neither surface produces.
-  Evidence: old roadmap Phase 3 (NSA-009 white-label executive pack); Network Detective positions reports as client deliverables (RESEARCH.md, Competitive Landscape).
-  Touches: new C# exporter using Open XML SDK or a minimal hand-built package, branding config, `--export-pptx` flag.
-  Acceptance: the deck contains title with branding, overall and ransomware scores, top five risks, compliance gaps, and phased remediation; it opens in PowerPoint and LibreOffice without repair prompts; tool version and scan limitations appear on the last slide.
-  Complexity: L
-
 - [ ] P3 — NSA-060 Send the existing alert payload to a webhook on request
   Why: `-AlertPreview` builds the payload but nothing can send it; recurring-scan users wire external scripts (the PingCastle-Notify pattern).
   Evidence: `NetworkSecurityAudit.ps1:11616` (Get-AuditAlertPayload); https://github.com/LuccaSA/PingCastle-Notify.
@@ -144,13 +130,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: `tools/Test-NetworkSecurityAudit.ps1`.
   Acceptance: the gate fails on an invalid date, a date later than today, or out-of-order versions.
   Complexity: S
-
-- [ ] P3 — NSA-063 Share design tokens between the WPF theme and the HTML reports
-  Why: the dashboard and HTML reports hard-code a Catppuccin-like palette separate from `Theme/Themes.xaml`, so severity colors can drift between GUI and report.
-  Evidence: `src/NetworkSecurityAuditor/Export/DashboardGenerator.cs`, `Export/HtmlReportGenerator.cs`, `Theme/Themes.xaml`.
-  Touches: a token source (C# constants or JSON) consumed by XAML resources and report CSS, contrast tests.
-  Acceptance: severity and status colors come from one source; a test asserts GUI and report tokens match.
-  Complexity: M
 
 - [ ] P3 — NSA-064 Trend Microsoft Secure Score from CL01 history
   Why: CL01 reads Secure Score but history has no Secure Score series, so trend cards can't show it.
