@@ -127,10 +127,22 @@ public sealed class EP04PatchComplianceTests
             return;
 
         var env = NetworkSecurityAuditor.Services.EnvironmentDetector.Detect();
-        var result = await new EP04_PatchComplianceCheck().ExecuteAsync(env, new AuditOptions(), CancellationToken.None);
+        var cacheDir = Path.Combine(Path.GetTempPath(), "nsa-kev-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            // The host collection is live; the KEV feed comes from the recorded fixture, so the test makes no network call.
+            var kev = new NetworkSecurityAuditor.Services.KevCatalogService(_ => Task.FromResult(KevFixtures.FeedText), cacheDir, null, minimumEntries: 10);
+            var result = await new EP04_PatchComplianceCheck(null, kev, null).ExecuteAsync(env, new AuditOptions(), CancellationToken.None);
 
-        Assert.Null(result.Error);
-        Assert.Contains("[Windows Update History (OS quality updates)]", result.Evidence);
-        Assert.DoesNotContain("Couldn't read:", result.Evidence);
+            Assert.Null(result.Error);
+            Assert.Contains("[Windows Update History (OS quality updates)]", result.Evidence);
+            Assert.DoesNotContain("Couldn't read:", result.Evidence);
+            Assert.Contains("KEV catalog: 12 known exploited vulnerabilities (source: live download)", result.Findings);
+            Assert.Contains("  Detected products: Windows", result.Findings);
+        }
+        finally
+        {
+            try { Directory.Delete(cacheDir, recursive: true); } catch (DirectoryNotFoundException) { }
+        }
     }
 }

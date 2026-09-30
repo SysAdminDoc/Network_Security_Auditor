@@ -186,13 +186,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: groups resolve from domain SID and RID; nested members appear with their path; a fixture with localized group names (for example "Domänen-Admins") produces the same result as the English fixture.
   Complexity: M
 
-- [ ] P1 — NSA-079 Add CISA KEV cross-referencing to C# EP04
-  Why: EP04 is catalogued as "Patch compliance + CISA KEV" but has no KEV logic; the PS1 already fetches and caches the feed.
-  Evidence: `src/NetworkSecurityAuditor/Data/CheckCatalog.cs` EP04 label; `NetworkSecurityAudit.ps1:4462-4520`; https://www.cisa.gov/known-exploited-vulnerabilities-catalog.
-  Touches: EP04, a `KevCatalogService` with cache under the output or app-data folder, the internet gate from NSA-048, ransomware readiness input for `knownRansomwareCampaignUse`.
-  Acceptance: with internet allowed, EP04 matches installed products from uninstall keys against the KEV JSON feed and lists matches with CVE and due date; offline or feed failure reports cache age or `Skipped: OfflineMode`; KEV entries with known ransomware use feed the ransomware score; tests use a recorded feed fixture.
-  Complexity: M
-
 - [ ] P1 — NSA-080 Port the PS1 AD attack-indicator checks to C#
   Why: DCSync rights for non-default principals, AdminSDHolder ACL tampering, Protected Users coverage of Tier 0 and unconstrained delegation exist only in the PS1; C# EP03 labels the LSA `AllowTgtSessionKey` value as "Kerberos delegation".
   Evidence: `NetworkSecurityAudit.ps1:3524-3530`, `:3538-3553`, `:3596-3606`; `src/NetworkSecurityAuditor/Checks/EndpointSecurity/EP03_SmbNtlmCheck.cs:286-295`.
@@ -361,6 +354,13 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Evidence: PS1 check blocks for the 16 IDs in `CheckCatalog.QuestionnaireIds`; `Get-FrameworkScores` counts `Partial` as 0.5 and everything else as Not Assessed; app behavior in `StatusModelTests`.
   Touches: PS1 questionnaire check blocks, the status combo values, `Get-FrameworkScores`, risk score, HTML and JSON coverage fields, Pester.
   Acceptance: the 16 questionnaire checks return Not Assessed from the scan on the PS1 (hints go in the findings text); a thrown or timed-out check shows as Error, earns nothing and is listed in the report; the PS1 exit code's framework threshold counts only Pass; a Pester parity test checks the questionnaire set against the app's.
+  Complexity: M
+
+- [ ] P2 — NSA-120 Fix EP04 KEV false hits and misses found while porting it to the app
+  Why: the C# port copies the PS1's KEV rules to keep the two in step, so both share these faults. On this PC both flag CVE-2019-1068 on SQL Server 2019, which shipped with that fix, because the old-CVE rule can only clear a fix by binary date (2019-09-24). Edge is never detected, since its version is read from HKLM\SOFTWARE\Microsoft\Edge\BLBeacon and only HKCU has that key. Entries whose product is just "Microsoft" are skipped, so CVE-2026-42897 (an Exchange XSS) can't match. Hits are capped at 15 before ransomware-linked ones are counted, so an older overdue ransomware entry can drop off. And when no hotfix has a parseable date, the app's EP04 passes where the PS1 fails.
+  Evidence: `NetworkSecurityAudit.ps1` EP04 block (`Get-Ep04KevFamily`, the BLBeacon read near :4686, the hit cap near :4522); `Checks/EndpointSecurity/KevMatcher.cs`, `KevProductInventory.cs`, `EP04_PatchComplianceCheck.cs`.
+  Touches: both EP04 surfaces, `Fixtures/Kev/ep04-kev-scenarios.json` (the shared scenarios keep them in step).
+  Acceptance: a SQL Server build that includes a fix clears that KEV entry by version; Edge is detected from the HKLM or per-user key; an Exchange entry listed under vendor-only "Microsoft" matches on its name; ransomware-linked hits are counted before the display cap; both surfaces give the same status when hotfix dates are missing; each case is a shared scenario run by xUnit and Pester.
   Complexity: M
 
 ### P3

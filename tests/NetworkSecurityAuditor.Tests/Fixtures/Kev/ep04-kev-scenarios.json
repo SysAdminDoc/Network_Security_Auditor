@@ -1,0 +1,199 @@
+{
+  "description": "EP04 CISA KEV matching scenarios. The C# tests (EP04KevTests) run them through KevMatcher and the Pester tests run them through the PowerShell EP04 helpers Get-Ep04KevFamily, Get-Ep04KevHits and Get-Ep04NewestTitledDate, so both surfaces must give these answers. The feed is kev-feed.json, entries recorded from the CISA feed (catalog 2026.09.29). Expected hits are in the order the check lists them: latest due date first.",
+  "feed": "kev-feed.json",
+  "hitScenarios": [
+    {
+      "name": "patched Windows 11 workstation: every entry was added before the product's newest update",
+      "today": "2026-09-30",
+      "families": ["Windows", ".NET", "Office"],
+      "latestOsDate": "2026-09-22",
+      "updateDates": { ".NET": "2026-09-08", "Office": "2026-09-26" },
+      "expected": []
+    },
+    {
+      "name": "SQL Server Express still on its 2019 release build",
+      "today": "2026-09-30",
+      "families": ["Windows", "SQL Server", ".NET", "Office"],
+      "latestOsDate": "2026-09-22",
+      "updateDates": { "SQL Server": "2019-09-24", ".NET": "2026-09-08", "Office": "2026-09-26" },
+      "expected": [
+        { "cveID": "CVE-2019-1068", "family": "SQL Server", "overdue": true, "ransomware": false, "unverified": false }
+      ]
+    },
+    {
+      "name": "missed the September OS update, after the due date",
+      "today": "2026-09-30",
+      "families": ["Windows"],
+      "latestOsDate": "2026-08-11",
+      "updateDates": {},
+      "expected": [
+        { "cveID": "CVE-2026-81963", "family": "Windows", "overdue": true, "ransomware": false, "unverified": false }
+      ]
+    },
+    {
+      "name": "missed the September OS update, before the due date",
+      "today": "2026-09-15",
+      "families": ["Windows"],
+      "latestOsDate": "2026-08-11",
+      "updateDates": {},
+      "expected": [
+        { "cveID": "CVE-2026-81963", "family": "Windows", "overdue": false, "ransomware": false, "unverified": false }
+      ]
+    },
+    {
+      "name": "ransomware-linked Windows entry past its due date; the old CVE-2008-4250 re-add counts as fixed",
+      "today": "2026-09-30",
+      "families": ["Windows"],
+      "latestOsDate": "2026-03-10",
+      "updateDates": {},
+      "expected": [
+        { "cveID": "CVE-2026-81963", "family": "Windows", "overdue": true, "ransomware": false, "unverified": false },
+        { "cveID": "CVE-2025-60710", "family": "Windows", "overdue": true, "ransomware": true, "unverified": false }
+      ]
+    },
+    {
+      "name": "ransomware-linked Exchange entry that isn't due yet",
+      "today": "2026-04-20",
+      "families": ["Exchange"],
+      "latestOsDate": null,
+      "updateDates": { "Exchange": "2024-06-11" },
+      "expected": [
+        { "cveID": "CVE-2023-21529", "family": "Exchange", "overdue": false, "ransomware": true, "unverified": false }
+      ]
+    },
+    {
+      "name": "old CVE re-added: an Exchange update from after the end of the following year counts as fixed",
+      "today": "2026-09-30",
+      "families": ["Windows", "Exchange"],
+      "latestOsDate": "2026-09-22",
+      "updateDates": { "Exchange": "2025-03-11" },
+      "expected": []
+    },
+    {
+      "name": "Exchange not updated since 2024",
+      "today": "2026-09-30",
+      "families": ["Windows", "Exchange"],
+      "latestOsDate": "2026-09-22",
+      "updateDates": { "Exchange": "2024-06-11" },
+      "expected": [
+        { "cveID": "CVE-2023-21529", "family": "Exchange", "overdue": true, "ransomware": true, "unverified": false }
+      ]
+    },
+    {
+      "name": "Internet Key Exchange isn't Exchange Server",
+      "today": "2026-09-30",
+      "families": ["Windows", "Exchange"],
+      "latestOsDate": "2026-08-11",
+      "updateDates": { "Exchange": "2026-05-12" },
+      "expected": [
+        { "cveID": "CVE-2026-81963", "family": "Windows", "overdue": true, "ransomware": false, "unverified": false }
+      ]
+    },
+    {
+      "name": "SQL Server with no update date to compare; CVE-2020-0618 was due more than a year ago",
+      "today": "2026-09-30",
+      "families": ["Windows", "SQL Server"],
+      "latestOsDate": "2026-09-22",
+      "updateDates": { "SQL Server": null },
+      "expected": [
+        { "cveID": "CVE-2019-1068", "family": "SQL Server", "overdue": true, "ransomware": false, "unverified": true }
+      ]
+    },
+    {
+      "name": "Office with no update date to compare",
+      "today": "2026-09-30",
+      "families": ["Windows", "Office"],
+      "latestOsDate": "2026-09-22",
+      "updateDates": {},
+      "expected": [
+        { "cveID": "CVE-2009-0238", "family": "Office", "overdue": true, "ransomware": false, "unverified": true }
+      ]
+    },
+    {
+      "name": "no OS update date at all: every Windows entry due in the last year counts",
+      "today": "2026-09-30",
+      "families": ["Windows"],
+      "latestOsDate": null,
+      "updateDates": {},
+      "expected": [
+        { "cveID": "CVE-2026-81963", "family": "Windows", "overdue": true, "ransomware": false, "unverified": true },
+        { "cveID": "CVE-2008-4250", "family": "Windows", "overdue": true, "ransomware": false, "unverified": true },
+        { "cveID": "CVE-2025-60710", "family": "Windows", "overdue": true, "ransomware": true, "unverified": true },
+        { "cveID": "CVE-2021-43226", "family": "Windows", "overdue": true, "ransomware": true, "unverified": true }
+      ]
+    },
+    {
+      "name": ".NET Framework behind its own update",
+      "today": "2025-03-10",
+      "families": [".NET"],
+      "latestOsDate": "2025-01-14",
+      "updateDates": { ".NET": "2025-01-14" },
+      "expected": [
+        { "cveID": "CVE-2024-29059", "family": ".NET", "overdue": true, "ransomware": false, "unverified": false }
+      ]
+    },
+    {
+      "name": ".NET Framework update installed after the entry was added",
+      "today": "2025-03-10",
+      "families": [".NET"],
+      "latestOsDate": "2025-01-14",
+      "updateDates": { ".NET": "2025-02-11" },
+      "expected": []
+    },
+    {
+      "name": ".NET falls back to the OS update when there's no .NET update date",
+      "today": "2025-03-10",
+      "families": [".NET"],
+      "latestOsDate": "2025-02-11",
+      "updateDates": {},
+      "expected": []
+    },
+    {
+      "name": "only Microsoft entries count: Ajax.NET Professional isn't .NET Framework",
+      "today": "2026-09-30",
+      "families": [".NET"],
+      "latestOsDate": null,
+      "updateDates": {},
+      "expected": []
+    }
+  ],
+  "familyCases": [
+    { "product": "Windows", "family": "Windows" },
+    { "product": "Windows Ancillary Function Driver for WinSock", "family": "Windows" },
+    { "product": "Exchange Server", "family": "Exchange" },
+    { "product": "Internet Key Exchange (IKE) Service Extensions", "family": null },
+    { "product": "SQL Server", "family": "SQL Server" },
+    { "product": "Office", "family": "Office" },
+    { "product": "Word", "family": "Office" },
+    { "product": "Microsoft 365 Apps", "family": "Office" },
+    { "product": ".NET Framework", "family": ".NET" },
+    { "product": ".NET Core and Visual Studio", "family": ".NET" },
+    { "product": "Internet Explorer and Edge", "family": "Edge" },
+    { "product": "Internet Information Services (IIS)", "family": "IIS" },
+    { "product": "SharePoint", "family": null },
+    { "product": "Defender", "family": null },
+    { "product": "Active Directory Federation Services", "family": null }
+  ],
+  "titledDates": {
+    "history": [
+      { "title": "9PLL735RFDSM-Microsoft.NET.Native.Runtime.2.2", "date": "2026-09-20T14:05:00" },
+      { "title": "9WZDNCRFJ3PT-Microsoft.NET 8.0 Desktop Runtime", "date": "2026-09-01T09:00:00" },
+      { "title": "2026-09 .NET Framework Security Update (KB5126052)", "date": "2026-09-08T21:40:00" },
+      { "title": "2026-06 Security Update for .NET Framework 4.8.1 (KB5099002)", "date": "2026-06-10T08:00:00" },
+      { "title": "Security Update for Microsoft OLE DB Driver 18 for SQL Server (KB5040711)", "date": "2026-09-22T10:00:00" },
+      { "title": "2026-08 Security Update for SQL Server 2019 Native Client (KB5099001)", "date": "2026-08-20T10:00:00" },
+      { "title": "Security Update for SQL Server 2019 RTM GDR (KB5046859)", "date": "2026-07-15T03:15:00" },
+      { "title": "Security Update for Exchange Server 2019 Cumulative Update 14 (KB5049233)", "date": "2026-05-12T23:30:00" },
+      { "title": "Security Update for Microsoft Office 2016 (KB5002700) 64-Bit Edition", "date": "2026-04-14T12:00:00" },
+      { "title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.437.1)", "date": "2026-09-25T06:00:00" }
+    ],
+    "expected": {
+      "Exchange": "2026-05-12",
+      "SQL Server": "2026-07-15",
+      ".NET": "2026-09-08",
+      "Office": "2026-04-14",
+      "Windows": null,
+      "Edge": null
+    }
+  }
+}

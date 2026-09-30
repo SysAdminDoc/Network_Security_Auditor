@@ -2216,6 +2216,56 @@ Describe 'EP04 CISA KEV matching against installed updates (nested check helpers
     }
 }
 
+Describe 'EP04 KEV scenarios shared with the C# port (tests/NetworkSecurityAuditor.Tests/Fixtures/Kev)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in @('Get-Ep04KevFamily','Get-Ep04KevHits','Get-Ep04NewestTitledDate')) {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        $kevDir = Join-Path $script:RepoRoot 'tests\NetworkSecurityAuditor.Tests\Fixtures\Kev'
+        $script:KevScenarios = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $kevDir 'ep04-kev-scenarios.json') | ConvertFrom-Json
+        $script:KevRecordedFeed = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $kevDir $script:KevScenarios.feed) | ConvertFrom-Json
+        function ConvertTo-Ep04ScenarioDate { param($Value) if ($null -eq $Value -or [string]$Value -eq '') { $null } else { ([datetime]$Value).Date } }
+    }
+
+    It 'reads the recorded feed in the CISA shape' {
+        $script:KevRecordedFeed.catalogVersion | Should -Be '2026.09.29'
+        @($script:KevRecordedFeed.vulnerabilities).Count | Should -Be $script:KevRecordedFeed.count
+        @($script:KevScenarios.hitScenarios).Count | Should -BeGreaterThan 10
+    }
+    It 'maps each product the way the C# port does' {
+        foreach ($case in @($script:KevScenarios.familyCases)) {
+            $family = Get-Ep04KevFamily -Product $case.product
+            if ($null -eq $case.family) { $family | Should -BeNullOrEmpty -Because $case.product } else { $family | Should -Be $case.family -Because $case.product }
+        }
+    }
+    It 'gives every scenario the expected KEV hits' {
+        foreach ($scenario in @($script:KevScenarios.hitScenarios)) {
+            $updateDates = @{}
+            foreach ($p in @($scenario.updateDates.PSObject.Properties)) { $updateDates[$p.Name] = ConvertTo-Ep04ScenarioDate $p.Value }
+            $hits = @(Get-Ep04KevHits -Entries @($script:KevRecordedFeed.vulnerabilities) -Families @($scenario.families) -UpdateDates $updateDates `
+                -LatestOsDate (ConvertTo-Ep04ScenarioDate $scenario.latestOsDate) -Today (ConvertTo-Ep04ScenarioDate $scenario.today))
+            $expected = @($scenario.expected)
+            $hits.Count | Should -Be $expected.Count -Because $scenario.name
+            for ($i = 0; $i -lt $expected.Count; $i++) {
+                $hits[$i].CveId | Should -Be $expected[$i].cveID -Because $scenario.name
+                $hits[$i].Family | Should -Be $expected[$i].family -Because $scenario.name
+                $hits[$i].Overdue | Should -Be ([bool]$expected[$i].overdue) -Because "$($scenario.name) overdue"
+                $hits[$i].Ransomware | Should -Be ([bool]$expected[$i].ransomware) -Because "$($scenario.name) ransomware"
+                $hits[$i].Unverified | Should -Be ([bool]$expected[$i].unverified) -Because "$($scenario.name) unverified"
+            }
+        }
+    }
+    It 'dates each product from its own update titles' {
+        $history = @($script:KevScenarios.titledDates.history | ForEach-Object { [pscustomobject]@{ Title = [string]$_.title; Date = [datetime]$_.date } })
+        foreach ($p in @($script:KevScenarios.titledDates.expected.PSObject.Properties)) {
+            $actual = Get-Ep04NewestTitledDate -History $history -Family $p.Name
+            if ($null -eq $p.Value) { $actual | Should -BeNullOrEmpty -Because $p.Name } else { $actual | Should -Be (ConvertTo-Ep04ScenarioDate $p.Value) -Because $p.Name }
+        }
+    }
+}
+
 Describe 'EP08 TPM reporting without elevation (nested check helper via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
