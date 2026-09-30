@@ -1,0 +1,354 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filterPattern": "\\(&\\(objectCategory=person\\)\\(objectClass=user\\)\\(!\\(userAccountControl:1\\.2\\.840\\.113556\\.1\\.4\\.803:=2\\)\\)\\(\\|\\(lastLogonTimestamp<=\\d+\\)\\(!\\(lastLogonTimestamp=\\*\\)\\)\\)\\)",
+      "results": [
+        {
+          "$path": "LDAP://corp.example/CN=Avery Adams,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "a.adams",
+          "distinguishedName": "CN=Avery Adams,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 95
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Blake Brooks,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "b.brooks",
+          "distinguishedName": "CN=Blake Brooks,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 106
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Casey Carter,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "c.carter",
+          "distinguishedName": "CN=Casey Carter,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 117
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Devon Diaz,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "d.diaz",
+          "distinguishedName": "CN=Devon Diaz,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 128
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Emerson Evans,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "e.evans",
+          "distinguishedName": "CN=Emerson Evans,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 139
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Finley Foster,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "f.foster",
+          "distinguishedName": "CN=Finley Foster,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 150
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Harper Garcia,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "h.garcia",
+          "distinguishedName": "CN=Harper Garcia,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 161
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Jordan Hughes,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "j.hughes",
+          "distinguishedName": "CN=Jordan Hughes,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 172
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Kendall Irwin,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "k.irwin",
+          "distinguishedName": "CN=Kendall Irwin,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 183
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Logan James,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "l.james",
+          "distinguishedName": "CN=Logan James,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 194
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Morgan Kim,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "m.kim",
+          "distinguishedName": "CN=Morgan Kim,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 205
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Parker Lopez,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "p.lopez",
+          "distinguishedName": "CN=Parker Lopez,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 216
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Quinn Miller,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "q.miller",
+          "distinguishedName": "CN=Quinn Miller,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 227
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Reese Nguyen,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "r.nguyen",
+          "distinguishedName": "CN=Reese Nguyen,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 238
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Riley Owens,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "r.owens",
+          "distinguishedName": "CN=Riley Owens,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 249
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Rowan Patel,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "r.patel",
+          "distinguishedName": "CN=Rowan Patel,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 260
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Sawyer Reed,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "s.reed",
+          "distinguishedName": "CN=Sawyer Reed,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 271
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Skyler Shaw,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "s.shaw",
+          "distinguishedName": "CN=Skyler Shaw,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 282
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Taylor Turner,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "t.turner",
+          "distinguishedName": "CN=Taylor Turner,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 293
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Toby Usher,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "t.usher",
+          "distinguishedName": "CN=Toby Usher,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 304
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Wren Vance,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "w.vance",
+          "distinguishedName": "CN=Wren Vance,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 315
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Ellis Walsh,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "e.walsh",
+          "distinguishedName": "CN=Ellis Walsh,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 326
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Hayden Young,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "h.young",
+          "distinguishedName": "CN=Hayden Young,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 337
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Jamie Zimmer,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "j.zimmer",
+          "distinguishedName": "CN=Jamie Zimmer,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 348
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        }
+      ]
+    }
+  ]
+}

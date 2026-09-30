@@ -1,0 +1,50 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filterPattern": "\\(&\\(objectCategory=person\\)\\(objectClass=user\\)\\(!\\(userAccountControl:1\\.2\\.840\\.113556\\.1\\.4\\.803:=2\\)\\)\\(\\|\\(lastLogonTimestamp<=\\d+\\)\\(!\\(lastLogonTimestamp=\\*\\)\\)\\)\\)",
+      "results": [
+        {
+          "$path": "LDAP://corp.example/CN=Old Admin,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "old.admin",
+          "distinguishedName": "CN=Old Admin,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 400
+          },
+          "memberOf": [
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=RDP Contractor,OU=Contractors,DC=corp,DC=example",
+          "sAMAccountName": "rdp.contractor",
+          "distinguishedName": "CN=RDP Contractor,OU=Contractors,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 300
+          },
+          "memberOf": [
+            "CN=Remote Desktop Users,CN=Builtin,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Jane Doe,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "j.doe",
+          "distinguishedName": "CN=Jane Doe,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 120
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example"
+          ]
+        }
+      ]
+    }
+  ]
+}

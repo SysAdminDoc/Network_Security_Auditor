@@ -1,0 +1,53 @@
+{
+  "entries": {
+    "CN=Administrator,CN=Users,DC=corp,DC=example": {
+      "sAMAccountName": "Administrator",
+      "userAccountControl": 66048
+    },
+    "CN=SQL Service,OU=Service Accounts,DC=corp,DC=example": {
+      "sAMAccountName": "svc_sql",
+      "servicePrincipalName": [
+        "MSSQLSvc/sql01.corp.example:1433",
+        "MSSQLSvc/sql01.corp.example"
+      ],
+      "userAccountControl": 66048
+    },
+    "CN=Veeam Backup,OU=Service Accounts,DC=corp,DC=example": {
+      "sAMAccountName": "veeam.backup",
+      "userAccountControl": 512
+    },
+    "CN=Ops Admin,CN=Users,DC=emea,DC=corp,DC=example": {
+      "$error": {
+        "hresult": "0x8007203A",
+        "message": "The server is not operational."
+      }
+    }
+  },
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Domain Admins))",
+      "results": [
+        {
+          "$path": "LDAP://corp.example/CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example",
+            "CN=SQL Service,OU=Service Accounts,DC=corp,DC=example",
+            "CN=Veeam Backup,OU=Service Accounts,DC=corp,DC=example",
+            "CN=Ops Admin,CN=Users,DC=emea,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(objectClass=msDS-GroupManagedServiceAccount)",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(objectClass=pKIEnrollmentService)",
+      "results": []
+    }
+  ]
+}

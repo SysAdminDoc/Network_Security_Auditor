@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.CommonFindings;
 
-using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// CF04 - Former Employee Access: Find stale AD accounts (>90d no logon) with
@@ -11,6 +11,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
 {
     public string Id => "CF04";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public CF04_FormerEmployeeCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal CF04_FormerEmployeeCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     private static readonly string[] PrivilegedGroups =
     [
@@ -42,31 +48,29 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
 
             evidence.AppendLine("[Stale Account Analysis (>90 days no logon)]");
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry) { PageSize = 1000 };
+            var directory = _directory(env);
 
             // Find enabled user accounts with no logon in >90 days
             // FileTime for 90 days ago
             long fileTimeThreshold = staleThreshold.ToFileTimeUtc();
 
-            searcher.Filter = $"(&(objectCategory=person)(objectClass=user)" +
+            var query = new DirectoryQuery(
+                $"(&(objectCategory=person)(objectClass=user)" +
                 $"(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
-                $"(|(lastLogonTimestamp<={fileTimeThreshold})(!(lastLogonTimestamp=*))))";
-            searcher.PropertiesToLoad.AddRange(
+                $"(|(lastLogonTimestamp<={fileTimeThreshold})(!(lastLogonTimestamp=*))))",
                 ["sAMAccountName", "lastLogonTimestamp", "memberOf", "whenCreated", "distinguishedName"]);
 
             ct.ThrowIfCancellationRequested();
 
-            using var results = searcher.FindAll();
-            foreach (SearchResult sr in results)
+            foreach (var sr in directory.Search(query, ct))
             {
                 ct.ThrowIfCancellationRequested();
 
-                string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
+                string sam = sr.String("sAMAccountName") ?? "";
                 staleEnabledCount++;
 
                 // Check if member of any privileged groups
-                var memberOf = sr.Properties["memberOf"];
+                var memberOf = sr.Strings("memberOf");
                 bool isPrivileged = false;
                 string matchedGroup = "";
 
@@ -89,9 +93,7 @@ public sealed class CF04_FormerEmployeeCheck : ISecurityCheck
                     stalePrivilegedCount++;
                     hasIssue = true;
 
-                    long lastLogon = 0;
-                    if (sr.Properties["lastLogonTimestamp"].Count > 0)
-                        lastLogon = (long)sr.Properties["lastLogonTimestamp"][0];
+                    long lastLogon = sr.Long("lastLogonTimestamp");
 
                     DateTime lastLogonDate = lastLogon > 0
                         ? DateTime.FromFileTimeUtc(lastLogon)

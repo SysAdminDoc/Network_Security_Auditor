@@ -1,0 +1,30 @@
+{
+  "entries": {
+    "(domain)": {
+      "distinguishedName": "DC=corp,DC=example"
+    },
+    "RootDSE": {
+      "domainFunctionality": "7",
+      "forestFunctionality": "7",
+      "defaultNamingContext": "DC=corp,DC=example"
+    },
+    "CN=Managed Service Accounts,DC=corp,DC=example": {
+      "distinguishedName": "CN=Managed Service Accounts,DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": null,
+      "filter": "(objectClass=msDS-DelegatedManagedServiceAccount)",
+      "results": []
+    }
+  ],
+  "acls": {
+    "CN=Managed Service Accounts,DC=corp,DC=example": {
+      "$error": {
+        "hresult": "0x80070005",
+        "message": "Access is denied."
+      }
+    }
+  }
+}

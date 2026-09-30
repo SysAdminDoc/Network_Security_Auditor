@@ -1,0 +1,47 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filterPattern": "\\(&\\(objectCategory=person\\)\\(objectClass=user\\)\\(!\\(userAccountControl:1\\.2\\.840\\.113556\\.1\\.4\\.803:=2\\)\\)\\(\\|\\(lastLogonTimestamp<=\\d+\\)\\(!\\(lastLogonTimestamp=\\*\\)\\)\\)\\)",
+      "results": [
+        {
+          "$path": "LDAP://corp.example/CN=Jane Doe,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "j.doe",
+          "distinguishedName": "CN=Jane Doe,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 120
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example",
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Miguel Ortiz,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "m.ortiz",
+          "distinguishedName": "CN=Miguel Ortiz,OU=Staff,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          },
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 210
+          },
+          "memberOf": [
+            "CN=All Staff,OU=Groups,DC=corp,DC=example"
+          ]
+        },
+        {
+          "$path": "LDAP://corp.example/CN=Lobby Kiosk,OU=Shared,DC=corp,DC=example",
+          "sAMAccountName": "kiosk.lobby",
+          "distinguishedName": "CN=Lobby Kiosk,OU=Shared,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 900
+          }
+        }
+      ]
+    }
+  ]
+}

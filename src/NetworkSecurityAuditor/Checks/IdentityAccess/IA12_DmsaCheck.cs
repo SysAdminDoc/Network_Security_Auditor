@@ -3,6 +3,7 @@ namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA12 - dMSA/BadSuccessor Exposure: Check for delegated Managed Service Account
@@ -12,6 +13,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class IA12_DmsaCheck : ISecurityCheck
 {
     public string Id => "IA12";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA12_DmsaCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA12_DmsaCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -31,8 +38,7 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasIssue = false;
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry) { PageSize = 1000 };
+            var directory = _directory(env);
 
             // 1. Check for existing dMSA objects
             ct.ThrowIfCancellationRequested();
@@ -41,26 +47,22 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
             int dmsaCount = 0;
             try
             {
-                searcher.Filter = "(objectClass=msDS-DelegatedManagedServiceAccount)";
-                searcher.PropertiesToLoad.Clear();
-                searcher.PropertiesToLoad.AddRange(["sAMAccountName", "distinguishedName",
-                    "msDS-DelegatedManagedServiceAccountSuccessor", "whenCreated"]);
+                var dmsaQuery = new DirectoryQuery("(objectClass=msDS-DelegatedManagedServiceAccount)",
+                    ["sAMAccountName", "distinguishedName",
+                     "msDS-DelegatedManagedServiceAccountSuccessor", "whenCreated"]);
 
-                using var dmsaResults = searcher.FindAll();
-                foreach (SearchResult sr in dmsaResults)
+                foreach (var sr in directory.Search(dmsaQuery, ct))
                 {
                     ct.ThrowIfCancellationRequested();
                     dmsaCount++;
-                    string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
-                    string dn = sr.Properties["distinguishedName"][0]?.ToString() ?? "";
+                    string sam = sr.String("sAMAccountName") ?? "";
+                    string dn = sr.String("distinguishedName") ?? "";
 
-                    string successor = sr.Properties["msDS-DelegatedManagedServiceAccountSuccessor"].Count > 0
-                        ? sr.Properties["msDS-DelegatedManagedServiceAccountSuccessor"][0]?.ToString() ?? "None"
+                    string successor = sr.Has("msDS-DelegatedManagedServiceAccountSuccessor")
+                        ? sr.String("msDS-DelegatedManagedServiceAccountSuccessor") ?? "None"
                         : "None";
 
-                    DateTime created = sr.Properties["whenCreated"].Count > 0
-                        ? (DateTime)sr.Properties["whenCreated"][0]
-                        : DateTime.MinValue;
+                    DateTime created = sr.Time("whenCreated") ?? DateTime.MinValue;
 
                     evidence.AppendLine($"  {sam} | DN={dn}");
                     evidence.AppendLine($"    Successor: {successor}");
@@ -86,13 +88,13 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("\n[Managed Service Accounts Container]");
 
-            string domainDn = rootEntry.Properties["distinguishedName"]?.Value?.ToString() ?? "";
+            string domainDn = directory.ReadEntry(null, ["distinguishedName"], ct).String("distinguishedName") ?? "";
             string msaCn = $"CN=Managed Service Accounts,{domainDn}";
 
             try
             {
-                using var msaContainer = new DirectoryEntry("LDAP://" + msaCn);
-                msaContainer.RefreshCache(["ntSecurityDescriptor"]);
+                // Binding the container proves it exists; its ACL is read separately below.
+                directory.ReadEntry(msaCn, ["distinguishedName"], ct);
 
                 // Report the container exists
                 evidence.AppendLine($"  Container DN: {msaCn}");
@@ -101,33 +103,28 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
                 // Check for delegated permissions using the security descriptor
                 try
                 {
-                    var sd = msaContainer.ObjectSecurity;
-                    var rules = sd.GetAccessRules(true, true, typeof(System.Security.Principal.NTAccount));
+                    var rules = directory.ReadAccessRules(msaCn, ct);
 
                     int createChildRules = 0;
-                    foreach (System.Security.AccessControl.AuthorizationRule rule in rules)
+                    foreach (var adRule in rules)
                     {
-                        if (rule is System.DirectoryServices.ActiveDirectoryAccessRule adRule)
+                        // ADS_RIGHT_DS_CREATE_CHILD = 0x1
+                        if (adRule.Rights.HasFlag(ActiveDirectoryRights.CreateChild))
                         {
-                            // ADS_RIGHT_DS_CREATE_CHILD = 0x1
-                            if (adRule.ActiveDirectoryRights.HasFlag(
-                                System.DirectoryServices.ActiveDirectoryRights.CreateChild))
-                            {
-                                createChildRules++;
-                                string identity = adRule.IdentityReference?.Value ?? "Unknown";
-                                evidence.AppendLine($"  CreateChild ACE: {identity} | Type={adRule.AccessControlType}");
+                            createChildRules++;
+                            string identity = adRule.Identity;
+                            evidence.AppendLine($"  CreateChild ACE: {identity} | Type={adRule.Type}");
 
-                                // Flag non-standard delegations (not SYSTEM, Domain Admins, Enterprise Admins)
-                                if (!identity.Contains("SYSTEM", StringComparison.OrdinalIgnoreCase) &&
-                                    !identity.Contains("Domain Admins", StringComparison.OrdinalIgnoreCase) &&
-                                    !identity.Contains("Enterprise Admins", StringComparison.OrdinalIgnoreCase) &&
-                                    !identity.Contains("Administrators", StringComparison.OrdinalIgnoreCase) &&
-                                    adRule.AccessControlType == System.Security.AccessControl.AccessControlType.Allow)
-                                {
-                                    hasIssue = true;
-                                    sb.AppendLine($"CRITICAL: Non-standard CreateChild delegation on MSA container: {identity}");
-                                    sb.AppendLine("  This principal could create dMSA objects and exploit BadSuccessor.");
-                                }
+                            // Flag non-standard delegations (not SYSTEM, Domain Admins, Enterprise Admins)
+                            if (!identity.Contains("SYSTEM", StringComparison.OrdinalIgnoreCase) &&
+                                !identity.Contains("Domain Admins", StringComparison.OrdinalIgnoreCase) &&
+                                !identity.Contains("Enterprise Admins", StringComparison.OrdinalIgnoreCase) &&
+                                !identity.Contains("Administrators", StringComparison.OrdinalIgnoreCase) &&
+                                adRule.Type == System.Security.AccessControl.AccessControlType.Allow)
+                            {
+                                hasIssue = true;
+                                sb.AppendLine($"CRITICAL: Non-standard CreateChild delegation on MSA container: {identity}");
+                                sb.AppendLine("  This principal could create dMSA objects and exploit BadSuccessor.");
                             }
                         }
                     }
@@ -152,9 +149,10 @@ public sealed class IA12_DmsaCheck : ISecurityCheck
             // Check domain functional level (dMSA requires Windows Server 2025 / FL 10)
             try
             {
-                using var rootDse = new DirectoryEntry("LDAP://RootDSE");
-                string? domainFl = rootDse.Properties["domainFunctionality"]?.Value?.ToString();
-                string? forestFl = rootDse.Properties["forestFunctionality"]?.Value?.ToString();
+                var rootDse = directory.ReadEntry(DirectoryReader.RootDse,
+                    ["domainFunctionality", "forestFunctionality"], ct);
+                string? domainFl = rootDse.String("domainFunctionality");
+                string? forestFl = rootDse.String("forestFunctionality");
                 evidence.AppendLine($"  Domain Functional Level: {domainFl}");
                 evidence.AppendLine($"  Forest Functional Level: {forestFl}");
 

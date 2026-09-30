@@ -1,0 +1,73 @@
+{
+  "entries": {
+    "(domain)": {
+      "distinguishedName": "DC=corp,DC=example"
+    },
+    "RootDSE": {
+      "domainFunctionality": "10",
+      "forestFunctionality": "10",
+      "defaultNamingContext": "DC=corp,DC=example"
+    },
+    "CN=Managed Service Accounts,DC=corp,DC=example": {
+      "distinguishedName": "CN=Managed Service Accounts,DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": null,
+      "filter": "(objectClass=msDS-DelegatedManagedServiceAccount)",
+      "results": [
+        {
+          "$path": "LDAP://corp.example/CN=dmsa_web,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "dmsa_web$",
+          "distinguishedName": "CN=dmsa_web,OU=Service Accounts,DC=corp,DC=example",
+          "whenCreated": {
+            "$daysAgo": 12
+          }
+        }
+      ]
+    }
+  ],
+  "acls": {
+    "CN=Managed Service Accounts,DC=corp,DC=example": [
+      {
+        "identity": "NT AUTHORITY\\SYSTEM",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Domain Admins",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Enterprise Admins",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "BUILTIN\\Administrators",
+        "rights": "CreateChild, DeleteChild, Self, WriteProperty, ExtendedRight, GenericRead, WriteDacl, WriteOwner",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "NT AUTHORITY\\Authenticated Users",
+        "rights": "GenericRead",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Helpdesk",
+        "rights": "CreateChild",
+        "type": "Allow",
+        "objectType": "0feb936f-47b3-49f2-9386-1dedc2c23765"
+      },
+      {
+        "identity": "CORP\\Contractors",
+        "rights": "CreateChild",
+        "type": "Deny"
+      }
+    ]
+  }
+}

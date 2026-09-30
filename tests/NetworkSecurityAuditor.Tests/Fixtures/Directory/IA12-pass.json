@@ -1,0 +1,53 @@
+{
+  "entries": {
+    "(domain)": {
+      "distinguishedName": "DC=corp,DC=example"
+    },
+    "RootDSE": {
+      "domainFunctionality": "7",
+      "forestFunctionality": "7",
+      "defaultNamingContext": "DC=corp,DC=example"
+    },
+    "CN=Managed Service Accounts,DC=corp,DC=example": {
+      "distinguishedName": "CN=Managed Service Accounts,DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": null,
+      "filter": "(objectClass=msDS-DelegatedManagedServiceAccount)",
+      "results": []
+    }
+  ],
+  "acls": {
+    "CN=Managed Service Accounts,DC=corp,DC=example": [
+      {
+        "identity": "NT AUTHORITY\\SYSTEM",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Domain Admins",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Enterprise Admins",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "BUILTIN\\Administrators",
+        "rights": "CreateChild, DeleteChild, Self, WriteProperty, ExtendedRight, GenericRead, WriteDacl, WriteOwner",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "NT AUTHORITY\\Authenticated Users",
+        "rights": "GenericRead",
+        "type": "Allow"
+      }
+    ]
+  }
+}

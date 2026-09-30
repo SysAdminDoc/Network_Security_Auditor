@@ -1,0 +1,25 @@
+{
+  "entries": {
+    "(domain)": {
+      "$error": {
+        "hresult": "0x8007203A",
+        "message": "The server is not operational."
+      }
+    },
+    "RootDSE": {
+      "domainFunctionality": "7",
+      "forestFunctionality": "7",
+      "defaultNamingContext": "DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": null,
+      "filter": "(objectClass=msDS-DelegatedManagedServiceAccount)",
+      "$error": {
+        "hresult": "0x8007203A",
+        "message": "The server is not operational."
+      }
+    }
+  ]
+}

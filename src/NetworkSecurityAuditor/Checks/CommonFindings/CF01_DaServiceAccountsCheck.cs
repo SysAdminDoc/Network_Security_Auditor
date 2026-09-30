@@ -1,9 +1,9 @@
 namespace NetworkSecurityAuditor.Checks.CommonFindings;
 
-using System.DirectoryServices;
 using System.IO;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// CF01 - DA Service Accounts + ADCS: Check Domain Admins for service accounts.
@@ -27,6 +27,20 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         "Groups.xml", "Services.xml", "ScheduledTasks.xml", "DataSources.xml", "Drives.xml"
     ];
 
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+    private readonly Func<EnvironmentInfo, string> _sysvolPoliciesPath;
+
+    public CF01_DaServiceAccountsCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    /// <param name="sysvolPoliciesPath">Where the GPP scan looks; tests point it at a local folder.</param>
+    internal CF01_DaServiceAccountsCheck(
+        Func<EnvironmentInfo, IDirectoryReader> directory,
+        Func<EnvironmentInfo, string>? sysvolPoliciesPath = null)
+    {
+        _directory = directory;
+        _sysvolPoliciesPath = sysvolPoliciesPath ?? (env => $@"\\{env.DomainName}\SYSVOL\{env.DomainName}\Policies");
+    }
+
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
         if (!env.IsDomainJoined)
@@ -45,21 +59,23 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasIssue = false;
 
+            var directory = _directory(env);
+
             // 1. Check Domain Admins for service account patterns
             ct.ThrowIfCancellationRequested();
-            CheckDaServiceAccounts(env, sb, evidence, ref hasIssue, ct);
+            CheckDaServiceAccounts(directory, sb, evidence, ref hasIssue, ct);
 
             // 2. Check for gMSA adoption
             ct.ThrowIfCancellationRequested();
-            CheckGmsaAdoption(env, sb, evidence, ct);
+            CheckGmsaAdoption(directory, sb, evidence, ct);
 
             // 3. Check for GPP password remnants (Groups.xml in SYSVOL)
             ct.ThrowIfCancellationRequested();
-            CheckGppPasswords(env, sb, evidence, ref hasIssue, ct);
+            CheckGppPasswords(_sysvolPoliciesPath(env), sb, evidence, ref hasIssue, ct);
 
             // 4. Basic ADCS check
             ct.ThrowIfCancellationRequested();
-            CheckAdcs(env, sb, evidence, ct);
+            CheckAdcs(directory, sb, evidence, ct);
 
             if (!hasIssue)
                 sb.Insert(0, "No critical service account issues detected in Domain Admins.\n");
@@ -81,29 +97,26 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         }
     }
 
-    private static void CheckDaServiceAccounts(EnvironmentInfo env, StringBuilder sb,
+    private static void CheckDaServiceAccounts(IDirectoryReader directory, StringBuilder sb,
         StringBuilder evidence, ref bool hasIssue, CancellationToken ct)
     {
         evidence.AppendLine("[Domain Admins - Service Account Check]");
 
         try
         {
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry)
+            var query = new DirectoryQuery("(&(objectClass=group)(cn=Domain Admins))", ["member"])
             {
-                Filter = "(&(objectClass=group)(cn=Domain Admins))",
-                PageSize = 1000
+                SizeLimit = 1
             };
-            searcher.PropertiesToLoad.AddRange(["member"]);
 
-            var result = searcher.FindOne();
+            var result = directory.Search(query, ct).FirstOrDefault();
             if (result == null)
             {
                 evidence.AppendLine("  Domain Admins group not found.");
                 return;
             }
 
-            var members = result.Properties["member"];
+            var members = result.Strings("member");
             int svcAccountCount = 0;
 
             foreach (string memberDn in members)
@@ -112,24 +125,20 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
 
                 try
                 {
-                    using var memberEntry = new DirectoryEntry("LDAP://" + memberDn.Replace("/", "\\/"));
-                    memberEntry.RefreshCache(["sAMAccountName", "servicePrincipalName", "userAccountControl"]);
+                    var memberEntry = directory.ReadEntry(memberDn,
+                        ["sAMAccountName", "servicePrincipalName", "userAccountControl"], ct);
 
-                    string sam = memberEntry.Properties["sAMAccountName"]?.Value?.ToString() ?? "";
+                    string sam = memberEntry.String("sAMAccountName") ?? "";
 
                     // Check if it looks like a service account
                     bool isService = ServiceAccountIndicators.Any(i =>
                         sam.Contains(i, StringComparison.OrdinalIgnoreCase));
 
                     // Check for SPN (service accounts typically have SPNs)
-                    var spns = memberEntry.Properties["servicePrincipalName"];
-                    bool hasSpn = spns?.Count > 0;
+                    bool hasSpn = memberEntry.Has("servicePrincipalName");
 
                     // Check for non-interactive flags
-                    int uac = 0;
-                    object? uacVal = memberEntry.Properties["userAccountControl"]?.Value;
-                    if (uacVal != null)
-                        uac = (int)uacVal;
+                    int uac = memberEntry.Int("userAccountControl");
 
                     bool pwdNeverExpires = (uac & 0x10000) != 0;
 
@@ -166,28 +175,21 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         }
     }
 
-    private static void CheckGmsaAdoption(EnvironmentInfo env, StringBuilder sb,
+    private static void CheckGmsaAdoption(IDirectoryReader directory, StringBuilder sb,
         StringBuilder evidence, CancellationToken ct)
     {
         evidence.AppendLine("\n[Group Managed Service Accounts (gMSA)]");
 
         try
         {
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry)
-            {
-                Filter = "(objectClass=msDS-GroupManagedServiceAccount)",
-                PageSize = 1000
-            };
-            searcher.PropertiesToLoad.AddRange(["sAMAccountName"]);
+            var query = new DirectoryQuery("(objectClass=msDS-GroupManagedServiceAccount)", ["sAMAccountName"]);
 
             int gmsaCount = 0;
-            using var results = searcher.FindAll();
-            foreach (SearchResult sr in results)
+            foreach (var sr in directory.Search(query, ct))
             {
                 ct.ThrowIfCancellationRequested();
                 gmsaCount++;
-                string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
+                string sam = sr.String("sAMAccountName") ?? "";
                 if (gmsaCount <= 10)
                     evidence.AppendLine($"  gMSA: {sam}");
             }
@@ -206,15 +208,13 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         }
     }
 
-    private static void CheckGppPasswords(EnvironmentInfo env, StringBuilder sb,
+    private static void CheckGppPasswords(string sysvolPath, StringBuilder sb,
         StringBuilder evidence, ref bool hasIssue, CancellationToken ct)
     {
         evidence.AppendLine("\n[GPP Password Check (SYSVOL)]");
 
         try
         {
-            string sysvolPath = $@"\\{env.DomainName}\SYSVOL\{env.DomainName}\Policies";
-
             if (!Directory.Exists(sysvolPath))
             {
                 evidence.AppendLine($"  SYSVOL not accessible: {sysvolPath}");
@@ -370,30 +370,22 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         }
     }
 
-    private static void CheckAdcs(EnvironmentInfo env, StringBuilder sb,
+    private static void CheckAdcs(IDirectoryReader directory, StringBuilder sb,
         StringBuilder evidence, CancellationToken ct)
     {
         evidence.AppendLine("\n[Active Directory Certificate Services (ADCS)]");
 
         try
         {
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry)
-            {
-                Filter = "(objectClass=pKIEnrollmentService)",
-                PageSize = 1000
-            };
-            searcher.PropertiesToLoad.AddRange(["cn", "dNSHostName"]);
+            var query = new DirectoryQuery("(objectClass=pKIEnrollmentService)", ["cn", "dNSHostName"]);
 
             int caCount = 0;
-            using var results = searcher.FindAll();
-            foreach (SearchResult sr in results)
+            foreach (var sr in directory.Search(query, ct))
             {
                 ct.ThrowIfCancellationRequested();
                 caCount++;
-                string cn = sr.Properties["cn"][0]?.ToString() ?? "";
-                string dns = sr.Properties.Contains("dNSHostName") && sr.Properties["dNSHostName"].Count > 0
-                    ? sr.Properties["dNSHostName"][0]?.ToString() ?? "" : "";
+                string cn = sr.String("cn") ?? "";
+                string dns = sr.Has("dNSHostName") ? sr.String("dNSHostName") ?? "" : "";
 
                 evidence.AppendLine($"  CA: {cn} ({dns})");
             }
