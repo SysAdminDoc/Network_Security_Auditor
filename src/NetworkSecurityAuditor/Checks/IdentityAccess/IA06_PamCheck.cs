@@ -1,17 +1,58 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
 using System.DirectoryServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA06 - PAM/Privileged Access: LAPS deployment coverage.
-/// Checks msLAPS-EncryptedPassword (Windows LAPS) and ms-Mcs-AdmPwd (Legacy LAPS)
-/// on computer objects. Reports coverage percentage.
+/// Coverage comes from the password expiration attributes (msLAPS-PasswordExpirationTime for
+/// Windows LAPS, ms-Mcs-AdmPwdExpirationTime for legacy LAPS), which Authenticated Users can read
+/// by default. The password attributes themselves are confidential and return nothing to an auditor
+/// without the LAPS read right, so they're never used to measure coverage.
 /// </summary>
 public sealed class IA06_PamCheck : ISecurityCheck
 {
+    internal const string WindowsLapsExpiration = "msLAPS-PasswordExpirationTime";
+    internal const string LegacyLapsExpiration = "ms-Mcs-AdmPwdExpirationTime";
+
+    /// <summary>Enabled computers that aren't writable (516) or read-only (521) domain controllers.</summary>
+    internal const string PopulationFilter =
+        "(&(objectCategory=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
+        "(!(primaryGroupID=516))(!(primaryGroupID=521)))";
+
+    // Windows LAPS reads policy from CSP, then GPO, then local configuration.
+    private static readonly string[] WindowsLapsPolicyKeys =
+    [
+        @"HKLM\SOFTWARE\Microsoft\Policies\LAPS",
+        @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS",
+        @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\LAPS\Config",
+    ];
+    private const string LegacyLapsPolicyKey = @"HKLM\SOFTWARE\Policies\Microsoft Services\AdmPwd";
+    private const int MaxUncoveredListed = 10;
+
     public string Id => "IA06";
+
+    internal sealed record LapsComputer(string DistinguishedName, bool WindowsLaps, bool LegacyLaps);
+
+    internal sealed record LapsSnapshot
+    {
+        /// <summary>Null when computer objects couldn't be searched.</summary>
+        public IReadOnlyList<LapsComputer>? Computers { get; init; }
+        public string? SearchError { get; init; }
+        public bool SearchAccessDenied { get; init; }
+        /// <summary>Whether the schema defines the attribute; null when the schema couldn't be read.</summary>
+        public bool? WindowsLapsSchema { get; init; }
+        public bool? LegacyLapsSchema { get; init; }
+        public string? SchemaError { get; init; }
+        /// <summary>The auditing machine's Windows LAPS BackupDirectory policy (1 = Entra ID, 2 = Active Directory).</summary>
+        public int? LocalBackupDirectory { get; init; }
+        public bool LocalLegacyLapsEnabled { get; init; }
+    }
+
+    internal sealed record LapsAssessment(CheckStatus Status, string Findings, string Evidence, int Covered, int Total, string? Error);
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -27,118 +68,270 @@ public sealed class IA06_PamCheck : ISecurityCheck
 
         try
         {
-            var sb = new StringBuilder();
-            var evidence = new StringBuilder();
-            bool hasIssue = false;
-
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry) { PageSize = 1000 };
-
-            // Count total enabled computer objects (exclude DCs for LAPS scope)
-            ct.ThrowIfCancellationRequested();
-            searcher.Filter = "(&(objectCategory=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
-                              "(!(primaryGroupID=516)))"; // 516 = Domain Controllers
-            searcher.PropertiesToLoad.Clear();
-            searcher.PropertiesToLoad.Add("distinguishedName");
-
-            int totalComputers = 0;
-            using (var allComputers = searcher.FindAll())
-            {
-                totalComputers = allComputers.Count;
-            }
-
-            evidence.AppendLine($"[Computer Objects] Total enabled (non-DC): {totalComputers}");
-
-            // Windows LAPS (msLAPS-EncryptedPassword)
-            ct.ThrowIfCancellationRequested();
-            evidence.AppendLine("\n[Windows LAPS (msLAPS-EncryptedPassword)]");
-            int windowsLapsCount = 0;
-
-            try
-            {
-                searcher.Filter = "(&(objectCategory=computer)(msLAPS-EncryptedPassword=*)" +
-                                  "(!(userAccountControl:1.2.840.113556.1.4.803:=2)))";
-                searcher.PropertiesToLoad.Clear();
-                searcher.PropertiesToLoad.Add("sAMAccountName");
-
-                using var wlResults = searcher.FindAll();
-                windowsLapsCount = wlResults.Count;
-                evidence.AppendLine($"  Computers with msLAPS-EncryptedPassword: {windowsLapsCount}");
-            }
-            catch
-            {
-                evidence.AppendLine("  msLAPS-EncryptedPassword attribute not found in schema (Windows LAPS not deployed).");
-            }
-
-            // Legacy LAPS (ms-Mcs-AdmPwd)
-            ct.ThrowIfCancellationRequested();
-            evidence.AppendLine("\n[Legacy LAPS (ms-Mcs-AdmPwd)]");
-            int legacyLapsCount = 0;
-
-            try
-            {
-                searcher.Filter = "(&(objectCategory=computer)(ms-Mcs-AdmPwd=*)" +
-                                  "(!(userAccountControl:1.2.840.113556.1.4.803:=2)))";
-                searcher.PropertiesToLoad.Clear();
-                searcher.PropertiesToLoad.Add("sAMAccountName");
-
-                using var llResults = searcher.FindAll();
-                legacyLapsCount = llResults.Count;
-                evidence.AppendLine($"  Computers with ms-Mcs-AdmPwd: {legacyLapsCount}");
-            }
-            catch
-            {
-                evidence.AppendLine("  ms-Mcs-AdmPwd attribute not found in schema (Legacy LAPS not deployed).");
-            }
-
-            // Coverage calculations
-            int anyLaps = Math.Max(windowsLapsCount, legacyLapsCount); // rough union
-            double coveragePct = totalComputers > 0 ? (anyLaps * 100.0 / totalComputers) : 0;
-
-            sb.AppendLine($"Total enabled computers (non-DC): {totalComputers}");
-            sb.AppendLine($"Windows LAPS coverage: {windowsLapsCount}/{totalComputers} ({windowsLapsCount * 100.0 / Math.Max(totalComputers, 1):F1}%)");
-            sb.AppendLine($"Legacy LAPS coverage: {legacyLapsCount}/{totalComputers} ({legacyLapsCount * 100.0 / Math.Max(totalComputers, 1):F1}%)");
-
-            if (anyLaps == 0)
-            {
-                hasIssue = true;
-                sb.AppendLine("CRITICAL: No LAPS deployment detected. Local admin passwords are likely shared/static.");
-            }
-            else if (coveragePct < 80)
-            {
-                hasIssue = true;
-                sb.AppendLine($"FAIL: LAPS coverage is {coveragePct:F1}% (target >= 80%).");
-            }
-            else if (coveragePct < 95)
-            {
-                sb.AppendLine($"WARNING: LAPS coverage is {coveragePct:F1}% (target >= 95%).");
-            }
-            else
-            {
-                sb.AppendLine($"PASS: LAPS coverage is {coveragePct:F1}%.");
-            }
-
-            if (windowsLapsCount > 0 && legacyLapsCount > 0)
-            {
-                sb.AppendLine("INFO: Both Windows LAPS and Legacy LAPS are in use. Plan migration to Windows LAPS only.");
-            }
-
-            // Check LAPS delegation ACLs (look for LAPS-related attributes in schema)
-            ct.ThrowIfCancellationRequested();
-            evidence.AppendLine("\n[LAPS Schema Attributes]");
-            evidence.AppendLine($"  env.HasWindowsLAPS = {env.HasWindowsLAPS}");
-            evidence.AppendLine($"  env.HasLegacyLAPS = {env.HasLegacyLAPS}");
-
+            var assessment = Assess(CollectSnapshot(env.DomainName, ct));
             return Task.FromResult(new CheckResult
             {
-                Status = hasIssue ? CheckStatus.Fail : CheckStatus.Pass,
-                Findings = sb.ToString().TrimEnd(),
-                Evidence = evidence.ToString().TrimEnd()
+                Status = assessment.Status,
+                Findings = assessment.Findings,
+                Evidence = assessment.Evidence,
+                Error = assessment.Error
             });
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             return Task.FromResult(CheckResult.FromError(Id, ex));
         }
     }
+
+    internal static LapsAssessment Assess(LapsSnapshot snapshot)
+    {
+        var sb = new StringBuilder();
+        var evidence = new StringBuilder();
+
+        evidence.AppendLine("[LAPS Schema Attributes]");
+        evidence.AppendLine($"  {WindowsLapsExpiration}: {SchemaText(snapshot.WindowsLapsSchema)}");
+        evidence.AppendLine($"  {LegacyLapsExpiration}: {SchemaText(snapshot.LegacyLapsSchema)}");
+        if (snapshot.SchemaError is not null)
+            evidence.AppendLine($"  Schema couldn't be read: {snapshot.SchemaError}");
+        evidence.AppendLine("\n[Auditing Machine LAPS Policy]");
+        evidence.AppendLine($"  Windows LAPS BackupDirectory: {BackupDirectoryText(snapshot.LocalBackupDirectory)}");
+        evidence.AppendLine($"  Legacy LAPS (AdmPwdEnabled): {(snapshot.LocalLegacyLapsEnabled ? "1" : "not set")}");
+
+        if (snapshot.Computers is null)
+        {
+            var error = snapshot.SearchError ?? "Computer search failed.";
+            evidence.AppendLine($"\n[Computer Objects]\n  Search failed: {error}");
+            sb.AppendLine(snapshot.SearchAccessDenied
+                ? "NOT ASSESSED: the auditing account was denied access to computer objects, so LAPS coverage can't be measured. " +
+                  "It needs Read on computer objects in the domain (Authenticated Users have it by default)."
+                : $"NOT ASSESSED: computer objects couldn't be searched ({error}).");
+            return new LapsAssessment(CheckStatus.NotAssessed, sb.ToString().TrimEnd(), evidence.ToString().TrimEnd(), 0, 0, error);
+        }
+
+        // One object per distinguished name, so a computer with both attributes counts once.
+        var computers = snapshot.Computers
+            .GroupBy(c => c.DistinguishedName, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new LapsComputer(g.Key, g.Any(c => c.WindowsLaps), g.Any(c => c.LegacyLaps)))
+            .ToList();
+        var total = computers.Count;
+        var windowsCount = computers.Count(c => c.WindowsLaps);
+        var legacyCount = computers.Count(c => c.LegacyLaps);
+        var uncovered = computers.Where(c => !c.WindowsLaps && !c.LegacyLaps).ToList();
+        var covered = total - uncovered.Count;
+        var windowsSchema = snapshot.WindowsLapsSchema ?? (windowsCount > 0 ? true : null);
+        var legacySchema = snapshot.LegacyLapsSchema ?? (legacyCount > 0 ? true : null);
+
+        evidence.AppendLine("\n[Computer Objects]");
+        evidence.AppendLine($"  Enabled computers (excluding domain controllers): {total}");
+        evidence.AppendLine($"  With {WindowsLapsExpiration}: {windowsCount}");
+        evidence.AppendLine($"  With {LegacyLapsExpiration}: {legacyCount}");
+        evidence.AppendLine($"  With either (union by distinguished name): {covered}");
+        if (uncovered.Count > 0 && covered > 0)
+        {
+            evidence.AppendLine($"  Without a LAPS expiration time (first {Math.Min(uncovered.Count, MaxUncoveredListed)} of {uncovered.Count}):");
+            foreach (var c in uncovered.Take(MaxUncoveredListed))
+                evidence.AppendLine($"    {c.DistinguishedName}");
+        }
+
+        CheckStatus status;
+        string? assessmentError = null;
+
+        if (windowsSchema == false && legacySchema == false)
+        {
+            status = CheckStatus.Fail;
+            sb.AppendLine("FAIL: The Active Directory schema has neither the Windows LAPS nor the legacy LAPS attributes, " +
+                "so no computer can back up a LAPS password to AD. Local administrator passwords are likely shared or static.");
+            sb.AppendLine("  Devices that back up Windows LAPS to Microsoft Entra ID aren't visible to this check.");
+        }
+        else if (total == 0)
+        {
+            status = CheckStatus.NotAssessed;
+            assessmentError = "No enabled member computers were returned.";
+            sb.AppendLine("NOT ASSESSED: the search returned no enabled computers other than domain controllers. " +
+                "If the domain has member computers, check that the auditing account can list computer objects.");
+        }
+        else if (covered == 0 && (snapshot.LocalBackupDirectory == 2 || snapshot.LocalLegacyLapsEnabled))
+        {
+            // This machine is told to back up to AD, yet no object anywhere shows an expiration time.
+            status = CheckStatus.NotAssessed;
+            assessmentError = "LAPS expiration attributes appear unreadable to the auditing account.";
+            sb.AppendLine($"NOT ASSESSED: this computer has a LAPS policy that backs up to Active Directory, but none of the {total} " +
+                "enabled computers shows a LAPS password expiration time. The auditing account most likely can't read it.");
+            sb.AppendLine($"  Grant Read Property on {WindowsLapsExpiration} and {LegacyLapsExpiration} for computer objects " +
+                "(Authenticated Users have it by default), or rerun as an account that has it.");
+        }
+        else if (covered == 0)
+        {
+            status = CheckStatus.Fail;
+            sb.AppendLine($"FAIL: The LAPS schema is present, but none of the {total} enabled computers has a LAPS password " +
+                "expiration time. LAPS isn't managing local administrator passwords.");
+        }
+        else
+        {
+            var coveragePct = covered * 100.0 / total;
+            if (coveragePct < 80)
+            {
+                status = CheckStatus.Fail;
+                sb.AppendLine($"FAIL: LAPS coverage is {coveragePct:F1}% ({covered}/{total}, target >= 80%).");
+            }
+            else if (coveragePct < 95)
+            {
+                status = CheckStatus.Pass;
+                sb.AppendLine($"WARNING: LAPS coverage is {coveragePct:F1}% ({covered}/{total}, target >= 95%).");
+            }
+            else
+            {
+                status = CheckStatus.Pass;
+                sb.AppendLine($"PASS: LAPS coverage is {coveragePct:F1}% ({covered}/{total}).");
+            }
+        }
+
+        if (total > 0)
+        {
+            sb.AppendLine($"Windows LAPS: {windowsCount}/{total} ({windowsCount * 100.0 / total:F1}%)");
+            sb.AppendLine($"Legacy LAPS: {legacyCount}/{total} ({legacyCount * 100.0 / total:F1}%)");
+        }
+        if (windowsCount > 0 && legacyCount > 0)
+            sb.AppendLine("INFO: Both Windows LAPS and legacy LAPS are in use. Plan migration to Windows LAPS only.");
+        else if (legacyCount > 0)
+            sb.AppendLine("INFO: Only legacy LAPS is in use. It stores passwords in cleartext; plan migration to Windows LAPS.");
+
+        return new LapsAssessment(status, sb.ToString().TrimEnd(), evidence.ToString().TrimEnd(), covered, total, assessmentError);
+    }
+
+    internal static LapsSnapshot CollectSnapshot(string domainName, CancellationToken ct)
+    {
+        var prefix = "LDAP://" + domainName;
+        bool? windowsSchema = null, legacySchema = null;
+        string? schemaError = null;
+        try
+        {
+            using var rootDse = new DirectoryEntry(prefix + "/RootDSE");
+            var schemaNc = rootDse.Properties["schemaNamingContext"].Value as string;
+            if (!string.IsNullOrWhiteSpace(schemaNc))
+            {
+                using var schemaRoot = new DirectoryEntry(prefix + "/" + schemaNc);
+                windowsSchema = SchemaHasAttribute(schemaRoot, WindowsLapsExpiration);
+                legacySchema = SchemaHasAttribute(schemaRoot, LegacyLapsExpiration);
+            }
+            else
+            {
+                schemaError = "RootDSE returned no schemaNamingContext.";
+            }
+        }
+        catch (Exception ex) when (ex is COMException or UnauthorizedAccessException)
+        {
+            schemaError = ex.Message.Trim();
+        }
+
+        ct.ThrowIfCancellationRequested();
+        List<LapsComputer>? computers = null;
+        string? searchError = null;
+        var accessDenied = false;
+        try
+        {
+            using var root = new DirectoryEntry(prefix);
+            using var searcher = new DirectorySearcher(root) { Filter = PopulationFilter, PageSize = 1000 };
+            searcher.PropertiesToLoad.Add("distinguishedName");
+            // Unknown attributes are never requested, so a partly extended schema can't break the search.
+            if (windowsSchema != false) searcher.PropertiesToLoad.Add(WindowsLapsExpiration);
+            if (legacySchema != false) searcher.PropertiesToLoad.Add(LegacyLapsExpiration);
+
+            computers = [];
+            using var results = searcher.FindAll();
+            foreach (SearchResult result in results)
+            {
+                ct.ThrowIfCancellationRequested();
+                var dn = result.Properties["distinguishedName"] is { Count: > 0 } dnValues
+                    ? dnValues[0]?.ToString() ?? result.Path
+                    : result.Path;
+                computers.Add(new LapsComputer(
+                    dn,
+                    HasValue(result, WindowsLapsExpiration),
+                    HasValue(result, LegacyLapsExpiration)));
+            }
+        }
+        catch (Exception ex) when (ex is COMException or UnauthorizedAccessException)
+        {
+            computers = null;
+            searchError = ex.Message.Trim();
+            accessDenied = IsAccessDenied(ex);
+        }
+
+        return new LapsSnapshot
+        {
+            Computers = computers,
+            SearchError = searchError,
+            SearchAccessDenied = accessDenied,
+            WindowsLapsSchema = windowsSchema,
+            LegacyLapsSchema = legacySchema,
+            SchemaError = schemaError,
+            LocalBackupDirectory = ReadLocalBackupDirectory(),
+            LocalLegacyLapsEnabled = RegistryHelper.GetValue<int>(LegacyLapsPolicyKey, "AdmPwdEnabled", 0) == 1,
+        };
+    }
+
+    internal static bool IsAccessDenied(Exception ex) => ex switch
+    {
+        UnauthorizedAccessException => true,
+        DirectoryServicesCOMException ds when ds.ExtendedError == 5 => true,
+        // E_ACCESSDENIED, and LDAP_INSUFFICIENT_RIGHTS (50) wrapped as an ADSI HRESULT.
+        COMException com => com.ErrorCode is unchecked((int)0x80070005) or unchecked((int)0x80072098),
+        _ => false,
+    };
+
+    private static bool SchemaHasAttribute(DirectoryEntry schemaRoot, string ldapDisplayName)
+    {
+        using var searcher = new DirectorySearcher(schemaRoot)
+        {
+            Filter = $"(&(objectClass=attributeSchema)(lDAPDisplayName={ldapDisplayName}))",
+            SearchScope = SearchScope.OneLevel,
+        };
+        searcher.PropertiesToLoad.Add("lDAPDisplayName");
+        using var result = searcher.FindAll();
+        return result.Count > 0;
+    }
+
+    private static bool HasValue(SearchResult result, string attribute) =>
+        result.Properties.Contains(attribute) && result.Properties[attribute].Count > 0 &&
+        result.Properties[attribute][0] is not null && !IsZeroFileTime(result.Properties[attribute][0]);
+
+    // An expiration time of 0 means LAPS never set a password on that object.
+    private static bool IsZeroFileTime(object value) => value switch
+    {
+        long l => l == 0,
+        string s => s.Trim() is "" or "0",
+        _ => false,
+    };
+
+    private static int? ReadLocalBackupDirectory()
+    {
+        foreach (var key in WindowsLapsPolicyKeys)
+        {
+            var value = RegistryHelper.GetValue<int?>(key, "BackupDirectory");
+            if (value is not null)
+                return value;
+        }
+        return null;
+    }
+
+    private static string SchemaText(bool? present) => present switch
+    {
+        true => "present",
+        false => "not in schema",
+        null => "unknown",
+    };
+
+    private static string BackupDirectoryText(int? value) => value switch
+    {
+        null => "not configured",
+        0 => "0 (disabled)",
+        1 => "1 (Microsoft Entra ID)",
+        2 => "2 (Active Directory)",
+        _ => value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+    };
 }

@@ -5829,25 +5829,97 @@ $script:AutoChecks = @{
 
     'IA06' = @{ Type='AD'; Label='Scan PAM / Privileged Access'
         Script = {
+            # Defined inside the check so it survives fresh runspaces and Invoke-Command.
+            # Matches the app: coverage comes from the password expiration attributes, which Authenticated
+            # Users can read by default, never the confidential password attributes. The union is by
+            # distinguished name. Outcomes: Covered, Low, None, SchemaAbsent, NoComputers, Unreadable.
+            function Get-Ia06LapsCoverage {
+                param(
+                    $Computers = $null,
+                    $WindowsSchema = $null,
+                    $LegacySchema = $null,
+                    [string]$SearchError = '',
+                    [bool]$SearchAccessDenied = $false,
+                    $LocalBackupDirectory = $null,
+                    [bool]$LocalLegacyEnabled = $false
+                )
+                $winAttr = 'msLAPS-PasswordExpirationTime'; $legAttr = 'ms-Mcs-AdmPwdExpirationTime'
+                if ($null -eq $Computers) {
+                    $line = if ($SearchAccessDenied) { "LAPS: NOT ASSESSED - the auditing account was denied access to computer objects ($SearchError). It needs Read on computer objects (Authenticated Users have it by default)." }
+                            else { "LAPS: NOT ASSESSED - computer objects couldn't be searched ($SearchError)." }
+                    return @{ Outcome='Unreadable'; Covered=0; Total=0; Windows=0; Legacy=0; Lines=@($line) }
+                }
+                $byDn = @{}
+                foreach ($c in @($Computers)) {
+                    $key = ([string]$c.DN).ToLowerInvariant()
+                    if (-not $byDn.ContainsKey($key)) { $byDn[$key] = @{ W=$false; L=$false } }
+                    if ($c.WindowsLaps) { $byDn[$key].W = $true }
+                    if ($c.LegacyLaps) { $byDn[$key].L = $true }
+                }
+                $total = $byDn.Count
+                $win = @($byDn.Values | Where-Object { $_.W }).Count
+                $leg = @($byDn.Values | Where-Object { $_.L }).Count
+                $covered = @($byDn.Values | Where-Object { $_.W -or $_.L }).Count
+                if ($null -eq $WindowsSchema -and $win -gt 0) { $WindowsSchema = $true }
+                if ($null -eq $LegacySchema -and $leg -gt 0) { $LegacySchema = $true }
+                $lines = @()
+                if ($WindowsSchema -eq $false -and $LegacySchema -eq $false) {
+                    $outcome = 'SchemaAbsent'
+                    $lines += "LAPS: [!] The AD schema has neither the Windows LAPS nor the legacy LAPS attributes, so no computer can back up a LAPS password to AD."
+                    $lines += "  Devices that back up Windows LAPS to Microsoft Entra ID aren't visible to this check."
+                } elseif ($total -eq 0) {
+                    $outcome = 'NoComputers'
+                    $lines += "LAPS: NOT ASSESSED - the search returned no enabled computers other than domain controllers."
+                } elseif ($covered -eq 0 -and ($LocalBackupDirectory -eq 2 -or $LocalLegacyEnabled)) {
+                    $outcome = 'Unreadable'
+                    $lines += "LAPS: NOT ASSESSED - this computer backs up LAPS to Active Directory, but none of the $total enabled computers shows a LAPS password expiration time. The auditing account most likely can't read it."
+                    $lines += "  Grant Read Property on $winAttr and $legAttr for computer objects (Authenticated Users have it by default), or rerun as an account that has it."
+                } elseif ($covered -eq 0) {
+                    $outcome = 'None'
+                    $lines += "LAPS: [!] The LAPS schema is present, but none of the $total enabled computers has a LAPS password expiration time."
+                } else {
+                    $pct = [math]::Round(($covered / $total) * 100, 1)
+                    $outcome = if ($pct -lt 80) { 'Low' } else { 'Covered' }
+                    $lines += "LAPS DEPLOYMENT: $covered/$total enabled computers ($pct%), Windows LAPS and legacy LAPS combined by computer"
+                    if ($outcome -eq 'Low') { $lines += "  [!] Low LAPS coverage - target 80%+" }
+                }
+                if ($total -gt 0) { $lines += "  Windows LAPS ($winAttr): $win; legacy LAPS ($legAttr): $leg" }
+                if ($win -gt 0 -and $leg -gt 0) { $lines += "  [i] Mixed deployment: $win Windows LAPS, $leg legacy LAPS" }
+                elseif ($leg -gt 0) { $lines += "  [!] Legacy LAPS stores passwords in cleartext - migrate to Windows LAPS" }
+                return @{ Outcome=$outcome; Covered=$covered; Total=$total; Windows=$win; Legacy=$leg; Lines=$lines }
+            }
+
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
-            # Check LAPS deployment - Windows LAPS (built-in since Apr 2023) vs Legacy LAPS
-            $lapsType = 'None'
+            # LAPS coverage: enabled computers other than writable (516) and read-only (521) DCs
+            $lapsType = 'None'; $population = $null; $winSchema = $null; $legSchema = $null; $searchError = ''; $searchDenied = $false
             try {
-                # Try Windows LAPS first (msLAPS-EncryptedPassword attribute)
-                $lapsComputers = Get-ADComputer -Filter * -Properties 'msLAPS-EncryptedPassword','msLAPS-PasswordExpirationTime','ms-Mcs-AdmPwd','ms-Mcs-AdmPwdExpirationTime' -EA Stop
-                $total = $lapsComputers.Count
-                $winLAPS = ($lapsComputers | Where-Object { $_.'msLAPS-EncryptedPassword' }).Count
-                $legLAPS = ($lapsComputers | Where-Object { $_.'ms-Mcs-AdmPwd' }).Count
-                $lapsDeployed = [math]::Max($winLAPS, $legLAPS)
-                $pct = if ($total -gt 0) { [math]::Round(($lapsDeployed/$total)*100,1) } else { 0 }
-                if ($winLAPS -gt 0) { $lapsType = 'Windows LAPS (encrypted)' }
-                elseif ($legLAPS -gt 0) { $lapsType = 'Legacy LAPS (cleartext)' }
-                [void]$sb.AppendLine("LAPS DEPLOYMENT: $lapsDeployed/$total computers ($pct%)")
-                [void]$sb.AppendLine("  LAPS Type: $lapsType")
-                if ($lapsType -eq 'Legacy LAPS (cleartext)') { [void]$sb.AppendLine("  [!] Legacy LAPS stores passwords in cleartext - migrate to Windows LAPS") }
-                if ($pct -lt 80) { $issues++; [void]$sb.AppendLine("  [!] Low LAPS coverage - target 80%+") }
-                if ($winLAPS -gt 0 -and $legLAPS -gt 0) { [void]$sb.AppendLine("  [i] Mixed deployment: $winLAPS Windows LAPS, $legLAPS Legacy LAPS") }
-            } catch { [void]$sb.AppendLine("LAPS: Could not query (schema extension may not be deployed)"); $issues++ }
+                $schemaNc = (Get-ADRootDSE -EA Stop).schemaNamingContext
+                $winSchema = [bool](Get-ADObject -SearchBase $schemaNc -SearchScope OneLevel -LDAPFilter '(&(objectClass=attributeSchema)(lDAPDisplayName=msLAPS-PasswordExpirationTime))' -EA Stop)
+                $legSchema = [bool](Get-ADObject -SearchBase $schemaNc -SearchScope OneLevel -LDAPFilter '(&(objectClass=attributeSchema)(lDAPDisplayName=ms-Mcs-AdmPwdExpirationTime))' -EA Stop)
+            } catch { [void]$sb.AppendLine("LAPS schema couldn't be read: $($_.Exception.Message.Trim())") }
+            try {
+                $query = @{ LDAPFilter='(&(objectCategory=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(primaryGroupID=516))(!(primaryGroupID=521)))'; ErrorAction='Stop' }
+                $props = @(); if ($winSchema -ne $false) { $props += 'msLAPS-PasswordExpirationTime' }; if ($legSchema -ne $false) { $props += 'ms-Mcs-AdmPwdExpirationTime' }
+                if ($props.Count -gt 0) { $query.Properties = $props }
+                $population = @(Get-ADComputer @query | ForEach-Object {
+                    @{ DN=[string]$_.DistinguishedName; WindowsLaps=([int64]$_.'msLAPS-PasswordExpirationTime' -gt 0); LegacyLaps=([int64]$_.'ms-Mcs-AdmPwdExpirationTime' -gt 0) }
+                })
+            } catch {
+                $searchError = $_.Exception.Message.Trim()
+                $searchDenied = ($_.Exception -is [System.UnauthorizedAccessException]) -or ($_.Exception.HResult -in @(-2147024891, -2147016672)) -or ($searchError -match 'Access is denied|Insufficient access')
+            }
+            $localBackup = $null
+            foreach ($k in @('HKLM:\SOFTWARE\Microsoft\Policies\LAPS','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\LAPS\Config')) {
+                $v = (Get-ItemProperty -LiteralPath $k -Name BackupDirectory -EA SilentlyContinue).BackupDirectory
+                if ($null -ne $v) { $localBackup = [int]$v; break }
+            }
+            $localLegacy = ((Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft Services\AdmPwd' -Name AdmPwdEnabled -EA SilentlyContinue).AdmPwdEnabled -eq 1)
+            $laps = Get-Ia06LapsCoverage -Computers $population -WindowsSchema $winSchema -LegacySchema $legSchema -SearchError $searchError -SearchAccessDenied $searchDenied -LocalBackupDirectory $localBackup -LocalLegacyEnabled $localLegacy
+            foreach ($line in $laps.Lines) { [void]$sb.AppendLine($line) }
+            if ($laps.Outcome -in @('Low','None','SchemaAbsent')) { $issues++ }
+            $lapsUnassessed = ($laps.Outcome -in @('Unreadable','NoComputers'))
+            if ($laps.Windows -gt 0) { $lapsType = 'Windows LAPS' } elseif ($laps.Legacy -gt 0) { $lapsType = 'Legacy LAPS (cleartext)' }
+            $lapsComputers = @($population | Where-Object { $_.WindowsLaps -or $_.LegacyLaps })
             # LAPS password read/decrypt delegation audit
             if ($lapsType -ne 'None') {
                 try {
@@ -5867,7 +5939,7 @@ $script:AutoChecks = @{
                         if ($winEncAttr) { $winLapsEncGuid = [guid]$winEncAttr.schemaIDGUID }
                     } catch {}
                     $lapsOUs = @($lapsComputers | ForEach-Object {
-                        ($_.DistinguishedName -replace '^CN=[^,]+,','')
+                        ($_.DN -replace '^CN=[^,]+,','')
                     } | Select-Object -Unique | Select-Object -First 20)
                     $delegationIssues = 0; $ouCount = 0
                     foreach ($ouDN in $lapsOUs) {
@@ -5925,6 +5997,8 @@ $script:AutoChecks = @{
             if ($foundPAM.Count -gt 0) { foreach ($p in $foundPAM) { [void]$sb.AppendLine("`nPAM Software: $($p.DisplayName)") } }
             else { [void]$sb.AppendLine("`nNo PAM/JIT access solution detected"); $issues++ }
             $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 1) {'Partial'} else {'Fail'}
+            # Unreadable LAPS coverage can't be called a pass, but it doesn't hide issues found elsewhere.
+            if ($lapsUnassessed -and $issues -eq 0) { $status = 'Not Assessed' }
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="PAM/LAPS/Privileged Access scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
     }

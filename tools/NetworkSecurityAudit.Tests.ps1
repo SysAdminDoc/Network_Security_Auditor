@@ -1540,6 +1540,61 @@ Describe 'NP02 listener classification (nested check helper via AST)' {
     }
 }
 
+Describe 'IA06 LAPS coverage (nested check helper via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Ia06LapsCoverage' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+        function New-Fleet([int]$Windows, [int]$Legacy, [int]$Both, [int]$None) {
+            $n = 0; $list = @()
+            foreach ($spec in @(@($Windows, $true, $false), @($Legacy, $false, $true), @($Both, $true, $true), @($None, $false, $false))) {
+                for ($i = 0; $i -lt $spec[0]; $i++) { $n++; $list += @{ DN="CN=PC$n,OU=Workstations,DC=corp,DC=example"; WindowsLaps=$spec[1]; LegacyLaps=$spec[2] } }
+            }
+            , $list
+        }
+    }
+
+    It 'counts the union by distinguished name instead of the larger of the two counts' {
+        $result = Get-Ia06LapsCoverage -Computers (New-Fleet -Windows 50 -Legacy 45 -Both 0 -None 5) -WindowsSchema $true -LegacySchema $true
+        $result.Covered | Should -Be 95
+        $result.Outcome | Should -Be 'Covered'
+        $low = Get-Ia06LapsCoverage -Computers (New-Fleet -Windows 5 -Legacy 4 -Both 2 -None 9) -WindowsSchema $true -LegacySchema $true
+        $low.Covered | Should -Be 11
+        $low.Outcome | Should -Be 'Low'
+    }
+    It 'counts one computer once when it shows up twice with different casing' {
+        $computers = @(@{ DN='CN=PC1,DC=corp,DC=example'; WindowsLaps=$true; LegacyLaps=$false }, @{ DN='cn=pc1,dc=corp,dc=example'; WindowsLaps=$false; LegacyLaps=$true })
+        $result = Get-Ia06LapsCoverage -Computers $computers -WindowsSchema $true -LegacySchema $true
+        $result.Total | Should -Be 1
+        $result.Covered | Should -Be 1
+    }
+    It 'keeps schema-absent, access-denied and zero coverage apart' {
+        (Get-Ia06LapsCoverage -Computers (New-Fleet 0 0 0 12) -WindowsSchema $false -LegacySchema $false).Outcome | Should -Be 'SchemaAbsent'
+        $denied = Get-Ia06LapsCoverage -SearchError 'Insufficient access rights to perform the operation.' -SearchAccessDenied $true
+        $denied.Outcome | Should -Be 'Unreadable'
+        ($denied.Lines -join "`n") | Should -Match 'needs Read on computer objects'
+        (Get-Ia06LapsCoverage -Computers (New-Fleet 0 0 0 30) -WindowsSchema $true -LegacySchema $true).Outcome | Should -Be 'None'
+    }
+    It 'treats zero coverage as unreadable when this computer backs up LAPS to AD' {
+        $result = Get-Ia06LapsCoverage -Computers (New-Fleet 0 0 0 30) -WindowsSchema $true -LegacySchema $true -LocalBackupDirectory 2
+        $result.Outcome | Should -Be 'Unreadable'
+        ($result.Lines -join "`n") | Should -Match 'Read Property on msLAPS-PasswordExpirationTime and ms-Mcs-AdmPwdExpirationTime'
+        (Get-Ia06LapsCoverage -Computers (New-Fleet 0 0 0 30) -WindowsSchema $true -LegacySchema $true -LocalLegacyEnabled $true).Outcome | Should -Be 'Unreadable'
+        (Get-Ia06LapsCoverage -Computers (New-Fleet 0 0 0 30) -WindowsSchema $true -LegacySchema $true -LocalBackupDirectory 1).Outcome | Should -Be 'None'
+    }
+    It 'reports no member computers separately' {
+        (Get-Ia06LapsCoverage -Computers @() -WindowsSchema $true -LegacySchema $false).Outcome | Should -Be 'NoComputers'
+    }
+    It 'never measures coverage from the confidential password attributes' {
+        $block = Get-Block -Text $script:Text -Start "'IA06' = @\{ Type='AD'" -End "'IA09' = @\{"
+        $block | Should -Not -Match "Where-Object \{ \`$_\.'msLAPS-EncryptedPassword' \}"
+        $block | Should -Not -Match "Where-Object \{ \`$_\.'ms-Mcs-AdmPwd' \}"
+        $block | Should -Not -Match '\[math\]::Max'
+        $block | Should -Match 'primaryGroupID=521'
+        $block | Should -Match "if \(\`$lapsUnassessed -and \`$issues -eq 0\) \{ \`$status = 'Not Assessed' \}"
+    }
+}
+
 Describe 'EP01 primary antivirus decision (nested check helper via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)

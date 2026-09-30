@@ -170,13 +170,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P0
 
-- [ ] P0 — NSA-069 Stop IA06 from reporting "no LAPS" to auditors who can't read passwords
-  Why: coverage filters on `msLAPS-EncryptedPassword=*` and `ms-Mcs-AdmPwd=*`, which are confidential and return nothing without the control-access right; the catch blocks turn access-denied into "not deployed"; `Math.Max` stands in for a union.
-  Evidence: `src/NetworkSecurityAuditor/Checks/IdentityAccess/IA06_PamCheck.cs:58-95`; https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview.
-  Touches: `IA06_PamCheck.cs` (the PS1 block at `NetworkSecurityAudit.ps1:5815-5843` already reads expiration-time attributes and is the reference), the directory seam from NSA-073.
-  Acceptance: coverage uses the readable `msLAPS-PasswordExpirationTime` and `ms-Mcs-AdmPwdExpirationTime` attributes; the union is computed by distinguished name; schema-absent, access-denied and zero-coverage are three distinct outcomes, with access-denied reported as `NotAssessed` plus the missing right; fixture tests cover all three.
-  Complexity: S
-
 - [ ] P0 — NSA-070 Correct EP04 and EP10 lifecycle data and run local EOL evaluation on every host
   Why: EP04 lists build 19045 (Windows 10 22H2, end of support 2025-10-14) as current and doesn't know 26200 (Windows 11 25H2); EP10 is typed AD, so its local end-of-life logic never runs on workgroup hosts; Windows 10 ESU year 1 and Server 2012 R2 ESU end 2026-10-13.
   Evidence: `src/NetworkSecurityAuditor/Checks/EndpointSecurity/EP04_PatchComplianceCheck.cs:18-28`; `Data/CheckCatalog.cs` EP10 `CheckType.AD`; `Checks/CheckRunner.cs:144`; https://learn.microsoft.com/en-us/windows/whats-new/extended-security-updates.
