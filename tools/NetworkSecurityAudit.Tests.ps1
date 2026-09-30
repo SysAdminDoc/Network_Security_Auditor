@@ -1421,6 +1421,63 @@ Describe 'LM02 log forwarding decision (nested check helper via AST)' {
     }
 }
 
+Describe 'NP02 listener classification (nested check helper via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Np02PortAssessment' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+        function New-DefaultWorkstationListeners {
+            @(
+                @{ Protocol='TCP'; Address='0.0.0.0'; Port=135 }, @{ Protocol='TCP'; Address='::'; Port=135 },
+                @{ Protocol='TCP'; Address='192.168.1.20'; Port=139 },
+                @{ Protocol='TCP'; Address='0.0.0.0'; Port=445 }, @{ Protocol='TCP'; Address='::'; Port=445 },
+                @{ Protocol='TCP'; Address='0.0.0.0'; Port=5985 }, @{ Protocol='TCP'; Address='0.0.0.0'; Port=49664 },
+                @{ Protocol='TCP'; Address='127.0.0.1'; Port=5939 }
+            )
+        }
+    }
+
+    It 'never fails a default workstation on a private network' {
+        $result = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners)
+        $result.Status | Should -Be 'Pass'
+        ($result.Info -join "`n") | Should -Match 'TCP 445 \(SMB\).*default Windows role port'
+    }
+    It 'never fails a default workstation on a public network with stock rules' {
+        $rules = @(
+            @{ Name='File and Printer Sharing (SMB-In)'; Profiles=3; Protocol='TCP'; LocalPorts=@('445'); Program='System' },
+            @{ Name='Microsoft Teams'; Profiles=4; Protocol='TCP'; LocalPorts=@(); Program='C:\Program Files\Teams\ms-teams.exe' }
+        )
+        $result = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -Rules $rules
+        $result.Status | Should -Not -Be 'Fail'
+    }
+    It 'fails a Telnet listener' {
+        $listeners = @(New-DefaultWorkstationListeners) + @(@{ Protocol='TCP'; Address='0.0.0.0'; Port=23 })
+        $result = Get-Np02PortAssessment -Listeners $listeners
+        $result.Status | Should -Be 'Fail'
+        ($result.Failures -join "`n") | Should -Match 'TCP 23 \(Telnet\)'
+    }
+    It 'fails SMB allowed inbound on the Public profile' {
+        $rules = @(@{ Name='File and Printer Sharing (SMB-In)'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); Program='System' })
+        $result = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -Rules $rules
+        $result.Status | Should -Be 'Fail'
+        ($result.Failures -join "`n") | Should -Match "TCP 445 \(SMB\) reachable from a Public-profile network via inbound rule 'File and Printer Sharing \(SMB-In\)'"
+    }
+    It 'maps the RPC-EPMap keyword to port 135 and fails when the Public firewall is off' {
+        $rules = @(@{ Name='RPC Endpoint Mapper'; Profiles=0; Protocol='TCP'; LocalPorts=@('RPC-EPMap'); Program='' })
+        $viaRule = Get-Np02PortAssessment -Listeners @(@{ Protocol='TCP'; Address='0.0.0.0'; Port=135 }) -PublicAddresses @('203.0.113.8') -PublicFirewallEnabled $true -Rules $rules
+        $viaRule.Status | Should -Be 'Fail'
+        (Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $false).Status | Should -Be 'Fail'
+    }
+    It 'treats loopback-only insecure listeners as informational and RDP as review' {
+        (Get-Np02PortAssessment -Listeners @(@{ Protocol='TCP'; Address='127.0.0.1'; Port=6379 })).Status | Should -Be 'Pass'
+        (Get-Np02PortAssessment -Listeners @(@{ Protocol='TCP'; Address='0.0.0.0'; Port=3389 })).Status | Should -Be 'Partial'
+    }
+    It 'reports Partial when a public-bound role port cannot be checked against the firewall' {
+        $result = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -PublicAddresses @('192.168.1.20') -FirewallError 'Access denied'
+        $result.Status | Should -Be 'Partial'
+    }
+}
+
 Describe 'Lint cleanliness (PSScriptAnalyzer)' {
     It 'has zero analyzer findings under the project settings' -Skip:(-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
         $settings = Join-Path $script:RepoRoot 'PSScriptAnalyzerSettings.psd1'

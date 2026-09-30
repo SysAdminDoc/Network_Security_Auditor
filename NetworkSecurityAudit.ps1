@@ -6407,7 +6407,80 @@ $script:AutoChecks = @{
 
     'NP02' = @{ Type='Local'; Label='Scan Open Ports'
         Script = {
-            $sb = [System.Text.StringBuilder]::new(); $issues = 0
+            # Defined inside the check so it survives fresh runspaces and Invoke-Command.
+            # Insecure listeners fail; sensitive services are reviewed; default Windows role ports
+            # (135/139/445/5985/5986) are informational unless a Public-profile network can reach them.
+            function Get-Np02PortAssessment {
+                param(
+                    [object[]]$Listeners = @(),
+                    [string[]]$PublicAddresses = @(),
+                    $PublicFirewallEnabled = $null,
+                    [bool]$PublicDefaultAllow = $false,
+                    [object[]]$Rules = @(),
+                    [string]$FirewallError = ''
+                )
+                $classes = @{
+                    'TCP:21'=@('FTP','Insecure'); 'TCP:23'=@('Telnet','Insecure'); 'UDP:69'=@('TFTP','Insecure')
+                    'TCP:5900'=@('VNC','Insecure'); 'TCP:5901'=@('VNC','Insecure'); 'TCP:5902'=@('VNC','Insecure'); 'TCP:5903'=@('VNC','Insecure')
+                    'TCP:6379'=@('Redis (no auth by default)','Insecure'); 'TCP:9200'=@('Elasticsearch HTTP (no auth by default before 8.0)','Insecure')
+                    'TCP:11211'=@('Memcached (no auth)','Insecure'); 'UDP:11211'=@('Memcached (no auth)','Insecure'); 'TCP:27017'=@('MongoDB (no auth by default)','Insecure')
+                    'TCP:25'=@('SMTP','Review'); 'TCP:110'=@('POP3','Review'); 'TCP:143'=@('IMAP','Review'); 'TCP:1433'=@('MSSQL','Review'); 'UDP:1434'=@('MSSQL Browser','Review')
+                    'TCP:3306'=@('MySQL','Review'); 'TCP:3389'=@('RDP','Review'); 'TCP:5432'=@('PostgreSQL','Review'); 'TCP:8080'=@('HTTP Proxy/Alt','Review'); 'TCP:8443'=@('HTTPS Alt','Review')
+                    'TCP:135'=@('RPC/DCOM','DefaultRole'); 'TCP:139'=@('NetBIOS Session','DefaultRole'); 'TCP:445'=@('SMB','DefaultRole')
+                    'TCP:5985'=@('WinRM HTTP','DefaultRole'); 'TCP:5986'=@('WinRM HTTPS','DefaultRole')
+                }
+                $isLoopback = { param($a) $a -eq '127.0.0.1' -or $a -eq '::1' -or $a -like '127.*' }
+                $isWildcard = { param($a) $a -eq '0.0.0.0' -or $a -eq '::' }
+                $portMatches = {
+                    param($values, [int]$port)
+                    foreach ($v in @($values)) {
+                        $t = ([string]$v).Trim()
+                        if ($t -in @('RPC-EPMap','RPCEPMap')) { if ($port -eq 135) { return $true }; continue }
+                        if ($t -match '^(\d+)-(\d+)$') { if ($port -ge [int]$Matches[1] -and $port -le [int]$Matches[2]) { return $true }; continue }
+                        if ($t -match '^\d+$' -and [int]$t -eq $port) { return $true }
+                    }
+                    return $false
+                }
+                $failures = @(); $reviews = @(); $info = @()
+                $groups = @($Listeners | Where-Object { $classes.ContainsKey("$($_.Protocol):$($_.Port)") } | Group-Object { "$($_.Protocol):$($_.Port)" } | Sort-Object { [int](($_.Name -split ':')[1]) })
+                foreach ($g in $groups) {
+                    $service = $classes[$g.Name][0]; $risk = $classes[$g.Name][1]
+                    $proto = ($g.Name -split ':')[0]; $port = [int](($g.Name -split ':')[1])
+                    $label = "$proto $port ($service)"
+                    $reach = @($g.Group | Where-Object { -not (& $isLoopback ([string]$_.Address)) })
+                    if ($reach.Count -eq 0) { $info += "$label on loopback only"; continue }
+                    $binds = (@($reach | ForEach-Object { $a = [string]$_.Address; if (& $isWildcard $a) { "$a (all interfaces)" } else { $a } } | Select-Object -Unique)) -join ', '
+                    $publicBinds = @()
+                    if (@($PublicAddresses).Count -gt 0) { $publicBinds = @($reach | Where-Object { (& $isWildcard ([string]$_.Address)) -or ([string]$_.Address -in $PublicAddresses) }) }
+                    $via = $null; $unknown = $false
+                    if ($publicBinds.Count -gt 0) {
+                        if ($FirewallError) { $unknown = $true }
+                        elseif ($PublicFirewallEnabled -eq $false) { $via = 'the Public firewall profile being off' }
+                        elseif ($PublicDefaultAllow) { $via = "the Public profile's default inbound Allow" }
+                        else {
+                            foreach ($r in @($Rules)) {
+                                $profileMask = [int]$r.Profiles
+                                if ($profileMask -ne 0 -and ($profileMask -band 4) -eq 0) { continue }
+                                $rp = [string]$r.Protocol
+                                if ($rp -and $rp -ne 'Any' -and $rp -ne $proto -and -not ($proto -eq 'TCP' -and $rp -eq '6') -and -not ($proto -eq 'UDP' -and $rp -eq '17')) { continue }
+                                $ports = @($r.LocalPorts | Where-Object { $_ })
+                                $anyPort = ($ports.Count -eq 0 -or @($ports | Where-Object { $_ -in @('Any','*') }).Count -gt 0)
+                                $anyProgram = ([string]::IsNullOrWhiteSpace([string]$r.Program) -or [string]$r.Program -eq 'Any')
+                                if (($anyPort -and $anyProgram) -or (-not $anyPort -and (& $portMatches $ports $port))) { $via = "inbound rule '$($r.Name)'"; break }
+                            }
+                        }
+                    }
+                    if ($risk -eq 'Insecure') { $failures += "$label listening on $binds$(if ($via) { "; public exposure via $via" })" }
+                    elseif ($via) { $failures += "$label reachable from a Public-profile network via $via ($binds)" }
+                    elseif ($unknown) { $reviews += "$label on $binds is bound to a Public-profile interface, and the firewall couldn't be read to confirm it's blocked" }
+                    elseif ($risk -eq 'Review') { $reviews += "$label listening on $binds" }
+                    else { $info += "$label on $binds; default Windows role port, not exposed to a Public-profile network" }
+                }
+                $status = if ($failures.Count -gt 0) { 'Fail' } elseif ($reviews.Count -gt 0) { 'Partial' } else { 'Pass' }
+                return @{ Status=$status; Failures=$failures; Reviews=$reviews; Info=$info }
+            }
+
+            $sb = [System.Text.StringBuilder]::new()
             $listeners = Get-NetTCPConnection -State Listen -EA Stop | Sort-Object LocalPort
             $grouped = $listeners | Group-Object LocalPort
             [void]$sb.AppendLine("LISTENING TCP PORTS ($($grouped.Count) unique):")
@@ -6415,16 +6488,39 @@ $script:AutoChecks = @{
                 $port = $g.Name; $binds = ($g.Group.LocalAddress | Select-Object -Unique) -join ', '
                 $proc = $g.Group[0].OwningProcess
                 $procName = try { (Get-Process -Id $proc -EA Stop).ProcessName } catch { 'Unknown' }
-                $concern = $port -in @(21,23,25,69,110,135,139,445,1433,1434,3306,3389,5432,5900,8080,8443)
-                if ($concern -and $binds -match '0\.0\.0\.0|::') { $issues++ }
-                [void]$sb.AppendLine("  :$port | Bind:$binds | Process:$procName (PID:$proc) $(if($concern){'[REVIEW]'})")
+                [void]$sb.AppendLine("  :$port | Bind:$binds | Process:$procName (PID:$proc)")
             }
             # UDP listeners
-            $udp = Get-NetUDPEndpoint -EA SilentlyContinue | Where-Object { $_.LocalAddress -eq '0.0.0.0' -or $_.LocalAddress -eq '::' } | Group-Object LocalPort | Sort-Object { [int]$_.Name }
-            [void]$sb.AppendLine("`nUDP LISTENERS (all-interface, $($udp.Count) ports):")
+            $udpAll = @(Get-NetUDPEndpoint -EA SilentlyContinue)
+            $udp = $udpAll | Where-Object { $_.LocalAddress -eq '0.0.0.0' -or $_.LocalAddress -eq '::' } | Group-Object LocalPort | Sort-Object { [int]$_.Name }
+            [void]$sb.AppendLine("`nUDP LISTENERS (all-interface, $(@($udp).Count) ports):")
             foreach ($u in ($udp | Select-Object -First 15)) { [void]$sb.AppendLine("  :$($u.Name)") }
-            $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 3) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Open port scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+            $endpoints = @($listeners | ForEach-Object { @{ Protocol='TCP'; Address=[string]$_.LocalAddress; Port=[int]$_.LocalPort } })
+            $endpoints += @($udpAll | Where-Object { [int]$_.LocalPort -in @(69,1434,11211) } | ForEach-Object { @{ Protocol='UDP'; Address=[string]$_.LocalAddress; Port=[int]$_.LocalPort } })
+            # Public-profile exposure: interface addresses, the Public firewall profile and inbound allow rules
+            $publicAddresses = @(); $fwEnabled = $null; $fwDefaultAllow = $false; $rules = @(); $fwError = ''
+            try {
+                $publicIdx = @(Get-NetConnectionProfile -EA Stop | Where-Object { [string]$_.NetworkCategory -eq 'Public' } | ForEach-Object { $_.InterfaceIndex })
+                if ($publicIdx.Count -gt 0) {
+                    $publicAddresses = @(Get-NetIPAddress -EA Stop | Where-Object { $_.InterfaceIndex -in $publicIdx } | ForEach-Object { ([string]$_.IPAddress -split '%')[0] })
+                    $fwProfile = Get-NetFirewallProfile -Name Public -EA Stop
+                    $fwEnabled = ([string]$fwProfile.Enabled -ne 'False')
+                    $fwDefaultAllow = ([string]$fwProfile.DefaultInboundAction -eq 'Allow')
+                    $portFilters = @{}; foreach ($pf in @(Get-NetFirewallPortFilter -All -EA Stop)) { $portFilters[$pf.InstanceID] = $pf }
+                    $appFilters = @{}; foreach ($af in @(Get-NetFirewallApplicationFilter -All -EA Stop)) { $appFilters[$af.InstanceID] = [string]$af.Program }
+                    foreach ($fr in @(Get-NetFirewallRule -Enabled True -Direction Inbound -Action Allow -EA Stop)) {
+                        $pf = $portFilters[$fr.InstanceID]
+                        $rules += @{ Name=[string]$fr.DisplayName; Profiles=[int]$fr.Profile; Protocol=$(if ($pf) { [string]$pf.Protocol } else { 'Any' }); LocalPorts=$(if ($pf) { @($pf.LocalPort) } else { @() }); Program=$appFilters[$fr.InstanceID] }
+                    }
+                }
+            } catch { $fwError = $_.Exception.Message }
+            $ports = Get-Np02PortAssessment -Listeners $endpoints -PublicAddresses $publicAddresses -PublicFirewallEnabled $fwEnabled -PublicDefaultAllow $fwDefaultAllow -Rules $rules -FirewallError $fwError
+            [void]$sb.AppendLine("`nPUBLIC-PROFILE ADDRESSES: $(if ($publicAddresses.Count) { $publicAddresses -join ', ' } else { 'none' })")
+            if ($fwError) { [void]$sb.AppendLine("Firewall rules couldn't be read ($fwError); public exposure isn't assumed.") }
+            if ($ports.Failures.Count) { [void]$sb.AppendLine("`nHIGH-RISK LISTENERS [!]:"); foreach ($l in $ports.Failures) { [void]$sb.AppendLine("  $l") } }
+            if ($ports.Reviews.Count) { [void]$sb.AppendLine("`nREVIEW:"); foreach ($l in $ports.Reviews) { [void]$sb.AppendLine("  $l") } }
+            if ($ports.Info.Count) { [void]$sb.AppendLine("`nINFORMATIONAL:"); foreach ($l in $ports.Info) { [void]$sb.AppendLine("  $l") } }
+            @{ Status=$ports.Status; Findings=$sb.ToString().Trim(); Evidence="Open port scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
 

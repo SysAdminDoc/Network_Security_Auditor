@@ -11,7 +11,9 @@ internal sealed record FirewallRuleSnapshot(
     string? Protocol,
     string[] LocalPorts,
     string[] RemotePorts,
-    string[] RemoteAddresses)
+    string[] RemoteAddresses,
+    int Profiles = 0,
+    string? Program = null)
 {
     public bool IsInbound => Direction == 1;
     public bool IsOutbound => Direction == 2;
@@ -20,6 +22,10 @@ internal sealed record FirewallRuleSnapshot(
     public bool HasAnyLocalPort => FirewallRuleReader.IsAnyValue(LocalPorts);
     public bool HasAnyRemotePort => FirewallRuleReader.IsAnyValue(RemotePorts);
     public bool HasAnyRemoteAddress => FirewallRuleReader.IsAnyValue(RemoteAddresses);
+    // MSFT_NetFirewallRule.Profiles: 0 = Any, 1 = Domain, 2 = Private, 4 = Public.
+    public bool AppliesToPublicProfile => Profiles == 0 || (Profiles & 4) != 0;
+    public bool HasAnyProgram => string.IsNullOrWhiteSpace(Program) ||
+        Program.Trim().Equals("Any", StringComparison.OrdinalIgnoreCase);
 }
 
 internal static class FirewallRuleReader
@@ -30,13 +36,14 @@ internal static class FirewallRuleReader
     {
         using var searcher = new ManagementObjectSearcher(
             NamespacePath,
-            "SELECT InstanceID, ElementName, Description, Direction, Action, Enabled, " +
+            "SELECT InstanceID, ElementName, Description, Direction, Action, Enabled, Profiles, " +
             "CreationClassName, PolicyRuleName, SystemCreationClassName, SystemName " +
             "FROM MSFT_NetFirewallRule WHERE Enabled = 1");
 
         var rules = new List<FirewallRuleSnapshot>();
         var portFilters = LoadProtocolPortFilters(ct);
         var addressFilters = LoadAddressFilters(ct);
+        var programs = LoadApplicationFilters(ct);
 
         using var results = searcher.Get();
         foreach (ManagementObject rule in results)
@@ -48,6 +55,7 @@ internal static class FirewallRuleReader
                 var instanceId = GetString(rule["InstanceID"], string.Empty);
                 portFilters.TryGetValue(instanceId, out var protocolFilter);
                 addressFilters.TryGetValue(instanceId, out var addressFilter);
+                programs.TryGetValue(instanceId, out var program);
 
                 rules.Add(new FirewallRuleSnapshot(
                     instanceId,
@@ -58,7 +66,9 @@ internal static class FirewallRuleReader
                     protocolFilter?.Protocol,
                     protocolFilter?.LocalPorts ?? [],
                     protocolFilter?.RemotePorts ?? [],
-                    addressFilter?.RemoteAddresses ?? []));
+                    addressFilter?.RemoteAddresses ?? [],
+                    GetInt(rule["Profiles"]),
+                    program));
             }
         }
 
@@ -142,6 +152,30 @@ internal static class FirewallRuleReader
                 if (string.IsNullOrWhiteSpace(instanceId)) continue;
 
                 filters[instanceId] = new AddressFilter(GetStringArray(filter["RemoteAddress"]));
+            }
+        }
+
+        return filters;
+    }
+
+    private static Dictionary<string, string> LoadApplicationFilters(CancellationToken ct)
+    {
+        using var searcher = new ManagementObjectSearcher(
+            NamespacePath,
+            "SELECT InstanceID, Program FROM MSFT_NetApplicationFilter");
+
+        var filters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        using var results = searcher.Get();
+        foreach (ManagementObject filter in results)
+        {
+            using (filter)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var instanceId = GetString(filter["InstanceID"], string.Empty);
+                if (string.IsNullOrWhiteSpace(instanceId)) continue;
+
+                filters[instanceId] = GetString(filter["Program"], "Any");
             }
         }
 

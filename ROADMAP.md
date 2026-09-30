@@ -170,13 +170,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P0
 
-- [ ] P0 — NSA-067 Stop NP02 from failing every host on default Windows listeners
-  Why: 135, 445 and 5985 listen by default on Windows and on hosts that fleet mode itself needs, yet NP02 treats them as high risk; parsing relies on the English `LISTENING`.
-  Evidence: `src/NetworkSecurityAuditor/Checks/NetworkPerimeter/NP02_OpenPortsCheck.cs:15-31,54,69-73,106`.
-  Touches: `NP02_OpenPortsCheck.cs`, PS1 NP02 equivalent, tests.
-  Acceptance: listeners are read through `MSFT_NetTCPConnection` or the IP Helper API instead of netstat text; default role ports (135, 445, 5985/5986 on managed hosts) are reported as informational unless bound to a public-profile interface with an allowing inbound rule; Telnet, FTP, TFTP, VNC and unauthenticated database listeners still fail; tests cover a default workstation (Pass or Partial, never Fail) and a Telnet listener (Fail).
-  Complexity: S
-
 - [ ] P0 — NSA-068 Fix EP01 EDR detection false positives
   Why: the `Windows Advanced Threat Protection` key exists on all Windows 10+ systems, so Defender for Endpoint is always "detected"; `Palo Alto Networks` may be GlobalProtect only; passive-mode Defender beside a third-party AV is reported as a failure; tamper protection and ASR aren't read.
   Evidence: `src/NetworkSecurityAuditor/Checks/EndpointSecurity/EP01_AvEdrCheck.cs:53-60,109-111,186-194`; PS1 reads tamper protection at `NetworkSecurityAudit.ps1:4129` and ASR at `:4173-4174`.
@@ -290,6 +283,13 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: event-log helper (XPath time filter plus event cap, formatting only for shown samples), `DirectorySearcher.ServerTimeLimit`/`ClientTimeout`, a console cancel handler and per-run deadline, NP03 VPN detection through `Get-VpnConnection` data or the RAS phonebook file.
   Acceptance: event queries stop at a documented cap with the count reported as "at least N"; a Ctrl+C or deadline ends a silent run with partial results flagged and exit code documented; no check launches a windowed process; a test asserts a blocked fake check is cancelled within the timeout.
   Complexity: M
+
+- [ ] P1 — NSA-106 Stop EP06 from flagging default Windows listeners and parsing English netstat
+  Why: EP06's high-risk listener sub-check has the same two defects NSA-067 fixed in NP02: its list includes 135, 139, 445, 5985 and 5986, so a stock host always gets the warning and `hasIssue`, and it keeps only lines containing the English `LISTENING`, so a non-English host sees no listeners. Found 2026-09-30 during NSA-067.
+  Evidence: `src/NetworkSecurityAuditor/Checks/EndpointSecurity/EP06_HostFirewallCheck.cs:19-20,387-442`; NP02's classifier and exposure logic in `Checks/NetworkPerimeter/NP02_OpenPortsCheck.cs`.
+  Touches: `EP06_HostFirewallCheck.cs` (reuse NP02's listener snapshot and classification instead of netstat), `EP06_HostFirewallCheckTests.cs` (the netstat fakes move to listener fixtures), the PS1 EP06 block if it has the same list.
+  Acceptance: EP06 reads listeners from the IP Helper API; default role ports only raise the issue when NP02 would call them publicly exposed; insecure listeners still raise it; existing EP06 tests keep their intent with listener fixtures; a default workstation fixture doesn't set `hasIssue` from ports alone.
+  Complexity: S
 
 ### P2
 
