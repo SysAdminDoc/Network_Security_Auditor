@@ -12,6 +12,20 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
 {
     public string Id => "BR03";
 
+    private const int SampleCount = 5;
+
+    private static readonly string[] BackupSources =
+    [
+        "Veeam", "Acronis", "Windows Server Backup",
+        "wbengine", "Datto", "Commvault", "Backup Exec"
+    ];
+
+    private readonly IEventLogReader _events;
+
+    public BR03_RestoreTestCheck() : this(SystemEventLogReader.Instance) { }
+
+    internal BR03_RestoreTestCheck(IEventLogReader events) => _events = events;
+
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
         try
@@ -63,7 +77,7 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
         }
     }
 
-    private static void CheckBackupEventLog(StringBuilder sb, StringBuilder evidence,
+    private void CheckBackupEventLog(StringBuilder sb, StringBuilder evidence,
         ref bool hasRecentBackup, CancellationToken ct)
     {
         evidence.AppendLine("[Windows Backup Event Log]");
@@ -71,58 +85,59 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
         try
         {
             string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(30));
-            var recentEntries = EventLogQueryHelper.Read("Microsoft-Windows-Backup", query, maxEvents: 10, ct);
+            int sampled = 0;
+            var read = _events.Query("Microsoft-Windows-Backup", query, maxEvents: 10,
+                formatMessage: _ => sampled++ < SampleCount, ct);
+            var recentEntries = read.Records;
 
             if (recentEntries.Count > 0)
             {
                 hasRecentBackup = true;
-                evidence.AppendLine($"  Recent backup events (last 30 days): {recentEntries.Count}");
+                evidence.AppendLine($"  Recent backup events (last 30 days): {read.CountText(recentEntries.Count)}");
 
-                foreach (var entry in recentEntries.Take(5))
+                foreach (var entry in recentEntries.Take(SampleCount))
                 {
                     evidence.AppendLine($"    {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
                         $"[{entry.LevelDisplayName}] EventId={entry.Id}: " +
                         $"{Truncate(entry.Message, 100)}");
                 }
 
-                sb.AppendLine($"Windows Backup events found: {recentEntries.Count} in last 30 days.");
+                sb.AppendLine($"Windows Backup events found: {read.CountText(recentEntries.Count)} in last 30 days.");
             }
             else
             {
                 evidence.AppendLine("  No backup events in last 30 days.");
             }
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine("  Microsoft-Windows-Backup event log not accessible.");
         }
     }
 
-    private static void CheckApplicationBackupEvents(StringBuilder sb, StringBuilder evidence,
+    private void CheckApplicationBackupEvents(StringBuilder sb, StringBuilder evidence,
         ref bool hasRecentBackup, CancellationToken ct)
     {
         evidence.AppendLine("\n[Application Log - Backup Events]");
 
         try
         {
-            string[] backupSources =
-            [
-                "Veeam", "Acronis", "Windows Server Backup",
-                "wbengine", "Datto", "Commvault", "Backup Exec"
-            ];
-
+            // Provider names are matched by substring, which the event log's XPath can't express, so the
+            // time window is filtered at the source and the provider match happens here, under the read cap.
             string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(30));
-            var recentBackupEntries = EventLogQueryHelper.Read("Application", query, maxEvents: 0, ct)
-                .Where(e => backupSources.Any(src => e.ProviderName.Contains(src, StringComparison.OrdinalIgnoreCase)))
-                .Take(10)
+            int sampled = 0;
+            var read = _events.Query("Application", query, EventLogQueryHelper.MaxEventsPerQuery,
+                formatMessage: e => IsBackupSource(e.ProviderName) && sampled++ < SampleCount, ct);
+            var recentBackupEntries = read.Records
+                .Where(e => IsBackupSource(e.ProviderName))
                 .ToList();
 
             if (recentBackupEntries.Count > 0)
             {
                 hasRecentBackup = true;
-                evidence.AppendLine($"  Backup-related application events (last 30 days): {recentBackupEntries.Count}");
+                evidence.AppendLine($"  Backup-related application events (last 30 days): {read.CountText(recentBackupEntries.Count)}");
 
-                foreach (var entry in recentBackupEntries.Take(5))
+                foreach (var entry in recentBackupEntries.Take(SampleCount))
                 {
                     evidence.AppendLine($"    {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
                         $"[{entry.ProviderName}] {entry.LevelDisplayName}: {Truncate(entry.Message, 80)}");
@@ -132,12 +147,18 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
             {
                 evidence.AppendLine("  No backup-related events found in Application log.");
             }
+
+            if (read.CapNote("Application") is { } capNote)
+                evidence.AppendLine(capNote);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine($"  Error reading Application log: {ex.Message}");
         }
     }
+
+    private static bool IsBackupSource(string provider) =>
+        BackupSources.Any(src => provider.Contains(src, StringComparison.OrdinalIgnoreCase));
 
     private static string Truncate(string? value, int maxLength)
     {

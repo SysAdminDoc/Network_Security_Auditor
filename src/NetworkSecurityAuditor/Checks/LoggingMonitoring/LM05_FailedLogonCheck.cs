@@ -15,6 +15,12 @@ public sealed class LM05_FailedLogonCheck : ISecurityCheck
     private const int BruteForceThreshold = 50;
     private const int WarningThreshold = 10;
 
+    private readonly IEventLogReader _events;
+
+    public LM05_FailedLogonCheck() : this(SystemEventLogReader.Instance) { }
+
+    internal LM05_FailedLogonCheck(IEventLogReader events) => _events = events;
+
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
         try
@@ -38,9 +44,10 @@ public sealed class LM05_FailedLogonCheck : ISecurityCheck
 
             ct.ThrowIfCancellationRequested();
 
-            var failedLogons = QueryFailedLogons(evidence, ct);
+            var (failedLogons, read) = QueryFailedLogons(evidence, ct);
+            string CountText(int count) => read?.CountText(count) ?? count.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-            evidence.AppendLine($"\n  Total 4625 events: {failedLogons.Values.Sum()}");
+            evidence.AppendLine($"\n  Total 4625 events: {CountText(failedLogons.Values.Sum())}");
 
             if (failedLogons.Count == 0)
             {
@@ -58,7 +65,9 @@ public sealed class LM05_FailedLogonCheck : ISecurityCheck
                 .OrderByDescending(kv => kv.Value)
                 .ToList();
 
-            sb.AppendLine($"Found {failedLogons.Values.Sum()} failed logon events across {failedLogons.Count} account(s) in last {LookbackDays} days.");
+            sb.AppendLine($"Found {CountText(failedLogons.Values.Sum())} failed logon events across {CountText(failedLogons.Count)} account(s) in last {LookbackDays} days.");
+            if (read?.CapReached == true)
+                sb.AppendLine($"NOTE: Only the newest {read.Cap} events were read, so the counts below are lower bounds.");
             sb.AppendLine();
             sb.AppendLine("Top accounts by failed logon count:");
 
@@ -105,17 +114,21 @@ public sealed class LM05_FailedLogonCheck : ISecurityCheck
         }
     }
 
-    private static Dictionary<string, int> QueryFailedLogons(StringBuilder evidence, CancellationToken ct)
+    private (Dictionary<string, int> Counts, EventLogReadResult? Read) QueryFailedLogons(StringBuilder evidence, CancellationToken ct)
     {
         var results = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        EventLogReadResult? read = null;
 
         try
         {
+            // Only the account properties are used, so no message is rendered.
             string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(LookbackDays), "EventID=4625");
-            var records = EventLogQueryHelper.Read("Security", query, maxEvents: 0, ct);
-            evidence.AppendLine($"  4625 events returned by XPath query: {records.Count}");
+            read = _events.Query("Security", query, EventLogQueryHelper.MaxEventsPerQuery, formatMessage: null, ct);
+            evidence.AppendLine($"  4625 events returned by XPath query: {read.CountText(read.Records.Count)}");
+            if (read.CapNote("Security") is { } capNote)
+                evidence.AppendLine(capNote);
 
-            foreach (var record in records)
+            foreach (var record in read.Records)
             {
                 ct.ThrowIfCancellationRequested();
 
@@ -128,12 +141,12 @@ public sealed class LM05_FailedLogonCheck : ISecurityCheck
                 results[account] = existing + 1;
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine($"  Error reading Security log: {ex.Message}");
         }
 
-        return results;
+        return (results, read);
     }
 
     internal static string? ExtractFailedLogonAccount(IReadOnlyList<object?> properties)

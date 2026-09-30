@@ -12,6 +12,22 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
 {
     public string Id => "BR06";
 
+    private const int ErrorSampleCount = 5;
+    private const int VssSampleCount = 3;
+
+    private static readonly string[] BackupSources =
+    [
+        "Veeam", "Acronis", "Windows Backup", "wbengine",
+        "Datto", "Commvault", "Backup Exec", "Volume Shadow Copy",
+        "Microsoft-Windows-Backup"
+    ];
+
+    private readonly IEventLogReader _events;
+
+    public BR06_BackupMonitoringCheck() : this(SystemEventLogReader.Instance) { }
+
+    internal BR06_BackupMonitoringCheck(IEventLogReader events) => _events = events;
+
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
         try
@@ -73,29 +89,28 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
         }
     }
 
-    private static void CheckBackupFailureEvents(StringBuilder sb, StringBuilder evidence,
+    private void CheckBackupFailureEvents(StringBuilder sb, StringBuilder evidence,
         ref bool hasFailures, ref bool hasRecentActivity, CancellationToken ct)
     {
         evidence.AppendLine("[Backup Events - Application Log]");
 
         try
         {
-            string[] backupSources =
-            [
-                "Veeam", "Acronis", "Windows Backup", "wbengine",
-                "Datto", "Commvault", "Backup Exec", "Volume Shadow Copy",
-                "Microsoft-Windows-Backup"
-            ];
-
             int errorCount = 0;
             int warningCount = 0;
             int infoCount = 0;
 
+            // Provider names are matched by substring, which the event log's XPath can't express, so the
+            // time window is filtered at the source and the provider match happens here, under the read cap.
+            // Only the error samples shown below get a rendered message.
             string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(7));
-            foreach (var entry in EventLogQueryHelper.Read("Application", query, maxEvents: 0, ct))
+            int errorsSampled = 0;
+            var read = _events.Query("Application", query, EventLogQueryHelper.MaxEventsPerQuery,
+                formatMessage: e => e.Level == 2 && IsBackupSource(e.ProviderName) && errorsSampled++ < ErrorSampleCount, ct);
+            foreach (var entry in read.Records)
             {
                 string source = entry.ProviderName;
-                if (!backupSources.Any(s => source.Contains(s, StringComparison.OrdinalIgnoreCase)))
+                if (!IsBackupSource(source))
                     continue;
 
                 hasRecentActivity = true;
@@ -104,7 +119,7 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
                 {
                     case 2:
                         errorCount++;
-                        if (errorCount <= 5)
+                        if (errorCount <= ErrorSampleCount)
                         {
                             evidence.AppendLine($"  ERROR: {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
                                 $"[{source}] {Truncate(entry.Message, 100)}");
@@ -119,26 +134,36 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
                 }
             }
 
-            evidence.AppendLine($"\n  Last 7 days: {errorCount} errors, {warningCount} warnings, {infoCount} info");
+            evidence.AppendLine($"\n  Last 7 days: {read.CountText(errorCount)} errors, {read.CountText(warningCount)} warnings, {read.CountText(infoCount)} info");
+            if (read.CapNote("Application") is { } capNote)
+                evidence.AppendLine(capNote);
 
             if (errorCount > 0)
             {
                 hasFailures = true;
-                sb.AppendLine($"WARNING: {errorCount} backup error event(s) in the last 7 days. " +
+                sb.AppendLine($"WARNING: {read.CountText(errorCount)} backup error event(s) in the last 7 days. " +
                     "Investigate and resolve failed backups immediately.");
             }
             else if (warningCount > 0)
             {
-                sb.AppendLine($"INFO: {warningCount} backup warning(s) in the last 7 days.");
+                sb.AppendLine($"INFO: {read.CountText(warningCount)} backup warning(s) in the last 7 days.");
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine($"  Error reading event log: {ex.Message}");
         }
     }
 
-    private static void CheckVssErrors(StringBuilder sb, StringBuilder evidence, ref bool hasFailures, CancellationToken ct)
+    private static bool IsBackupSource(string provider) =>
+        BackupSources.Any(s => provider.Contains(s, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsVssSource(string provider) =>
+        provider.Contains("VSS", StringComparison.OrdinalIgnoreCase) ||
+        provider.Contains("Volume Shadow", StringComparison.OrdinalIgnoreCase) ||
+        provider.Contains("volsnap", StringComparison.OrdinalIgnoreCase);
+
+    private void CheckVssErrors(StringBuilder sb, StringBuilder evidence, ref bool hasFailures, CancellationToken ct)
     {
         evidence.AppendLine("\n[VSS Errors - System Log]");
 
@@ -147,15 +172,16 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
             int vssErrors = 0;
 
             string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(7), "Level=2");
-            foreach (var entry in EventLogQueryHelper.Read("System", query, maxEvents: 0, ct))
+            int sampled = 0;
+            var read = _events.Query("System", query, EventLogQueryHelper.MaxEventsPerQuery,
+                formatMessage: e => IsVssSource(e.ProviderName) && sampled++ < VssSampleCount, ct);
+            foreach (var entry in read.Records)
             {
                 string source = entry.ProviderName;
-                if (source.Contains("VSS", StringComparison.OrdinalIgnoreCase) ||
-                    source.Contains("Volume Shadow", StringComparison.OrdinalIgnoreCase) ||
-                    source.Contains("volsnap", StringComparison.OrdinalIgnoreCase))
+                if (IsVssSource(source))
                 {
                     vssErrors++;
-                    if (vssErrors <= 3)
+                    if (vssErrors <= VssSampleCount)
                     {
                         evidence.AppendLine($"  {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
                             $"[{source}] {Truncate(entry.Message, 100)}");
@@ -166,13 +192,15 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
             if (vssErrors > 0)
             {
                 hasFailures = true;
-                sb.AppendLine($"WARNING: {vssErrors} VSS error(s) in the last 7 days. " +
+                sb.AppendLine($"WARNING: {read.CountText(vssErrors)} VSS error(s) in the last 7 days. " +
                     "VSS failures can prevent backups from completing.");
             }
 
-            evidence.AppendLine($"  VSS errors in last 7 days: {vssErrors}");
+            evidence.AppendLine($"  VSS errors in last 7 days: {read.CountText(vssErrors)}");
+            if (read.CapNote("System") is { } capNote)
+                evidence.AppendLine(capNote);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine($"  Error reading System log: {ex.Message}");
         }

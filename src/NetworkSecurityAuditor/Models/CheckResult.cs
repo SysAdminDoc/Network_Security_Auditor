@@ -26,6 +26,22 @@ public sealed record CheckResult
         Error = ex.Message
     };
 
+    /// <summary>
+    /// A check that never finished because the whole run was cancelled or hit its deadline. It's an Error so it
+    /// stays out of every score, and the "Incomplete @ ..." evidence marks the export as partial.
+    /// </summary>
+    public static CheckResult Incomplete(string checkId, string reason) => new()
+    {
+        Status = CheckStatus.Error,
+        Findings = $"Check {checkId} did not finish because {reason}. This is a partial result: the check was not assessed.",
+        Evidence = $"Incomplete @ {EvidenceTimestampUtc()}",
+        Error = $"Incomplete: {reason}"
+    };
+
+    /// <summary>The headless run stamps a check it never finished "Incomplete @ ...".</summary>
+    public static bool IsIncompleteEvidence(string? evidence) =>
+        evidence is not null && evidence.StartsWith("Incomplete @ ", StringComparison.Ordinal);
+
     /// <summary>The runner stamps a timed-out check's evidence "Timeout @ ..."; saved states keep only the evidence.</summary>
     public static bool IsTimeoutEvidence(string? evidence) =>
         evidence is not null && evidence.StartsWith("Timeout @ ", StringComparison.Ordinal);

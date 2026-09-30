@@ -1,5 +1,7 @@
 namespace NetworkSecurityAuditor.Checks.NetworkPerimeter;
 
+using System.Globalization;
+using System.IO;
 using System.Management;
 using System.Text;
 using NetworkSecurityAuditor.Models;
@@ -127,13 +129,10 @@ public sealed class NP03_VpnCheck : ISecurityCheck
         }
         catch { /* rasdial may not be available */ }
 
-        // Check VPN phonebook entries
-        try
-        {
-            string output = RunCommand("rasphone", "-h", ct);
-            evidence.AppendLine($"  rasphone available: {!string.IsNullOrWhiteSpace(output)}");
-        }
-        catch { /* rasphone not available */ }
+        // Built-in VPN connections are the VPN entries in the RAS phonebooks, read here as files.
+        // rasphone.exe is a dialog, so running it would open a window on the desktop of whoever is signed in.
+        if (ReadPhonebooks(PhonebookPaths(), sb, evidence, ct))
+            vpnFound = true;
 
         // Check registry for VPN connections
         var vpnConnections = RegistryHelper.GetSubKeyNames(
@@ -205,6 +204,138 @@ public sealed class NP03_VpnCheck : ISecurityCheck
         {
             evidence.AppendLine($"  Route analysis error: {ex.Message}");
         }
+    }
+
+    /// <summary>The per-user and all-users RAS phonebooks, where Windows keeps its built-in VPN connections.</summary>
+    internal static IReadOnlyList<(string Scope, string Path)> PhonebookPaths() =>
+    [
+        ("current user", PhonebookPath(Environment.SpecialFolder.ApplicationData)),
+        ("all users", PhonebookPath(Environment.SpecialFolder.CommonApplicationData))
+    ];
+
+    private static string PhonebookPath(Environment.SpecialFolder folder) =>
+        Path.Combine(Environment.GetFolderPath(folder), "Microsoft", "Network", "Connections", "Pbk", "rasphone.pbk");
+
+    /// <summary>
+    /// Lists the VPN entries of each phonebook that exists. Returns true when any is found. Evidence names the
+    /// phonebook by scope, never by path, since the per-user path carries the account name.
+    /// </summary>
+    internal static bool ReadPhonebooks(
+        IEnumerable<(string Scope, string Path)> phonebooks,
+        StringBuilder sb,
+        StringBuilder evidence,
+        CancellationToken ct)
+    {
+        bool found = false;
+        foreach (var (scope, path) in phonebooks)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!File.Exists(path))
+            {
+                evidence.AppendLine($"  RAS phonebook ({scope}): none");
+                continue;
+            }
+
+            IReadOnlyList<PhonebookEntry> entries;
+            try
+            {
+                entries = ParsePhonebook(File.ReadAllText(path));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                evidence.AppendLine($"  RAS phonebook ({scope}): unreadable ({ex.GetType().Name})");
+                continue;
+            }
+
+            var vpnEntries = entries.Where(entry => entry.IsVpn).ToList();
+            evidence.AppendLine($"  RAS phonebook ({scope}): {vpnEntries.Count} VPN {(vpnEntries.Count == 1 ? "entry" : "entries")}");
+            foreach (var entry in vpnEntries)
+            {
+                found = true;
+                evidence.AppendLine($"    {DescribePhonebookEntry(entry)}");
+                sb.AppendLine($"Built-in VPN connection configured: {entry.Name}");
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Parses a rasphone.pbk file (INI format). Each [section] is one entry. Keys repeat in the device
+    /// subsections, so the first value of a key wins.
+    /// </summary>
+    internal static IReadOnlyList<PhonebookEntry> ParsePhonebook(string text)
+    {
+        var entries = new List<PhonebookEntry>();
+        string? name = null;
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        void Flush()
+        {
+            if (name is null)
+                return;
+            entries.Add(new PhonebookEntry(
+                name,
+                ReadInt(values, "Type"),
+                values.GetValueOrDefault("PhoneNumber", ""),
+                ReadInt(values, "IpPrioritizeRemote")));
+        }
+
+        foreach (var rawLine in text.Split('\n'))
+        {
+            string line = rawLine.Trim();
+            if (line.Length == 0 || line[0] is ';' or '#')
+                continue;
+
+            if (line.Length >= 2 && line[0] == '[' && line[^1] == ']')
+            {
+                Flush();
+                name = line[1..^1].Trim();
+                values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                continue;
+            }
+
+            int separator = line.IndexOf('=');
+            if (name is null || separator <= 0)
+                continue;
+
+            values.TryAdd(line[..separator].Trim(), line[(separator + 1)..].Trim());
+        }
+
+        Flush();
+        return entries;
+    }
+
+    internal static string DescribePhonebookEntry(PhonebookEntry entry)
+    {
+        string server = string.IsNullOrWhiteSpace(entry.Server) ? "(not set)" : entry.Server;
+        string tunnel = entry.SplitTunnel switch
+        {
+            true => "split tunnel (IpPrioritizeRemote=0)",
+            false => "full tunnel (IpPrioritizeRemote=1)",
+            null => "tunnel mode not recorded"
+        };
+        return $"{entry.Name} | Server: {server} | {tunnel}";
+    }
+
+    private static int? ReadInt(Dictionary<string, string> values, string key) =>
+        values.TryGetValue(key, out var text) &&
+        int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : null;
+
+    /// <summary>One rasphone.pbk entry. Type 2 is a VPN (RASET_Vpn).</summary>
+    internal sealed record PhonebookEntry(string Name, int? Type, string Server, int? PrioritizeRemote)
+    {
+        public bool IsVpn => Type == 2;
+
+        /// <summary>IpPrioritizeRemote=0 turns off "use default gateway on remote network", which is split tunneling.</summary>
+        public bool? SplitTunnel => PrioritizeRemote switch
+        {
+            0 => true,
+            1 => false,
+            _ => null
+        };
     }
 
     internal static SplitTunnelRouteAssessment AssessSplitTunnelRoutes(string routeOutput)

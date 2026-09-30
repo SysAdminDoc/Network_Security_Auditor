@@ -90,5 +90,7 @@ public enum ExitCode
     NoScorableChecks = 65,
     DiagnosticsDegraded = 66,
     DiagnosticsBlocked = 67,
-    AlreadyRunning = 68
+    AlreadyRunning = 68,
+    /// <summary>A headless scan stopped early by Ctrl+C or its deadline. Its reports hold partial results.</summary>
+    RunIncomplete = 69
 }

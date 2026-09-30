@@ -124,17 +124,19 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
         };
     }
 
+    /// <summary>
+    /// How long a domain controller may spend on a search request (a paged search sends one per page). It sits
+    /// under the runner's default 90-second check timeout, so a stalled DC ends the search rather than the check.
+    /// </summary>
+    internal static readonly TimeSpan SearchServerTimeLimit = TimeSpan.FromSeconds(60);
+
+    /// <summary>How long the client waits for a DC to answer one search request before it gives up.</summary>
+    internal static readonly TimeSpan SearchClientTimeout = TimeSpan.FromSeconds(75);
+
     public IReadOnlyList<DirectoryRecord> Search(DirectoryQuery query, CancellationToken ct)
     {
         using var root = new DirectoryEntry(Bind(query.SearchBase));
-        using var searcher = new DirectorySearcher(root)
-        {
-            Filter = query.Filter,
-            SearchScope = query.Scope,
-            PageSize = query.SizeLimit == 1 ? 0 : query.PageSize,
-            SizeLimit = query.SizeLimit
-        };
-        searcher.PropertiesToLoad.AddRange([.. query.Properties]);
+        using var searcher = CreateSearcher(root, query);
 
         var records = new List<DirectoryRecord>();
         if (query.SizeLimit == 1)
@@ -152,6 +154,22 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
             records.Add(ToRecord(result));
         }
         return records;
+    }
+
+    /// <summary>Builds the searcher for a query. Creating it doesn't contact a DC.</summary>
+    internal static DirectorySearcher CreateSearcher(DirectoryEntry root, DirectoryQuery query)
+    {
+        var searcher = new DirectorySearcher(root)
+        {
+            Filter = query.Filter,
+            SearchScope = query.Scope,
+            PageSize = query.SizeLimit == 1 ? 0 : query.PageSize,
+            SizeLimit = query.SizeLimit,
+            ServerTimeLimit = SearchServerTimeLimit,
+            ClientTimeout = SearchClientTimeout
+        };
+        searcher.PropertiesToLoad.AddRange([.. query.Properties]);
+        return searcher;
     }
 
     public DirectoryRecord ReadEntry(string? distinguishedName, IReadOnlyList<string> properties, CancellationToken ct)

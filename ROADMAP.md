@@ -207,13 +207,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: after NSA-065, a release exists with the C# ZIP, SBOM, manifest, `NetworkSecurityAudit.ps1` and one `SHA256SUMS.txt` covering all of them; the README download link resolves (HTTP 200) and the documented hash command matches; screenshots show the released version.
   Complexity: S
 
-- [ ] P1 — NSA-083 Bound check resource use and make headless runs cancellable
-  Why: LM05, BR03 and BR06 read event logs with `maxEvents: 0` and format every message; headless runs pass `CancellationToken.None`; timed-out synchronous checks are abandoned, not stopped; LDAP searches set no time limit; NP03 launches `rasphone -h`, a GUI binary, under RMM.
-  Evidence: `LM05_FailedLogonCheck.cs:115`, `BR03_RestoreTestCheck.cs:115`, `BR06_BackupMonitoringCheck.cs:95,150`, `Services/EventLogQueryHelper.cs:32,57`, `App.xaml.cs:440`, `Checks/CheckRunner.cs:70-83`, `NP03_VpnCheck.cs:133`.
-  Touches: event-log helper (XPath time filter plus event cap, formatting only for shown samples), `DirectorySearcher.ServerTimeLimit`/`ClientTimeout`, a console cancel handler and per-run deadline, NP03 VPN detection through `Get-VpnConnection` data or the RAS phonebook file.
-  Acceptance: event queries stop at a documented cap with the count reported as "at least N"; a Ctrl+C or deadline ends a silent run with partial results flagged and exit code documented; no check launches a windowed process; a test asserts a blocked fake check is cancelled within the timeout.
-  Complexity: M
-
 - [ ] P1 — NSA-116 Stop IA01, IA02, IA07 and CF04 from failing every real domain
   Why: converting the AD checks to recorded fixtures (NSA-073) showed results no real domain can pass, apart from the nested-group and non-English cases NSA-078 covers. IA01's orphaned-adminCount test flags `krbtgt`, which always has adminCount=1. IA02's SPN filter includes `krbtgt` and disabled accounts, so every domain has a "kerberoastable" account, and an account matching two name patterns is counted twice. IA07's "admin" pattern matches the built-in Administrator. CF04 treats `(!(lastLogonTimestamp=*))` as a former employee, so a hire created yesterday is CRITICAL, and it requests `whenCreated` without using it.
   Evidence: `Checks/IdentityAccess/IA01_PrivilegedGroupsCheck.cs` orphan loop; `IA02_ServiceAccountCheck.cs` filter and pattern count; `IA07_SharedAccountsCheck.cs` pattern list; `Checks/CommonFindings/CF04_FormerEmployeeCheck.cs` filter; fixtures under `tests/NetworkSecurityAuditor.Tests/Fixtures/Directory/`.
@@ -362,6 +355,20 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: both EP04 surfaces, `Fixtures/Kev/ep04-kev-scenarios.json` (the shared scenarios keep them in step).
   Acceptance: a SQL Server build that includes a fix clears that KEV entry by version; Edge is detected from the HKLM or per-user key; an Exchange entry listed under vendor-only "Microsoft" matches on its name; ransomware-linked hits are counted before the display cap; both surfaces give the same status when hotfix dates are missing; each case is a shared scenario run by xUnit and Pester.
   Complexity: M
+
+- [ ] P2 — NSA-121 Make the remaining event-log reads honest about caps and read failures
+  Why: NSA-083 bounded the app's event-log checks, and it turned up gaps it didn't cover. The app's LM05 returns Pass ("No failed logon events") when the Security log can't be read. In the PS1, IA06 cuts its list to 20 events before testing `-gt 50`, so that branch can never fire. LM05 always prints "N+" even under the cap. BR02, BR06 and CF03 filter on message text, which formats every event, and none says "at least" when `-MaxEvents` cut the result. The app's NP03 records a split tunnel in evidence only, where the PS1 marks it Partial.
+  Evidence: `Checks/LoggingMonitoring/LM05_FailedLogonCheck.cs` (`QueryFailedLogons` catch); `NetworkSecurityAudit.ps1` IA06 (near :6577-6581), LM05 (near :5531), BR02 (near :7744), BR06 (near :7867), CF03 (near :7965); `Checks/NetworkPerimeter/NP03_VpnCheck.cs`.
+  Touches: app LM05 and NP03, PS1 IA06, LM05, BR02, BR06 and CF03, their tests.
+  Acceptance: an unreadable Security log makes the app's LM05 Partial or Error with the reason, never Pass; the PS1 IA06 threshold is tested on the full count; every capped PS1 query says "at least N" only when the cap was hit; BR02, BR06 and CF03 filter by event ID or XPath before formatting messages; NP03 gives the same status for a split tunnel on both surfaces.
+  Complexity: M
+
+- [ ] P2 — NSA-122 Stop IA09 counting Windows' built-in WAN Miniport and RAS adapters as VPN adapters
+  Why: the app's IA09 treats every PPP-type adapter as a VPN, and every Windows install has "WAN Miniport (PPPOE)" and "RAS Async Adapter". On this PC IA09 reported both as VPN adapters although no VPN is configured.
+  Evidence: `Checks/IdentityAccess/IA09_RemoteAccessCheck.cs` (`nic.Type == NetworkInterfaceType.Ppp`); the PS1 IA09 block matches descriptions only and doesn't have the fault.
+  Touches: IA09 adapter test, IA09RemoteAccessCheckTests.
+  Acceptance: an adapter fixture with "WAN Miniport (PPPOE)" and "RAS Async Adapter" reports no VPN adapters; a PPP adapter with a VPN vendor description and a WireGuard tunnel still count.
+  Complexity: S
 
 ### P3
 

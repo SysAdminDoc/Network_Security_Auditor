@@ -53,6 +53,55 @@ public sealed class CheckRunner
         return results;
     }
 
+    /// <summary>
+    /// Runs like <see cref="RunAsync"/>, but when <paramref name="ct"/> is cancelled it returns instead of
+    /// throwing: every check that finished keeps its result, and every applicable check that didn't gets
+    /// <see cref="CheckResult.Incomplete"/> with the reason <paramref name="incompleteReason"/> gives. The check
+    /// that was running is abandoned, and nothing it does later can reach the returned results.
+    /// </summary>
+    public async Task<CheckRunOutcome> RunWithPartialResultsAsync(
+        EnvironmentInfo env,
+        AuditOptions options,
+        CancellationToken ct,
+        Func<string> incompleteReason,
+        Action<(string checkId, CheckResult result)>? completedCallback = null)
+    {
+        var finished = new Dictionary<string, CheckResult>();
+        var closed = false;
+
+        // The runner reports inline, so once the run is over nothing can add to these results.
+        void Record((string checkId, CheckResult result) update)
+        {
+            if (closed)
+                return;
+            finished[update.checkId] = update.result;
+            completedCallback?.Invoke(update);
+        }
+
+        try
+        {
+            var results = await RunAsync(env, options, progress: null, ct, completedCallback: Record);
+            closed = true;
+            return new CheckRunOutcome(results, []);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            closed = true;
+            var partial = new Dictionary<string, CheckResult>(finished);
+            var unfinished = new List<string>();
+            var reason = incompleteReason();
+            foreach (var checkId in ResolveApplicableCheckIds(env, options))
+            {
+                if (partial.ContainsKey(checkId))
+                    continue;
+                unfinished.Add(checkId);
+                partial[checkId] = CheckResult.Incomplete(checkId, reason);
+            }
+
+            return new CheckRunOutcome(partial, unfinished);
+        }
+    }
+
     private async Task<CheckResult> RunSingleCheckAsync(
         ISecurityCheck check,
         EnvironmentInfo env,
@@ -66,10 +115,16 @@ public sealed class CheckRunner
             var timeout = TimeSpan.FromSeconds(options.CheckTimeoutSeconds);
             using var timeoutCts = new CancellationTokenSource();
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+            var checkToken = linkedCts.Token;
 
-            var checkTask = Task.Run(
-                async () => await check.ExecuteAsync(env, options, linkedCts.Token),
-                CancellationToken.None);
+            // Most checks are synchronous and can't be interrupted if they ignore their token. Each one gets its
+            // own thread, so a check the runner gives up on keeps only that thread busy and never starves the
+            // pool that the timeout and the rest of the run depend on.
+            var checkTask = Task.Factory.StartNew(
+                () => check.ExecuteAsync(env, options, checkToken),
+                CancellationToken.None,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default).Unwrap();
             var timeoutTask = Task.Delay(timeout, ct);
             var completedTask = await Task.WhenAny(checkTask, timeoutTask);
 
@@ -154,4 +209,10 @@ public sealed class CheckRunner
     {
         return CheckCatalog.All.TryGetValue(checkId, out var meta) && meta.Type == CheckType.AD;
     }
+}
+
+/// <summary>A run's results, and the applicable checks it didn't finish (empty when the run completed).</summary>
+public sealed record CheckRunOutcome(Dictionary<string, CheckResult> Results, IReadOnlyList<string> UnfinishedIds)
+{
+    public bool IsComplete => UnfinishedIds.Count == 0;
 }

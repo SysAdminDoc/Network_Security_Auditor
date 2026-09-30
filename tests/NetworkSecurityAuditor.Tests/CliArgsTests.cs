@@ -293,6 +293,84 @@ public class CliArgsTests
         Assert.Contains("return (int)ExitCode.InputPathUnavailable;", source);
     }
 
+    [Theory]
+    [InlineData("--deadline-minutes", "30", 30)]
+    [InlineData("-DeadlineMinutes", "5", 5)]
+    public void Deadline_Minutes_Parsed(string flag, string value, int expected)
+    {
+        var args = App.ParseArgs(["--silent", flag, value]);
+
+        Assert.Equal(expected, args.DeadlineMinutes);
+        Assert.Empty(args.ParseWarnings);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("soon")]
+    public void Deadline_Minutes_Rejects_Non_Positive_Values(string value)
+    {
+        var args = App.ParseArgs(["--silent", "--deadline-minutes", value]);
+
+        Assert.Equal(0, args.DeadlineMinutes);
+        Assert.NotEmpty(args.ParseWarnings);
+        Assert.True(args.Silent);
+    }
+
+    [Fact]
+    public void Deadline_Minutes_Without_Value_Does_Not_Consume_Next_Switch()
+    {
+        var args = App.ParseArgs(["--deadline-minutes", "--silent"]);
+
+        Assert.Equal(0, args.DeadlineMinutes);
+        Assert.True(args.Silent);
+        Assert.Contains("--deadline-minutes requires a value.", args.ParseWarnings);
+    }
+
+    [Fact]
+    public void No_Deadline_By_Default()
+    {
+        Assert.Equal(0, App.ParseArgs(["--silent"]).DeadlineMinutes);
+    }
+
+    [Fact]
+    public void Exit_Codes_Are_Distinct_And_Incomplete_Run_Is_69()
+    {
+        var values = Enum.GetValues<ExitCode>().Select(code => (int)code).ToArray();
+
+        Assert.Equal(values.Length, values.Distinct().Count());
+        Assert.Equal(69, (int)ExitCode.RunIncomplete);
+    }
+
+    [Theory]
+    [InlineData(false, true, 95, 95, false, 0, ExitCode.RunIncomplete)]
+    [InlineData(false, false, 0, 0, true, 9, ExitCode.RunIncomplete)]
+    [InlineData(true, false, 0, 0, false, 0, ExitCode.NoScorableChecks)]
+    [InlineData(true, true, 50, 90, false, 0, ExitCode.ImmediateAlert)]
+    [InlineData(true, true, 90, 30, false, 0, ExitCode.ImmediateAlert)]
+    [InlineData(true, true, 90, 90, true, 0, ExitCode.ComplianceAlert)]
+    [InlineData(true, true, 90, 90, false, 2, ExitCode.ReviewNeeded)]
+    [InlineData(true, true, 90, 90, false, 0, ExitCode.Green)]
+    public void Silent_Exit_Code_Puts_An_Incomplete_Run_First(
+        bool runComplete, bool hasScorable, int score, int ransomware, bool frameworkBelow, int fails, ExitCode expected)
+    {
+        var exitCode = App.ResolveSilentExitCode(runComplete, hasScorable, score, ransomware, () => frameworkBelow, fails);
+
+        Assert.Equal(expected, exitCode);
+    }
+
+    [Fact]
+    public void Silent_Run_Is_Cancellable_And_Keeps_Partial_Results()
+    {
+        var source = ReadSourceFile("src", "NetworkSecurityAuditor", "App.xaml.cs");
+
+        Assert.DoesNotContain("ct: CancellationToken.None", source);
+        Assert.Contains("new HeadlessRunCancellation(", source);
+        Assert.Contains("cancellation.HookConsole(", source);
+        Assert.Contains("runner.RunWithPartialResultsAsync(", source);
+        Assert.Contains("runComplete: outcome.IsComplete", source);
+    }
+
     [Fact]
     public void Elevated_Relaunch_Preserves_Working_Directory()
     {

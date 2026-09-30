@@ -431,15 +431,28 @@ public partial class App : Application
             Console.WriteLine($"  [{completed}/{applicableIds.Length}] [{symbol}] {update.checkId}");
         }
 
+        using var cancellation = new HeadlessRunCancellation(
+            args.DeadlineMinutes > 0 ? TimeSpan.FromMinutes(args.DeadlineMinutes) : null);
+        cancellation.HookConsole(Console.Error);
+        if (args.DeadlineMinutes > 0)
+            Console.WriteLine($"Run deadline: {args.DeadlineMinutes} minute(s)");
+
         Console.WriteLine($"Running {applicableIds.Length} checks...");
         Console.WriteLine();
 
-        var results = await runner.RunAsync(
+        var outcome = await runner.RunWithPartialResultsAsync(
             env,
             options,
-            progress: null,
-            ct: CancellationToken.None,
+            cancellation.Token,
+            cancellation.DescribeStop,
             completedCallback: WriteProgress);
+        var results = outcome.Results;
+        if (!outcome.IsComplete)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"  PARTIAL RESULTS: {outcome.UnfinishedIds.Count} of {applicableIds.Length} checks did not finish because {cancellation.DescribeStop()}.");
+            Console.WriteLine("  Those checks are marked Error with \"Incomplete @\" evidence in every export.");
+        }
 
         var checkVms = new System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel>();
         foreach (var meta in CheckCatalog.All.Values.OrderBy(m => m.Id))
@@ -665,18 +678,41 @@ public partial class App : Application
 
         Console.WriteLine();
 
-        var exitCode = ExitCode.Green;
-        if (!hasScorableChecks)
-            exitCode = ExitCode.NoScorableChecks;
-        else if (score < 60 || rwScore < 40)
-            exitCode = ExitCode.ImmediateAlert;
-        else if (HasFrameworkBelowThreshold(scoredCheckVms, 60))
-            exitCode = ExitCode.ComplianceAlert;
-        else if (failCount > 0)
-            exitCode = ExitCode.ReviewNeeded;
+        var exitCode = ResolveSilentExitCode(
+            runComplete: outcome.IsComplete,
+            hasScorableChecks,
+            score,
+            rwScore,
+            frameworkBelowThreshold: () => HasFrameworkBelowThreshold(scoredCheckVms, 60),
+            failCount);
 
         Console.WriteLine($"  Exit code: {(int)exitCode}");
         return (int)exitCode;
+    }
+
+    /// <summary>
+    /// A cancelled or deadline-cut run exits <see cref="ExitCode.RunIncomplete"/> before anything else: its score
+    /// covers only the checks that finished, so a score-based code would mislead an RMM.
+    /// </summary>
+    internal static ExitCode ResolveSilentExitCode(
+        bool runComplete,
+        bool hasScorableChecks,
+        int score,
+        int ransomwareScore,
+        Func<bool> frameworkBelowThreshold,
+        int failCount)
+    {
+        if (!runComplete)
+            return ExitCode.RunIncomplete;
+        if (!hasScorableChecks)
+            return ExitCode.NoScorableChecks;
+        if (score < 60 || ransomwareScore < 40)
+            return ExitCode.ImmediateAlert;
+        if (frameworkBelowThreshold())
+            return ExitCode.ComplianceAlert;
+        if (failCount > 0)
+            return ExitCode.ReviewNeeded;
+        return ExitCode.Green;
     }
 
     internal static System.Collections.ObjectModel.ObservableCollection<CheckItemViewModel> ExcludeWaivedChecksFromScoring(
@@ -798,6 +834,13 @@ public partial class App : Application
             }
             else if (arg.Equals("--render-high-contrast", StringComparison.OrdinalIgnoreCase))
                 result.RenderHighContrast = true;
+            else if (arg.Equals("--deadline-minutes", StringComparison.OrdinalIgnoreCase) || arg.Equals("-DeadlineMinutes", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryReadValue(args, ref i, arg, result, out var value) && int.TryParse(value, out var minutes) && minutes > 0)
+                    result.DeadlineMinutes = minutes;
+                else if (i < args.Length && !result.ParseWarnings.Contains($"{arg} requires a value."))
+                    result.ParseWarnings.Add($"{arg} must be a positive whole number of minutes.");
+            }
             else if (arg.Equals("--no-internet", StringComparison.OrdinalIgnoreCase) || arg.Equals("-NoInternet", StringComparison.OrdinalIgnoreCase))
                 result.NoInternet = true;
             else if (arg.Equals("--privacy", StringComparison.OrdinalIgnoreCase) || arg.Equals("-PrivacyMode", StringComparison.OrdinalIgnoreCase))
@@ -924,6 +967,7 @@ public partial class App : Application
         public bool UiaBackground;
         public string RenderScreenshotPath = "";
         public bool RenderHighContrast;
+        public int DeadlineMinutes;
         public bool NoInternet;
         public bool PrivacyMode;
         public bool ExportCsv;

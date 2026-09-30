@@ -128,6 +128,8 @@ value. `--output` is treated as an output directory; if a file-looking value suc
 as `C:\Reports\audit.html` is supplied, the C# rewrite writes its artifact set to
 that file's parent folder.
 
+Silent runs can be stopped early. The first Ctrl+C stops the scan, writes reports for what finished and exits. A second Ctrl+C quits right away. `--deadline-minutes <N>` (or `-DeadlineMinutes <N>`) does the same on a timer. Unfinished checks show as Error with `Incomplete @` evidence in every export, and the run exits 69 (`RunIncomplete`), which takes priority over the score-based exit codes. Rerun it to get a complete picture.
+
 PowerShell and C# silent scans use a per-client/target/output/history run lock so
 Task Scheduler or an RMM cannot overlap writes for the same assessment. A second
 invocation exits with code 68 (`AlreadyRunning`) before scanning or writing
