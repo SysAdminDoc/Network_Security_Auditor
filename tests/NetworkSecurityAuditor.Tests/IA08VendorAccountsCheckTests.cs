@@ -47,6 +47,23 @@ public class IA08VendorAccountsCheckTests
     }
 
     [Fact]
+    public async Task Invalid_Expiry_Accounts_Are_Named_In_The_Findings()
+    {
+        var result = await Run("IA08-invalid-expiry.json");
+
+        Assert.Equal(CheckStatus.Fail, result.Status);
+        Assert.Contains("Vendor/guest accounts found: 4", result.Findings);
+        Assert.Contains("CRITICAL: 2 enabled vendor/guest account(s) have an accountExpires value that isn't a valid date, so they have no real expiration:", result.Findings);
+        Assert.Contains("  vendor.tempco (accountExpires=3000000000000000000)", result.Findings);
+        Assert.Contains("  consultant.old (accountExpires=-5)", result.Findings);
+        Assert.Contains("vendor.tempco | Enabled=True | Expires=Invalid | LastLogon=Never [INVALID EXPIRY]", result.Findings);
+        // A disabled account with a bad value is listed but not flagged.
+        Assert.DoesNotContain("vendor.retired (accountExpires", result.Findings);
+        Assert.Single(result.Findings.Split('\n'), line => line.Contains("vendor.retired | Enabled=False | Expires=Invalid", StringComparison.Ordinal) && !line.Contains('['));
+        Assert.DoesNotContain("have NO expiration date set", result.Findings);
+    }
+
+    [Fact]
     public async Task Every_Naming_Pattern_Is_Searched_From_The_Domain_Root()
     {
         var directory = FixtureDirectoryReader.Load("IA08-pass.json");

@@ -1,0 +1,28 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Domain Admins))",
+      "$error": {
+        "hresult": "0x8007203A",
+        "message": "The server is not operational."
+      }
+    },
+    {
+      "base": null,
+      "filter": "(objectClass=msDS-GroupManagedServiceAccount)",
+      "$error": {
+        "hresult": "0x8007203A",
+        "message": "The server is not operational."
+      }
+    },
+    {
+      "base": null,
+      "filter": "(objectClass=pKIEnrollmentService)",
+      "$error": {
+        "hresult": "0x8007203A",
+        "message": "The server is not operational."
+      }
+    }
+  ]
+}

@@ -18,6 +18,8 @@ public sealed class IA08_VendorAccountsCheck : ISecurityCheck
 
     internal IA08_VendorAccountsCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
+    private const int MaxInvalidListed = 20;
+
     private static readonly string[] VendorPatterns =
     [
         "vendor", "contractor", "consultant", "extern", "guest",
@@ -47,7 +49,7 @@ public sealed class IA08_VendorAccountsCheck : ISecurityCheck
             evidence.AppendLine("[Vendor/Guest Account Scan]");
 
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var accounts = new List<(string Sam, bool Enabled, string Expiration, string LastLogon, string Pattern)>();
+            var accounts = new List<(string Sam, bool Enabled, string Expiration, string LastLogon, string Pattern, long ExpiresRaw)>();
 
             foreach (var pattern in VendorPatterns)
             {
@@ -84,8 +86,9 @@ public sealed class IA08_VendorAccountsCheck : ISecurityCheck
                             expirationStr = expDate.ToString("yyyy-MM-dd");
                             hasExpiration = true;
                         }
-                        catch
+                        catch (ArgumentOutOfRangeException)
                         {
+                            // Negative, or past the last date a FILETIME can hold: not a real expiration.
                             expirationStr = "Invalid";
                             hasExpiration = false;
                         }
@@ -96,7 +99,7 @@ public sealed class IA08_VendorAccountsCheck : ISecurityCheck
                         ? DateTime.FromFileTimeUtc(logonTs).ToString("yyyy-MM-dd")
                         : "Never";
 
-                    accounts.Add((sam, enabled, expirationStr, lastLogon, pattern));
+                    accounts.Add((sam, enabled, expirationStr, lastLogon, pattern, expiresTicks));
 
                     // Flag enabled accounts without expiration
                     if (enabled && !hasExpiration)
@@ -106,6 +109,7 @@ public sealed class IA08_VendorAccountsCheck : ISecurityCheck
 
             int total = accounts.Count;
             int enabledNoExpiry = accounts.Count(a => a.Enabled && a.Expiration == "Never");
+            var invalidExpiry = accounts.Where(a => a.Enabled && a.Expiration == "Invalid").ToList();
 
             sb.AppendLine($"Vendor/guest accounts found: {total}");
 
@@ -115,9 +119,25 @@ public sealed class IA08_VendorAccountsCheck : ISecurityCheck
                 sb.AppendLine("  All vendor/contractor accounts should have an AccountExpirationDate.");
             }
 
-            foreach (var (sam, enabled, expiration, lastLogon, pattern) in accounts.Take(30))
+            if (invalidExpiry.Count > 0)
             {
-                string flag = (enabled && expiration == "Never") ? " [NO EXPIRY]" : "";
+                sb.AppendLine($"CRITICAL: {invalidExpiry.Count} enabled vendor/guest account(s) have an accountExpires value that isn't a valid date, " +
+                    "so they have no real expiration:");
+                foreach (var account in invalidExpiry.Take(MaxInvalidListed))
+                    sb.AppendLine($"  {account.Sam} (accountExpires={account.ExpiresRaw})");
+                if (invalidExpiry.Count > MaxInvalidListed)
+                    sb.AppendLine($"  ... and {invalidExpiry.Count - MaxInvalidListed} more.");
+                sb.AppendLine("  Set a real AccountExpirationDate on each.");
+            }
+
+            foreach (var (sam, enabled, expiration, lastLogon, pattern, _) in accounts.Take(30))
+            {
+                string flag = !enabled ? "" : expiration switch
+                {
+                    "Never" => " [NO EXPIRY]",
+                    "Invalid" => " [INVALID EXPIRY]",
+                    _ => ""
+                };
                 string line = $"  {sam} | Enabled={enabled} | Expires={expiration} | LastLogon={lastLogon}{flag}";
                 sb.AppendLine(line);
                 evidence.AppendLine(line);

@@ -436,7 +436,7 @@ Beyond misconfiguration checks, the tool detects active indicators of compromise
 - **AdminSDHolder tampering**: unexpected ACEs on the AdminSDHolder container
 - **SID History abuse**: accounts with SID History from foreign domains
 - **ADCS vulnerabilities**: ESC1/ESC6/ESC8/ESC9/ESC10/ESC11/ESC13/ESC15 certificate template and CA misconfigurations
-- **Kerberos legacy encryption**: RC4/DES-only or default-dependent accounts, trusts, and KDC event evidence
+- **Kerberos legacy encryption**: each DC's RC4 default after the 2026 enforcement updates (CVE-2026-20833), RC4/DES-only or default-dependent user, computer and managed service accounts, trusts, and KDC events 201 to 209
 - **BadSuccessor / dMSA exposure**: Windows Server 2025 delegated MSA objects, migration links, and OU create/control rights
 
 ### Domain Security Maturity Score

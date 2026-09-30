@@ -1,0 +1,83 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*vendor*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Tempco Vendor,OU=Vendors,DC=corp,DC=example",
+          "sAMAccountName": "vendor.tempco",
+          "distinguishedName": "CN=Tempco Vendor,OU=Vendors,DC=corp,DC=example",
+          "userAccountControl": 512,
+          "accountExpires": 3000000000000000000
+        },
+        {
+          "$path": "LDAP://CN=Retired Vendor,OU=Vendors,DC=corp,DC=example",
+          "sAMAccountName": "vendor.retired",
+          "distinguishedName": "CN=Retired Vendor,OU=Vendors,DC=corp,DC=example",
+          "userAccountControl": 514,
+          "accountExpires": 3000000000000000000
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*contractor*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*consultant*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Old Consultant,OU=Vendors,DC=corp,DC=example",
+          "sAMAccountName": "consultant.old",
+          "distinguishedName": "CN=Old Consultant,OU=Vendors,DC=corp,DC=example",
+          "userAccountControl": 512,
+          "accountExpires": -5,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 3
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*extern*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*guest*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*partner*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Globex Partner,OU=Vendors,DC=corp,DC=example",
+          "sAMAccountName": "partner.globex",
+          "distinguishedName": "CN=Globex Partner,OU=Vendors,DC=corp,DC=example",
+          "userAccountControl": 512,
+          "accountExpires": 134509680000000000
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*3rdparty*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*thirdparty*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*outsource*))",
+      "results": []
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "entries": {
+    "CN=Administrator,CN=Users,DC=corp,DC=example": {
+      "sAMAccountName": "Administrator",
+      "userAccountControl": 66048
+    }
+  },
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectClass=group)(cn=Domain Admins))",
+      "results": [
+        {
+          "$path": "LDAP://corp.example/CN=Domain Admins,CN=Users,DC=corp,DC=example",
+          "member": [
+            "CN=Administrator,CN=Users,DC=corp,DC=example"
+          ]
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(objectClass=msDS-GroupManagedServiceAccount)",
+      "$error": {
+        "hresult": "0x80072020",
+        "message": "An operations error occurred."
+      }
+    },
+    {
+      "base": null,
+      "filter": "(objectClass=pKIEnrollmentService)",
+      "$error": {
+        "hresult": "0x80070005",
+        "message": "Access is denied."
+      }
+    }
+  ]
+}

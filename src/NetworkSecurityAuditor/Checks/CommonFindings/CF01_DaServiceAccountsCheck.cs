@@ -58,37 +58,71 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
             var sb = new StringBuilder();
             var evidence = new StringBuilder();
             bool hasIssue = false;
+            // Parts of the review that couldn't run. The check never passes with any of them.
+            var gaps = new List<string>();
 
             var directory = _directory(env);
 
-            // 1. Check Domain Admins for service account patterns
+            // 1. Check Domain Admins for service account patterns. This is the core search: when the directory
+            //    can't answer it, nothing else CF01 says about the domain can be trusted to be complete.
             ct.ThrowIfCancellationRequested();
-            CheckDaServiceAccounts(directory, sb, evidence, ref hasIssue, ct);
+            var daReview = CheckDaServiceAccounts(directory, sb, evidence, gaps, ref hasIssue, ct);
 
             // 2. Check for gMSA adoption
             ct.ThrowIfCancellationRequested();
-            CheckGmsaAdoption(directory, sb, evidence, ct);
+            CheckGmsaAdoption(directory, sb, evidence, gaps, ct);
 
             // 3. Check for GPP password remnants (Groups.xml in SYSVOL)
             ct.ThrowIfCancellationRequested();
-            CheckGppPasswords(_sysvolPoliciesPath(env), sb, evidence, ref hasIssue, ct);
+            CheckGppPasswords(_sysvolPoliciesPath(env), sb, evidence, gaps, ref hasIssue, ct);
 
             // 4. Basic ADCS check
             ct.ThrowIfCancellationRequested();
-            CheckAdcs(directory, sb, evidence, ct);
+            CheckAdcs(directory, sb, evidence, gaps, ct);
 
-            if (!hasIssue)
-                sb.Insert(0, "No critical service account issues detected in Domain Admins.\n");
+            // A confirmed finding stands even when other parts couldn't run.
+            CheckStatus status;
+            string headline;
+            if (hasIssue)
+            {
+                status = CheckStatus.Fail;
+                headline = "Service account security issues detected.";
+            }
+            else if (daReview.Error is not null)
+            {
+                status = CheckStatus.Error;
+                headline = $"Could not read the directory, so Domain Admins weren't reviewed: {daReview.Error}";
+            }
+            else if (daReview.GroupNotFound)
+            {
+                status = CheckStatus.NotAssessed;
+                headline = "The Domain Admins group wasn't found (searched by the name \"Domain Admins\"), so its members weren't reviewed.";
+            }
+            else if (gaps.Count > 0)
+            {
+                status = CheckStatus.Partial;
+                headline = "No service accounts found in Domain Admins, but parts of the review couldn't run.";
+            }
             else
-                sb.Insert(0, "Service account security issues detected.\n");
+            {
+                status = CheckStatus.Pass;
+                headline = "No critical service account issues detected in Domain Admins.";
+            }
 
-            var status = hasIssue ? CheckStatus.Fail : CheckStatus.Pass;
+            sb.Insert(0, headline + "\n");
+            if (gaps.Count > 0)
+            {
+                sb.AppendLine("\nNot assessed:");
+                foreach (var gap in gaps)
+                    sb.AppendLine($"  - {gap}");
+            }
 
             return Task.FromResult(new CheckResult
             {
                 Status = status,
                 Findings = sb.ToString().TrimEnd(),
-                Evidence = evidence.ToString().TrimEnd()
+                Evidence = evidence.ToString().TrimEnd(),
+                Error = status == CheckStatus.Error ? daReview.Error : null
             });
         }
         catch (Exception ex)
@@ -97,8 +131,13 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         }
     }
 
-    private static void CheckDaServiceAccounts(IDirectoryReader directory, StringBuilder sb,
-        StringBuilder evidence, ref bool hasIssue, CancellationToken ct)
+    /// <summary>How the Domain Admins review went: an LDAP error, a missing group, or reviewed.</summary>
+    private sealed record DaReview(string? Error, bool GroupNotFound);
+
+    private const int MaxUnreadMembersListed = 10;
+
+    private static DaReview CheckDaServiceAccounts(IDirectoryReader directory, StringBuilder sb,
+        StringBuilder evidence, List<string> gaps, ref bool hasIssue, CancellationToken ct)
     {
         evidence.AppendLine("[Domain Admins - Service Account Check]");
 
@@ -113,11 +152,13 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
             if (result == null)
             {
                 evidence.AppendLine("  Domain Admins group not found.");
-                return;
+                gaps.Add("Domain Admins: the group wasn't found by name, so its members weren't reviewed.");
+                return new DaReview(null, GroupNotFound: true);
             }
 
             var members = result.Strings("member");
             int svcAccountCount = 0;
+            var unreadMembers = new List<string>();
 
             foreach (string memberDn in members)
             {
@@ -155,9 +196,10 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
                         sb.AppendLine($"CRITICAL: Likely service account \"{sam}\" is in Domain Admins.{flags}");
                     }
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     evidence.AppendLine($"  Could not read: {memberDn}");
+                    unreadMembers.Add(memberDn);
                 }
             }
 
@@ -168,15 +210,25 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
                 sb.AppendLine("Recommendation: Remove service accounts from Domain Admins. " +
                     "Grant only the minimum required permissions. Use gMSA where possible.");
             }
+
+            if (unreadMembers.Count > 0)
+            {
+                string more = unreadMembers.Count > MaxUnreadMembersListed ? $"; and {unreadMembers.Count - MaxUnreadMembersListed} more" : "";
+                gaps.Add($"{unreadMembers.Count} Domain Admins member(s) could not be read: " +
+                    string.Join("; ", unreadMembers.Take(MaxUnreadMembersListed)) + more);
+            }
+            return new DaReview(null, GroupNotFound: false);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine($"  LDAP error: {ex.Message}");
+            gaps.Add($"Domain Admins: the directory couldn't be read ({ex.Message}).");
+            return new DaReview(ex.Message, GroupNotFound: false);
         }
     }
 
     private static void CheckGmsaAdoption(IDirectoryReader directory, StringBuilder sb,
-        StringBuilder evidence, CancellationToken ct)
+        StringBuilder evidence, List<string> gaps, CancellationToken ct)
     {
         evidence.AppendLine("\n[Group Managed Service Accounts (gMSA)]");
 
@@ -202,14 +254,15 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
                 sb.AppendLine("INFO: No gMSA accounts found. Consider migrating service accounts to gMSA " +
                     "for automatic password rotation.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine($"  gMSA query error: {ex.Message}");
+            gaps.Add($"gMSA inventory could not be read ({ex.Message}).");
         }
     }
 
     private static void CheckGppPasswords(string sysvolPath, StringBuilder sb,
-        StringBuilder evidence, ref bool hasIssue, CancellationToken ct)
+        StringBuilder evidence, List<string> gaps, ref bool hasIssue, CancellationToken ct)
     {
         evidence.AppendLine("\n[GPP Password Check (SYSVOL)]");
 
@@ -218,6 +271,7 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
             if (!Directory.Exists(sysvolPath))
             {
                 evidence.AppendLine($"  SYSVOL not accessible: {sysvolPath}");
+                gaps.Add($"SYSVOL could not be read at {sysvolPath}, so GPP passwords weren't checked.");
                 return;
             }
 
@@ -237,10 +291,19 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
             {
                 evidence.AppendLine("  No GPP passwords found.");
             }
+
+            var skipped = new List<string>();
+            if (scan.SkippedUnreadableCount > 0) skipped.Add($"{scan.SkippedUnreadableCount} unreadable file(s)");
+            if (scan.SkippedOversizedCount > 0) skipped.Add($"{scan.SkippedOversizedCount} file(s) over {MaxGppFileBytes} bytes");
+            if (scan.EnumerationErrorCount > 0) skipped.Add($"{scan.EnumerationErrorCount} folder(s) that couldn't be listed");
+            if (scan.Truncated) skipped.Add($"everything after the first {MaxGppFilesToInspect} files");
+            if (skipped.Count > 0)
+                gaps.Add($"The GPP password scan skipped {string.Join(", ", skipped)}.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine($"  SYSVOL scan error: {ex.Message}");
+            gaps.Add($"The SYSVOL scan failed ({ex.Message}), so GPP passwords weren't fully checked.");
         }
     }
 
@@ -348,6 +411,7 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
+            summary.EnumerationErrorCount++;
             summary.EvidenceLines.Add($"Could not enumerate {directory}: {ex.Message}");
             return [];
         }
@@ -365,13 +429,14 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
+            summary.EnumerationErrorCount++;
             summary.EvidenceLines.Add($"Could not enumerate {directory}: {ex.Message}");
             return [];
         }
     }
 
     private static void CheckAdcs(IDirectoryReader directory, StringBuilder sb,
-        StringBuilder evidence, CancellationToken ct)
+        StringBuilder evidence, List<string> gaps, CancellationToken ct)
     {
         evidence.AppendLine("\n[Active Directory Certificate Services (ADCS)]");
 
@@ -400,9 +465,10 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
                 evidence.AppendLine("  No ADCS enrollment services found.");
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine($"  ADCS query error: {ex.Message}");
+            gaps.Add($"AD CS enrollment services could not be read ({ex.Message}).");
         }
     }
 
@@ -413,6 +479,7 @@ public sealed class CF01_DaServiceAccountsCheck : ISecurityCheck
         public int SkippedOversizedCount { get; set; }
         public int SkippedUnreadableCount { get; set; }
         public bool Truncated { get; set; }
+        public int EnumerationErrorCount { get; set; }
         public List<string> EvidenceLines { get; } = [];
     }
 }

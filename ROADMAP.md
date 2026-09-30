@@ -165,13 +165,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P1
 
-- [ ] P1 — NSA-076 Update IA11 for Kerberos RC4 enforcement (CVE-2026-20833)
-  Why: accounts without `msDS-SupportedEncryptionTypes` fall back to the DC default, which changed in 2026, but IA11 counts them without failing, reads the domain object's etype attribute as if meaningful, and skips computer and gMSA accounts.
-  Evidence: `src/NetworkSecurityAuditor/Checks/IdentityAccess/IA11_KerberosEncryptionCheck.cs:123-156`; https://www.microsoft.com/en-us/windows-server/blog/2025/12/03/beyond-rc4-for-windows-authentication/; https://4sysops.com/archives/windows-kerberos-rc4-deprecation-what-will-break-in-active-directory-and-how-to-fix-it/.
-  Touches: `IA11_KerberosEncryptionCheck.cs`, PS1 IA11 block (`NetworkSecurityAudit.ps1:3801-3823`), NSA-073 fixtures.
-  Acceptance: the check reads `DefaultDomainSupportedEncTypes` and `RC4DefaultDisablementPhase` on each reachable DC, evaluates user, computer and gMSA accounts with SPNs against that effective value, fails RC4-only or DES accounts, and summarizes KDC events 201-209 when readable; fixtures cover unset, AES-only and RC4-only accounts. Needs live validation on a DC with the 2026 updates.
-  Complexity: M
-
 - [ ] P1 — NSA-078 Resolve privileged groups by SID and nested membership
   Why: IA01, IA02, CF04 and IA12 match English group names and direct membership only, so non-English domains and nested admins give wrong results.
   Evidence: `IA01_PrivilegedGroupsCheck.cs:55`, `IA02_ServiceAccountCheck.cs:76`, `CF04_FormerEmployeeCheck.cs:77`, `IA12_DmsaCheck.cs:121-124`.
@@ -206,15 +199,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: the four checks, their fixtures and tests, and the PS1 counterparts where they share the logic.
   Acceptance: a fixture domain with `krbtgt`, a disabled account with an SPN, the built-in Administrator and a week-old account that never logged on passes IA01, IA02, IA07 and CF04; a real orphaned adminCount account, an enabled user with an SPN, a shared "frontdesk" account and a 200-day-idle account still fail; IA02 counts each account once.
   Complexity: M
-
-- [ ] P1 — NSA-118 Stop CF01 passing when the directory can't be read
-  Why: CF01 writes every LDAP failure to evidence and carries on, so with the DC unreachable it returns Pass with "No critical service account issues detected". IA08 fails an account whose `accountExpires` is out of range without saying why, because the CRITICAL count only includes "Never".
-  Evidence: `Checks/CommonFindings/CF01_DaServiceAccountsCheck.cs` catch blocks around each search; `IA08_VendorAccountsCheck.cs` Invalid versus Never handling.
-  Touches: CF01, IA08 and their tests.
-  Acceptance: CF01 with an unreachable directory is Error (or Not assessed with the reason), never Pass; IA08 names the invalid-expiry accounts in the findings.
-  Complexity: S
-
-### P2
 
 - [ ] P2 — NSA-084 Add an LDAP signing and channel binding check for domain controllers
   Why: C# has no LDAP signing or channel binding check and the PS1 reads only the local DC registry; Server 2025 DCs require signing by default while channel binding stays "when supported", so unconfigured means different things by OS.
@@ -355,6 +339,27 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: IA09 adapter test, IA09RemoteAccessCheckTests.
   Acceptance: an adapter fixture with "WAN Miniport (PPPOE)" and "RAS Async Adapter" reports no VPN adapters; a PPP adapter with a VPN vendor description and a WireGuard tunnel still count.
   Complexity: S
+
+- [ ] P2 — NSA-123 Search the Configuration partition for AD CS in CF01
+  Why: CF01 looks for certificate authorities from the domain root, but CAs live under CN=Enrollment Services in the Configuration partition, so it always reports none and never weighs a service account's enrollment rights. NSA-081 reads the same objects for the ESC catalog.
+  Evidence: `Checks/CommonFindings/CF01_DaServiceAccountsCheck.cs` AD CS search (near :445).
+  Touches: CF01's AD CS query base, its fixtures.
+  Acceptance: a fixture with an enrollment service under CN=Configuration is found; a fixture query rooted at the domain DN no longer matches it.
+  Complexity: S
+
+- [ ] P2 — NSA-124 Stop the script's IA07 and IA08 passing on an unreachable directory, and stop an unset krbtgt etype warning every domain
+  Why: the PS1 IA07 and IA08 run their AD queries with `-EA SilentlyContinue`, so a directory they can't reach returns no accounts and passes. The PS1 IA11 warns when `krbtgt` has no etype set, which makes nearly every domain Partial although the KDC doesn't use krbtgt's attribute that way.
+  Evidence: `NetworkSecurityAudit.ps1` IA08 (near :6094), IA07 (near :6114), IA11 krbtgt branch.
+  Touches: those three PS1 blocks and Pester tests.
+  Acceptance: a failed AD query makes IA07 and IA08 Error or Partial with the reason; an unset krbtgt etype is informational; both covered by Pester.
+  Complexity: S
+
+- [ ] P2 — NSA-125 Finish IA11: DC update level, trust etypes in the app, bounded remote event reads
+  Why: when a DC has neither registry value set, IA11 assumes the pre-enforcement default (0x27) instead of reading the DC's update level, so a DC past the April 2026 update is judged too harshly. The app doesn't read trust etypes, which the PS1 does. Remote registry reads are bounded (15 seconds), but remote KDC event reads aren't.
+  Evidence: `Checks/IdentityAccess/IA11_KerberosEncryptionCheck.cs` (`PreEnforcementDefault`, `_kdcEvents`); PS1 IA11 trust section.
+  Touches: IA11 on both surfaces, fixtures.
+  Acceptance: a DC whose build carries the April 2026 update is treated as 0x18 when nothing is set, from a documented build table; the app lists trusts with RC4-only or unset etypes as the PS1 does; a remote event read that doesn't answer in time names the DC and moves on.
+  Complexity: M
 
 ### P3
 
