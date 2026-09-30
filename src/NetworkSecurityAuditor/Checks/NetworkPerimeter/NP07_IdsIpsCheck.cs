@@ -1,65 +1,161 @@
 namespace NetworkSecurityAuditor.Checks.NetworkPerimeter;
 
 using System.Management;
+using System.ServiceProcess;
 using System.Text;
+using NetworkSecurityAuditor.Checks.EndpointSecurity;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Services;
 
 /// <summary>
-/// NP07 - IDS/IPS: Heuristic check for intrusion detection/prevention systems.
-/// Check for Snort/Suricata services and firewall IPS features.
+/// NP07 - IDS/IPS: looks for a running IDS/IPS or EDR agent on this host. A host scan can't see an
+/// IDS/IPS at the network perimeter, so finding none is Partial, not Fail. The PowerShell NP07 block
+/// uses the same service list and the same rules.
 /// </summary>
 public sealed class NP07_IdsIpsCheck : ISecurityCheck
 {
     public string Id => "NP07";
 
+    /// <summary>
+    /// Agent services by name; a trailing * is a prefix match. Matching is on the service name only:
+    /// a substring match on "bro" (Bro/Zeek) used to hit BrokerInfrastructure on every Windows host.
+    /// </summary>
+    internal static readonly (string Pattern, string Label)[] AgentServices =
+    [
+        ("Snort*", "Snort IDS"),
+        ("Suricata*", "Suricata IDS"),
+        ("OssecSvc", "OSSEC HIDS"),
+        ("WazuhSvc", "Wazuh HIDS"),
+        ("ds_agent", "Trend Micro Deep Security"),
+        ("Sense", "Defender for Endpoint"),
+        ("CbDefense", "Carbon Black Cloud"),
+        ("CarbonBlack", "Carbon Black EDR"),
+        ("CSFalconService", "CrowdStrike Falcon"),
+        ("SentinelAgent", "SentinelOne"),
+        ("SAVService", "Sophos"),
+        ("Sophos Endpoint Defense Service", "Sophos"),
+        ("SepMasterService", "Symantec/Broadcom"),
+    ];
+
+    /// <summary>Install keys. They outlive uninstalls, so a key without a running agent is listed, not counted.</summary>
+    internal static readonly (string KeyPath, string Label)[] TraceKeys =
+    [
+        (@"HKLM\SOFTWARE\Snort", "Snort"),
+        (@"HKLM\SOFTWARE\OISF\Suricata", "Suricata"),
+        (@"HKLM\SOFTWARE\OSSEC", "OSSEC"),
+        (@"HKLM\SOFTWARE\Wazuh", "Wazuh"),
+        (@"HKLM\SOFTWARE\AlienVault", "AlienVault OSSIM"),
+        (@"HKLM\SOFTWARE\Trend Micro\Deep Security Agent", "Trend Micro Deep Security"),
+        (@"HKLM\SOFTWARE\McAfee\NSP", "McAfee Network Security"),
+    ];
+
+    internal sealed record AgentService(string Name, string DisplayName, string State, string Label);
+
+    internal sealed record IdsSnapshot
+    {
+        public IReadOnlyList<AgentService> Services { get; init; } = [];
+        public string? ServiceError { get; init; }
+        public int? MdeOnboardingState { get; init; }
+        public bool? NisEnabled { get; init; }
+        public IReadOnlyList<string> TraceLabels { get; init; } = [];
+        public bool IpsecRules { get; init; }
+    }
+
+    internal static bool NameMatches(string pattern, string serviceName) =>
+        pattern.EndsWith('*')
+            ? serviceName.StartsWith(pattern[..^1], StringComparison.OrdinalIgnoreCase)
+            : serviceName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// An agent counts only when its service is running. Defender for Endpoint also needs
+    /// OnboardingState 1, because the Sense service ships with every Windows 10/11 and Server 2019+ host.
+    /// </summary>
+    internal static (bool Counted, string Reason) Counts(AgentService service, int? mdeOnboardingState)
+    {
+        if (!service.State.Equals("Running", StringComparison.OrdinalIgnoreCase))
+            return (false, "not running");
+        if (service.Name.Equals("Sense", StringComparison.OrdinalIgnoreCase) && mdeOnboardingState != 1)
+            return (false, $"not onboarded (OnboardingState {mdeOnboardingState?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "absent"})");
+        return (true, "");
+    }
+
+    internal static CheckResult Assess(IdsSnapshot snapshot)
+    {
+        var sb = new StringBuilder();
+        var evidence = new StringBuilder();
+        var counted = new List<string>();
+
+        evidence.AppendLine("[IDS/IPS and EDR agent services]");
+        if (snapshot.ServiceError is not null)
+            evidence.AppendLine($"  Services couldn't be listed: {snapshot.ServiceError}");
+        foreach (var service in snapshot.Services)
+        {
+            var (isCounted, reason) = Counts(service, snapshot.MdeOnboardingState);
+            if (isCounted)
+            {
+                counted.Add($"{service.Label}: {service.DisplayName}");
+                evidence.AppendLine($"  FOUND: {service.Label}: {service.DisplayName} ({service.Name}) - {service.State}");
+            }
+            else
+            {
+                evidence.AppendLine($"  Not counted: {service.Label}: {service.DisplayName} ({service.Name}) - {service.State}, {reason}");
+            }
+        }
+        if (snapshot.Services.Count == 0 && snapshot.ServiceError is null)
+            evidence.AppendLine("  None installed.");
+
+        evidence.AppendLine("\n[Install traces]");
+        foreach (var label in snapshot.TraceLabels)
+            evidence.AppendLine($"  {label} registry key present");
+        if (snapshot.TraceLabels.Count == 0)
+            evidence.AppendLine("  None.");
+
+        evidence.AppendLine("\n[Windows Defender Network Inspection]");
+        evidence.AppendLine($"  NIS Enabled: {snapshot.NisEnabled?.ToString() ?? "couldn't be read"}");
+        evidence.AppendLine("\n[Windows Firewall IPsec]");
+        evidence.AppendLine($"  IPsec connection security rules configured: {snapshot.IpsecRules}");
+
+        CheckStatus status;
+        if (counted.Count > 0)
+        {
+            status = CheckStatus.Pass;
+            sb.AppendLine("IDS/IPS or EDR agent running on this host:");
+            foreach (var agent in counted)
+                sb.AppendLine($"  {agent}");
+        }
+        else
+        {
+            status = CheckStatus.Partial;
+            sb.AppendLine(snapshot.ServiceError is null
+                ? "No running IDS/IPS or EDR agent on this host."
+                : "Services couldn't be listed, so a running IDS/IPS or EDR agent couldn't be confirmed.");
+            var notCounted = snapshot.Services.Where(s => !Counts(s, snapshot.MdeOnboardingState).Counted).ToList();
+            if (notCounted.Count > 0)
+                sb.AppendLine($"Installed but not counted: {string.Join(", ", notCounted.Select(s => $"{s.Label} ({Counts(s, snapshot.MdeOnboardingState).Reason})"))}.");
+            if (snapshot.TraceLabels.Count > 0)
+                sb.AppendLine($"Install traces without a running agent: {string.Join(", ", snapshot.TraceLabels)}.");
+            sb.AppendLine("An IDS/IPS at the network perimeter (firewall/UTM) won't show up in a host scan. Confirm it on the network side, " +
+                "or deploy a host-based IPS (an EDR with IPS capabilities).");
+        }
+        if (snapshot.NisEnabled == true)
+            sb.AppendLine("Defender Network Inspection System is on. It inspects this host's traffic for known exploits, but it isn't a network IDS/IPS.");
+        if (snapshot.IpsecRules)
+            sb.AppendLine("INFO: IPsec connection security rules are configured.");
+
+        return new CheckResult
+        {
+            Status = status,
+            Findings = sb.ToString().TrimEnd(),
+            Evidence = evidence.ToString().TrimEnd(),
+        };
+    }
+
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
         try
         {
-            var sb = new StringBuilder();
-            var evidence = new StringBuilder();
-            bool idsFound = false;
-
-            // 1. Check for IDS/IPS services
             ct.ThrowIfCancellationRequested();
-            CheckIdsServices(sb, evidence, ref idsFound, ct);
-
-            // 2. Check for IDS/IPS software via registry
-            ct.ThrowIfCancellationRequested();
-            CheckIdsSoftware(sb, evidence, ref idsFound);
-
-            // 3. Check Windows Defender Network Inspection Service (NIS)
-            ct.ThrowIfCancellationRequested();
-            CheckDefenderNis(sb, evidence, ref idsFound);
-
-            // 4. Check for Windows Firewall advanced IPS features
-            ct.ThrowIfCancellationRequested();
-            CheckFirewallIps(sb, evidence);
-
-            // Summary
-            if (idsFound)
-            {
-                sb.Insert(0, "IDS/IPS capabilities detected.\n");
-            }
-            else
-            {
-                sb.Insert(0, "No dedicated IDS/IPS solution detected on this host.\n");
-                sb.AppendLine("WARNING: No intrusion detection/prevention system found. " +
-                    "Recommend deploying network-based IDS/IPS (Snort, Suricata, or commercial solution) " +
-                    "or host-based IPS (EDR with IPS capabilities).");
-                sb.AppendLine("NOTE: IDS/IPS may be deployed at the network perimeter (firewall/UTM) " +
-                    "rather than on individual hosts. Verify with network infrastructure review.");
-            }
-
-            var status = idsFound ? CheckStatus.Pass : CheckStatus.Partial;
-
-            return Task.FromResult(new CheckResult
-            {
-                Status = status,
-                Findings = sb.ToString().TrimEnd(),
-                Evidence = evidence.ToString().TrimEnd()
-            });
+            return Task.FromResult(Assess(Collect(ct)));
         }
         catch (Exception ex)
         {
@@ -67,124 +163,64 @@ public sealed class NP07_IdsIpsCheck : ISecurityCheck
         }
     }
 
-    private static void CheckIdsServices(StringBuilder sb, StringBuilder evidence,
-        ref bool idsFound, CancellationToken ct)
+    private static IdsSnapshot Collect(CancellationToken ct)
     {
-        evidence.AppendLine("[IDS/IPS Service Check]");
-
-        string[] idsServiceNames =
-        [
-            "snort", "suricata", "ossec", "wazuh", "zeek", "bro",
-            "SnortService", "SuricataService"
-        ];
-
+        var services = new List<AgentService>();
+        string? serviceError = null;
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT Name, DisplayName, State, StartMode FROM Win32_Service");
-
-            foreach (ManagementObject obj in searcher.Get())
+            var all = ServiceController.GetServices();
+            try
             {
-                ct.ThrowIfCancellationRequested();
-                string name = obj["Name"]?.ToString() ?? "";
-                string displayName = obj["DisplayName"]?.ToString() ?? "";
-
-                foreach (string ids in idsServiceNames)
+                foreach (var service in all)
                 {
-                    if (name.Contains(ids, StringComparison.OrdinalIgnoreCase) ||
-                        displayName.Contains(ids, StringComparison.OrdinalIgnoreCase))
-                    {
-                        idsFound = true;
-                        string state = obj["State"]?.ToString() ?? "Unknown";
-                        evidence.AppendLine($"  FOUND: {displayName} ({name}) - State: {state}");
-                        sb.AppendLine($"IDS/IPS service detected: {displayName} ({state})");
-                        break;
-                    }
+                    ct.ThrowIfCancellationRequested();
+                    var match = AgentServices.FirstOrDefault(a => NameMatches(a.Pattern, service.ServiceName));
+                    if (match.Pattern is null) continue;
+                    services.Add(new AgentService(service.ServiceName, service.DisplayName, service.Status.ToString(), match.Label));
                 }
             }
+            finally
+            {
+                ServiceControllerDisposal.DisposeAll(all);
+            }
         }
-        catch (ManagementException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            evidence.AppendLine($"  WMI error: {ex.Message}");
+            serviceError = ex.Message;
         }
-    }
 
-    private static void CheckIdsSoftware(StringBuilder sb, StringBuilder evidence, ref bool idsFound)
-    {
-        evidence.AppendLine("\n[IDS/IPS Software Registry]");
+        int onboarding = RegistryHelper.GetValue(EP01_AvEdrCheck.MdeStatusKey, "OnboardingState", -1);
 
-        var idsSoftware = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        return new IdsSnapshot
         {
-            { @"HKLM\SOFTWARE\Snort", "Snort" },
-            { @"HKLM\SOFTWARE\OISF\Suricata", "Suricata" },
-            { @"HKLM\SOFTWARE\OSSEC", "OSSEC" },
-            { @"HKLM\SOFTWARE\Wazuh", "Wazuh" },
-            { @"HKLM\SOFTWARE\AlienVault", "AlienVault OSSIM" },
-            { @"HKLM\SOFTWARE\Trend Micro\Deep Security Agent", "Trend Micro Deep Security" },
-            { @"HKLM\SOFTWARE\McAfee\NSP", "McAfee Network Security" },
+            Services = services,
+            ServiceError = serviceError,
+            MdeOnboardingState = onboarding < 0 ? null : onboarding,
+            NisEnabled = ReadNisEnabled(),
+            TraceLabels = TraceKeys.Where(k => RegistryHelper.KeyExists(k.KeyPath)).Select(k => k.Label).ToList(),
+            IpsecRules = RegistryHelper.KeyExists(@"HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\ConSecRules"),
         };
-
-        bool foundAny = false;
-        foreach (var (path, label) in idsSoftware)
-        {
-            if (RegistryHelper.KeyExists(path))
-            {
-                foundAny = true;
-                idsFound = true;
-                evidence.AppendLine($"  FOUND: {label} ({path})");
-                sb.AppendLine($"IDS/IPS software detected: {label}");
-            }
-        }
-
-        if (!foundAny)
-            evidence.AppendLine("  No IDS/IPS software registry keys detected.");
     }
 
-    private static void CheckDefenderNis(StringBuilder sb, StringBuilder evidence, ref bool idsFound)
+    private static bool? ReadNisEnabled()
     {
-        evidence.AppendLine("\n[Windows Defender Network Inspection]");
-
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                @"root\Microsoft\Windows\Defender",
-                "SELECT NISEnabled, NISSignatureAge, NISEngineVersion FROM MSFT_MpComputerStatus");
-
-            foreach (ManagementObject obj in searcher.Get())
+            using var searcher = new ManagementObjectSearcher(@"root\Microsoft\Windows\Defender", "SELECT NISEnabled FROM MSFT_MpComputerStatus");
+            using var results = searcher.Get();
+            foreach (ManagementObject obj in results)
             {
-                bool nisEnabled = obj["NISEnabled"] is true;
-                string engineVer = obj["NISEngineVersion"]?.ToString() ?? "Unknown";
-                int sigAge = 0;
-                try { sigAge = Convert.ToInt32(obj["NISSignatureAge"] ?? 0); } catch { }
-
-                evidence.AppendLine($"  NIS Enabled: {nisEnabled}");
-                evidence.AppendLine($"  NIS Engine: {engineVer}");
-                evidence.AppendLine($"  NIS Signature Age: {sigAge} days");
-
-                if (nisEnabled)
-                {
-                    idsFound = true;
-                    sb.AppendLine($"Windows Defender Network Inspection Service (NIS) is enabled (engine: {engineVer}).");
-                }
+                using (obj)
+                    return obj["NISEnabled"] is true;
             }
         }
         catch (ManagementException)
         {
-            evidence.AppendLine("  Defender WMI not accessible.");
         }
-    }
-
-    private static void CheckFirewallIps(StringBuilder sb, StringBuilder evidence)
-    {
-        evidence.AppendLine("\n[Windows Firewall IPsec]");
-
-        // Check for IPsec connection security rules (not IPS per se, but related)
-        bool hasIpsec = RegistryHelper.KeyExists(
-            @"HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\ConSecRules");
-
-        evidence.AppendLine($"  IPsec connection security rules configured: {hasIpsec}");
-
-        if (hasIpsec)
-            sb.AppendLine("INFO: IPsec connection security rules are configured.");
+        catch (UnauthorizedAccessException)
+        {
+        }
+        return null;
     }
 }

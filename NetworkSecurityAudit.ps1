@@ -7226,14 +7226,23 @@ $script:AutoChecks = @{
                 @{ Counted=$false; Line="  ${Desc}: $DisplayName ($Status) - $why, not counted" }
             }
             $sb = [System.Text.StringBuilder]::new(); $found = $false
-            # Check for IDS/IPS services
+            # Agent services by name, the same list as the app's NP07_IdsIpsCheck.AgentServices (a test keeps
+            # them in step). A trailing * is a prefix match; broad patterns such as 'cb*' matched built-in
+            # services (cbdhsvc) on every host.
             $idsServices = @(
-                @{Name='Snort*';Desc='Snort IDS'},@{Name='Suricata*';Desc='Suricata IDS'},
-                @{Name='OSSEC*';Desc='OSSEC HIDS'},@{Name='Wazuh*';Desc='Wazuh HIDS'},
-                # Exact agent service names (EP01 uses the same ones). A 'cb*' wildcard matched the Clipboard User Service (cbdhsvc) on every host.
-                @{Name='Sense';Desc='Defender for Endpoint'},@{Name='CbDefense';Desc='Carbon Black Cloud'},@{Name='CarbonBlack';Desc='Carbon Black EDR'},
-                @{Name='CSFalconService';Desc='CrowdStrike Falcon'},@{Name='SentinelAgent';Desc='SentinelOne'},
-                @{Name='SAVService';Desc='Sophos'},@{Name='Sophos Endpoint Defense Service';Desc='Sophos'},@{Name='SepMasterService';Desc='Symantec/Broadcom'}
+                @{Name='Snort*';Desc='Snort IDS'}
+                @{Name='Suricata*';Desc='Suricata IDS'}
+                @{Name='OssecSvc';Desc='OSSEC HIDS'}
+                @{Name='WazuhSvc';Desc='Wazuh HIDS'}
+                @{Name='ds_agent';Desc='Trend Micro Deep Security'}
+                @{Name='Sense';Desc='Defender for Endpoint'}
+                @{Name='CbDefense';Desc='Carbon Black Cloud'}
+                @{Name='CarbonBlack';Desc='Carbon Black EDR'}
+                @{Name='CSFalconService';Desc='CrowdStrike Falcon'}
+                @{Name='SentinelAgent';Desc='SentinelOne'}
+                @{Name='SAVService';Desc='Sophos'}
+                @{Name='Sophos Endpoint Defense Service';Desc='Sophos'}
+                @{Name='SepMasterService';Desc='Symantec/Broadcom'}
             )
             [void]$sb.AppendLine("IDS/IPS AND EDR DETECTION:")
             $mdeOnboarding = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows Advanced Threat Protection\Status' -EA SilentlyContinue).OnboardingState
@@ -7244,7 +7253,26 @@ $script:AutoChecks = @{
                     [void]$sb.AppendLine($agent.Line)
                 }
             }
-            if (-not $found) { [void]$sb.AppendLine("  No running IDS/IPS/EDR agents detected on this host [!]") }
+            if (-not $found) {
+                [void]$sb.AppendLine("  No running IDS/IPS/EDR agents detected on this host [!]")
+                [void]$sb.AppendLine("  An IDS/IPS at the network perimeter (firewall/UTM) won't show up in a host scan. Confirm it on the network side.")
+            }
+            # Install keys outlive uninstalls, so they're listed but never counted.
+            $traceKeys = @(
+                @{Path='HKLM:\SOFTWARE\Snort';Desc='Snort'}
+                @{Path='HKLM:\SOFTWARE\OISF\Suricata';Desc='Suricata'}
+                @{Path='HKLM:\SOFTWARE\OSSEC';Desc='OSSEC'}
+                @{Path='HKLM:\SOFTWARE\Wazuh';Desc='Wazuh'}
+                @{Path='HKLM:\SOFTWARE\AlienVault';Desc='AlienVault OSSIM'}
+                @{Path='HKLM:\SOFTWARE\Trend Micro\Deep Security Agent';Desc='Trend Micro Deep Security'}
+                @{Path='HKLM:\SOFTWARE\McAfee\NSP';Desc='McAfee Network Security'}
+            )
+            $traces = @($traceKeys | Where-Object { Test-Path -LiteralPath $_.Path } | ForEach-Object { $_.Desc })
+            if ($traces.Count -gt 0 -and -not $found) { [void]$sb.AppendLine("  Install traces without a running agent: $($traces -join ', ')") }
+            try {
+                $nis = (Get-CimInstance -Namespace 'root\Microsoft\Windows\Defender' -ClassName MSFT_MpComputerStatus -EA Stop).NISEnabled
+                if ($nis -eq $true) { [void]$sb.AppendLine("  Defender Network Inspection System is on. It inspects this host's traffic for known exploits, but it isn't a network IDS/IPS.") }
+            } catch {}
             # Check Windows Defender advanced features
             try {
                 $mp = Get-MpPreference -EA SilentlyContinue
@@ -7256,7 +7284,8 @@ $script:AutoChecks = @{
                     [void]$sb.AppendLine("  ASR Rules: $(($mp.AttackSurfaceReductionRules_Actions | Where-Object {$_ -gt 0}).Count) active")
                 }
             } catch {}
-            $status = if ($found) {'Pass'} else {'Fail'}
+            # A host scan can't rule out a perimeter IDS/IPS, so finding no agent is Partial, as in the app.
+            $status = if ($found) {'Pass'} else {'Partial'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="IDS/IPS scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
