@@ -173,6 +173,24 @@ public class CliArgsTests
         Assert.False(args.ExportOcsf);
     }
 
+    [Theory]
+    [InlineData("--export-pptx")]
+    [InlineData("-ExportPPTX")]
+    public void ExportPptx_Flag_Parsed(string flag)
+    {
+        var args = App.ParseArgs([flag]);
+        Assert.True(args.ExportPptx);
+    }
+
+    [Fact]
+    public void ExportPptx_Is_Not_Set_By_ExportAll()
+    {
+        // --export-pptx is deliberately not bundled into --export-all: it's new and heavier
+        // (an Open XML package) than the rest of the bundle, so it stays opt-in.
+        var args = App.ParseArgs(["--export-all"]);
+        Assert.False(args.ExportPptx);
+    }
+
     [Fact]
     public void Unknown_Flags_Are_Warned_And_Known_Flags_Still_Parse()
     {

@@ -665,6 +665,13 @@ public partial class App : Application
             Console.WriteLine(pdfOk ? $"  PDF: {pdfPath}" : $"  PDF: {pdfMsg}");
         }
 
+        if (args.ExportPptx)
+        {
+            var pptxPath = Path.Combine(outputDir, $"{baseName}.pptx");
+            var (pptxOk, pptxMsg) = await PptxExporter.ExportAsync(pptxPath, exportChecks, exportEnv, score, grade, rwScore, rwGrade, branding);
+            Console.WriteLine(pptxOk ? $"  PPTX: {pptxPath}" : $"  PPTX: {pptxMsg}");
+        }
+
         var dataHandlingPath = Path.Combine(outputDir, $"{baseName}_data-handling.json");
         var dataHandlingArtifacts = Directory
             .EnumerateFiles(outputDir, $"{baseName}*", SearchOption.TopDirectoryOnly)
@@ -913,6 +920,8 @@ public partial class App : Application
                 result.ExportCmmc = true;
             else if (arg.Equals("--export-pdf", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportPDF", StringComparison.OrdinalIgnoreCase))
                 result.ExportPdf = true;
+            else if (arg.Equals("--export-pptx", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportPPTX", StringComparison.OrdinalIgnoreCase))
+                result.ExportPptx = true;
             else if (arg.Equals("--export-compliance-summary", StringComparison.OrdinalIgnoreCase) || arg.Equals("-ExportComplianceSummary", StringComparison.OrdinalIgnoreCase))
                 result.ExportComplianceSummary = true;
             else if (arg.Equals("--export-all", StringComparison.OrdinalIgnoreCase))
@@ -982,6 +991,7 @@ public partial class App : Application
         public bool ExportSiem;
         public bool ExportCmmc;
         public bool ExportPdf;
+        public bool ExportPptx;
         public bool ExportComplianceSummary;
         public ScanProfileType ScanProfile = ScanProfileType.Full;
         public ReportTier ReportTier = ReportTier.All;
