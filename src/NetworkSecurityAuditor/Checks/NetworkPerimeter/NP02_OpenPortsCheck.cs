@@ -260,9 +260,10 @@ public sealed class NP02_OpenPortsCheck : ISecurityCheck
         bool Opens(FirewallRuleSnapshot r) =>
             r.IsAllow && Matches(r) &&
             (r.HasAnyLocalPort ? r.HasNoApplicationScope : LocalPortsInclude(r.LocalPorts, endpoint.Port));
-        // A block only closes the port when it applies to every program and every remote address.
+        // A block only closes the port when it applies to every program, address and interface.
         bool Closes(FirewallRuleSnapshot r) =>
             r.IsBlock && Matches(r) && r.HasNoApplicationScope && r.HasAnyRemoteAddress &&
+            r.HasAnyLocalAddress && !r.InterfaceScoped &&
             (r.HasAnyLocalPort || LocalPortsInclude(r.LocalPorts, endpoint.Port));
 
         if (snapshot.FirewallRules.Any(Closes))

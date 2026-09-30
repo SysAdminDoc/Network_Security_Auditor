@@ -70,6 +70,8 @@ internal static class LifecycleTable
         new("win10-ltsc2019-iot", "Windows 10 IoT Enterprise LTSC 2019", "Windows 10", 17763, LifecycleEdition.IotLtsc, D(2029, 1, 9)),
         new("win10-ltsb2016", "Windows 10 Enterprise LTSB 2016", "Windows 10", 14393, LifecycleEdition.Ltsc, D(2026, 10, 13)),
         new("win10-ltsb2016-iot", "Windows 10 IoT Enterprise LTSB 2016", "Windows 10", 14393, LifecycleEdition.IotLtsc, D(2026, 10, 13)),
+        new("win10-ltsb2015", "Windows 10 Enterprise LTSB 2015", "Windows 10", 10240, LifecycleEdition.Ltsc, D(2025, 10, 14)),
+        new("win10-ltsb2015-iot", "Windows 10 IoT Enterprise LTSB 2015", "Windows 10", 10240, LifecycleEdition.IotLtsc, D(2025, 10, 14)),
         new("win10-22h2", "Windows 10 22H2", "Windows 10", 19045, LifecycleEdition.Any, D(2025, 10, 14), D(2028, 10, 10)),
         new("win10-older", "Windows 10 (older than 22H2)", "Windows 10", null, LifecycleEdition.Any, D(2024, 6, 11)),
         new("win81", "Windows 8.1", "Windows 8.1", null, LifecycleEdition.Any, D(2023, 1, 10)),

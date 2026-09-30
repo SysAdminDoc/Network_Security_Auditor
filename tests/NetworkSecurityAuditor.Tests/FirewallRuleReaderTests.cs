@@ -41,6 +41,9 @@ public class FirewallRuleReaderTests
         Assert.True(rule.HasAnyLocalPort);
         Assert.True(rule.HasAnyRemotePort);
         Assert.True(rule.HasAnyRemoteAddress);
+        Assert.True(rule.HasAnyLocalAddress);
+        Assert.False(rule.InterfaceScoped);
+        Assert.False((rule with { LocalAddresses = ["10.1.1.5"] }).HasAnyLocalAddress);
         Assert.Equal("Any", FirewallRuleReader.FormatValues(rule.LocalPorts));
     }
 

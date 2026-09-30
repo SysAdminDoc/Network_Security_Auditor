@@ -16,7 +16,9 @@ internal sealed record FirewallRuleSnapshot(
     string? Program = null,
     string? Package = null,
     string? Service = null,
-    string? Owner = null)
+    string? Owner = null,
+    string[]? LocalAddresses = null,
+    bool InterfaceScoped = false)
 {
     public bool IsInbound => Direction == 1;
     public bool IsOutbound => Direction == 2;
@@ -25,6 +27,7 @@ internal sealed record FirewallRuleSnapshot(
     public bool HasAnyLocalPort => FirewallRuleReader.IsAnyValue(LocalPorts);
     public bool HasAnyRemotePort => FirewallRuleReader.IsAnyValue(RemotePorts);
     public bool HasAnyRemoteAddress => FirewallRuleReader.IsAnyValue(RemoteAddresses);
+    public bool HasAnyLocalAddress => FirewallRuleReader.IsAnyValue(LocalAddresses ?? []);
     // MSFT_NetFirewallRule.Profiles: 0 = Any, 1 = Domain, 2 = Private, 4 = Public.
     public bool AppliesToPublicProfile => Profiles == 0 || (Profiles & 4) != 0;
     /// <summary>
@@ -45,11 +48,13 @@ internal static class FirewallRuleReader
         "CreationClassName, PolicyRuleName, SystemCreationClassName, SystemName " +
         "FROM MSFT_NetFirewallRule WHERE Enabled = 1";
     internal const string PortFilterQuery = "SELECT InstanceID, Protocol, LocalPort, RemotePort FROM MSFT_NetProtocolPortFilter";
-    internal const string AddressFilterQuery = "SELECT InstanceID, RemoteAddress FROM MSFT_NetAddressFilter";
+    internal const string AddressFilterQuery = "SELECT InstanceID, LocalAddress, RemoteAddress FROM MSFT_NetAddressFilter";
+    internal const string InterfaceFilterQuery = "SELECT InstanceID, InterfaceAlias FROM MSFT_NetInterfaceFilter";
+    internal const string InterfaceTypeFilterQuery = "SELECT InstanceID, InterfaceType FROM MSFT_NetInterfaceTypeFilter";
     internal const string ApplicationFilterQuery = "SELECT InstanceID, AppPath, Package FROM MSFT_NetApplicationFilter";
     internal const string ServiceFilterQuery = "SELECT InstanceID, ServiceName FROM MSFT_NetServiceFilter";
 
-    internal static readonly string[] Queries = [RuleQuery, PortFilterQuery, AddressFilterQuery, ApplicationFilterQuery, ServiceFilterQuery];
+    internal static readonly string[] Queries = [RuleQuery, PortFilterQuery, AddressFilterQuery, ApplicationFilterQuery, ServiceFilterQuery, InterfaceFilterQuery, InterfaceTypeFilterQuery];
     /// <summary>The store Get-NetFirewallRule -PolicyStore ActiveStore reads: local and Group Policy rules merged.</summary>
     public const string ActiveStore = "ActiveStore";
 
@@ -66,6 +71,7 @@ internal static class FirewallRuleReader
         var addressFilters = LoadAddressFilters(ct, policyStore);
         var applicationFilters = LoadApplicationFilters(ct, policyStore);
         var serviceFilters = LoadServiceFilters(ct, policyStore);
+        var interfaceScoped = LoadInterfaceScopedRules(ct, policyStore);
 
         using var results = searcher.Get();
         foreach (ManagementObject rule in results)
@@ -94,7 +100,9 @@ internal static class FirewallRuleReader
                     applicationFilter?.AppPath,
                     applicationFilter?.Package,
                     service,
-                    GetString(rule["Owner"], null)));
+                    GetString(rule["Owner"], null),
+                    addressFilter?.LocalAddresses ?? [],
+                    interfaceScoped.Contains(instanceId)));
             }
         }
 
@@ -190,7 +198,7 @@ internal static class FirewallRuleReader
                 var instanceId = GetString(filter["InstanceID"], string.Empty);
                 if (string.IsNullOrWhiteSpace(instanceId)) continue;
 
-                filters[instanceId] = new AddressFilter(GetStringArray(filter["RemoteAddress"]));
+                filters[instanceId] = new AddressFilter(GetStringArray(filter["LocalAddress"]), GetStringArray(filter["RemoteAddress"]));
             }
         }
 
@@ -242,6 +250,35 @@ internal static class FirewallRuleReader
         return filters;
     }
 
+    // A rule limited to named interfaces (InterfaceAlias) or interface types (InterfaceType: 0 = Any,
+    // 1 = Wired, 2 = Wireless, 4 = Remote access) doesn't apply everywhere.
+    private static HashSet<string> LoadInterfaceScopedRules(CancellationToken ct, string? policyStore)
+    {
+        var scoped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (query, isScoped) in new (string, Func<ManagementBaseObject, bool>)[]
+        {
+            (InterfaceFilterQuery, f => !IsAnyValue(GetStringArray(f["InterfaceAlias"]))),
+            (InterfaceTypeFilterQuery, f => GetInt(f["InterfaceType"]) != 0),
+        })
+        {
+            using var searcher = CreateSearcher(query, policyStore);
+            using var results = searcher.Get();
+            foreach (ManagementObject filter in results)
+            {
+                using (filter)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var instanceId = GetString(filter["InstanceID"], string.Empty);
+                    if (!string.IsNullOrWhiteSpace(instanceId) && isScoped(filter))
+                        scoped.Add(instanceId);
+                }
+            }
+        }
+
+        return scoped;
+    }
+
     private static string GetString(object? value, string? fallback)
     {
         return string.IsNullOrWhiteSpace(value?.ToString()) ? fallback ?? string.Empty : value.ToString()!;
@@ -272,7 +309,7 @@ internal static class FirewallRuleReader
 
     private sealed record ProtocolPortFilter(string? Protocol, string[] LocalPorts, string[] RemotePorts);
 
-    private sealed record AddressFilter(string[] RemoteAddresses);
+    private sealed record AddressFilter(string[] LocalAddresses, string[] RemoteAddresses);
 
     private sealed record ApplicationFilter(string? AppPath, string? Package);
 }

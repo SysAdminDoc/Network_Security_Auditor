@@ -4130,14 +4130,18 @@ $script:AutoChecks = @{
             # A third-party AV registered with Security Center puts Defender in passive mode or turns it off.
             function Get-Ep01PrimaryAv {
                 param($AntivirusEnabled, $RealTimeProtectionEnabled, [string]$AmRunningMode = '', [object[]]$Products = @())
-                $active = @()
+                $active = @(); $stale = @()
                 foreach ($p in @($Products)) {
                     if ([string]$p.Name -match 'Windows Defender|Microsoft Defender') { continue }
                     $scanner = ([int64]$p.State -shr 8) -band 0xFF
-                    if ($scanner -eq 0x10 -or $scanner -eq 0x11) { $active += [string]$p.Name }
+                    if ($scanner -eq 0x10 -or $scanner -eq 0x11) {
+                        $active += [string]$p.Name
+                        # Low byte 0x00 means Security Center sees current signatures; anything else is out of date.
+                        if (([int64]$p.State -band 0xFF) -ne 0) { $stale += [string]$p.Name }
+                    }
                 }
                 $defenderPrimary = ([bool]$AntivirusEnabled -and [bool]$RealTimeProtectionEnabled -and $AmRunningMode -notmatch 'Passive|EDR Block')
-                return @{ DefenderPrimary=$defenderPrimary; ThirdPartyPrimary=(-not $defenderPrimary -and $active.Count -gt 0); ActiveThirdParty=$active }
+                return @{ DefenderPrimary=$defenderPrimary; ThirdPartyPrimary=(-not $defenderPrimary -and $active.Count -gt 0); ActiveThirdParty=$active; StaleThirdParty=$stale }
             }
             $scProducts = @()
             try { $scProducts = @(Get-CimInstance -Namespace 'root\SecurityCenter2' -ClassName AntiVirusProduct -EA Stop | ForEach-Object { @{ Name=[string]$_.displayName; State=[int64]$_.productState } }) } catch {}
@@ -4147,11 +4151,14 @@ $script:AutoChecks = @{
             $daysOld = if ($sigDate -is [datetime]) { ((Get-Date) - $sigDate).Days } else { 999 }
             [void]$sb.AppendLine("CORE PROTECTION:")
             [void]$sb.AppendLine("  Running Mode      : $(if ($mp.AMRunningMode) { $mp.AMRunningMode } else { 'Unknown' })")
-            if ($thirdPartyPrimary) { [void]$sb.AppendLine("  Primary AV        : $($primary.ActiveThirdParty -join ', ') (registered and enabled; Defender isn't the active engine) [OK]") }
+            if ($thirdPartyPrimary) {
+                [void]$sb.AppendLine("  Primary AV        : $($primary.ActiveThirdParty -join ', ') (registered and enabled; Defender isn't the active engine) [OK]")
+                if ($primary.StaleThirdParty.Count -gt 0) { [void]$sb.AppendLine("  [!] Security Center reports out-of-date signatures for $($primary.StaleThirdParty -join ', ')"); $warnings++ }
+            }
             [void]$sb.AppendLine("  AV Enabled        : $($mp.AntivirusEnabled) $(if(-not $mp.AntivirusEnabled -and $thirdPartyPrimary){'[third-party AV primary]'} elseif(-not $mp.AntivirusEnabled){'[DISABLED!]';$issues++} else {'[OK]'})")
             [void]$sb.AppendLine("  Real-Time Protect  : $($mp.RealTimeProtectionEnabled) $(if(-not $mp.RealTimeProtectionEnabled -and $thirdPartyPrimary){'[third-party AV primary]'} elseif(-not $mp.RealTimeProtectionEnabled){'[DISABLED!]';$issues++} else {'[OK]'})")
             [void]$sb.AppendLine("  Behavior Monitor   : $($mp.BehaviorMonitorEnabled) $(if(-not $mp.BehaviorMonitorEnabled -and $thirdPartyPrimary){'[third-party AV primary]'} elseif(-not $mp.BehaviorMonitorEnabled){'[DISABLED]';$issues++} else {'[OK]'})")
-            [void]$sb.AppendLine("  Tamper Protection  : $($mp.IsTamperProtected) $(if(-not $mp.IsTamperProtected){'[NOT PROTECTED]';$issues++} else {'[OK]'})")
+            [void]$sb.AppendLine("  Tamper Protection  : $($mp.IsTamperProtected) $(if(-not $mp.IsTamperProtected -and $thirdPartyPrimary){'[Defender setting; third-party AV primary]'} elseif(-not $mp.IsTamperProtected){'[NOT PROTECTED]';$issues++} else {'[OK]'})")
             [void]$sb.AppendLine("  Signature Age      : ${daysOld}d $(if($daysOld -gt 7 -and $thirdPartyPrimary){'[Defender signatures; third-party AV primary]'} elseif($daysOld -gt 7){'[STALE!]';$issues++} else {'[OK]'})")
             [void]$sb.AppendLine("  Signature Updated  : $(if($sigDate -is [datetime]){$sigDate.ToString('yyyy-MM-dd HH:mm')}else{'Unknown'})")
             [void]$sb.AppendLine("  Engine Version     : $($mp.AMEngineVersion)")
@@ -4839,6 +4846,8 @@ $script:AutoChecks = @{
                     @{ Key='win10-ltsc2019-iot'; Product='Windows 10 IoT Enterprise LTSC 2019'; Match='Windows 10'; Build=17763; Edition='IotLtsc'; EOS='2029-01-09'; ESU='' }
                     @{ Key='win10-ltsb2016'; Product='Windows 10 Enterprise LTSB 2016'; Match='Windows 10'; Build=14393; Edition='Ltsc'; EOS='2026-10-13'; ESU='' }
                     @{ Key='win10-ltsb2016-iot'; Product='Windows 10 IoT Enterprise LTSB 2016'; Match='Windows 10'; Build=14393; Edition='IotLtsc'; EOS='2026-10-13'; ESU='' }
+                    @{ Key='win10-ltsb2015'; Product='Windows 10 Enterprise LTSB 2015'; Match='Windows 10'; Build=10240; Edition='Ltsc'; EOS='2025-10-14'; ESU='' }
+                    @{ Key='win10-ltsb2015-iot'; Product='Windows 10 IoT Enterprise LTSB 2015'; Match='Windows 10'; Build=10240; Edition='IotLtsc'; EOS='2025-10-14'; ESU='' }
                     @{ Key='win10-22h2'; Product='Windows 10 22H2'; Match='Windows 10'; Build=19045; Edition='Any'; EOS='2025-10-14'; ESU='2028-10-10' }
                     @{ Key='win10-older'; Product='Windows 10 (older than 22H2)'; Match='Windows 10'; Build=$null; Edition='Any'; EOS='2024-06-11'; ESU='' }
                     @{ Key='win81'; Product='Windows 8.1'; Match='Windows 8.1'; Build=$null; Edition='Any'; EOS='2023-01-10'; ESU='' }
@@ -6218,7 +6227,7 @@ $script:AutoChecks = @{
                 })
             } catch {
                 $searchError = $_.Exception.Message.Trim()
-                $searchDenied = ($_.Exception -is [System.UnauthorizedAccessException]) -or ($_.Exception.HResult -in @(-2147024891, -2147016672)) -or ($searchError -match 'Access is denied|Insufficient access')
+                $searchDenied = ($_.Exception -is [System.UnauthorizedAccessException]) -or ($_.Exception.HResult -in @(-2147024891, -2147016552, -2147016672)) -or ($searchError -match 'Access is denied|Insufficient access')
             }
             $localBackup = $null
             foreach ($k in @('HKLM:\SOFTWARE\Microsoft\Policies\LAPS','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\LAPS\Config')) {
@@ -6540,10 +6549,12 @@ $script:AutoChecks = @{
             }
             # Matches the app: active forwarding decides the result. Sysmon and script block logging
             # are reported as advice, since a host shipping logs to a SIEM without them still forwards.
+            # An agent's registry key with no matching service (and no stopped agent) is Partial, as in the app.
             function Get-Lm02Status {
-                param([object[]]$Counted = @(), [bool]$ServicesReadable = $true)
+                param([object[]]$Counted = @(), [bool]$ServicesReadable = $true, [object[]]$TracesWithoutService = @(), [object[]]$NotCounted = @())
                 if (@($Counted).Count -gt 0) { return 'Pass' }
                 if (-not $ServicesReadable) { return 'Not Assessed' }
+                if (@($TracesWithoutService).Count -gt 0 -and @($NotCounted).Count -eq 0) { return 'Partial' }
                 return 'Fail'
             }
 
@@ -6564,8 +6575,19 @@ $script:AutoChecks = @{
             $mdeOnboarding = if ($mdeStatus -and $mdeStatus.PSObject.Properties['OnboardingState']) { $mdeStatus.OnboardingState } else { $null }
             $forwarding = Get-Lm02ForwardingAssessment -Services $serviceMap -ForwardingTargets $forwardTargets -CollectorSubscriptions $collectorSubs -MdeOnboardingState $mdeOnboarding
             foreach ($line in $forwarding.Lines) { [void]$sb.AppendLine($line) }
+            # Same install-trace keys as LM02_SiemCheck.SiemRegistryKeys
+            $siemKeys = @(
+                @{ Key='HKLM:\SOFTWARE\Splunk'; Label='Splunk'; Services=@('SplunkForwarder','splunkd') }
+                @{ Key='HKLM:\SOFTWARE\Elastic'; Label='Elastic'; Services=@('elastic-agent','elastic-endpoint','filebeat','winlogbeat') }
+                @{ Key='HKLM:\SOFTWARE\ossec-agent'; Label='OSSEC/Wazuh'; Services=@('WazuhSvc','OssecSvc') }
+                @{ Key='HKLM:\SOFTWARE\Microsoft\Microsoft Monitoring Agent'; Label='Microsoft Monitoring Agent'; Services=@('MicrosoftMonitoringAgent','HealthService') }
+                @{ Key='HKLM:\SOFTWARE\Microsoft\Azure Monitor'; Label='Azure Monitor Agent'; Services=@('AzureMonitorAgent','AzureMonitorWindowsAgent') }
+                @{ Key='HKLM:\SOFTWARE\nxlog'; Label='NXLog'; Services=@('nxlog') }
+            )
+            $tracesWithoutService = @($siemKeys | Where-Object { (Test-Path -LiteralPath $_.Key) -and -not @($_.Services | Where-Object { $serviceMap.ContainsKey($_) }).Count } | ForEach-Object { $_.Label })
             if ($forwarding.Counted.Count -eq 0) {
-                if ($servicesReadable) { [void]$sb.AppendLine("`nNo active SIEM/log forwarding detected [!]") }
+                if ($servicesReadable -and $tracesWithoutService.Count -gt 0 -and $forwarding.NotCounted.Count -eq 0) { [void]$sb.AppendLine("`nPARTIAL: SIEM agent install traces found ($($tracesWithoutService -join ', ')), but no running forwarding service was matched. Confirm the agent is reporting in the SIEM console.") }
+                elseif ($servicesReadable) { [void]$sb.AppendLine("`nNo active SIEM/log forwarding detected [!]") }
                 if ($forwarding.NotCounted.Count -gt 0) { [void]$sb.AppendLine("Installed but not forwarding: $($forwarding.NotCounted -join ', ')") }
             }
             else { [void]$sb.AppendLine("`nActive log forwarding: $($forwarding.Counted -join ', ')") }
@@ -6576,7 +6598,7 @@ $script:AutoChecks = @{
                 [void]$sb.AppendLine("`nPS Script Block Logging: $(if($psLog.EnableScriptBlockLogging -eq 1){'Enabled [OK]'}else{'Disabled (advisory, not scored)'})")
                 [void]$sb.AppendLine("PS Transcription: $(if($psTranscript.EnableTranscripting -eq 1){'Enabled [OK]'}else{'Disabled'})")
             } catch {}
-            $status = Get-Lm02Status -Counted $forwarding.Counted -ServicesReadable $servicesReadable
+            $status = Get-Lm02Status -Counted $forwarding.Counted -ServicesReadable $servicesReadable -TracesWithoutService $tracesWithoutService -NotCounted $forwarding.NotCounted
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="SIEM/centralized logging scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
@@ -6594,9 +6616,10 @@ $script:AutoChecks = @{
                 } catch { [void]$sb.AppendLine("  Sysmon log: no events or inaccessible") }
             } else { [void]$sb.AppendLine("Sysmon: NOT INSTALLED"); $issues++ }
             # Check for common FIM solutions
-            $fimServices = @('OSSEC','Wazuh','Tripwire','AIDE','SamhainSvc','MsSense','CarbonBlack')
+            # Exact service names, the same list as the app's LM06.
+            $fimServices = @('Tripwire','twagent','OssecSvc','WazuhSvc','osqueryd','CarbonBlack','CbDefense','SentinelAgent')
             foreach ($f in $fimServices) {
-                $svc = Get-Service "*$f*" -EA SilentlyContinue
+                $svc = Get-Service -Name $f -EA SilentlyContinue
                 if ($svc) { [void]$sb.AppendLine("FIM Agent: $($svc.DisplayName) ($($svc.Status))") }
             }
             # Check Windows built-in auditing for file system
@@ -6891,7 +6914,7 @@ $script:AutoChecks = @{
                                 $portNamed = (-not $anyPort) -and (& $portMatches $ports $port)
                                 $noAppScope = (& $isUnscoped $r.Program) -and (& $isUnscoped $r.Package) -and (& $isUnscoped $r.Service) -and (& $isUnscoped $r.Owner)
                                 if ([string]$r.Action -eq 'Block') {
-                                    if ($noAppScope -and (& $isAny $r.RemoteAddresses) -and ($anyPort -or $portNamed)) { $closed = $true; break }
+                                    if ($noAppScope -and (& $isAny $r.RemoteAddresses) -and (& $isAny $r.LocalAddresses) -and -not $r.InterfaceScoped -and ($anyPort -or $portNamed)) { $closed = $true; break }
                                 } elseif (-not $opens -and (($anyPort -and $noAppScope) -or $portNamed)) { $opens = [string]$r.Name }
                             }
                             if (-not $closed) {
@@ -6946,7 +6969,11 @@ $script:AutoChecks = @{
                 } catch { $fwProfileError = $_.Exception.Message.Trim() }
                 try {
                     $portFilters = @{}; foreach ($pf in @(Get-NetFirewallPortFilter -All -PolicyStore ActiveStore -EA Stop)) { $portFilters[$pf.InstanceID] = $pf }
-                    $addrFilters = @{}; foreach ($xf in @(Get-NetFirewallAddressFilter -All -PolicyStore ActiveStore -EA Stop)) { $addrFilters[$xf.InstanceID] = @($xf.RemoteAddress) }
+                    $addrFilters = @{}; foreach ($xf in @(Get-NetFirewallAddressFilter -All -PolicyStore ActiveStore -EA Stop)) { $addrFilters[$xf.InstanceID] = $xf }
+                    # A block limited to named interfaces or an interface type (Wired, Wireless, RemoteAccess) doesn't apply everywhere.
+                    $ifScoped = @{}
+                    foreach ($ia in @(Get-NetFirewallInterfaceFilter -All -PolicyStore ActiveStore -EA Stop)) { if (@($ia.InterfaceAlias | Where-Object { [string]$_ -and [string]$_ -ne 'Any' }).Count -gt 0) { $ifScoped[$ia.InstanceID] = $true } }
+                    foreach ($it in @(Get-NetFirewallInterfaceTypeFilter -All -PolicyStore ActiveStore -EA Stop)) { if ([string]$it.InterfaceType -and [string]$it.InterfaceType -ne 'Any') { $ifScoped[$it.InstanceID] = $true } }
                     $appFilters = @{}; foreach ($af in @(Get-NetFirewallApplicationFilter -All -PolicyStore ActiveStore -EA Stop)) { $appFilters[$af.InstanceID] = $af }
                     $svcFilters = @{}; foreach ($sf in @(Get-NetFirewallServiceFilter -All -PolicyStore ActiveStore -EA Stop)) { $svcFilters[$sf.InstanceID] = [string]$sf.Service }
                     foreach ($fr in @(Get-NetFirewallRule -Enabled True -Direction Inbound -PolicyStore ActiveStore -EA Stop)) {
@@ -6956,7 +6983,8 @@ $script:AutoChecks = @{
                         $rules += @{
                             Name=[string]$fr.DisplayName; Direction='Inbound'; Action=$action; Profiles=[int]$fr.Profile
                             Protocol=$(if ($pf) { [string]$pf.Protocol } else { 'Any' }); LocalPorts=$(if ($pf) { @($pf.LocalPort) } else { @() })
-                            RemoteAddresses=$(if ($addrFilters.ContainsKey($fr.InstanceID)) { $addrFilters[$fr.InstanceID] } else { @() })
+                            RemoteAddresses=$(if ($addrFilters.ContainsKey($fr.InstanceID)) { @($addrFilters[$fr.InstanceID].RemoteAddress) } else { @() })
+                            LocalAddresses=$(if ($addrFilters.ContainsKey($fr.InstanceID)) { @($addrFilters[$fr.InstanceID].LocalAddress) } else { @() }); InterfaceScoped=[bool]$ifScoped[$fr.InstanceID]
                             Program=$(if ($af) { [string]$af.Program } else { '' }); Package=$(if ($af) { [string]$af.Package } else { '' })
                             Service=[string]$svcFilters[$fr.InstanceID]; Owner=[string]$fr.Owner
                         }
@@ -7106,9 +7134,10 @@ $script:AutoChecks = @{
             $idsServices = @(
                 @{Name='Snort*';Desc='Snort IDS'},@{Name='Suricata*';Desc='Suricata IDS'},
                 @{Name='OSSEC*';Desc='OSSEC HIDS'},@{Name='Wazuh*';Desc='Wazuh HIDS'},
-                @{Name='MsSense';Desc='Defender for Endpoint'},@{Name='cb*';Desc='Carbon Black'},
-                @{Name='CrowdStrike*';Desc='CrowdStrike Falcon'},@{Name='SentinelAgent*';Desc='SentinelOne'},
-                @{Name='SophosSafestore*';Desc='Sophos'},@{Name='Symantec*';Desc='Symantec/Broadcom'}
+                # Exact agent service names (EP01 uses the same ones). A 'cb*' wildcard matched the Clipboard User Service (cbdhsvc) on every host.
+                @{Name='Sense';Desc='Defender for Endpoint'},@{Name='CbDefense';Desc='Carbon Black Cloud'},@{Name='CarbonBlack';Desc='Carbon Black EDR'},
+                @{Name='CSFalconService';Desc='CrowdStrike Falcon'},@{Name='SentinelAgent';Desc='SentinelOne'},
+                @{Name='SAVService';Desc='Sophos'},@{Name='Sophos Endpoint Defense Service';Desc='Sophos'},@{Name='SepMasterService';Desc='Symantec/Broadcom'}
             )
             [void]$sb.AppendLine("IDS/IPS AND EDR DETECTION:")
             foreach ($ids in $idsServices) {

@@ -259,7 +259,11 @@ public sealed class EP01_AvEdrCheck : ISecurityCheck
         evidence.AppendLine("\n[EDR/XDR Detection]");
         foreach (var (keyPath, label, serviceNames) in EdrRegistrySignatures)
         {
-            var service = serviceNames.Select(n => (Name: n, State: ServiceState(n))).FirstOrDefault(s => s.State is not null);
+            // A running agent service wins over a stopped sibling (Sophos and Carbon Black ship two).
+            var installed = serviceNames.Select(n => (Name: n, State: ServiceState(n))).Where(s => s.State is not null).ToList();
+            var service = installed.FirstOrDefault(s => Running(s.State));
+            if (service.State is null)
+                service = installed.FirstOrDefault();
             if (service.State is not null && Running(service.State))
             {
                 products.Add(label);

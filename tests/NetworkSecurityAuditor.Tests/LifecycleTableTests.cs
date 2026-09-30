@@ -20,6 +20,8 @@ public class LifecycleTableTests
     [InlineData("Microsoft Windows 10 Enterprise LTSC", 19044, "win10-ltsc2021")]
     [InlineData("Microsoft Windows 10 IoT Enterprise LTSC", 19044, "win10-ltsc2021-iot")]
     [InlineData("Microsoft Windows 10 Enterprise 2016 LTSB", 14393, "win10-ltsb2016")]
+    [InlineData("Microsoft Windows 10 Enterprise 2015 LTSB", 10240, "win10-ltsb2015")]
+    [InlineData("Microsoft Windows 10 IoT Enterprise 2015 LTSB", 10240, "win10-ltsb2015-iot")]
     [InlineData("Microsoft Windows Server 2012 R2 Standard", 9600, "server2012r2")]
     [InlineData("Windows Server 2012 Datacenter", 9200, "server2012")]
     [InlineData("Windows Server 2025 Datacenter", 26100, "server2025")]

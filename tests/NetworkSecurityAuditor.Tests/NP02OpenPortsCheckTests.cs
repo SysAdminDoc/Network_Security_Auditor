@@ -103,10 +103,15 @@ public sealed class NP02OpenPortsCheckTests(Xunit.Abstractions.ITestOutputHelper
     public void Scoped_Block_Rule_Does_Not_Hide_An_Open_Port()
     {
         var allow = InboundAllow("File and Printer Sharing (SMB-In)", "445", profiles: 4, program: "System");
-        FirewallRuleSnapshot Block(string? program = null, string[]? remote = null) =>
-            new("{block}", "Partial block", string.Empty, 1, 4, "TCP", ["445"], [], remote ?? [], Profiles: 4, Program: program);
+        FirewallRuleSnapshot Block(string? program = null, string[]? remote = null, string[]? local = null, bool interfaceScoped = false) =>
+            new("{block}", "Partial block", string.Empty, 1, 4, "TCP", ["445"], [], remote ?? [], Profiles: 4, Program: program,
+                LocalAddresses: local, InterfaceScoped: interfaceScoped);
 
-        foreach (var block in new[] { Block(program: @"C:\Tools\agent.exe"), Block(remote: ["10.0.0.0/8"]) })
+        foreach (var block in new[]
+                 {
+                     Block(program: @"C:\Tools\agent.exe"), Block(remote: ["10.0.0.0/8"]),
+                     Block(local: ["10.1.1.5"]), Block(interfaceScoped: true),
+                 })
         {
             var assessment = NP02_OpenPortsCheck.Assess(new Snapshot
             {

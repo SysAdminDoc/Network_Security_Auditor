@@ -1421,7 +1421,11 @@ Describe 'LM02 log forwarding decision (nested check helper via AST)' {
         Get-Lm02Status -Counted $forwarding.Counted | Should -Be 'Pass'
         Get-Lm02Status -Counted (Get-Lm02ForwardingAssessment -Services (New-CleanHostServices)).Counted | Should -Be 'Fail'
         Get-Lm02Status -Counted @() -ServicesReadable $false | Should -Be 'Not Assessed'
+        # Same as the app: an install trace with no matching service is Partial, unless a stopped agent explains it.
+        Get-Lm02Status -Counted @() -TracesWithoutService @('Splunk') | Should -Be 'Partial'
+        Get-Lm02Status -Counted @() -TracesWithoutService @('Splunk') -NotCounted @('Elastic Winlogbeat (Stopped)') | Should -Be 'Fail'
         $block = Get-Block -Text $script:Text -Start "'LM02' = @\{ Type='Local'" -End "'LM06' = @\{"
+        $block | Should -Match "Key='HKLM:\\SOFTWARE\\Splunk'"
         $block | Should -Match '\$status = Get-Lm02Status -Counted \$forwarding\.Counted -ServicesReadable \$servicesReadable'
         $block | Should -Not -Match '\$issues'
     }
@@ -1430,6 +1434,21 @@ Describe 'LM02 log forwarding decision (nested check helper via AST)' {
         $block | Should -Not -Match 'wecutil'
         $block | Should -Match 'EventCollector\\Subscriptions'
         $block | Should -Not -Match "Name='MsSense'"
+    }
+}
+
+Describe 'NP07 and LM06 agent service names' {
+    It 'looks agents up by exact service name, not a wildcard that matches built-in services' {
+        $np07 = Get-Block -Text $script:Text -Start "'NP07' = @\{ Type='Local'" -End "'NP08' = @\{"
+        $np07 | Should -Match "Name='Sense'"
+        $np07 | Should -Match "Name='CbDefense'"
+        $np07 | Should -Match "Name='CSFalconService'"
+        $np07 | Should -Not -Match "Name='cb\*'"
+        $np07 | Should -Not -Match "Name='MsSense'"
+        $lm06 = Get-Block -Text $script:Text -Start "'LM06' = @\{ Type='Local'" -End "'LM08' = @\{ Type='Local'"
+        $lm06 | Should -Match "Get-Service -Name \`$f "
+        $lm06 | Should -Not -Match "MsSense"
+        $lm06 | Should -Not -Match 'Get-Service "\*\$f\*"'
     }
 }
 
@@ -1509,12 +1528,14 @@ Describe 'NP02 listener classification (nested check helper via AST)' {
         (Get-Np02PortAssessment -Listeners $smb -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -Rules @($allow, $block)).Status | Should -Be 'Pass'
         (Get-Np02PortAssessment -Listeners $smb -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -PublicDefaultAllow $true -Rules @($block)).Status | Should -Be 'Pass'
     }
-    It 'ignores Block rules scoped to one program or one remote range' {
+    It 'ignores Block rules scoped to one program, address range or interface' {
         $smb = @(@{ Protocol='TCP'; Address='0.0.0.0'; Port=445 })
         $allow = @{ Name='File and Printer Sharing (SMB-In)'; Action='Allow'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); Program='System' }
         foreach ($block in @(
             @{ Name='Block agent'; Action='Block'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); Program='C:\Tools\agent.exe' },
-            @{ Name='Block 10/8'; Action='Block'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); RemoteAddresses=@('10.0.0.0/8') }
+            @{ Name='Block 10/8'; Action='Block'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); RemoteAddresses=@('10.0.0.0/8') },
+            @{ Name='Block on one address'; Action='Block'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); LocalAddresses=@('10.1.1.5') },
+            @{ Name='Block on Wi-Fi'; Action='Block'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); InterfaceScoped=$true }
         )) {
             (Get-Np02PortAssessment -Listeners $smb -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -Rules @($allow, $block)).Status | Should -Be 'Fail'
         }
@@ -1592,6 +1613,8 @@ Describe 'IA06 LAPS coverage (nested check helper via AST)' {
         $block | Should -Not -Match '\[math\]::Max'
         $block | Should -Match 'primaryGroupID=521'
         $block | Should -Match "if \(\`$lapsUnassessed -and \`$issues -eq 0\) \{ \`$status = 'Not Assessed' \}"
+        # E_ACCESSDENIED and LDAP insufficient access rights (0x80072098), matching IA06_PamCheck.IsAccessDenied
+        $block | Should -Match 'HResult -in @\(-2147024891, -2147016552'
     }
 }
 
@@ -1616,6 +1639,17 @@ Describe 'EP01 primary antivirus decision (nested check helper via AST)' {
         $result = Get-Ep01PrimaryAv -AntivirusEnabled $false -RealTimeProtectionEnabled $false -AmRunningMode 'Not running' -Products @(@{ Name='Sophos Anti-Virus'; State=0x040100 })
         $result.ThirdPartyPrimary | Should -BeFalse
     }
+    It 'flags out-of-date third-party signatures the way the app does' {
+        $stale = Get-Ep01PrimaryAv -AntivirusEnabled $true -RealTimeProtectionEnabled $false -AmRunningMode 'Passive Mode' -Products @(@{ Name='Windows Defender'; State=0x060100 }, @{ Name='Sophos Anti-Virus'; State=0x041010 })
+        $stale.ThirdPartyPrimary | Should -BeTrue
+        @($stale.StaleThirdParty) | Should -Be @('Sophos Anti-Virus')
+        @((Get-Ep01PrimaryAv -AntivirusEnabled $true -RealTimeProtectionEnabled $false -AmRunningMode 'Passive Mode' -Products @(@{ Name='Sophos Anti-Virus'; State=0x041000 })).StaleThirdParty).Count | Should -Be 0
+    }
+    It 'counts tamper protection only when Defender is the primary engine' {
+        $block = Get-Block -Text $script:Text -Start "'EP01' = @\{ Type='Local'" -End "'EP02' = @\{"
+        $block | Should -Match "IsTamperProtected -and \`$thirdPartyPrimary"
+        $block | Should -Match 'StaleThirdParty\.Count -gt 0\) \{ .*\$warnings\+\+'
+    }
     It 'requires OnboardingState 1 before reporting Defender for Endpoint as onboarded' {
         $block = Get-Block -Text $script:Text -Start "'EP01' = @\{ Type='Local'" -End "'EP02' = @\{"
         $block | Should -Match "Status -eq 'Running' -and \`$mdeOnboarding -eq 1"
@@ -1638,6 +1672,8 @@ Describe 'EP10 lifecycle evaluation (nested check helpers via AST)' {
         (Find-Ep10Release -Table $table -Caption 'Microsoft Windows 11 Education' -Build 22631).Key | Should -Be 'win11-23h2-ent'
         (Find-Ep10Release -Table $table -Caption 'Microsoft Windows 10 Enterprise LTSC' -Build 19044).Key | Should -Be 'win10-ltsc2021'
         (Find-Ep10Release -Table $table -Caption 'Windows 10 Enterprise' -Build 19044).Key | Should -Be 'win10-older'
+        (Find-Ep10Release -Table $table -Caption 'Microsoft Windows 10 Enterprise 2015 LTSB' -Build 10240).Key | Should -Be 'win10-ltsb2015'
+        (Find-Ep10Release -Table $table -Caption 'Microsoft Windows 10 IoT Enterprise 2015 LTSB' -Build 10240).Key | Should -Be 'win10-ltsb2015-iot'
         (Find-Ep10Release -Table $table -Caption 'Microsoft Windows Server 2012 R2 Standard' -Build 9600).Key | Should -Be 'server2012r2'
         Find-Ep10Release -Table $table -Caption 'Microsoft Windows 11 Pro' -Build 28000 | Should -BeNullOrEmpty
         Find-Ep10Release -Table $table -Caption 'Microsoft Windows 10 Enterprise LTSC' -Build 20348 | Should -BeNullOrEmpty

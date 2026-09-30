@@ -14,6 +14,17 @@ internal static class UpdateHistoryReader
     private const int ResultSucceeded = 2;
     private const int ResultSucceededWithErrors = 3;
 
+    /// <summary>
+    /// IUpdateHistoryEntry.Date is UTC but arrives with DateTimeKind.Unspecified; treat it as UTC,
+    /// the way PowerShell's ToLocalTime() does, so both surfaces count the same days.
+    /// </summary>
+    internal static DateTime ToLocal(DateTime comDate) => comDate.Kind switch
+    {
+        DateTimeKind.Local => comDate,
+        DateTimeKind.Utc => comDate.ToLocalTime(),
+        _ => DateTime.SpecifyKind(comDate, DateTimeKind.Utc).ToLocalTime(),
+    };
+
     public static (IReadOnlyList<EP04_PatchComplianceCheck.UpdateHistoryEntry>? Entries, string? Error) ReadInstalls(CancellationToken ct)
     {
         var sessionType = Type.GetTypeFromProgID("Microsoft.Update.Session");
@@ -41,8 +52,7 @@ internal static class UpdateHistoryReader
                 if (operation != OperationInstallation || (result != ResultSucceeded && result != ResultSucceededWithErrors))
                     continue;
                 string title = item.Title ?? string.Empty;
-                DateTime date = item.Date;
-                entries.Add(new EP04_PatchComplianceCheck.UpdateHistoryEntry(title, date.Kind == DateTimeKind.Utc ? date.ToLocalTime() : date));
+                entries.Add(new EP04_PatchComplianceCheck.UpdateHistoryEntry(title, ToLocal((DateTime)item.Date)));
             }
             return (entries, null);
         }

@@ -110,6 +110,17 @@ public sealed class EP04PatchComplianceTests
     }
 
     [Fact]
+    public void Windows_Update_History_Dates_Are_Read_As_Utc()
+    {
+        var unspecified = new DateTime(2026, 9, 22, 3, 30, 0, DateTimeKind.Unspecified);
+        var expected = new DateTime(2026, 9, 22, 3, 30, 0, DateTimeKind.Utc).ToLocalTime();
+
+        Assert.Equal(expected, UpdateHistoryReader.ToLocal(unspecified));
+        Assert.Equal(expected, UpdateHistoryReader.ToLocal(DateTime.SpecifyKind(unspecified, DateTimeKind.Utc)));
+        Assert.Equal(expected, UpdateHistoryReader.ToLocal(expected));
+    }
+
+    [Fact]
     public async Task Live_Host_Collection_Completes_Without_A_Check_Error()
     {
         if (!OperatingSystem.IsWindows())

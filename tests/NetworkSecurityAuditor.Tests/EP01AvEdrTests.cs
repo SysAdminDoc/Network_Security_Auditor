@@ -100,6 +100,25 @@ public sealed class EP01AvEdrTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_Running_Agent_Service_Counts_Even_When_Its_Sibling_Is_Stopped()
+    {
+        var sophos = StockWindows() with
+        {
+            RegistryKeysPresent = [EP01_AvEdrCheck.MdeKey, @"HKLM\SOFTWARE\Sophos"],
+            Services = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Sense"] = "Stopped",
+                ["SAVService"] = "Stopped",
+                ["Sophos Endpoint Defense Service"] = "Running",
+            },
+        };
+
+        var assessment = EP01_AvEdrCheck.Assess(sophos);
+        Assert.Equal(["Sophos"], assessment.EdrProducts);
+        Assert.Contains("FOUND: Sophos (Sophos Endpoint Defense Service service Running)", assessment.Evidence);
+    }
+
+    [Fact]
     public void Passive_Defender_Beside_An_Active_Third_Party_Av_Passes()
     {
         var snapshot = StockWindows(PassiveDefender()) with
