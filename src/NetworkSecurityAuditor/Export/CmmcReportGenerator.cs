@@ -39,11 +39,13 @@ public static class CmmcReportGenerator
         sb.AppendLine("<style>");
         sb.AppendLine(GetCss());
         sb.AppendLine("</style></head><body>");
+        sb.AppendLine($"<a href=\"#main-content\" class=\"skip-link\">{EscapeHtml(UiText.ReportSkipToMainContent)}</a>");
 
-        sb.AppendLine("<div class=\"header\">");
+        sb.AppendLine("<header class=\"header\">");
         sb.AppendLine($"<h1>{EscapeHtml(UiText.CmmcTitle)}</h1>");
         sb.AppendLine($"<p class=\"subtitle\">NIST SP 800-171 Rev 2 | {EscapeHtml(env.ComputerName)} | {DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}</p>");
-        sb.AppendLine("</div>");
+        sb.AppendLine("</header>");
+        sb.AppendLine("<main id=\"main-content\">");
 
         var sprsColor = sprsScore >= 88 ? "#a6e3a1" : sprsScore >= 50 ? "#f9e2af" : "#f38ba8";
         sb.AppendLine("<div class=\"summary-grid\">");
@@ -73,7 +75,8 @@ public static class CmmcReportGenerator
             AppendControlTable(sb, family.OrderBy(c => c.ControlId).ToList());
         }
 
-        sb.AppendLine($"<div class=\"footer\">{EscapeHtml(UiText.Format(nameof(UiText.CmmcFooterFormat), VersionInfo.Version))}</div>");
+        sb.AppendLine("</main>");
+        sb.AppendLine($"<footer class=\"footer\">{EscapeHtml(UiText.Format(nameof(UiText.CmmcFooterFormat), VersionInfo.Version))}</footer>");
         sb.AppendLine("</body></html>");
 
         return sb.ToString();
@@ -260,12 +263,19 @@ public static class CmmcReportGenerator
 
     private static string GetCss() => """
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; padding: 32px; line-height: 1.6; }
+        .skip-link {
+            position: absolute; left: -9999px; top: 0; z-index: 100;
+            background: #11131c; color: #f8fafc; padding: 10px 18px;
+            border-radius: 0 0 6px 0; font-size: 14px; font-weight: 600;
+        }
+        .skip-link:focus { left: 0; }
         .header { background: #313244; border-radius: 8px; padding: 32px; margin-bottom: 24px; border-left: 4px solid #cba6f7; }
         .header h1 { color: #cba6f7; font-size: 24px; margin-bottom: 8px; }
         .subtitle { color: #b5bcd6; font-size: 14px; }
-        h2 { color: #cba6f7; margin: 24px 0 12px; font-size: 20px; }
-        h3 { color: #b5bcd6; margin: 16px 0 8px; font-size: 16px; }
+        h2 { color: #cba6f7; margin: 24px 0 12px; font-size: 20px; scroll-margin-top: 16px; }
+        h3 { color: #b5bcd6; margin: 16px 0 8px; font-size: 16px; scroll-margin-top: 16px; }
         .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .score-card { background: #313244; border-radius: 8px; padding: 24px; text-align: center; }
         .score-grade { font-weight: 700; }
@@ -275,10 +285,21 @@ public static class CmmcReportGenerator
         table { width: 100%; border-collapse: collapse; background: #313244; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
         caption { text-align: left; color: #b5bcd6; font-size: 12px; padding: 0 0 8px; font-weight: 600; }
         th { background: #45475a; color: #cba6f7; text-align: left; padding: 10px 14px; font-size: 13px; text-transform: uppercase; }
+        thead th { position: sticky; top: 0; z-index: 2; }
         td { padding: 10px 14px; border-top: 1px solid #45475a; font-size: 14px; }
         tr:hover { background: #3b3d50; }
+        a:focus-visible, [tabindex]:focus-visible {
+            outline: 2px solid #38bdf8; outline-offset: 2px; border-radius: 2px;
+        }
         .footer { text-align: center; padding: 24px; color: #585b70; font-size: 12px; margin-top: 32px; }
-        @media print { body { background: #fff; color: #333; } .header { background: #f5f5f5; } table { background: #fff; } th { background: #eee; } td { border-top-color: #ddd; } }
+        @media print { body { background: #fff; color: #333; } .header { background: #f5f5f5; } table { background: #fff; } th { background: #eee; } td { border-top-color: #ddd; } .skip-link { display: none; } }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+                transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+            }
+        }
         """;
 
     private sealed class ControlAssessment

@@ -42,6 +42,7 @@ public static class HtmlReportGenerator
         sb.AppendLine("</style>");
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
+        sb.AppendLine($"<a href=\"#main-content\" class=\"skip-link\">{EscapeHtml(UiText.ReportSkipToMainContent)}</a>");
 
         if (branding is { ShowCoverPage: true, CompanyName.Length: > 0 })
         {
@@ -56,7 +57,7 @@ public static class HtmlReportGenerator
             sb.AppendLine("</div>");
         }
 
-        sb.AppendLine("<div class=\"header\">");
+        sb.AppendLine("<header class=\"header\">");
         if (branding is { HasLogo: true, ShowCoverPage: false })
             sb.AppendLine($"<img src=\"data:image/png;base64,{EscapeHtmlAttribute(branding.LogoBase64)}\" alt=\"\" style=\"height:40px;margin-bottom:12px\" />");
         var h1 = branding?.CompanyName.Length > 0
@@ -68,13 +69,22 @@ public static class HtmlReportGenerator
             DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
             env.ComputerName,
             env.OSCaption))}</p>");
-        sb.AppendLine("</div>");
+        sb.AppendLine("</header>");
 
         var passCount = checkList.Count(c => c.Status == CheckStatus.Pass);
         var failCount = checkList.Count(c => c.Status == CheckStatus.Fail);
         var partialCount = checkList.Count(c => c.Status == CheckStatus.Partial);
         var coverage = Scoring.CoverageSummary.From(checkList);
         var (sprsScore, sprsConf) = Scoring.SprsScoreEngine.Calculate(checkList);
+        var hasFindings = checkList.Any(c => c.Status is CheckStatus.Fail or CheckStatus.Partial);
+        var manualCount = checkList.Count(c =>
+            CheckCatalog.All.TryGetValue(c.Id, out var meta2) &&
+            meta2.EvidenceMode is EvidenceMode.Checklist or EvidenceMode.InterviewRequired or EvidenceMode.ExternalRequired);
+        var showLimitations = coverage.Errors > 0 || coverage.NotAssessed > 0 || manualCount > 0;
+
+        AppendTableOfContents(sb, tier, hasFindings, showLimitations, intuneStigAudit is not null);
+
+        sb.AppendLine("<main id=\"main-content\">");
 
         if (tier is ReportTier.Executive or ReportTier.All)
             AppendExecutive(sb, checkList, overallScore, grade, ransomwareScore, ransomwareGrade,
@@ -87,25 +97,28 @@ public static class HtmlReportGenerator
         if (tier is ReportTier.Technical or ReportTier.All)
             AppendTechnical(sb, checkList);
 
-        AppendLimitations(sb, checkList, coverage);
+        if (showLimitations)
+            AppendLimitations(sb, checkList, coverage, manualCount);
 
         if (intuneStigAudit is not null)
             AppendIntuneStigAudit(sb, intuneStigAudit);
 
+        sb.AppendLine("</main>");
+
         if (branding is not null && branding.FooterText.Length > 0)
         {
-            sb.AppendLine($"<div class=\"footer\">{EscapeHtml(branding.FooterText)}");
+            sb.AppendLine($"<footer class=\"footer\">{EscapeHtml(branding.FooterText)}");
             if (TryBuildMailtoHref(branding.ContactEmail) is { } mailtoHref)
                 sb.AppendLine($" | <a href=\"{EscapeHtmlAttribute(mailtoHref)}\" style=\"color:#89b4fa\">{EscapeHtml(branding.ContactEmail.Trim())}</a>");
             else if (branding.ContactEmail.Length > 0)
                 sb.AppendLine($" | {EscapeHtml(branding.ContactEmail)}");
             if (branding.ContactPhone.Length > 0)
                 sb.AppendLine($" | {EscapeHtml(branding.ContactPhone)}");
-            sb.AppendLine("</div>");
+            sb.AppendLine("</footer>");
         }
         else
         {
-            sb.AppendLine($"<div class=\"footer\">{EscapeHtml(UiText.Format(nameof(UiText.ReportFooterFormat), VersionInfo.Version))}</div>");
+            sb.AppendLine($"<footer class=\"footer\">{EscapeHtml(UiText.Format(nameof(UiText.ReportFooterFormat), VersionInfo.Version))}</footer>");
         }
         sb.AppendLine("</body>");
         sb.AppendLine("</html>");
@@ -113,11 +126,50 @@ public static class HtmlReportGenerator
         return sb.ToString();
     }
 
+    private static void AppendTableOfContents(StringBuilder sb, ReportTier tier, bool hasFindings, bool showLimitations, bool hasIntuneStigAudit)
+    {
+        var entries = new List<(string Id, string Label)>();
+        if (tier is ReportTier.Executive or ReportTier.All)
+        {
+            entries.Add(("executive-summary", UiText.ReportExecutiveSummary));
+            if (hasFindings)
+                entries.Add(("top-findings", UiText.ReportTopFindings));
+        }
+        if (tier is ReportTier.Management or ReportTier.All)
+        {
+            entries.Add(("score-by-category", UiText.ReportScoreByCategory));
+            entries.Add(("compliance-readiness", UiText.ReportComplianceReadiness));
+            if (hasFindings)
+                entries.Add(("remediation-roadmap", UiText.ReportRemediationRoadmap));
+        }
+        if (tier is ReportTier.Technical or ReportTier.All)
+        {
+            entries.Add(("detailed-findings", UiText.ReportDetailedFindings));
+            entries.Add(("d3fend-coverage", UiText.ReportD3fendCoverage));
+        }
+        if (showLimitations)
+            entries.Add(("scan-limitations", UiText.ReportLimitationsHeading));
+        if (hasIntuneStigAudit)
+            entries.Add(("intune-stig-evidence", UiText.ReportIntuneStigEvidence));
+
+        if (entries.Count == 0)
+            return;
+
+        sb.AppendLine($"<nav class=\"toc\" aria-label=\"{EscapeHtmlAttribute(UiText.ReportTableOfContents)}\">");
+        sb.AppendLine($"<h2 class=\"toc-heading\">{EscapeHtml(UiText.ReportTableOfContents)}</h2>");
+        sb.AppendLine("<ol>");
+        foreach (var (id, label) in entries)
+            sb.AppendLine($"<li><a href=\"#{id}\">{EscapeHtml(label)}</a></li>");
+        sb.AppendLine("</ol>");
+        sb.AppendLine("</nav>");
+    }
+
     private static void AppendExecutive(StringBuilder sb, List<CheckItemViewModel> checkList,
         int overallScore, string grade, int ransomwareScore, string ransomwareGrade,
         int domainMaturityScore, string domainMaturityGrade, int sprsScore, string sprsConf,
         int passCount, int failCount, int partialCount, Scoring.CoverageSummary coverage)
     {
+        sb.AppendLine($"<h2 id=\"executive-summary\">{EscapeHtml(UiText.ReportExecutiveSummary)}</h2>");
         sb.AppendLine("<div class=\"summary-grid\">");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(grade)}\">{grade}</div><div class=\"score-value\">{overallScore}/100</div><div class=\"score-label\">{EscapeHtml(UiText.ReportOverallScore)}</div></div>");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(ransomwareGrade)}\">{ransomwareGrade}</div><div class=\"score-value\">{ransomwareScore}/100</div><div class=\"score-label\">{EscapeHtml(UiText.ReportRansomwareReadiness)}</div></div>");
@@ -138,6 +190,16 @@ public static class HtmlReportGenerator
         sb.AppendLine("</div>");
         sb.AppendLine("</div>");
 
+        sb.AppendLine($"<div class=\"status-legend\" role=\"note\" aria-label=\"{EscapeHtmlAttribute(UiText.ReportStatusLegendHeading)}\">");
+        sb.AppendLine($"<strong>{EscapeHtml(UiText.ReportStatusLegendHeading)}:</strong> ");
+        sb.AppendLine($"<span class=\"badge status-pass\">{EscapeHtml(UiText.StatusPass)}</span> = {EscapeHtml(UiText.ReportStatusLegendPassDef)} | ");
+        sb.AppendLine($"<span class=\"badge status-partial\">{EscapeHtml(UiText.StatusPartial)}</span> = {EscapeHtml(UiText.ReportStatusLegendPartialDef)} | ");
+        sb.AppendLine($"<span class=\"badge status-fail\">{EscapeHtml(UiText.StatusFail)}</span> = {EscapeHtml(UiText.ReportStatusLegendFailDef)} | ");
+        sb.AppendLine($"<span class=\"badge status-na\">{EscapeHtml(UiText.StatusNotApplicable)}</span> = {EscapeHtml(UiText.ReportStatusLegendNaDef)} | ");
+        sb.AppendLine($"<span class=\"badge status-notassessed\">{EscapeHtml(UiText.StatusNotAssessed)}</span> = {EscapeHtml(UiText.ReportStatusLegendNotAssessedDef)} | ");
+        sb.AppendLine($"<span class=\"badge status-error\">{EscapeHtml(UiText.StatusError)}</span> = {EscapeHtml(UiText.ReportStatusLegendErrorDef)}");
+        sb.AppendLine("</div>");
+
         var topFindings = checkList
             .Where(c => c.Status is CheckStatus.Fail or CheckStatus.Partial)
             .OrderByDescending(c => StatusPriority(c.Status))
@@ -147,7 +209,7 @@ public static class HtmlReportGenerator
 
         if (topFindings.Count > 0)
         {
-            sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportTopFindings)}</h2>");
+            sb.AppendLine($"<h2 id=\"top-findings\">{EscapeHtml(UiText.ReportTopFindings)}</h2>");
             AppendTableHeader(sb, "category-table", UiText.ReportTopFindingsCaption,
                 [UiText.Id, UiText.Check, UiText.TableSeverity, UiText.TableStatus, UiText.TableRecommendation]);
             foreach (var check in topFindings)
@@ -162,17 +224,20 @@ public static class HtmlReportGenerator
         }
     }
 
-    // Checks that errored or timed out earn no score; the reader needs to see which ones and how much
-    // of the audit that leaves covered, whatever tier the report was built for.
-    private static void AppendLimitations(StringBuilder sb, List<CheckItemViewModel> checkList, Scoring.CoverageSummary coverage)
+    // Checks that errored, timed out, were skipped or need manual evidence earn no automated score; the
+    // reader needs to see which ones and how much of the audit that leaves covered, whatever tier the
+    // report was built for.
+    private static void AppendLimitations(StringBuilder sb, List<CheckItemViewModel> checkList, Scoring.CoverageSummary coverage, int manualCount)
     {
-        if (coverage.Errors == 0)
-            return;
-
-        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportLimitationsHeading)}</h2>");
+        sb.AppendLine($"<h2 id=\"scan-limitations\">{EscapeHtml(UiText.ReportLimitationsHeading)}</h2>");
         sb.AppendLine($"<p>{EscapeHtml(UiText.Format(nameof(UiText.ReportLimitationsIntroFormat), coverage.Scored, coverage.Applicable))}</p>");
         if (coverage.NotAssessed > 0)
             sb.AppendLine($"<p>{EscapeHtml(UiText.Format(nameof(UiText.ReportLimitationsNotAssessedFormat), coverage.NotAssessed))}</p>");
+        if (manualCount > 0)
+            sb.AppendLine($"<p>{EscapeHtml(UiText.Format(nameof(UiText.ReportLimitationsManualFormat), manualCount))}</p>");
+
+        if (coverage.Errors == 0)
+            return;
 
         AppendTableHeader(sb, "limitations-table", UiText.ReportLimitationsHeading,
             [UiText.Id, UiText.Check, UiText.TableStatus, UiText.TableFindings]);
@@ -188,7 +253,7 @@ public static class HtmlReportGenerator
 
     private static void AppendManagement(StringBuilder sb, List<CheckItemViewModel> checkList)
     {
-        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportScoreByCategory)}</h2>");
+        sb.AppendLine($"<h2 id=\"score-by-category\">{EscapeHtml(UiText.ReportScoreByCategory)}</h2>");
         AppendTableHeader(sb, "category-table", UiText.ReportScoreByCategoryCaption,
             [UiText.TableCategory, UiText.StatusPass, UiText.StatusPartial, UiText.StatusFail, UiText.StatusNotApplicable, UiText.ReportNotScored]);
         foreach (var group in checkList.GroupBy(c => c.Category).OrderBy(g => g.Key))
@@ -204,7 +269,7 @@ public static class HtmlReportGenerator
 
         var statusLookup = checkList.ToDictionary(c => c.Id, c => c.Status, StringComparer.OrdinalIgnoreCase);
 
-        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportComplianceReadiness)}</h2>");
+        sb.AppendLine($"<h2 id=\"compliance-readiness\">{EscapeHtml(UiText.ReportComplianceReadiness)}</h2>");
         AppendTableHeader(sb, "category-table", UiText.ReportComplianceReadinessCaption,
             [UiText.TableFramework, UiText.TableMappedChecks, UiText.TableMet, UiText.StatusPartial, UiText.StatusFail, UiText.TableNotAssessed, UiText.TableMetCoverage]);
         foreach (var (fwName, sel) in FrameworkDefinitions.All)
@@ -239,7 +304,7 @@ public static class HtmlReportGenerator
 
         if (roadmapItems.Count > 0)
         {
-            sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportRemediationRoadmap)}</h2>");
+            sb.AppendLine($"<h2 id=\"remediation-roadmap\">{EscapeHtml(UiText.ReportRemediationRoadmap)}</h2>");
             AppendTableHeader(sb, "category-table", UiText.ReportRemediationRoadmapCaption,
                 [UiText.TablePriority, UiText.Id, UiText.Check, UiText.TableStatus, UiText.TableCategory, UiText.TableAssignee, UiText.TableDue]);
             var priorityOrder = 1;
@@ -256,7 +321,7 @@ public static class HtmlReportGenerator
 
     private static void AppendTechnical(StringBuilder sb, List<CheckItemViewModel> checkList)
     {
-        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportDetailedFindings)}</h2>");
+        sb.AppendLine($"<h2 id=\"detailed-findings\">{EscapeHtml(UiText.ReportDetailedFindings)}</h2>");
         foreach (var group in checkList.GroupBy(c => c.Category).OrderBy(g => g.Key))
         {
             sb.AppendLine($"<h3>{group.Key}</h3>");
@@ -272,7 +337,7 @@ public static class HtmlReportGenerator
                     ? string.Join(", ", mitre.Techniques.Select(t => $"<span class=\"badge severity-medium\">{t}</span>"))
                     : "";
                 sb.AppendLine($"<tr>");
-                sb.AppendLine($"<td class=\"id-cell\">{check.Id}</td>");
+                sb.AppendLine($"<td id=\"chk-{check.Id}\" class=\"id-cell\">{check.Id}</td>");
                 var safeUrl = TryGetHttpHref(check.RemediationUrl) is { } remediationHref
                     ? $" <a href=\"{EscapeHtmlAttribute(remediationHref)}\" aria-label=\"{EscapeHtmlAttribute(UiText.Format(nameof(UiText.ReportRemediationGuidanceAriaFormat), check.Id))}\" style=\"color:#89b4fa;font-size:11px\">{EscapeHtml(UiText.ReportRemediationGuidance)}</a>" : "";
                 sb.AppendLine($"<td>{EscapeHtml(check.Label)}{safeUrl}</td>");
@@ -298,7 +363,7 @@ public static class HtmlReportGenerator
         }
         AppendTableEnd(sb);
 
-        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportD3fendCoverage)}</h2>");
+        sb.AppendLine($"<h2 id=\"d3fend-coverage\">{EscapeHtml(UiText.ReportD3fendCoverage)}</h2>");
         AppendTableHeader(sb, "category-table", UiText.ReportD3fendCoverageCaption,
             [UiText.TableStage, UiText.TableChecks, UiText.TableTechniques]);
         var stageChecks = new Dictionary<string, List<(string id, string[] techniques)>>();
@@ -324,7 +389,7 @@ public static class HtmlReportGenerator
     private static void AppendIntuneStigAudit(StringBuilder sb, IntuneStigAuditImport import)
     {
         var summary = import.Summary;
-        sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportIntuneStigEvidence)}</h2>");
+        sb.AppendLine($"<h2 id=\"intune-stig-evidence\">{EscapeHtml(UiText.ReportIntuneStigEvidence)}</h2>");
         sb.AppendLine("<div class=\"score-card\" style=\"margin-bottom:18px\">");
         sb.AppendLine($"<div><strong>{EscapeHtml(UiText.ReportSource)}:</strong> {EscapeHtml(import.Source)}</div>");
         sb.AppendLine($"<div><strong>{EscapeHtml(UiText.ReportBaseline)}:</strong> {EscapeHtml(import.BaselineName)} {EscapeHtml(import.BaselineVersion)}</div>");
@@ -478,10 +543,33 @@ public static class HtmlReportGenerator
 
     private static string GetCss() => """
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
         body {
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             background: #1e1e2e; color: #cdd6f4;
             line-height: 1.6; padding: 32px;
+        }
+        .skip-link {
+            position: absolute; left: -9999px; top: 0; z-index: 100;
+            background: #11131c; color: #f8fafc; padding: 10px 18px;
+            border-radius: 0 0 6px 0; font-size: 14px; font-weight: 600;
+        }
+        .skip-link:focus { left: 0; }
+        .toc {
+            background: #313244; border-radius: 8px; padding: 16px 24px;
+            margin-bottom: 24px;
+        }
+        .toc-heading { margin: 0 0 8px; font-size: 15px; }
+        .toc ol { margin: 0; padding-left: 22px; }
+        .toc li { margin: 2px 0; }
+        .toc a {
+            color: #89b4fa; text-decoration: none; display: inline-block;
+            min-height: 24px; min-width: 24px; line-height: 24px; padding: 0 2px;
+        }
+        .toc a:hover, .toc a:focus-visible { text-decoration: underline; }
+        .status-legend {
+            background: #313244; border-radius: 8px; padding: 14px 18px;
+            margin-bottom: 24px; font-size: 12.5px; color: #cdd6f4; line-height: 2;
         }
         .header {
             background: #313244; border-radius: 8px; padding: 32px;
@@ -489,8 +577,13 @@ public static class HtmlReportGenerator
         }
         .header h1 { color: #cba6f7; font-size: 28px; margin-bottom: 8px; }
         .subtitle { color: #b5bcd6; font-size: 14px; }
-        h2 { color: #cba6f7; margin: 24px 0 12px; font-size: 20px; }
-        h3 { color: #b5bcd6; margin: 16px 0 8px; font-size: 16px; }
+        h2 { color: #cba6f7; margin: 24px 0 12px; font-size: 20px; scroll-margin-top: 16px; }
+        h3 { color: #b5bcd6; margin: 16px 0 8px; font-size: 16px; scroll-margin-top: 16px; }
+        [id^="chk-"] { scroll-margin-top: 16px; }
+        a:focus-visible, [tabindex]:focus-visible {
+            outline: 2px solid #38bdf8; outline-offset: 2px; border-radius: 2px;
+        }
+        thead th { position: sticky; top: 0; z-index: 2; }
         .summary-grid {
             display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 16px; margin-bottom: 24px;
@@ -578,6 +671,14 @@ public static class HtmlReportGenerator
             td { border-top-color: #ddd; }
             .findings-cell, .evidence-cell, .subtitle { color: #666; }
             .cover-page { page-break-after: always; }
+            .skip-link, .toc { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+                transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+            }
         }
         """;
 

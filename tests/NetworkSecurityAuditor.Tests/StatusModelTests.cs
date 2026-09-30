@@ -163,7 +163,7 @@ public class StatusModelTests
 
         var html = HtmlReportGenerator.Generate(checks, new EnvironmentInfo(), 85, "B", 70, "C", tier: ReportTier.Executive);
 
-        var section = html[html.IndexOf("<h2>Limitations</h2>", StringComparison.Ordinal)..];
+        var section = html[html.IndexOf("<h2 id=\"scan-limitations\">Limitations</h2>", StringComparison.Ordinal)..];
         Assert.Contains("Coverage: 1 of 4 checks produced a scored result.", section);
         Assert.Contains("1 questionnaire checks are still waiting on an answer", section);
         Assert.Contains("Check EP03 failed: access denied", section);
@@ -190,7 +190,7 @@ public class StatusModelTests
 
         var html = HtmlReportGenerator.Generate(checks, new EnvironmentInfo(), 85, "B", 70, "C");
 
-        Assert.DoesNotContain("<h2>Limitations</h2>", html);
+        Assert.DoesNotContain("<h2 id=\"scan-limitations\">Limitations</h2>", html);
     }
 
     [Fact]
