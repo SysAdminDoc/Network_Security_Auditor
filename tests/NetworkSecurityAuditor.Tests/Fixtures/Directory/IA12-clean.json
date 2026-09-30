@@ -14,6 +14,21 @@
     },
     "CN=Managed Service Accounts,DC=corp,DC=example": {
       "distinguishedName": "CN=Managed Service Accounts,DC=corp,DC=example"
+    },
+    "CN=svc_sql,OU=Apps,DC=corp,DC=example": {
+      "objectSid": {
+        "$sid": "S-1-5-21-1004336348-1177238915-682003330-1120"
+      },
+      "sAMAccountName": "svc_sql",
+      "tokenGroups": [
+        {
+          "$sid": "S-1-5-21-1004336348-1177238915-682003330-513"
+        },
+        {
+          "$sid": "S-1-5-21-1004336348-1177238915-682003330-1130"
+        }
+      ],
+      "msDS-SupersededManagedAccountLink": "CN=dmsa_sql,OU=Apps,DC=corp,DC=example"
     }
   },
   "searches": [
@@ -35,12 +50,14 @@
       "filter": "(objectClass=msDS-DelegatedManagedServiceAccount)",
       "results": [
         {
-          "$path": "LDAP://corp.example/CN=dmsa_web,OU=Service Accounts,DC=corp,DC=example",
-          "sAMAccountName": "dmsa_web$",
-          "distinguishedName": "CN=dmsa_web,OU=Service Accounts,DC=corp,DC=example",
+          "$path": "LDAP://corp.example/CN=dmsa_sql,OU=Apps,DC=corp,DC=example",
+          "sAMAccountName": "dmsa_sql$",
+          "distinguishedName": "CN=dmsa_sql,OU=Apps,DC=corp,DC=example",
           "whenCreated": {
-            "$daysAgo": 12
-          }
+            "$daysAgo": 40
+          },
+          "msDS-ManagedAccountPrecededByLink": "CN=svc_sql,OU=Apps,DC=corp,DC=example",
+          "msDS-DelegatedMSAState": 2
         }
       ]
     },
@@ -49,7 +66,7 @@
       "filter": "(objectCategory=organizationalUnit)",
       "results": [
         {
-          "distinguishedName": "OU=Service Accounts,DC=corp,DC=example"
+          "distinguishedName": "OU=Apps,DC=corp,DC=example"
         }
       ]
     },
@@ -57,6 +74,9 @@
       "base": null,
       "filter": "(objectCategory=container)",
       "results": [
+        {
+          "distinguishedName": "CN=Users,DC=corp,DC=example"
+        },
         {
           "distinguishedName": "CN=Managed Service Accounts,DC=corp,DC=example"
         }
@@ -110,7 +130,81 @@
         "inheritOnly": true
       }
     ],
-    "OU=Service Accounts,DC=corp,DC=example": [
+    "OU=Apps,DC=corp,DC=example": [
+      {
+        "identity": "NT AUTHORITY\\SYSTEM",
+        "sid": "S-1-5-18",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Domain Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Enterprise Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-519",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "BUILTIN\\Administrators",
+        "sid": "S-1-5-32-544",
+        "rights": "CreateChild, DeleteChild, Self, WriteProperty, ExtendedRight, GenericRead, WriteDacl, WriteOwner",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "BUILTIN\\Account Operators",
+        "sid": "S-1-5-32-548",
+        "rights": "CreateChild, DeleteChild",
+        "type": "Allow",
+        "objectType": "bf967a86-0de6-11d0-a285-00aa003049e2"
+      },
+      {
+        "identity": "NT AUTHORITY\\Authenticated Users",
+        "sid": "S-1-5-11",
+        "rights": "GenericRead",
+        "type": "Allow"
+      },
+      {
+        "identity": "CREATOR OWNER",
+        "sid": "S-1-3-0",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inheritOnly": true
+      },
+      {
+        "identity": "CORP\\Helpdesk",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-1110",
+        "rights": "CreateChild, DeleteChild",
+        "type": "Allow",
+        "objectType": "bf967aba-0de6-11d0-a285-00aa003049e2"
+      },
+      {
+        "identity": "CORP\\Helpdesk",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-1110",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inheritOnly": true
+      },
+      {
+        "identity": "CORP\\Helpdesk",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-1110",
+        "rights": "ReadProperty, WriteProperty",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Contractors",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-1111",
+        "rights": "CreateChild",
+        "type": "Deny"
+      }
+    ],
+    "CN=Users,DC=corp,DC=example": [
       {
         "identity": "NT AUTHORITY\\SYSTEM",
         "sid": "S-1-5-18",
@@ -158,33 +252,6 @@
         "inheritOnly": true
       }
     ],
-    "CN=dmsa_web,OU=Service Accounts,DC=corp,DC=example": [
-      {
-        "identity": "NT AUTHORITY\\SYSTEM",
-        "sid": "S-1-5-18",
-        "rights": "GenericAll",
-        "type": "Allow"
-      },
-      {
-        "identity": "CORP\\Domain Admins",
-        "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
-        "rights": "GenericAll",
-        "type": "Allow"
-      },
-      {
-        "identity": "CORP\\Enterprise Admins",
-        "sid": "S-1-5-21-1004336348-1177238915-682003330-519",
-        "rights": "GenericAll",
-        "type": "Allow",
-        "inherited": true
-      },
-      {
-        "identity": "NT AUTHORITY\\Authenticated Users",
-        "sid": "S-1-5-11",
-        "rights": "GenericRead",
-        "type": "Allow"
-      }
-    ],
     "CN=Managed Service Accounts,DC=corp,DC=example": [
       {
         "identity": "NT AUTHORITY\\SYSTEM",
@@ -217,19 +284,46 @@
         "sid": "S-1-5-11",
         "rights": "GenericRead",
         "type": "Allow"
+      }
+    ],
+    "CN=dmsa_sql,OU=Apps,DC=corp,DC=example": [
+      {
+        "identity": "NT AUTHORITY\\SYSTEM",
+        "sid": "S-1-5-18",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Domain Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Enterprise Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-519",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "NT AUTHORITY\\Authenticated Users",
+        "sid": "S-1-5-11",
+        "rights": "GenericRead",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\svc_sql",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-1120",
+        "rights": "GenericRead",
+        "type": "Allow"
       },
       {
         "identity": "CORP\\Helpdesk",
         "sid": "S-1-5-21-1004336348-1177238915-682003330-1110",
-        "rights": "CreateChild",
+        "rights": "WriteProperty",
         "type": "Allow",
-        "objectType": "0feb936f-47b3-49f2-9386-1dedc2c23765"
-      },
-      {
-        "identity": "CORP\\Contractors",
-        "sid": "S-1-5-21-1004336348-1177238915-682003330-1111",
-        "rights": "CreateChild",
-        "type": "Deny"
+        "objectType": "bf967aba-0de6-11d0-a285-00aa003049e2"
       }
     ]
   },
@@ -238,7 +332,11 @@
       "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
       "identity": "CORP\\Domain Admins"
     },
-    "OU=Service Accounts,DC=corp,DC=example": {
+    "OU=Apps,DC=corp,DC=example": {
+      "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+      "identity": "CORP\\Domain Admins"
+    },
+    "CN=Users,DC=corp,DC=example": {
       "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
       "identity": "CORP\\Domain Admins"
     },
@@ -246,7 +344,7 @@
       "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
       "identity": "CORP\\Domain Admins"
     },
-    "CN=dmsa_web,OU=Service Accounts,DC=corp,DC=example": {
+    "CN=dmsa_sql,OU=Apps,DC=corp,DC=example": {
       "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
       "identity": "CORP\\Domain Admins"
     }
@@ -254,7 +352,7 @@
   "remoteRegistry": {
     "dc01.corp.example": {
       "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion": {
-        "UBR": 4652
+        "UBR": 4946
       }
     }
   }

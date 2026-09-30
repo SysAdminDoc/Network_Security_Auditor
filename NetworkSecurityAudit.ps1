@@ -3165,7 +3165,7 @@ $script:AuditCategories = [ordered]@{
             @{
                 ID='IA12'; Severity='Critical'; Weight=10
                 Text='BadSuccessor / dMSA privilege escalation exposure'
-                Hint='Run from a domain-joined admin workstation with the Active Directory module. Review Windows Server 2025 domain controllers, delegated Managed Service Account objects (objectClass msDS-DelegatedManagedServiceAccount), msDS-ManagedAccountPrecededByLink, msDS-ManagedAccountSucceededByLink, and msDS-DelegatedMSAState. Audit OU ACLs for non-tier-0 principals with CreateChild, GenericAll, GenericWrite, WriteDacl, or WriteOwner rights that could create or manipulate dMSA objects. Remediate by applying CVE-2025-53779 updates, restricting OU delegation, auditing SACLs on dMSA link attributes, and reviewing every migration link before production use.'
+                Hint='Run from a domain-joined admin workstation with the Active Directory module. Review Windows Server 2025 domain controllers, delegated Managed Service Account objects (objectClass msDS-DelegatedManagedServiceAccount), msDS-ManagedAccountPrecededByLink, msDS-SupersededManagedAccountLink, and msDS-DelegatedMSAState. Audit OU ACLs for non-tier-0 principals with CreateChild, GenericAll, GenericWrite, WriteDacl, or WriteOwner rights that could create or manipulate dMSA objects. Remediate by applying CVE-2025-53779 updates, restricting OU delegation, auditing SACLs on dMSA link attributes, and reviewing every migration link before production use.'
                 Compliance='NIST CSF PR.AC-1, PR.AC-4, PR.AC-6 | CIS Control 5.4, 6.8 | HIPAA 164.312(a)(1), 164.312(a)(2)(i)'
             }
         )
@@ -3926,184 +3926,338 @@ $script:AutoChecks = @{
 
     'IA12' = @{ Type='AD'; Label='Scan BadSuccessor / dMSA Exposure'
         Script = {
-            function ConvertTo-SafeGuid {
-                param([object]$Value)
-                if ($null -eq $Value) { return $null }
-                try {
-                    if ($Value -is [guid]) { return $Value }
-                    if ($Value -is [byte[]]) { return (New-Object -TypeName System.Guid -ArgumentList (,$Value)) }
-                    return ([guid]$Value)
-                } catch {
-                    return $null
+            # BadSuccessor (Akamai, May 2025), fixed as CVE-2025-53779 by KB5063878 (OS build 26100.4946) on
+            # August 12, 2025. A delegated Managed Service Account (dMSA) inherits the privileges of the account in
+            # msDS-ManagedAccountPrecededByLink once msDS-DelegatedMSAState reads 2. Whoever can create a dMSA in an
+            # OU or container, or write those attributes on an existing one, can point it at a Domain Admin. One
+            # Windows Server 2025 DC is enough, whatever the functional level. Principals are matched by SID so a
+            # localized domain gives the same answer as an English one.
+
+            function Get-Ia12Rid {
+                param([string]$Sid, [string]$DomainSid)
+                if ([string]::IsNullOrEmpty($Sid) -or [string]::IsNullOrEmpty($DomainSid)) { return $null }
+                if ($Sid.Length -le ($DomainSid.Length + 1)) { return $null }
+                if (-not $Sid.StartsWith($DomainSid, [System.StringComparison]::OrdinalIgnoreCase)) { return $null }
+                if ($Sid[$DomainSid.Length] -ne '-') { return $null }
+                $tail = $Sid.Substring($DomainSid.Length + 1)
+                $parsed = 0
+                if ([int]::TryParse($tail, [ref]$parsed)) { return $parsed }
+                return $null
+            }
+            function Test-Ia12Tier0Sid {
+                param([string]$Sid, [string]$DomainSid, [string]$ForestRootSid)
+                if ([string]::IsNullOrEmpty($Sid)) { return $false }
+                $fixed = @('S-1-5-18','S-1-5-9','S-1-5-32-544','S-1-5-32-548','S-1-5-32-549','S-1-5-32-550','S-1-5-32-551','S-1-5-32-552')
+                if ($fixed -contains $Sid) { return $true }
+                $domainRids = @(500,502,512,516,521,526,527)
+                $forestRids = @(518,519,527)
+                $rid = Get-Ia12Rid -Sid $Sid -DomainSid $DomainSid
+                if ($null -ne $rid -and (($domainRids -contains $rid) -or ($forestRids -contains $rid))) { return $true }
+                if (-not [string]::IsNullOrEmpty($ForestRootSid)) {
+                    $rootRid = Get-Ia12Rid -Sid $Sid -DomainSid $ForestRootSid
+                    if ($null -ne $rootRid -and ($forestRids -contains $rootRid)) { return $true }
                 }
+                return $false
             }
-            function Test-TierZeroTrustee {
-                param([object]$Identity)
-                $id = "$Identity"
-                if ([string]::IsNullOrWhiteSpace($id)) { return $false }
-                return ($id -match '(?i)(^NT AUTHORITY\\SYSTEM$|^S-1-5-18$|\\SYSTEM$|\\Domain Admins$|\\Enterprise Admins$|\\Schema Admins$|\\Administrators$|\\Enterprise Key Admins$|\\Key Admins$|\\Domain Controllers$|\\Enterprise Domain Controllers$)')
+            function Test-Ia12Reportable {
+                param([string]$Sid, [string]$Scope, [string]$DomainSid, [string]$ForestRootSid)
+                if ([string]::IsNullOrEmpty($Sid)) { return $true }
+                if (@('S-1-3-0','S-1-3-1','S-1-3-4') -contains $Sid) { return $false }
+                if ($Sid -eq 'S-1-5-10') { return ($Scope -eq 'Dmsa') }
+                return -not (Test-Ia12Tier0Sid -Sid $Sid -DomainSid $DomainSid -ForestRootSid $ForestRootSid)
             }
-            function Test-PrivilegedADObject {
-                param([object]$Object)
-                if ($null -eq $Object) { return $false }
-                if ($Object.adminCount -eq 1) { return $true }
-                $dn = "$($Object.DistinguishedName)"
-                if ($dn -match '(?i)CN=(krbtgt|Domain Admins|Enterprise Admins|Schema Admins|Administrators),') { return $true }
-                $groups = @($Object.memberOf) -join ';'
-                return ($groups -match '(?i)CN=(Domain Admins|Enterprise Admins|Schema Admins|Administrators),')
+            function Get-Ia12PatchState {
+                param([object]$Ubr)
+                if ($null -eq $Ubr -or "$Ubr" -eq '') { return 'Unknown' }
+                $value = 0
+                if (-not [int]::TryParse("$Ubr", [ref]$value)) { return 'Unknown' }
+                if ($value -ge 4946 -or $value -eq 4851) { return 'Patched' }
+                return 'Unpatched'
+            }
+            function Test-Ia12Server2025 {
+                param([string]$OperatingSystem, [string]$OperatingSystemVersion)
+                if (-not [string]::IsNullOrEmpty($OperatingSystem) -and
+                    $OperatingSystem -match '(?i)server' -and $OperatingSystem -match '2025') { return $true }
+                if (-not [string]::IsNullOrEmpty($OperatingSystemVersion)) {
+                    $m = [regex]::Match($OperatingSystemVersion, '\((\d+)\)')
+                    if ($m.Success -and $m.Groups[1].Value -eq '26100') { return $true }
+                }
+                return $false
+            }
+            function Get-Ia12RelevantRights {
+                param([string]$Rights, [string]$ObjectType, [bool]$InheritOnly, [string]$Type, [string]$Scope)
+                if ($Type -ne 'Allow' -or $InheritOnly) { return $null }
+                $dmsaClassGuid = '0feb936f-47b3-49f2-9386-1dedc2c23765'
+                $precededByGuid = 'a0945b2b-57a2-43bd-b327-4d112a4e8bd1'
+                $stateGuid = '2f5c138a-bd38-4016-88b4-0ec87cbb4919'
+                $anyType = ([string]::IsNullOrEmpty($ObjectType) -or $ObjectType -eq '00000000-0000-0000-0000-000000000000')
+                if ($anyType -and $Rights -match 'GenericAll') { return 'GenericAll' }
+                $parts = New-Object System.Collections.Generic.List[string]
+                if ($Scope -eq 'Container') {
+                    if ($Rights -match 'CreateChild' -and ($anyType -or $ObjectType -eq $dmsaClassGuid)) {
+                        if ($anyType) { $parts.Add('CreateChild (all classes)') }
+                        else { $parts.Add('CreateChild (msDS-DelegatedManagedServiceAccount)') }
+                    }
+                } else {
+                    if ($anyType) {
+                        if ($Rights -match 'GenericWrite') { $parts.Add('GenericWrite') }
+                        elseif ($Rights -match 'WriteProperty') { $parts.Add('WriteProperty (all attributes)') }
+                    } elseif ($Rights -match 'WriteProperty') {
+                        if ($ObjectType -eq $precededByGuid) { $parts.Add('WriteProperty (msDS-ManagedAccountPrecededByLink)') }
+                        elseif ($ObjectType -eq $stateGuid) { $parts.Add('WriteProperty (msDS-DelegatedMSAState)') }
+                    }
+                }
+                if ($anyType -and $Rights -match 'WriteDacl') { $parts.Add('WriteDacl') }
+                if ($anyType -and $Rights -match 'WriteOwner') { $parts.Add('WriteOwner') }
+                if ($parts.Count -eq 0) { return $null }
+                return ($parts -join ', ')
+            }
+            function Get-Ia12AceReason {
+                param([object]$Ace, [string]$Scope, [string]$DomainSid, [string]$ForestRootSid)
+                $sid = "$($Ace.Sid)"
+                if (-not (Test-Ia12Reportable -Sid $sid -Scope $Scope -DomainSid $DomainSid -ForestRootSid $ForestRootSid)) { return $null }
+                $inheritOnly = [bool]$Ace.InheritOnly
+                Get-Ia12RelevantRights -Rights "$($Ace.Rights)" -ObjectType "$($Ace.ObjectType)" -InheritOnly $inheritOnly -Type "$($Ace.Type)" -Scope $Scope
+            }
+            function Get-Ia12ParentDn {
+                param([string]$Dn)
+                if ([string]::IsNullOrEmpty($Dn)) { return $null }
+                for ($i = 0; $i -lt $Dn.Length; $i++) {
+                    if ($Dn[$i] -eq '\') { $i++; continue }
+                    if ($Dn[$i] -eq ',') { return $Dn.Substring($i + 1) }
+                }
+                return $null
+            }
+            function Get-Ia12RemoteUbr {
+                param([string]$ComputerName)
+                $out = @{ Ubr = $null; Error = '' }
+                if ([string]::IsNullOrWhiteSpace($ComputerName)) { $out.Error = 'no host name'; return $out }
+                try {
+                    $base = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', $ComputerName, 'Registry64')
+                    try {
+                        $key = $base.OpenSubKey('SOFTWARE\Microsoft\Windows NT\CurrentVersion')
+                        if ($null -eq $key) { $out.Error = 'CurrentVersion key missing'; return $out }
+                        try {
+                            $value = $key.GetValue('UBR')
+                            if ($null -eq $value) { $out.Error = 'UBR value missing' } else { $out.Ubr = [int]$value }
+                        } finally { $key.Dispose() }
+                    } finally { $base.Dispose() }
+                } catch {
+                    $out.Error = $_.Exception.Message
+                }
+                return $out
             }
 
             $sb = [System.Text.StringBuilder]::new()
-            $issues = 0
-            $warnings = 0
+            $critical = 0
+            $review = 0
+            $dmsaClassGuid = '0feb936f-47b3-49f2-9386-1dedc2c23765'
+
             $domain = Get-ADDomain -EA SilentlyContinue
             if (-not $domain -or -not $domain.DNSRoot) {
                 [void]$sb.AppendLine("Active Directory domain context is unavailable on this host.")
                 [void]$sb.AppendLine("BadSuccessor/dMSA exposure is only applicable when the scan can query a domain directory.")
                 return @{ Status='N/A'; Findings=$sb.ToString().Trim(); Evidence="BadSuccessor / dMSA applicability scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
             }
-            $rootDse = Get-ADRootDSE -EA SilentlyContinue
             [void]$sb.AppendLine("Domain: $($domain.DNSRoot)")
-            [void]$sb.AppendLine("BadSuccessor detection checks dMSA objects, migration links, and OU create/delegation rights.")
-
-            $dcs = @(Get-ADDomainController -Filter * -EA SilentlyContinue)
-            $server2025Dcs = @($dcs | Where-Object { $_.OperatingSystem -match '2025' -or $_.OperatingSystemVersion -match '26100' })
-            [void]$sb.AppendLine("Windows Server 2025 DCs detected: $($server2025Dcs.Count) of $($dcs.Count)")
-            foreach ($dc in ($server2025Dcs | Sort-Object HostName | Select-Object -First 10)) {
-                [void]$sb.AppendLine("  $($dc.HostName) | $($dc.OperatingSystem) | $($dc.OperatingSystemVersion)")
-            }
-
-            $schemaNc = $rootDse.schemaNamingContext
-            $dmsaClass = $null
-            if ($schemaNc) {
-                $dmsaClass = Get-ADObject -SearchBase $schemaNc -LDAPFilter '(lDAPDisplayName=msDS-DelegatedManagedServiceAccount)' -Properties schemaIDGUID,lDAPDisplayName -EA SilentlyContinue
-            }
-            if (-not $dmsaClass) {
-                [void]$sb.AppendLine("dMSA schema class msDS-DelegatedManagedServiceAccount: not present or not readable.")
-                if ($server2025Dcs.Count -eq 0) {
-                    [void]$sb.AppendLine("No Windows Server 2025 DCs or dMSA schema support were detected; BadSuccessor is not applicable to this domain state.")
-                    return @{ Status='N/A'; Findings=$sb.ToString().Trim(); Evidence="BadSuccessor / dMSA applicability scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+            $domainSid = "$($domain.DomainSID)"
+            $forestRootSid = ''
+            try {
+                $forest = Get-ADForest -EA Stop
+                if ($forest.RootDomain -and $forest.RootDomain -ne $domain.DNSRoot) {
+                    $rootDomain = Get-ADDomain -Identity $forest.RootDomain -EA Stop
+                    $forestRootSid = "$($rootDomain.DomainSID)"
                 }
-                $warnings++
-                [void]$sb.AppendLine("[REVIEW] Windows Server 2025 DCs are present but the dMSA schema class was not visible. Validate schema/read permissions and patch state.")
+            } catch {
+                $review++
+                [void]$sb.AppendLine("[REVIEW] Could not read the forest root domain SID: $($_.Exception.Message). Enterprise and Schema Admins from another domain may be listed below.")
             }
 
-            $dmsaClassGuid = ConvertTo-SafeGuid $dmsaClass.schemaIDGUID
-            if ($dmsaClassGuid) { [void]$sb.AppendLine("dMSA class schemaIDGUID: $dmsaClassGuid") }
+            # 1. Windows Server 2025 DCs gate the attack; the functional level does not.
+            $dcListFailed = $false
+            $server2025 = @()
+            try {
+                $dcs = @(Get-ADDomainController -Filter * -EA Stop)
+                $server2025 = @($dcs | Where-Object { Test-Ia12Server2025 -OperatingSystem "$($_.OperatingSystem)" -OperatingSystemVersion "$($_.OperatingSystemVersion)" })
+                [void]$sb.AppendLine("Windows Server 2025 domain controllers: $($server2025.Count) of $($dcs.Count)")
+            } catch {
+                $dcListFailed = $true
+                $review++
+                [void]$sb.AppendLine("[REVIEW] Could not list domain controllers ($($_.Exception.Message)); the check assumes a Windows Server 2025 DC may exist.")
+            }
 
+            $unpatched = 0
+            $unknownPatch = 0
+            $reads = 0
+            foreach ($dc in ($server2025 | Sort-Object { "$($_.HostName)" } | Select-Object -First 25)) {
+                $dcHost = "$($dc.HostName)"
+                $reads++
+                $state = 'Unknown'
+                $detail = ''
+                $r = Get-Ia12RemoteUbr -ComputerName $dcHost
+                if ($null -ne $r.Ubr) {
+                    $state = Get-Ia12PatchState -Ubr $r.Ubr
+                    $detail = "build 26100.$($r.Ubr)"
+                } else {
+                    $detail = "patch level unreadable: $($r.Error)"
+                }
+                if ($state -eq 'Unpatched') {
+                    $unpatched++
+                    $critical++
+                    [void]$sb.AppendLine("[CRITICAL] $dcHost runs Windows Server 2025 $detail, below the August 2025 update (KB5063878, build 26100.4946) that fixes CVE-2025-53779. Install the latest cumulative update.")
+                } elseif ($state -eq 'Unknown') {
+                    $unknownPatch++
+                    $review++
+                    [void]$sb.AppendLine("[REVIEW] $dcHost runs Windows Server 2025 but its patch level could not be confirmed ($detail). Verify it has KB5063878 (build 26100.4946) or later.")
+                }
+            }
+            if ($server2025.Count -gt $reads) {
+                $unknownPatch++
+                $review++
+                [void]$sb.AppendLine("[REVIEW] Patch level was read for the first $reads of $($server2025.Count) Windows Server 2025 DCs; confirm the rest by hand.")
+            }
+
+            $exposed = ($dcListFailed -or $server2025.Count -gt 0)
+            $allPatched = ((-not $dcListFailed) -and $server2025.Count -gt 0 -and $unpatched -eq 0 -and $unknownPatch -eq 0)
+
+            # 2. dMSA inventory. Existence alone is informational; a link to a Tier 0 account is not.
             $dmsaObjects = @()
-            if ($dmsaClass) {
-                try {
-                    $dmsaObjects = @(Get-ADObject -LDAPFilter '(objectClass=msDS-DelegatedManagedServiceAccount)' -Properties 'msDS-ManagedAccountPrecededByLink','msDS-DelegatedMSAState','msDS-ManagedAccountSucceededByLink',whenChanged,adminCount,servicePrincipalName -EA Stop)
-                } catch {
-                    $warnings++
-                    [void]$sb.AppendLine("dMSA object query failed: $($_.Exception.Message)")
-                }
+            try {
+                $dmsaObjects = @(Get-ADObject -LDAPFilter '(objectClass=msDS-DelegatedManagedServiceAccount)' -Properties 'msDS-ManagedAccountPrecededByLink','msDS-DelegatedMSAState',sAMAccountName,whenCreated -EA Stop)
+            } catch {
+                $review++
+                [void]$sb.AppendLine("[REVIEW] dMSA object query failed: $($_.Exception.Message)")
             }
-
-            [void]$sb.AppendLine("`ndMSA OBJECT INVENTORY:")
-            [void]$sb.AppendLine("  Objects found: $($dmsaObjects.Count)")
-            if ($dmsaObjects.Count -gt 0) { $warnings += $dmsaObjects.Count }
-            foreach ($acct in ($dmsaObjects | Sort-Object Name | Select-Object -First 25)) {
-                $state = $acct.'msDS-DelegatedMSAState'
-                $preceded = @($acct.'msDS-ManagedAccountPrecededByLink') | Where-Object { $_ }
-                [void]$sb.AppendLine("  $($acct.Name) | State:$state | Changed:$($acct.whenChanged)")
-                [void]$sb.AppendLine("    DN: $($acct.DistinguishedName)")
-                if ($preceded.Count -eq 0) {
-                    [void]$sb.AppendLine("    Predecessor links: none")
+            [void]$sb.AppendLine("Delegated Managed Service Accounts found: $($dmsaObjects.Count)")
+            if ($dmsaObjects.Count -gt 0) {
+                [void]$sb.AppendLine("[INFO] $($dmsaObjects.Count) dMSA object(s) exist. That is normal on its own; links and rights are checked below.")
+            }
+            foreach ($acct in ($dmsaObjects | Sort-Object Name | Select-Object -First 200)) {
+                $link = "$($acct.'msDS-ManagedAccountPrecededByLink')"
+                if ([string]::IsNullOrEmpty($link)) { continue }
+                try {
+                    $target = Get-ADObject -Identity $link -Properties objectSid,sAMAccountName,adminCount,'msDS-SupersededManagedAccountLink' -EA Stop
+                } catch {
+                    $review++
+                    [void]$sb.AppendLine("[REVIEW] dMSA $($acct.Name) is linked to $link, which could not be read ($($_.Exception.Message)). Confirm the account is not privileged.")
                     continue
                 }
-                foreach ($predDn in $preceded) {
-                    $warnings++
-                    [void]$sb.AppendLine("    Predecessor: $predDn")
+                $targetSid = "$($target.objectSid)"
+                $targetName = if ($target.sAMAccountName) { "$($target.sAMAccountName)" } else { "$($target.Name)" }
+                $privileged = (Test-Ia12Tier0Sid -Sid $targetSid -DomainSid $domainSid -ForestRootSid $forestRootSid) -or ([int]$target.adminCount -eq 1)
+                if (-not $privileged) { continue }
+                $back = @($target.'msDS-SupersededManagedAccountLink') | Where-Object { "$_" -eq "$($acct.DistinguishedName)" }
+                $critical++
+                if ($back.Count -gt 0) {
+                    [void]$sb.AppendLine("[CRITICAL] dMSA $($acct.Name) is linked to a privileged account ($targetName, $targetSid) that links back, so even patched DCs grant the dMSA its privileges. Unless this is a documented migration, remove the link and investigate.")
+                } else {
+                    [void]$sb.AppendLine("[CRITICAL] dMSA $($acct.Name) has a one-way link to a privileged account ($targetName, $targetSid). Patched DCs reject a one-way link, but an unpatched Windows Server 2025 DC honors it, and it is the BadSuccessor pattern. Remove the link and investigate.")
+                }
+            }
+
+            # 3. Who can create a dMSA in any OU or container, or rewrite an existing dMSA's link.
+            $riskyPrincipals = @{}
+            $inspected = 0
+            $unreadable = 0
+            $capHit = $false
+            if ($exposed -and (Get-PSDrive -Name AD -EA SilentlyContinue)) {
+                $targets = New-Object System.Collections.Generic.List[string]
+                $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+                function Add-Ia12Target { param([string]$Dn) if (-not [string]::IsNullOrEmpty($Dn) -and $seen.Add($Dn)) { $targets.Add($Dn) } }
+                Add-Ia12Target -Dn "$($domain.DistinguishedName)"
+                foreach ($acct in $dmsaObjects) { Add-Ia12Target -Dn (Get-Ia12ParentDn -Dn "$($acct.DistinguishedName)") }
+                Add-Ia12Target -Dn "CN=Managed Service Accounts,$($domain.DistinguishedName)"
+                foreach ($ldap in @('(objectCategory=organizationalUnit)','(objectCategory=container)')) {
                     try {
-                        $target = Get-ADObject -Identity $predDn -Properties adminCount,memberOf,sAMAccountName,objectClass,'msDS-ManagedAccountSucceededByLink' -EA Stop
-                        $targetName = if ($target.sAMAccountName) { $target.sAMAccountName } else { $target.Name }
-                        $succeededLinks = @($target.'msDS-ManagedAccountSucceededByLink') | Where-Object { $_ }
-                        $hasBackLink = @($succeededLinks | Where-Object { $_ -eq $acct.DistinguishedName }).Count -gt 0
-                        [void]$sb.AppendLine("      Target: $targetName | ObjectClass:$($target.objectClass -join ',') | adminCount:$($target.adminCount) | SucceededByLink:$hasBackLink")
-                        if (-not $hasBackLink) {
-                            $issues++
-                            [void]$sb.AppendLine("      [SUSPICIOUS] dMSA predecessor link lacks the target account backlink required by patched CVE-2025-53779 behavior.")
-                        }
-                        if (Test-PrivilegedADObject $target) {
-                            $issues++
-                            [void]$sb.AppendLine("      [CRITICAL] dMSA predecessor resolves to a privileged or protected account.")
-                        }
+                        foreach ($obj in @(Get-ADObject -LDAPFilter $ldap -Properties DistinguishedName -EA Stop)) { Add-Ia12Target -Dn "$($obj.DistinguishedName)" }
                     } catch {
-                        $warnings++
-                        [void]$sb.AppendLine("      Could not resolve predecessor target: $($_.Exception.Message)")
+                        $review++
+                        [void]$sb.AppendLine("[REVIEW] Could not list objects for $ldap ($($_.Exception.Message)); their ACLs were not inspected.")
                     }
                 }
-            }
 
-            [void]$sb.AppendLine("`nOU dMSA CREATE/CONTROL RIGHTS:")
-            $riskyAces = New-Object System.Collections.Generic.List[object]
-            if ($dmsaClass -and (Get-PSDrive -Name AD -EA SilentlyContinue)) {
-                try {
-                    $allOus = @(Get-ADOrganizationalUnit -Filter * -Properties DistinguishedName -EA Stop)
-                    $ouLimit = 300
-                    $ousToCheck = @($allOus | Sort-Object DistinguishedName | Select-Object -First $ouLimit)
-                    if ($allOus.Count -gt $ouLimit) {
-                        $warnings++
-                        [void]$sb.AppendLine("  OU ACL scan sampled first $ouLimit of $($allOus.Count) OUs; run a targeted review for complete coverage in very large domains.")
-                    } else {
-                        [void]$sb.AppendLine("  OUs inspected: $($ousToCheck.Count)")
+                $limit = 1000
+                $ordered = @($targets)
+                if ($ordered.Count -gt $limit) { $capHit = $true }
+                $dmsaDns = @($dmsaObjects | ForEach-Object { "$($_.DistinguishedName)" })
+                foreach ($dn in ($ordered | Select-Object -First $limit)) {
+                    $inspected++
+                    $scope = if ($dmsaDns -contains $dn) { 'Dmsa' } else { 'Container' }
+                    try {
+                        $acl = Get-Acl -Path ("AD:\{0}" -f $dn) -EA Stop
+                    } catch {
+                        $unreadable++
+                        [void]$sb.AppendLine("[REVIEW] Could not read the ACL of $dn ($($_.Exception.Message)); rights there were not checked.")
+                        continue
                     }
-                    $emptyGuid = [guid]::Empty
-                    foreach ($ou in $ousToCheck) {
+                    foreach ($ace in $acl.Access) {
+                        $sid = $null
                         try {
-                            $acl = Get-Acl -Path ("AD:\{0}" -f $ou.DistinguishedName) -EA Stop
-                            foreach ($ace in $acl.Access) {
-                                if ($ace.AccessControlType -ne 'Allow') { continue }
-                                $rights = "$($ace.ActiveDirectoryRights)"
-                                if ($rights -notmatch 'CreateChild|GenericAll|GenericWrite|WriteDacl|WriteOwner') { continue }
-                                $objectType = $ace.ObjectType
-                                $appliesToDmsa = ($objectType -eq $emptyGuid -or ($dmsaClassGuid -and $objectType -eq $dmsaClassGuid))
-                                if (-not $appliesToDmsa) { continue }
-                                if (Test-TierZeroTrustee $ace.IdentityReference) { continue }
-                                [void]$riskyAces.Add([pscustomobject]@{
-                                    OU = $ou.DistinguishedName
-                                    Trustee = "$($ace.IdentityReference)"
-                                    Rights = $rights
-                                    ObjectType = "$objectType"
-                                    Inherited = [bool]$ace.IsInherited
-                                })
-                            }
-                        } catch {
-                            $warnings++
-                            [void]$sb.AppendLine("  Could not read OU ACL for $($ou.DistinguishedName): $($_.Exception.Message)")
+                            if ($ace.IdentityReference -is [System.Security.Principal.SecurityIdentifier]) { $sid = "$($ace.IdentityReference.Value)" }
+                            else { $sid = "$($ace.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value)" }
+                        } catch { $sid = $null }
+                        $inheritOnly = (($ace.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0)
+                        $reason = Get-Ia12AceReason -Ace ([pscustomobject]@{ Sid=$sid; Rights="$($ace.ActiveDirectoryRights)"; ObjectType="$($ace.ObjectType)"; InheritOnly=$inheritOnly; Type="$($ace.AccessControlType)" }) -Scope $scope -DomainSid $domainSid -ForestRootSid $forestRootSid
+                        if ($null -eq $reason) { continue }
+                        $identity = "$($ace.IdentityReference)"
+                        $key = if ($sid) { $sid } else { $identity }
+                        if (-not $riskyPrincipals.ContainsKey($key)) { $riskyPrincipals[$key] = [pscustomobject]@{ Identity=$identity; Sid=$sid; Reason=$reason; Dn=$dn; Count=0 } }
+                        $riskyPrincipals[$key].Count++
+                    }
+                    # An owner can rewrite the DACL unless an OWNER RIGHTS (S-1-3-4) ACE narrows it.
+                    try { $ownerSid = "$($acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value)" } catch { $ownerSid = $null }
+                    if ($ownerSid -and (Test-Ia12Reportable -Sid $ownerSid -Scope 'Container' -DomainSid $domainSid -ForestRootSid $forestRootSid)) {
+                        $ownerAces = @($acl.Access | Where-Object {
+                            $s = $null
+                            try { if ($_.IdentityReference -is [System.Security.Principal.SecurityIdentifier]) { $s = "$($_.IdentityReference.Value)" } else { $s = "$($_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value)" } } catch { }
+                            $s -eq 'S-1-3-4' -and (($_.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -eq 0)
+                        })
+                        $ownerReason = $null
+                        if ($ownerAces.Count -eq 0) { $ownerReason = 'owner (implicit WriteDacl)' }
+                        else {
+                            $granted = @($ownerAces | ForEach-Object { Get-Ia12RelevantRights -Rights "$($_.ActiveDirectoryRights)" -ObjectType "$($_.ObjectType)" -InheritOnly $false -Type "$($_.AccessControlType)" -Scope $scope } | Where-Object { $_ })
+                            if ($granted.Count -gt 0) { $ownerReason = "owner via OWNER RIGHTS: $($granted -join ', ')" }
+                        }
+                        if ($ownerReason) {
+                            try { $ownerName = "$(([System.Security.Principal.SecurityIdentifier]$ownerSid).Translate([System.Security.Principal.NTAccount]).Value)" } catch { $ownerName = $ownerSid }
+                            if (-not $riskyPrincipals.ContainsKey($ownerSid)) { $riskyPrincipals[$ownerSid] = [pscustomobject]@{ Identity=$ownerName; Sid=$ownerSid; Reason=$ownerReason; Dn=$dn; Count=0 } }
+                            $riskyPrincipals[$ownerSid].Count++
                         }
                     }
-                } catch {
-                    $warnings++
-                    [void]$sb.AppendLine("  OU ACL enumeration failed: $($_.Exception.Message)")
                 }
-            } elseif ($dmsaClass) {
-                $warnings++
-                [void]$sb.AppendLine("  AD: provider drive is unavailable; OU ACL review could not be completed.")
+                [void]$sb.AppendLine("Objects inspected for dMSA create/control rights: $inspected of $($ordered.Count)")
+                if ($capHit) { $review++; [void]$sb.AppendLine("[REVIEW] The ACL sweep stopped at its limit of $limit objects; review the rest with a targeted scan.") }
+                if ($unreadable -gt 0) { $review++; [void]$sb.AppendLine("[REVIEW] $unreadable ACL(s) could not be read, so rights on those objects were not checked.") }
+            } elseif ($exposed) {
+                $review++
+                [void]$sb.AppendLine("[REVIEW] The AD: provider drive is unavailable; OU and dMSA ACL review could not run.")
             } else {
-                [void]$sb.AppendLine("  Skipped because the dMSA schema class is not visible.")
+                [void]$sb.AppendLine("[INFO] No domain controller runs Windows Server 2025, so no KDC can issue dMSA tickets and BadSuccessor does not apply here. Rerun after adding a 2025 DC.")
             }
 
-            if ($riskyAces.Count -gt 0) {
-                $issues += $riskyAces.Count
-                [void]$sb.AppendLine("  Risky non-tier-0 OU ACEs found: $($riskyAces.Count)")
-                foreach ($ace in ($riskyAces | Select-Object -First 20)) {
-                    [void]$sb.AppendLine("  [RISK] $($ace.Trustee) | $($ace.Rights) | Inherited:$($ace.Inherited) | OU:$($ace.OU)")
+            if ($riskyPrincipals.Count -gt 0) {
+                if ($allPatched) {
+                    $review++
+                    [void]$sb.AppendLine("[WARNING] $($riskyPrincipals.Count) non-tier-0 principal(s) can create or take over dMSA objects. Every Windows Server 2025 DC has the August 2025 fix, so a one-way link no longer works, but these rights still let the holder pull the keys of any account it can already write. Remove them unless the delegation is intended.")
+                } else {
+                    $critical++
+                    [void]$sb.AppendLine("[CRITICAL] $($riskyPrincipals.Count) non-tier-0 principal(s) can create or take over dMSA objects while a Windows Server 2025 DC is not confirmed patched. Any of them can link a dMSA to a Domain Admin and take its privileges.")
                 }
-            } elseif ($dmsaClass) {
-                [void]$sb.AppendLine("  No broad non-tier-0 dMSA create/control rights found in inspected OU ACLs.")
+                foreach ($p in ($riskyPrincipals.Values | Sort-Object Identity)) {
+                    $sidText = if ($p.Sid) { $p.Sid } else { 'SID unknown' }
+                    $more = if ($p.Count -gt 1) { " (+$($p.Count - 1) more)" } else { '' }
+                    [void]$sb.AppendLine("  $($p.Identity) ($sidText): $($p.Reason) on $($p.Dn)$more")
+                }
             }
 
-            [void]$sb.AppendLine("`nREMEDIATION SUMMARY:")
-            [void]$sb.AppendLine("  1. Apply Microsoft updates for CVE-2025-53779 on every domain controller.")
-            [void]$sb.AppendLine("  2. Review every dMSA migration link and require documented approval for predecessor accounts.")
-            [void]$sb.AppendLine("  3. Remove non-tier-0 OU rights that can create or control dMSA objects.")
-            [void]$sb.AppendLine("  4. Add SACL/audit coverage for msDS-ManagedAccountPrecededByLink and msDS-ManagedAccountSucceededByLink changes.")
+            [void]$sb.AppendLine("Reference: CVE-2025-53779 (BadSuccessor), fixed by KB5063878 (OS build 26100.4946) on August 12, 2025.")
+            if ($critical -eq 0 -and $review -eq 0) {
+                if ($dmsaObjects.Count -eq 0) { [void]$sb.AppendLine("[PASS] No dMSA objects or suspicious delegations detected.") }
+                else { [void]$sb.AppendLine("[PASS] No suspicious dMSA links or delegations detected.") }
+            }
 
-            $status = if ($issues -gt 0) { 'Fail' } elseif ($warnings -gt 0) { 'Partial' } else { 'Pass' }
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="BadSuccessor / dMSA scan ($issues blocking findings, $warnings follow-ups) @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+            $status = if ($critical -gt 0) { 'Fail' } elseif ($review -gt 0) { 'Partial' } else { 'Pass' }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="BadSuccessor / dMSA scan ($critical critical, $review review) @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
         }
     }
 

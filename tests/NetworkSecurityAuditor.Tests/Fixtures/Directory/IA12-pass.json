@@ -1,12 +1,16 @@
 {
   "entries": {
     "(domain)": {
-      "distinguishedName": "DC=corp,DC=example"
+      "distinguishedName": "DC=corp,DC=example",
+      "objectSid": {
+        "$sid": "S-1-5-21-1004336348-1177238915-682003330"
+      }
     },
     "RootDSE": {
       "domainFunctionality": "7",
       "forestFunctionality": "7",
-      "defaultNamingContext": "DC=corp,DC=example"
+      "defaultNamingContext": "DC=corp,DC=example",
+      "rootDomainNamingContext": "DC=corp,DC=example"
     },
     "CN=Managed Service Accounts,DC=corp,DC=example": {
       "distinguishedName": "CN=Managed Service Accounts,DC=corp,DC=example"
@@ -15,39 +19,252 @@
   "searches": [
     {
       "base": null,
+      "filter": "(&(objectCategory=computer)(|(userAccountControl:1.2.840.113556.1.4.803:=8192)(userAccountControl:1.2.840.113556.1.4.803:=67108864)))",
+      "results": [
+        {
+          "$path": "LDAP://corp.example/CN=DC01,OU=Domain Controllers,DC=corp,DC=example",
+          "name": "DC01",
+          "dNSHostName": "dc01.corp.example",
+          "operatingSystem": "Windows Server 2025 Datacenter",
+          "operatingSystemVersion": "10.0 (26100)"
+        },
+        {
+          "$path": "LDAP://corp.example/CN=DC02,OU=Domain Controllers,DC=corp,DC=example",
+          "name": "DC02",
+          "dNSHostName": "dc02.corp.example",
+          "operatingSystem": "Windows Server 2022 Standard",
+          "operatingSystemVersion": "10.0 (20348)"
+        }
+      ]
+    },
+    {
+      "base": null,
       "filter": "(objectClass=msDS-DelegatedManagedServiceAccount)",
       "results": []
+    },
+    {
+      "base": null,
+      "filter": "(objectCategory=organizationalUnit)",
+      "results": [
+        {
+          "distinguishedName": "OU=Servers,DC=corp,DC=example"
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(objectCategory=container)",
+      "results": [
+        {
+          "distinguishedName": "CN=Users,DC=corp,DC=example"
+        },
+        {
+          "distinguishedName": "CN=Managed Service Accounts,DC=corp,DC=example"
+        }
+      ]
     }
   ],
   "acls": {
-    "CN=Managed Service Accounts,DC=corp,DC=example": [
+    "DC=corp,DC=example": [
       {
         "identity": "NT AUTHORITY\\SYSTEM",
+        "sid": "S-1-5-18",
         "rights": "GenericAll",
         "type": "Allow"
       },
       {
         "identity": "CORP\\Domain Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+        "rights": "CreateChild, Self, WriteProperty, ExtendedRight, GenericRead, WriteDacl, WriteOwner",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Enterprise Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-519",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "BUILTIN\\Administrators",
+        "sid": "S-1-5-32-544",
+        "rights": "CreateChild, Self, WriteProperty, ExtendedRight, Delete, GenericRead, WriteDacl, WriteOwner",
+        "type": "Allow"
+      },
+      {
+        "identity": "NT AUTHORITY\\Authenticated Users",
+        "sid": "S-1-5-11",
+        "rights": "GenericRead",
+        "type": "Allow"
+      },
+      {
+        "identity": "NT AUTHORITY\\ENTERPRISE DOMAIN CONTROLLERS",
+        "sid": "S-1-5-9",
+        "rights": "ExtendedRight",
+        "type": "Allow",
+        "objectType": "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2"
+      },
+      {
+        "identity": "CREATOR OWNER",
+        "sid": "S-1-3-0",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inheritOnly": true
+      }
+    ],
+    "OU=Servers,DC=corp,DC=example": [
+      {
+        "identity": "NT AUTHORITY\\SYSTEM",
+        "sid": "S-1-5-18",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Domain Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
         "rights": "GenericAll",
         "type": "Allow"
       },
       {
         "identity": "CORP\\Enterprise Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-519",
         "rights": "GenericAll",
         "type": "Allow",
         "inherited": true
       },
       {
         "identity": "BUILTIN\\Administrators",
+        "sid": "S-1-5-32-544",
+        "rights": "CreateChild, DeleteChild, Self, WriteProperty, ExtendedRight, GenericRead, WriteDacl, WriteOwner",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "BUILTIN\\Account Operators",
+        "sid": "S-1-5-32-548",
+        "rights": "CreateChild, DeleteChild",
+        "type": "Allow",
+        "objectType": "bf967a86-0de6-11d0-a285-00aa003049e2"
+      },
+      {
+        "identity": "NT AUTHORITY\\Authenticated Users",
+        "sid": "S-1-5-11",
+        "rights": "GenericRead",
+        "type": "Allow"
+      },
+      {
+        "identity": "CREATOR OWNER",
+        "sid": "S-1-3-0",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inheritOnly": true
+      }
+    ],
+    "CN=Users,DC=corp,DC=example": [
+      {
+        "identity": "NT AUTHORITY\\SYSTEM",
+        "sid": "S-1-5-18",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Domain Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Enterprise Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-519",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "BUILTIN\\Administrators",
+        "sid": "S-1-5-32-544",
+        "rights": "CreateChild, DeleteChild, Self, WriteProperty, ExtendedRight, GenericRead, WriteDacl, WriteOwner",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "BUILTIN\\Account Operators",
+        "sid": "S-1-5-32-548",
+        "rights": "CreateChild, DeleteChild",
+        "type": "Allow",
+        "objectType": "bf967a86-0de6-11d0-a285-00aa003049e2"
+      },
+      {
+        "identity": "NT AUTHORITY\\Authenticated Users",
+        "sid": "S-1-5-11",
+        "rights": "GenericRead",
+        "type": "Allow"
+      },
+      {
+        "identity": "CREATOR OWNER",
+        "sid": "S-1-3-0",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inheritOnly": true
+      }
+    ],
+    "CN=Managed Service Accounts,DC=corp,DC=example": [
+      {
+        "identity": "NT AUTHORITY\\SYSTEM",
+        "sid": "S-1-5-18",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Domain Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+        "rights": "GenericAll",
+        "type": "Allow"
+      },
+      {
+        "identity": "CORP\\Enterprise Admins",
+        "sid": "S-1-5-21-1004336348-1177238915-682003330-519",
+        "rights": "GenericAll",
+        "type": "Allow",
+        "inherited": true
+      },
+      {
+        "identity": "BUILTIN\\Administrators",
+        "sid": "S-1-5-32-544",
         "rights": "CreateChild, DeleteChild, Self, WriteProperty, ExtendedRight, GenericRead, WriteDacl, WriteOwner",
         "type": "Allow",
         "inherited": true
       },
       {
         "identity": "NT AUTHORITY\\Authenticated Users",
+        "sid": "S-1-5-11",
         "rights": "GenericRead",
         "type": "Allow"
       }
     ]
+  },
+  "owners": {
+    "DC=corp,DC=example": {
+      "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+      "identity": "CORP\\Domain Admins"
+    },
+    "OU=Servers,DC=corp,DC=example": {
+      "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+      "identity": "CORP\\Domain Admins"
+    },
+    "CN=Users,DC=corp,DC=example": {
+      "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+      "identity": "CORP\\Domain Admins"
+    },
+    "CN=Managed Service Accounts,DC=corp,DC=example": {
+      "sid": "S-1-5-21-1004336348-1177238915-682003330-512",
+      "identity": "CORP\\Domain Admins"
+    }
+  },
+  "remoteRegistry": {
+    "dc01.corp.example": {
+      "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion": {
+        "UBR": 6584
+      }
+    }
   }
 }

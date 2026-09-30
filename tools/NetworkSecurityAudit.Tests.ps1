@@ -2377,6 +2377,101 @@ Describe 'EP11 Secure Boot 2023 certificate transition (nested check helpers via
     }
 }
 
+Describe 'IA12 BadSuccessor helpers (nested check helpers via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Get-Ia12Rid','Test-Ia12Tier0Sid','Test-Ia12Reportable','Get-Ia12PatchState','Test-Ia12Server2025','Get-Ia12RelevantRights','Get-Ia12AceReason','Get-Ia12ParentDn') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        $script:Dom = 'S-1-5-21-1004336348-1177238915-682003330'
+    }
+
+    It 'reads the real dMSA link attribute, not a nonexistent successor attribute' {
+        $block = Get-Block -Text $script:Text -Start "'IA12' = @\{ Type='AD'" -End "'EP01' = @\{ Type='Local'"
+        $block | Should -Match 'msDS-ManagedAccountPrecededByLink'
+        $block | Should -Match 'msDS-SupersededManagedAccountLink'
+        $block | Should -Not -Match 'msDS-ManagedAccountSucceededByLink'
+        $block | Should -Not -Match 'msDS-DelegatedManagedServiceAccountSuccessor'
+        $block | Should -Match 'CVE-2025-53779'
+        $block | Should -Not -Match 'CVE-2025-21293'
+    }
+
+    It 'matches Tier 0 principals by SID across domain, forest root and builtin RIDs' {
+        Test-Ia12Tier0Sid -Sid "$script:Dom-512" -DomainSid $script:Dom -ForestRootSid '' | Should -BeTrue
+        Test-Ia12Tier0Sid -Sid "$script:Dom-500" -DomainSid $script:Dom -ForestRootSid '' | Should -BeTrue
+        Test-Ia12Tier0Sid -Sid 'S-1-5-32-544' -DomainSid $script:Dom -ForestRootSid '' | Should -BeTrue
+        Test-Ia12Tier0Sid -Sid 'S-1-5-18' -DomainSid $script:Dom -ForestRootSid '' | Should -BeTrue
+        # Enterprise Admins live in the forest root domain.
+        $child = 'S-1-5-21-2222222222-3333333333-4444444444'
+        Test-Ia12Tier0Sid -Sid "$script:Dom-519" -DomainSid $child -ForestRootSid $script:Dom | Should -BeTrue
+        Test-Ia12Tier0Sid -Sid "$script:Dom-513" -DomainSid $script:Dom -ForestRootSid '' | Should -BeFalse
+        Test-Ia12Tier0Sid -Sid "$script:Dom-1105" -DomainSid $script:Dom -ForestRootSid '' | Should -BeFalse
+        # A different domain whose SID merely starts the same must not match.
+        Test-Ia12Tier0Sid -Sid "${script:Dom}5-512" -DomainSid $script:Dom -ForestRootSid '' | Should -BeFalse
+    }
+
+    It 'skips CREATOR OWNER and counts SELF only on a dMSA' {
+        Test-Ia12Reportable -Sid 'S-1-3-0' -Scope 'Container' -DomainSid $script:Dom -ForestRootSid '' | Should -BeFalse
+        Test-Ia12Reportable -Sid 'S-1-3-4' -Scope 'Container' -DomainSid $script:Dom -ForestRootSid '' | Should -BeFalse
+        Test-Ia12Reportable -Sid 'S-1-5-10' -Scope 'Container' -DomainSid $script:Dom -ForestRootSid '' | Should -BeFalse
+        Test-Ia12Reportable -Sid 'S-1-5-10' -Scope 'Dmsa' -DomainSid $script:Dom -ForestRootSid '' | Should -BeTrue
+        Test-Ia12Reportable -Sid "$script:Dom-512" -Scope 'Container' -DomainSid $script:Dom -ForestRootSid '' | Should -BeFalse
+        Test-Ia12Reportable -Sid "$script:Dom-1110" -Scope 'Container' -DomainSid $script:Dom -ForestRootSid '' | Should -BeTrue
+    }
+
+    It 'reads the August 2025 patch state from the update build revision' {
+        Get-Ia12PatchState -Ubr $null | Should -Be 'Unknown'
+        Get-Ia12PatchState -Ubr 4652 | Should -Be 'Unpatched'   # July 2025 cumulative update
+        Get-Ia12PatchState -Ubr 4851 | Should -Be 'Patched'      # August 2025 hotpatch KB5064010
+        Get-Ia12PatchState -Ubr 4945 | Should -Be 'Unpatched'
+        Get-Ia12PatchState -Ubr 4946 | Should -Be 'Patched'      # August 2025 cumulative update KB5063878
+        Get-Ia12PatchState -Ubr 6584 | Should -Be 'Patched'
+    }
+
+    It 'detects Windows Server 2025 from the OS name or the build number' {
+        Test-Ia12Server2025 -OperatingSystem 'Windows Server 2025 Datacenter' -OperatingSystemVersion '10.0 (26100)' | Should -BeTrue
+        Test-Ia12Server2025 -OperatingSystem 'Windows Server 2025 Standard' -OperatingSystemVersion '' | Should -BeTrue
+        Test-Ia12Server2025 -OperatingSystem '' -OperatingSystemVersion '10.0 (26100)' | Should -BeTrue
+        Test-Ia12Server2025 -OperatingSystem 'Windows Server 2022 Standard' -OperatingSystemVersion '10.0 (20348)' | Should -BeFalse
+        Test-Ia12Server2025 -OperatingSystem '' -OperatingSystemVersion '' | Should -BeFalse
+    }
+
+    It 'names the rights that create a dMSA on a container' {
+        $empty = '00000000-0000-0000-0000-000000000000'
+        $dmsa = '0feb936f-47b3-49f2-9386-1dedc2c23765'
+        Get-Ia12RelevantRights -Rights 'CreateChild' -ObjectType $empty -InheritOnly $false -Type 'Allow' -Scope 'Container' | Should -Be 'CreateChild (all classes)'
+        Get-Ia12RelevantRights -Rights 'CreateChild' -ObjectType $dmsa -InheritOnly $false -Type 'Allow' -Scope 'Container' | Should -Be 'CreateChild (msDS-DelegatedManagedServiceAccount)'
+        Get-Ia12RelevantRights -Rights 'CreateChild' -ObjectType 'bf967a86-0de6-11d0-a285-00aa003049e2' -InheritOnly $false -Type 'Allow' -Scope 'Container' | Should -BeNullOrEmpty
+        Get-Ia12RelevantRights -Rights 'GenericAll' -ObjectType $empty -InheritOnly $false -Type 'Allow' -Scope 'Container' | Should -Be 'GenericAll'
+        Get-Ia12RelevantRights -Rights 'GenericAll' -ObjectType $empty -InheritOnly $true -Type 'Allow' -Scope 'Container' | Should -BeNullOrEmpty
+        Get-Ia12RelevantRights -Rights 'CreateChild' -ObjectType $empty -InheritOnly $false -Type 'Deny' -Scope 'Container' | Should -BeNullOrEmpty
+        Get-Ia12RelevantRights -Rights 'WriteDacl, WriteOwner' -ObjectType $empty -InheritOnly $false -Type 'Allow' -Scope 'Container' | Should -Be 'WriteDacl, WriteOwner'
+    }
+
+    It 'names the rights that rewrite a dMSA link' {
+        $preceded = 'a0945b2b-57a2-43bd-b327-4d112a4e8bd1'
+        $state = '2f5c138a-bd38-4016-88b4-0ec87cbb4919'
+        Get-Ia12RelevantRights -Rights 'WriteProperty' -ObjectType $preceded -InheritOnly $false -Type 'Allow' -Scope 'Dmsa' | Should -Be 'WriteProperty (msDS-ManagedAccountPrecededByLink)'
+        Get-Ia12RelevantRights -Rights 'WriteProperty' -ObjectType $state -InheritOnly $false -Type 'Allow' -Scope 'Dmsa' | Should -Be 'WriteProperty (msDS-DelegatedMSAState)'
+        Get-Ia12RelevantRights -Rights 'GenericWrite' -ObjectType '00000000-0000-0000-0000-000000000000' -InheritOnly $false -Type 'Allow' -Scope 'Dmsa' | Should -Be 'GenericWrite'
+        Get-Ia12RelevantRights -Rights 'WriteProperty' -ObjectType 'bf967950-0de6-11d0-a285-00aa003049e2' -InheritOnly $false -Type 'Allow' -Scope 'Dmsa' | Should -BeNullOrEmpty
+    }
+
+    It 'gives a German ACE the same reason as an English one, by SID' {
+        $german = [pscustomobject]@{ Sid="$script:Dom-1110"; Rights='CreateChild'; ObjectType='0feb936f-47b3-49f2-9386-1dedc2c23765'; InheritOnly=$false; Type='Allow' }
+        $englishTier0 = [pscustomobject]@{ Sid="$script:Dom-512"; Rights='CreateChild, WriteDacl'; ObjectType='00000000-0000-0000-0000-000000000000'; InheritOnly=$false; Type='Allow' }
+        Get-Ia12AceReason -Ace $german -Scope 'Container' -DomainSid $script:Dom -ForestRootSid '' | Should -Be 'CreateChild (msDS-DelegatedManagedServiceAccount)'
+        Get-Ia12AceReason -Ace $englishTier0 -Scope 'Container' -DomainSid $script:Dom -ForestRootSid '' | Should -BeNullOrEmpty
+    }
+
+    It 'finds the parent DN, honoring an escaped comma' {
+        Get-Ia12ParentDn -Dn 'CN=dmsa_web,OU=Service Accounts,DC=corp,DC=example' | Should -Be 'OU=Service Accounts,DC=corp,DC=example'
+        Get-Ia12ParentDn -Dn 'CN=Smith\, John,OU=Apps,DC=corp,DC=example' | Should -Be 'OU=Apps,DC=corp,DC=example'
+        Get-Ia12ParentDn -Dn 'DC=example' | Should -BeNullOrEmpty
+    }
+}
+
 Describe 'Lint cleanliness (PSScriptAnalyzer)' {
     It 'has zero analyzer findings under the project settings' -Skip:(-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
         $settings = Join-Path $script:RepoRoot 'PSScriptAnalyzerSettings.psd1'

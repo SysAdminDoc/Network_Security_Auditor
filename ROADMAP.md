@@ -172,13 +172,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: the check reads `DefaultDomainSupportedEncTypes` and `RC4DefaultDisablementPhase` on each reachable DC, evaluates user, computer and gMSA accounts with SPNs against that effective value, fails RC4-only or DES accounts, and summarizes KDC events 201-209 when readable; fixtures cover unset, AES-only and RC4-only accounts. Needs live validation on a DC with the 2026 updates.
   Complexity: M
 
-- [ ] P1 — NSA-077 Gate IA12 BadSuccessor exposure on a Server 2025 DC and inspect every OU
-  Why: risk is gated on domain functional level, but the precondition is one Server 2025 DC; only the Managed Service Accounts container ACL is inspected, using English group names; any dMSA counts as a failure.
-  Evidence: `src/NetworkSecurityAuditor/Checks/IdentityAccess/IA12_DmsaCheck.cs:77-80,90-133,162-169`; https://www.akamai.com/blog/security-research/badsuccessor-is-dead-analyzing-badsuccessor-patch.
-  Touches: `IA12_DmsaCheck.cs`, PS1 IA12 block (`NetworkSecurityAudit.ps1:3921-3956`), NSA-073 fixtures.
-  Acceptance: exposure applies when any DC reports a Server 2025 `operatingSystem`; the check lists non-Tier-0 principals (by SID) holding CreateChild for `msDS-DelegatedManagedServiceAccount` or write access to existing dMSA link attributes on any OU; dMSA existence alone is informational; 2025 DCs below the August 2025 cumulative update are flagged; fixtures cover exposed and clean domains.
-  Complexity: M
-
 - [ ] P1 — NSA-078 Resolve privileged groups by SID and nested membership
   Why: IA01, IA02, CF04 and IA12 match English group names and direct membership only, so non-English domains and nested admins give wrong results.
   Evidence: `IA01_PrivilegedGroupsCheck.cs:55`, `IA02_ServiceAccountCheck.cs:76`, `CF04_FormerEmployeeCheck.cs:77`, `IA12_DmsaCheck.cs:121-124`.
@@ -213,13 +206,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: the four checks, their fixtures and tests, and the PS1 counterparts where they share the logic.
   Acceptance: a fixture domain with `krbtgt`, a disabled account with an SPN, the built-in Administrator and a week-old account that never logged on passes IA01, IA02, IA07 and CF04; a real orphaned adminCount account, an enabled user with an SPN, a shared "frontdesk" account and a 200-day-idle account still fail; IA02 counts each account once.
   Complexity: M
-
-- [ ] P1 — NSA-117 Read IA12's dMSA link from the real attribute and cite the right advisory
-  Why: IA12 reads `msDS-DelegatedManagedServiceAccountSuccessor`, which isn't a schema attribute (the dMSA link is `msDS-ManagedAccountPrecededByLink`), so the successor always reads "None". The class comment cites CVE-2025-21293, which isn't BadSuccessor. NSA-077 covers the OU scope and SID-based principal matching; this is the attribute and the reference.
-  Evidence: `Checks/IdentityAccess/IA12_DmsaCheck.cs` dMSA search properties and class comment; Akamai's BadSuccessor write-up (May 2025).
-  Touches: IA12 on both surfaces, its fixtures and tests.
-  Acceptance: IA12 reads `msDS-ManagedAccountPrecededByLink` and reports the linked account; a fixture dMSA linked to a Domain Admin is flagged; the comment and findings cite the right advisory.
-  Complexity: S
 
 - [ ] P1 — NSA-118 Stop CF01 passing when the directory can't be read
   Why: CF01 writes every LDAP failure to evidence and carries on, so with the DC unreachable it returns Pass with "No critical service account issues detected". IA08 fails an account whose `accountExpires` is out of range without saying why, because the CRITICAL count only includes "Never".

@@ -23,11 +23,28 @@ public interface IDirectoryReader
 
     /// <summary>Reads the explicit and inherited access rules on one object, with identities as NT account names.</summary>
     IReadOnlyList<DirectoryAccessRule> ReadAccessRules(string distinguishedName, CancellationToken ct);
+
+    /// <summary>
+    /// Reads one object's owner and access rules together. A reader that can't report the owner returns a null
+    /// owner and the rules from <see cref="ReadAccessRules"/>.
+    /// </summary>
+    DirectoryAcl ReadAcl(string distinguishedName, CancellationToken ct) =>
+        new(null, null, ReadAccessRules(distinguishedName, ct));
 }
+
+/// <summary>An object's owner (SID and display name, null when unknown) and its access rules.</summary>
+public sealed record DirectoryAcl(string? OwnerSid, string? Owner, IReadOnlyList<DirectoryAccessRule> Rules);
 
 public static class DirectoryReader
 {
     public const string RootDse = "RootDSE";
+
+    /// <summary>
+    /// RootDSE bound serverless (<c>LDAP://RootDSE</c>), which follows the signed-in user's own DC. On a
+    /// child-domain member where a forest-root admin is signed in, this reads that DC's RootDSE, not the
+    /// machine domain's. <see cref="RootDse"/> instead targets the machine's domain by name.
+    /// </summary>
+    public const string RootDseServerless = "RootDSE:serverless";
 
     /// <summary>Forward slashes in DN components must be escaped for an ADsPath.</summary>
     public static string EscapeDn(string dn) => dn.Replace("/", "\\/");
@@ -45,6 +62,7 @@ public sealed record DirectoryQuery(string Filter, IReadOnlyList<string> Propert
 /// <summary>
 /// One access rule. <see cref="Identity"/> is the account name for display (the SID string when it can't be
 /// translated); <see cref="Sid"/> is what checks should compare, since group names are localized.
+/// <see cref="InheritOnly"/> rules don't apply to the object itself, only to the children that inherit them.
 /// </summary>
 public sealed record DirectoryAccessRule(
     string Identity,
@@ -52,7 +70,8 @@ public sealed record DirectoryAccessRule(
     AccessControlType Type,
     Guid ObjectType,
     bool IsInherited,
-    string? Sid = null);
+    string? Sid = null,
+    bool InheritOnly = false);
 
 /// <summary>
 /// One directory object's attributes, matched case-insensitively. Integer8 values arrive as <see cref="long"/>
@@ -119,6 +138,7 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
         return distinguishedName switch
         {
             null => "LDAP://" + server,
+            DirectoryReader.RootDseServerless => "LDAP://RootDSE",
             DirectoryReader.RootDse => server.Length == 0 ? "LDAP://RootDSE" : $"LDAP://{server}/RootDSE",
             _ => "LDAP://" + DirectoryReader.EscapeDn(distinguishedName)
         };
@@ -215,10 +235,41 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
                     adRule.AccessControlType,
                     adRule.ObjectType,
                     adRule.IsInherited,
-                    sid.Value));
+                    sid.Value,
+                    adRule.PropagationFlags.HasFlag(PropagationFlags.InheritOnly)));
             }
         }
         return result;
+    }
+
+    // One bind for the owner and the rules, so a sweep over many OUs doesn't read each descriptor twice.
+    public DirectoryAcl ReadAcl(string distinguishedName, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        using var entry = new DirectoryEntry(Bind(distinguishedName));
+        entry.RefreshCache(["ntSecurityDescriptor"]);
+        var security = entry.ObjectSecurity;
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        string Name(SecurityIdentifier sid) =>
+            names.TryGetValue(sid.Value, out var known) ? known : names[sid.Value] = AccountName(sid);
+
+        var owner = security.GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
+        var rules = new List<DirectoryAccessRule>();
+        foreach (AuthorizationRule rule in security.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+        {
+            if (rule is ActiveDirectoryAccessRule adRule && adRule.IdentityReference is SecurityIdentifier sid)
+            {
+                rules.Add(new DirectoryAccessRule(
+                    Name(sid),
+                    adRule.ActiveDirectoryRights,
+                    adRule.AccessControlType,
+                    adRule.ObjectType,
+                    adRule.IsInherited,
+                    sid.Value,
+                    adRule.PropagationFlags.HasFlag(PropagationFlags.InheritOnly)));
+            }
+        }
+        return new DirectoryAcl(owner?.Value, owner is null ? null : Name(owner), rules);
     }
 
     // Same display as GetAccessRules(NTAccount): the account name, or the SID when it doesn't resolve.

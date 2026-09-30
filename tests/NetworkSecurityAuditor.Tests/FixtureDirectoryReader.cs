@@ -20,12 +20,14 @@ namespace NetworkSecurityAuditor.Tests;
 /// {
 ///   "entries":  { "(domain)": { "attr": [values] }, "RootDSE": { ... }, "CN=...,DC=...": { ... } },
 ///   "searches": [ { "base": "CN=...", "filter": "(...)", "results": [ { "$path": "...", "attr": [values] } ] } ],
-///   "acls":     { "CN=...": [ { "identity": "CORP\\Helpdesk", "sid": "S-1-5-21-...-1110", "rights": "CreateChild", "type": "Allow" } ] }
+///   "acls":     { "CN=...": [ { "identity": "CORP\\Helpdesk", "sid": "S-1-5-21-...-1110", "rights": "CreateChild", "type": "Allow" } ] },
+///   "owners":   { "CN=...": { "sid": "S-1-5-21-...-1105", "identity": "CORP\\jdoe" } }
 /// }
 /// </code>
 /// Any entry, search or ACL can carry "$error": { "hresult": "0x80070005", "message": "..." } instead, which throws a
 /// <see cref="COMException"/> the way the provider does. Values: strings, integers (as long), booleans, and objects
 /// {"$fileTimeDaysAgo": n}, {"$daysAgo": n} (DateTime UTC), {"$bytes": "base64"}, {"$sid": "S-1-5-..."}.
+/// An ACL rule can also carry "objectType" (a GUID), "inherited" and "inheritOnly" (booleans).
 /// </remarks>
 internal sealed class FixtureDirectoryReader : IDirectoryReader
 {
@@ -37,6 +39,9 @@ internal sealed class FixtureDirectoryReader : IDirectoryReader
     private readonly DateTime _now = DateTime.UtcNow;
 
     public List<DirectoryQuery> Queries { get; } = [];
+
+    /// <summary>Every distinguishedName passed to <see cref="ReadEntry"/>, in order (null is the domain root).</summary>
+    public List<string?> EntryReads { get; } = [];
 
     private FixtureDirectoryReader(JsonElement root) => _root = root;
 
@@ -79,7 +84,11 @@ internal sealed class FixtureDirectoryReader : IDirectoryReader
 
     public DirectoryRecord ReadEntry(string? distinguishedName, IReadOnlyList<string> properties, CancellationToken ct)
     {
-        var key = distinguishedName ?? DomainKey;
+        EntryReads.Add(distinguishedName);
+        // A serverless RootDSE read answers from the same recorded RootDSE entry.
+        var key = distinguishedName == DirectoryReader.RootDseServerless
+            ? DirectoryReader.RootDse
+            : distinguishedName ?? DomainKey;
         if (_root.TryGetProperty("entries", out var entries) && entries.TryGetProperty(key, out var entry))
         {
             ThrowIfError(entry);
@@ -108,7 +117,22 @@ internal sealed class FixtureDirectoryReader : IDirectoryReader
             Enum.Parse<AccessControlType>(rule.TryGetProperty("type", out var type) ? type.GetString()! : "Allow"),
             rule.TryGetProperty("objectType", out var objectType) ? Guid.Parse(objectType.GetString()!) : Guid.Empty,
             rule.TryGetProperty("inherited", out var inherited) && inherited.GetBoolean(),
-            rule.TryGetProperty("sid", out var sid) ? sid.GetString() : null)).ToList();
+            rule.TryGetProperty("sid", out var sid) ? sid.GetString() : null,
+            rule.TryGetProperty("inheritOnly", out var inheritOnly) && inheritOnly.GetBoolean())).ToList();
+    }
+
+    /// <summary>The "acls" rules plus the object's owner from "owners": { "DN": { "sid": "...", "identity": "..." } }.</summary>
+    public DirectoryAcl ReadAcl(string distinguishedName, CancellationToken ct)
+    {
+        var rules = ReadAccessRules(distinguishedName, ct);
+        if (_root.TryGetProperty("owners", out var owners) && owners.TryGetProperty(distinguishedName, out var owner))
+        {
+            return new DirectoryAcl(
+                owner.GetProperty("sid").GetString(),
+                owner.TryGetProperty("identity", out var identity) ? identity.GetString() : null,
+                rules);
+        }
+        return new DirectoryAcl(null, null, rules);
     }
 
     private static bool Matches(JsonElement search, DirectoryQuery query)
