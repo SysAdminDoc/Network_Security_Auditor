@@ -6367,8 +6367,25 @@ $script:AutoChecks = @{
 
     # ── Phase 3: Full Coverage Auto-Checks ────────────────────────────────────
 
-    'IA03' = @{ Type='AD'; Label='Scan Local MFA / Strong Auth Signals'
+    'IA03' = @{ Type='Local'; Label='Scan Local MFA / Strong Auth Signals'
         Script = {
+            # Product names matched as whole words (or word sequences), the same list as the app's
+            # IA03_MfaSignalsCheck.MfaAgents (a test keeps them identical). A substring match would count
+            # "Universal CRT" as RSA and "Snipping Tool" as Ping.
+            function Get-Ia03MfaAgent {
+                param([string]$DisplayName)
+                $agents = [ordered]@{ 'duo authentication'='Duo Security'; 'duo security'='Duo Security'; 'duo device health'='Duo Security'; 'rsa securid'='RSA SecurID'; 'rsa authentication agent'='RSA SecurID'; 'okta verify'='Okta Verify'; 'authlite'='AuthLite'; 'yubikey'='YubiKey'; 'yubico login'='YubiKey'; 'safenet authentication'='Thales/SafeNet'; 'cyberark identity'='CyberArk Identity'; 'pingid'='PingID'; 'azure mfa'='Azure AD MFA'; 'azure ad mfa'='Azure AD MFA'; 'azure multi factor authentication'='Azure AD MFA'; 'microsoft authenticator'='Microsoft Authenticator'; 'fortitoken'='FortiToken'; 'symantec vip'='Symantec VIP'; 'vip access'='Symantec VIP'; 'authpoint'='WatchGuard AuthPoint' }
+                $words = @(([string]$DisplayName).ToLowerInvariant() -split '[^\p{L}\p{Nd}]+' | Where-Object { $_ })
+                foreach ($phrase in $agents.Keys) {
+                    $parts = @($phrase -split ' ')
+                    for ($i = 0; $i + $parts.Count -le $words.Count; $i++) {
+                        $hit = $true
+                        for ($k = 0; $k -lt $parts.Count; $k++) { if ($words[$i + $k] -ne $parts[$k]) { $hit = $false; break } }
+                        if ($hit) { return $agents[$phrase] }
+                    }
+                }
+                return $null
+            }
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
             [void]$sb.AppendLine("Scope: local/AD-visible strong-auth indicators only; not tenant MFA proof.")
             # Check RDP NLA (Network Level Auth - local strong-auth prerequisite)
@@ -6380,14 +6397,13 @@ $script:AutoChecks = @{
             # Check for Azure AD / Entra modules
             $hasAzureAD = (Get-Module AzureAD,AzureADPreview,Microsoft.Graph -ListAvailable -EA SilentlyContinue | Measure-Object).Count -gt 0
             [void]$sb.AppendLine("Azure AD/Graph modules installed: $hasAzureAD (module presence only, no tenant MFA proof)")
-            # Check for ADFS
-            try { $adfs = Get-Service adfssrv -EA SilentlyContinue; if ($adfs) { [void]$sb.AppendLine("ADFS Service: $($adfs.Status)") } else { [void]$sb.AppendLine("ADFS: Not installed on this host") } } catch {}
+            # Check for ADFS (noted only: federation can run with password-only sign-in, so ADFS isn't MFA)
+            try { $adfs = Get-Service adfssrv -EA SilentlyContinue; if ($adfs) { [void]$sb.AppendLine("ADFS Service: $($adfs.Status) (not counted, ADFS alone isn't MFA)") } else { [void]$sb.AppendLine("ADFS: Not installed on this host") } } catch {}
             # Check for common MFA/SSO agents (registry - fast)
-            $mfaAgents = @('Duo Authentication','Okta Verify','RSA Authentication','Azure MFA','AuthPoint')
             $regPaths = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
             $allApps = Get-ItemProperty $regPaths -EA SilentlyContinue | Where-Object { $_.DisplayName }
-            $installed = @($allApps | Where-Object { $n=$_.DisplayName; ($mfaAgents | Where-Object { $n -match $_ }).Count -gt 0 })
-            if ($installed.Count -gt 0) { foreach ($a in $installed) { [void]$sb.AppendLine("MFA Agent found: $($a.DisplayName) v$($a.DisplayVersion)") } }
+            $installed = @(foreach ($app in $allApps) { $label = Get-Ia03MfaAgent $app.DisplayName; if ($label) { @{ App=$app; Label=$label } } })
+            if ($installed.Count -gt 0) { foreach ($a in $installed) { [void]$sb.AppendLine("MFA Agent found: $($a.Label) ($($a.App.DisplayName) v$($a.App.DisplayVersion))") } }
             else { [void]$sb.AppendLine("No MFA agent software detected on this host"); $issues++ }
             # Check smart card enforcement
             try {

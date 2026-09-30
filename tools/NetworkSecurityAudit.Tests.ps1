@@ -1792,6 +1792,29 @@ Describe 'NP01, NP05 and NP06 read the active store (nested check helper via AST
     }
 }
 
+Describe 'IA03 MFA agents (nested check helper via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Ia03MfaAgent' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+    }
+    It 'ignores programs whose names only contain an agent name' {
+        foreach ($name in 'Microsoft Visual C++ 2015-2022 Universal CRT','Microsoft Visual C++ Universal CRT','Snipping Tool','Duolingo','Thales Display Driver') {
+            Get-Ia03MfaAgent $name | Should -BeNullOrEmpty -Because "$name isn't an MFA agent"
+        }
+    }
+    It 'names the agent for whole product names' {
+        Get-Ia03MfaAgent 'Duo Authentication for Windows Logon x64' | Should -Be 'Duo Security'
+        Get-Ia03MfaAgent 'Okta Verify' | Should -Be 'Okta Verify'
+        Get-Ia03MfaAgent 'YubiKey Manager' | Should -Be 'YubiKey'
+        Get-Ia03MfaAgent 'NPS Extension For Azure MFA' | Should -Be 'Azure AD MFA'
+    }
+    It 'runs as a Local check so a workgroup host gets it' {
+        $script:Text | Should -Match "'IA03' = @\{ Type='Local'"
+        $script:Text | Should -Match "'IA09' = @\{ Type='Local'"
+    }
+}
+
 Describe 'NP06 stale-rule indicators (nested check helpers via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)

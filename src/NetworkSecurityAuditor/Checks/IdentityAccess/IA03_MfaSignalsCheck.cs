@@ -1,15 +1,16 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
 using System.Text;
+using System.Text.RegularExpressions;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA03 - Local MFA/Strong Auth Signals: RDP NLA, Windows Hello policy,
-/// installed MFA agents, smart card enforcement, ADFS service.
+/// installed MFA agents and smart card enforcement, with the ADFS service noted but not counted.
 /// These are local indicators only, not tenant MFA proof.
 /// </summary>
-public sealed class IA03_MfaSignalsCheck : ISecurityCheck
+public sealed partial class IA03_MfaSignalsCheck : ISecurityCheck
 {
     public string Id => "IA03";
 
@@ -19,21 +20,32 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
 
     internal IA03_MfaSignalsCheck(IRegistryReader registry) => _registry = registry;
 
-    private static readonly Dictionary<string, string> MfaAgentPatterns = new(StringComparer.OrdinalIgnoreCase)
-    {
-        { "Duo", "Duo Security" },
-        { "RSA", "RSA SecurID" },
-        { "Okta", "Okta Verify" },
-        { "AuthLite", "AuthLite" },
-        { "YubiKey", "YubiKey" },
-        { "Thales", "Thales/SafeNet" },
-        { "CyberArk", "CyberArk Identity" },
-        { "Ping", "PingID" },
-        { "Azure AD MFA", "Azure AD MFA" },
-        { "Microsoft Authenticator", "Microsoft Authenticator" },
-        { "FortiToken", "FortiToken" },
-        { "Symantec VIP", "Symantec VIP" },
-    };
+    // Product names matched as whole words (or word sequences) in the program's DisplayName. A substring match
+    // counted "Universal CRT" as RSA, "Snipping Tool" as Ping and "Duolingo" as Duo, and two false hits made IA03
+    // Pass. The PS1 IA03 block carries the same list, and a test keeps them identical.
+    internal static readonly (string Phrase, string Label)[] MfaAgents =
+    [
+        ("duo authentication", "Duo Security"),
+        ("duo security", "Duo Security"),
+        ("duo device health", "Duo Security"),
+        ("rsa securid", "RSA SecurID"),
+        ("rsa authentication agent", "RSA SecurID"),
+        ("okta verify", "Okta Verify"),
+        ("authlite", "AuthLite"),
+        ("yubikey", "YubiKey"),
+        ("yubico login", "YubiKey"),
+        ("safenet authentication", "Thales/SafeNet"),
+        ("cyberark identity", "CyberArk Identity"),
+        ("pingid", "PingID"),
+        ("azure mfa", "Azure AD MFA"),
+        ("azure ad mfa", "Azure AD MFA"),
+        ("azure multi factor authentication", "Azure AD MFA"),
+        ("microsoft authenticator", "Microsoft Authenticator"),
+        ("fortitoken", "FortiToken"),
+        ("symantec vip", "Symantec VIP"),
+        ("vip access", "Symantec VIP"),
+        ("authpoint", "WatchGuard AuthPoint"),
+    ];
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -113,16 +125,10 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
                     string displayName = _registry.GetValue<string>(
                         $@"{basePath}\{subkey}", "DisplayName", "") ?? "";
 
-                    foreach (var (pattern, label) in MfaAgentPatterns)
+                    if (MatchMfaAgent(displayName) is { } label && !detectedAgents.Contains(label))
                     {
-                        if (displayName.Contains(pattern, StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (!detectedAgents.Contains(label))
-                            {
-                                detectedAgents.Add(label);
-                                evidence.AppendLine($"  FOUND: {label} ({displayName})");
-                            }
-                        }
+                        detectedAgents.Add(label);
+                        evidence.AppendLine($"  FOUND: {label} ({displayName})");
                     }
                 }
             }
@@ -156,7 +162,7 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
                 sb.AppendLine("INFO: Smart card logon is not enforced.");
             }
 
-            // 5. ADFS service indicator
+            // 5. ADFS service indicator. Noted only: federation can run with password-only sign-in, so ADFS isn't MFA.
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("\n[ADFS Service]");
 
@@ -164,10 +170,7 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
             evidence.AppendLine($"  ADFS registry key exists = {adfsKeyExists}");
 
             if (adfsKeyExists)
-            {
-                sb.AppendLine("INFO: ADFS registry key detected. Federation service may be installed on this server.");
-                signalCount++;
-            }
+                sb.AppendLine("INFO: ADFS registry key detected. Federation service may be installed on this server. ADFS alone isn't MFA, so it isn't counted as a signal.");
 
             // Summary
             sb.Insert(0, $"MFA/Strong Auth signals found: {signalCount}\n" +
@@ -189,4 +192,24 @@ public sealed class IA03_MfaSignalsCheck : ISecurityCheck
             return Task.FromResult(CheckResult.FromError(Id, ex));
         }
     }
+
+    /// <summary>The label of the MFA agent named in <paramref name="displayName"/> as whole words, or null.</summary>
+    internal static string? MatchMfaAgent(string? displayName)
+    {
+        if (string.IsNullOrEmpty(displayName)) return null;
+        var words = WordSeparator().Split(displayName.ToLowerInvariant()).Where(w => w.Length > 0).ToArray();
+        foreach (var (phrase, label) in MfaAgents)
+        {
+            var parts = phrase.Split(' ');
+            for (int i = 0; i + parts.Length <= words.Length; i++)
+            {
+                if (parts.Select((part, k) => words[i + k] == part).All(hit => hit))
+                    return label;
+            }
+        }
+        return null;
+    }
+
+    [GeneratedRegex(@"[^\p{L}\p{Nd}]+")]
+    private static partial Regex WordSeparator();
 }

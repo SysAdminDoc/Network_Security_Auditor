@@ -9,11 +9,9 @@ namespace NetworkSecurityAuditor.Tests;
 /// <summary>Every AD check runs against recorded fixtures, so none can ship untested against the directory.</summary>
 public class DirectoryCheckCoverageTests
 {
-    // Typed AD but read only the local registry (and adapters), so their fixtures are in-memory registries.
-    private static readonly HashSet<string> RegistryOnly = new(StringComparer.OrdinalIgnoreCase) { "IA03", "IA09" };
-
+    // Every check typed AD, which a workgroup host skips, plus EP10, which is Local but also sweeps AD computers.
     private static IEnumerable<string> DirectoryCheckIds() =>
-        CheckCatalog.All.Where(kv => kv.Value.Type == CheckType.AD && !RegistryOnly.Contains(kv.Key)).Select(kv => kv.Key).Append("EP10");
+        CheckCatalog.All.Where(kv => kv.Value.Type == CheckType.AD).Select(kv => kv.Key).Append("EP10");
 
     [Fact]
     public void Every_Directory_Check_Has_Pass_And_Fail_Fixtures()
@@ -32,13 +30,14 @@ public class DirectoryCheckCoverageTests
         }
     }
 
+    // A check typed AD that never reads the directory is skipped on a workgroup host for nothing, as IA03 and IA09 were.
     [Fact]
     public void Every_Ad_Check_Takes_A_Reader_Seam()
     {
         var checks = CheckRegistry.GetAllChecks();
-        foreach (var id in DirectoryCheckIds().Concat(RegistryOnly))
+        var seam = typeof(Func<EnvironmentInfo, IDirectoryReader>);
+        foreach (var id in DirectoryCheckIds())
         {
-            var seam = RegistryOnly.Contains(id) ? typeof(IRegistryReader) : typeof(Func<EnvironmentInfo, IDirectoryReader>);
             var ctors = checks[id].GetType().GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.True(ctors.Any(c => c.GetParameters().Any(p => p.ParameterType == seam)), $"{id} has no {seam.Name} constructor.");
         }

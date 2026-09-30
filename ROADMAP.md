@@ -363,13 +363,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: the 16 questionnaire checks return Not Assessed from the scan on the PS1 (hints go in the findings text); a thrown or timed-out check shows as Error, earns nothing and is listed in the report; the PS1 exit code's framework threshold counts only Pass; a Pester parity test checks the questionnaire set against the app's.
   Complexity: M
 
-- [ ] P2 — NSA-119 Match IA03's MFA agents on whole names, and run IA03 and IA09 off the domain
-  Why: IA03 matches installed program names by substring, so "RSA" hits "Universal CRT", "Ping" hits "Snipping Tool" and "Duo" hits "Duolingo"; two false hits make it Pass. It also counts an ADFS registry key as an MFA signal, although ADFS alone isn't MFA. IA03 and IA09 read only the local registry and network adapters, but the catalog types them AD, so a workgroup machine skips both.
-  Evidence: `Checks/IdentityAccess/IA03_MfaSignalsCheck.cs` `MfaAgentPatterns` and the ADFS block; `Data/CheckCatalog.cs` Type for IA03 and IA09; `CheckRunner.ResolveApplicableCheckIds` drops AD checks when not domain-joined.
-  Touches: IA03 patterns (publisher plus product, or anchored names), the ADFS signal, the catalog Type for IA03 and IA09 on both surfaces, scan profile tests.
-  Acceptance: fixtures with "Microsoft Visual C++ Universal CRT" and "Snipping Tool" add no signal; Duo, Okta Verify and YubiKey Manager still do; IA03 and IA09 run on a workgroup host.
-  Complexity: S
-
 ### P3
 
 - [ ] P3 — NSA-099 Report Sysmon configuration maturity, not just presence

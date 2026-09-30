@@ -566,8 +566,8 @@ console evidence.
 - **No external modules required**: the script handles everything
 
 Optional for full coverage:
-- **RSAT / Active Directory module**: required for AD-type checks (IA01-IA08, IA10-IA12, CF01, CF04) and for EP10's sweep of AD computer objects. The tool auto-offers to install RSAT on first run.
-- **Domain-joined machine**: non-domain machines skip AD checks automatically and run all 57 local checks. EP10 still judges the local OS and installed server software there.
+- **RSAT / Active Directory module**: required for AD-type checks (IA01, IA02, IA04-IA08, IA10-IA12, CF01, CF04) and for EP10's sweep of AD computer objects. The tool auto-offers to install RSAT on first run.
+- **Domain-joined machine**: non-domain machines skip AD checks automatically and run all 58 local checks. EP10 still judges the local OS and installed server software there.
 
 ---
 
@@ -750,8 +750,8 @@ so a cloud scan cannot be mistaken for endpoint/domain coverage.
 | **Quick** | ~22 | ~15 min | Critical-only field triage |
 | **Standard** | ~53 | ~30 min | Routine assessment |
 | **Full** | 70 | ~60 min | Comprehensive audit |
-| **ADOnly** | ~14 | ~10 min | Domain-focused checks only |
-| **LocalOnly** | ~57 | ~45 min | Endpoint-only (no AD required) |
+| **ADOnly** | 12 | ~10 min | Domain-focused checks only |
+| **LocalOnly** | 58 | ~45 min | Endpoint-only (no AD required) |
 | **Cloud** | PowerShell: 3 live / 12 manifest; C#: disabled until CLxx checks land | ~5 min | Microsoft Graph cloud assessment |
 | **HIPAA** | 50 | ~30 min | Healthcare compliance |
 | **PCI** | 52 | ~35 min | Payment card compliance |

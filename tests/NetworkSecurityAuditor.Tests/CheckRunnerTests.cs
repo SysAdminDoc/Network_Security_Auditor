@@ -85,6 +85,18 @@ public class CheckRunnerTests
         Assert.Empty(applicable);
     }
 
+    [Theory]
+    [InlineData("IA03")]
+    [InlineData("IA09")]
+    public void Registry_Only_Identity_Checks_Run_On_A_Workgroup_Host(string id)
+    {
+        var applicable = CheckRunner.ResolveApplicableCheckIds(
+            new EnvironmentInfo { IsDomainJoined = false },
+            new AuditOptions { ScanProfile = ScanProfileType.Full });
+
+        Assert.Contains(id, applicable);
+    }
+
     [Fact]
     public async Task RunAsync_Reports_Applicable_Total_After_Ad_Filtering()
     {
