@@ -76,9 +76,10 @@ public sealed class EventLogCheckBoundsTests
     [Fact]
     public async Task BR06_Reports_At_Least_When_The_Application_Log_Hits_The_Cap()
     {
+        // Errors are read on their own, so the cap is reached by other providers' errors.
         var reader = new FakeEventLogReader()
             .AddMany("Application", 3, i => FakeEventLogReader.Event("Datto Backup Agent", 2, $"Backup {i} failed"))
-            .AddMany("Application", EventLogQueryHelper.MaxEventsPerQuery, i => FakeEventLogReader.Event("Service Control Manager", 4, $"noise {i}"));
+            .AddMany("Application", EventLogQueryHelper.MaxEventsPerQuery, i => FakeEventLogReader.Event("Service Control Manager", 2, $"noise {i}"));
 
         var result = await new BR06_BackupMonitoringCheck(reader).ExecuteAsync(new EnvironmentInfo(), new AuditOptions(), CancellationToken.None);
 
@@ -87,6 +88,66 @@ public sealed class EventLogCheckBoundsTests
         Assert.Contains("Last 7 days: at least 3 errors", result.Evidence);
         Assert.Contains("Read cap reached: the Application log", result.Evidence);
         Assert.Equal(3, reader.MessagesFormatted);
+    }
+
+    [Fact]
+    public async Task BR06_Finds_Older_Backup_Errors_Behind_A_Full_Cap_Of_Routine_Events()
+    {
+        // Newest first: a busy week of informational events, then three backup errors.
+        var reader = new FakeEventLogReader()
+            .AddMany("Application", EventLogQueryHelper.MaxEventsPerQuery, i => FakeEventLogReader.Event("MSSQLSERVER", 4, $"noise {i}"))
+            .AddMany("Application", 3, i => FakeEventLogReader.Event("Datto Backup Agent", 2, $"Backup {i} failed"));
+
+        var result = await new BR06_BackupMonitoringCheck(reader).ExecuteAsync(new EnvironmentInfo(), new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(CheckStatus.Fail, result.Status);
+        Assert.Contains("WARNING: 3 backup error event(s)", result.Findings);
+        Assert.Contains("Last 7 days: 3 errors", result.Evidence);
+        Assert.Contains(reader.Queries, q => q.LogName == "Application" && q.XPath.Contains("(Level=2)"));
+    }
+
+    [Fact]
+    public async Task BR06_Does_Not_Rule_Out_Failures_When_The_Error_Read_Hits_The_Cap()
+    {
+        var reader = new FakeEventLogReader()
+            .AddMany("Application", EventLogQueryHelper.MaxEventsPerQuery + 1, i => FakeEventLogReader.Event("Application Error", 2, $"crash {i}"))
+            .AddMany("Application", 3, i => FakeEventLogReader.Event("Datto Backup Agent", 2, $"Backup {i} failed"))
+            .AddMany("Application", 4, i => FakeEventLogReader.Event("Veeam Backup", 4, $"Job {i} finished"));
+
+        var result = await new BR06_BackupMonitoringCheck(reader).ExecuteAsync(new EnvironmentInfo(), new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(CheckStatus.Partial, result.Status);
+        Assert.StartsWith("Backup failures couldn't be ruled out", result.Findings);
+        Assert.Contains($"REVIEW: The Application log held more than {EventLogQueryHelper.MaxEventsPerQuery} error events", result.Findings);
+        Assert.DoesNotContain("no recent failures", result.Findings);
+        Assert.Contains("Last 7 days: at least 0 errors, 0 warnings, 4 info", result.Evidence);
+    }
+
+    [Fact]
+    public async Task BR06_Says_Older_Events_Were_Not_Checked_When_The_Activity_Read_Hits_The_Cap()
+    {
+        var reader = new FakeEventLogReader()
+            .AddMany("Application", EventLogQueryHelper.MaxEventsPerQuery + 1, i => FakeEventLogReader.Event("MSSQLSERVER", 4, $"noise {i}"))
+            .AddMany("Application", 2, i => FakeEventLogReader.Event("Acronis", 4, $"ok {i}"));
+
+        var result = await new BR06_BackupMonitoringCheck(reader).ExecuteAsync(new EnvironmentInfo(), new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(CheckStatus.Partial, result.Status);
+        Assert.StartsWith("No backup events among the events read.", result.Findings);
+        Assert.DoesNotContain("No backup monitoring events found", result.Findings);
+    }
+
+    [Fact]
+    public async Task BR03_Says_Older_Events_Were_Not_Checked_When_The_Application_Read_Hits_The_Cap()
+    {
+        var reader = new FakeEventLogReader()
+            .AddMany("Application", EventLogQueryHelper.MaxEventsPerQuery + 1, i => FakeEventLogReader.Event("Office", 4, $"noise {i}"))
+            .AddMany("Application", 2, i => FakeEventLogReader.Event("Veeam Agent", 4, $"Veeam job {i}"));
+
+        var result = await new BR03_RestoreTestCheck(reader).ExecuteAsync(new EnvironmentInfo(), new AuditOptions(), CancellationToken.None);
+
+        Assert.Contains($"No backup-related events among the newest {EventLogQueryHelper.MaxEventsPerQuery} Application events", result.Evidence);
+        Assert.DoesNotContain("No backup-related events found in Application log.", result.Evidence);
     }
 
     [Fact]

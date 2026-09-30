@@ -143,6 +143,11 @@ public sealed class BR03_RestoreTestCheck : ISecurityCheck
                         $"[{entry.ProviderName}] {entry.LevelDisplayName}: {Truncate(entry.Message, 80)}");
                 }
             }
+            else if (read.CapReached)
+            {
+                evidence.AppendLine($"  No backup-related events among the newest {read.Cap} Application events. " +
+                    "The log held more, so older backup events weren't checked.");
+            }
             else
             {
                 evidence.AppendLine("  No backup-related events found in Application log.");

@@ -36,10 +36,13 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasFailures = false;
             bool hasRecentActivity = false;
+            bool errorsIncomplete = false;
+            bool activityIncomplete = false;
 
             // 1. Check for backup failure events in Application log
             ct.ThrowIfCancellationRequested();
-            CheckBackupFailureEvents(sb, evidence, ref hasFailures, ref hasRecentActivity, ct);
+            CheckBackupFailureEvents(sb, evidence, ref hasFailures, ref hasRecentActivity,
+                ref errorsIncomplete, ref activityIncomplete, ct);
 
             // 2. Check System log for VSS errors
             ct.ThrowIfCancellationRequested();
@@ -54,9 +57,17 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
             {
                 sb.Insert(0, "Backup failures detected in event logs.\n");
             }
+            else if (errorsIncomplete)
+            {
+                sb.Insert(0, "Backup failures couldn't be ruled out: the Application log held more error events than one read covers.\n");
+            }
             else if (hasRecentActivity)
             {
                 sb.Insert(0, "Backup activity detected with no recent failures.\n");
+            }
+            else if (activityIncomplete)
+            {
+                sb.Insert(0, "No backup events among the events read. The Application log held more events than one read covers, so older backup events weren't checked.\n");
             }
             else
             {
@@ -90,7 +101,8 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
     }
 
     private void CheckBackupFailureEvents(StringBuilder sb, StringBuilder evidence,
-        ref bool hasFailures, ref bool hasRecentActivity, CancellationToken ct)
+        ref bool hasFailures, ref bool hasRecentActivity,
+        ref bool errorsIncomplete, ref bool activityIncomplete, CancellationToken ct)
     {
         evidence.AppendLine("[Backup Events - Application Log]");
 
@@ -101,52 +113,59 @@ public sealed class BR06_BackupMonitoringCheck : ISecurityCheck
             int infoCount = 0;
 
             // Provider names are matched by substring, which the event log's XPath can't express, so the
-            // time window is filtered at the source and the provider match happens here, under the read cap.
-            // Only the error samples shown below get a rendered message.
-            string query = EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(7));
+            // time window and level are filtered at the source and the provider match happens here, under the
+            // read cap. Errors get a read of their own, so a busy log's routine events can't push older backup
+            // errors past the cap. Only the error samples shown below get a rendered message.
             int errorsSampled = 0;
-            var read = _events.Query("Application", query, EventLogQueryHelper.MaxEventsPerQuery,
-                formatMessage: e => e.Level == 2 && IsBackupSource(e.ProviderName) && errorsSampled++ < ErrorSampleCount, ct);
-            foreach (var entry in read.Records)
+            var errors = _events.Query("Application",
+                EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(7), "Level=2"),
+                EventLogQueryHelper.MaxEventsPerQuery,
+                formatMessage: e => IsBackupSource(e.ProviderName) && errorsSampled++ < ErrorSampleCount, ct);
+            foreach (var entry in errors.Records.Where(e => IsBackupSource(e.ProviderName)))
             {
-                string source = entry.ProviderName;
-                if (!IsBackupSource(source))
-                    continue;
-
                 hasRecentActivity = true;
-
-                switch (entry.Level)
+                errorCount++;
+                if (errorCount <= ErrorSampleCount)
                 {
-                    case 2:
-                        errorCount++;
-                        if (errorCount <= ErrorSampleCount)
-                        {
-                            evidence.AppendLine($"  ERROR: {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
-                                $"[{source}] {Truncate(entry.Message, 100)}");
-                        }
-                        break;
-                    case 3:
-                        warningCount++;
-                        break;
-                    default:
-                        infoCount++;
-                        break;
+                    evidence.AppendLine($"  ERROR: {entry.TimeCreated:yyyy-MM-dd HH:mm} " +
+                        $"[{entry.ProviderName}] {Truncate(entry.Message, 100)}");
                 }
             }
 
-            evidence.AppendLine($"\n  Last 7 days: {read.CountText(errorCount)} errors, {read.CountText(warningCount)} warnings, {read.CountText(infoCount)} info");
-            if (read.CapNote("Application") is { } capNote)
+            ct.ThrowIfCancellationRequested();
+            var others = _events.Query("Application",
+                EventLogQueryHelper.RecentEventsQuery(TimeSpan.FromDays(7), "Level!=2"),
+                EventLogQueryHelper.MaxEventsPerQuery, formatMessage: null, ct);
+            foreach (var entry in others.Records.Where(e => IsBackupSource(e.ProviderName)))
+            {
+                hasRecentActivity = true;
+                if (entry.Level == 3)
+                    warningCount++;
+                else
+                    infoCount++;
+            }
+
+            errorsIncomplete = errors.CapReached;
+            activityIncomplete = others.CapReached;
+
+            evidence.AppendLine($"\n  Last 7 days: {errors.CountText(errorCount)} errors, {others.CountText(warningCount)} warnings, {others.CountText(infoCount)} info");
+            if ((errors.CapNote("Application") ?? others.CapNote("Application")) is { } capNote)
                 evidence.AppendLine(capNote);
 
             if (errorCount > 0)
             {
                 hasFailures = true;
-                sb.AppendLine($"WARNING: {read.CountText(errorCount)} backup error event(s) in the last 7 days. " +
+                sb.AppendLine($"WARNING: {errors.CountText(errorCount)} backup error event(s) in the last 7 days. " +
                     "Investigate and resolve failed backups immediately.");
+            }
+            else if (errorsIncomplete)
+            {
+                sb.AppendLine($"REVIEW: The Application log held more than {errors.Cap} error events in the last 7 days, " +
+                    "so older backup errors weren't checked. Check the backup console for failed jobs.");
             }
             else if (warningCount > 0)
             {
-                sb.AppendLine($"INFO: {read.CountText(warningCount)} backup warning(s) in the last 7 days.");
+                sb.AppendLine($"INFO: {others.CountText(warningCount)} backup warning(s) in the last 7 days.");
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

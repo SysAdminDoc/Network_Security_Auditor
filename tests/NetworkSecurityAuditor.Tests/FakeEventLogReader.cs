@@ -6,6 +6,8 @@ using NetworkSecurityAuditor.Services;
 /// Answers event log queries from in-memory records, newest first, through the production read loop
 /// (<see cref="EventLogQueryHelper.Collect{TRecord}"/>), so the cap and the message rendering rules under test
 /// are the real ones. Counts how many records were read and how many messages were rendered.
+/// Of the XPath it honors only <c>Level=N</c> (any listed level) and <c>Level!=N</c> terms, the one filter
+/// checks add to the time window, so a check that splits its reads by level is tested as it runs.
 /// </summary>
 internal sealed class FakeEventLogReader : IEventLogReader
 {
@@ -36,7 +38,7 @@ internal sealed class FakeEventLogReader : IEventLogReader
         CancellationToken ct)
     {
         Queries.Add((logName, xPathQuery, maxEvents));
-        var records = _logs.TryGetValue(logName, out var list) ? list : [];
+        var records = (_logs.TryGetValue(logName, out var list) ? list : []).Where(r => MatchesLevel(xPathQuery, r.Snapshot.Level)).ToList();
         int next = 0;
 
         return EventLogQueryHelper.Collect(
@@ -56,6 +58,14 @@ internal sealed class FakeEventLogReader : IEventLogReader
             maxEvents,
             formatMessage,
             ct);
+    }
+
+    private static bool MatchesLevel(string xPath, byte? level)
+    {
+        var terms = System.Text.RegularExpressions.Regex.Matches(xPath, @"Level(!?=)(\d+)");
+        var wanted = terms.Where(t => t.Groups[1].Value == "=").Select(t => byte.Parse(t.Groups[2].Value)).ToList();
+        var excluded = terms.Where(t => t.Groups[1].Value == "!=").Select(t => byte.Parse(t.Groups[2].Value)).ToList();
+        return (wanted.Count == 0 || (level is { } l && wanted.Contains(l))) && !(level is { } x && excluded.Contains(x));
     }
 
     public static FakeEventRecord FailedLogon(string user, string domain = "CONTOSO") =>
