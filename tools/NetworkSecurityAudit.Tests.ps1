@@ -1413,6 +1413,18 @@ Describe 'LM02 log forwarding decision (nested check helper via AST)' {
         $result = Get-Lm02ForwardingAssessment -Services (New-CleanHostServices) -ForwardingTargets @('1 = Server=http://wec01:5985/wsman/SubscriptionManager/WEC')
         $result.Counted | Should -Be @('Windows Event Forwarding (source)')
     }
+    It 'scores on forwarding alone: a Splunk host without Sysmon or script block logging passes' {
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Lm02Status' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+        $services = New-CleanHostServices; $services.SplunkForwarder = 'Running'
+        $forwarding = Get-Lm02ForwardingAssessment -Services $services
+        Get-Lm02Status -Counted $forwarding.Counted | Should -Be 'Pass'
+        Get-Lm02Status -Counted (Get-Lm02ForwardingAssessment -Services (New-CleanHostServices)).Counted | Should -Be 'Fail'
+        Get-Lm02Status -Counted @() -ServicesReadable $false | Should -Be 'Not Assessed'
+        $block = Get-Block -Text $script:Text -Start "'LM02' = @\{ Type='Local'" -End "'LM06' = @\{"
+        $block | Should -Match '\$status = Get-Lm02Status -Counted \$forwarding\.Counted -ServicesReadable \$servicesReadable'
+        $block | Should -Not -Match '\$issues'
+    }
     It 'reads collector subscriptions from the registry instead of launching wecutil' {
         $block = Get-Block -Text $script:Text -Start "'LM02' = @\{ Type='Local'" -End "'LM06' = @\{"
         $block | Should -Not -Match 'wecutil'
@@ -1475,6 +1487,83 @@ Describe 'NP02 listener classification (nested check helper via AST)' {
     It 'reports Partial when a public-bound role port cannot be checked against the firewall' {
         $result = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -PublicAddresses @('192.168.1.20') -FirewallError 'Access denied'
         $result.Status | Should -Be 'Partial'
+        $known = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -FirewallError 'Access denied'
+        $known.Status | Should -Be 'Partial'
+        ($known.Reviews -join "`n") | Should -Match "firewall rules couldn't be read to confirm it's blocked"
+    }
+    It 'treats package, service and owner scoped any-port rules as closed to other programs' {
+        $rules = @(
+            @{ Name='Xbox Game Bar'; Action='Allow'; Profiles=0; Protocol='Any'; LocalPorts=@(); Program='Any'; Package='S-1-15-2-1861897761-1695161497-2927542615-642690995-327840285-2659745135-2630312742' },
+            @{ Name='Delivery Optimization (TCP-In)'; Action='Allow'; Profiles=0; Protocol='TCP'; LocalPorts=@(); Program='%SystemRoot%\system32\svchost.exe'; Service='DoSvc' },
+            @{ Name='Per-user app'; Action='Allow'; Profiles=4; Protocol='TCP'; LocalPorts=@(); Owner='S-1-5-21-1-2-3-1001' }
+        )
+        $result = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -Rules $rules
+        $result.Status | Should -Be 'Pass'
+        $open = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -Rules @(@{ Name='Allow everything'; Action='Allow'; Profiles=4; Protocol='Any'; LocalPorts=@() })
+        ($open.Failures -join "`n") | Should -Match "via inbound rule 'Allow everything'"
+    }
+    It 'lets an unscoped Block rule win over an Allow rule and default inbound Allow' {
+        $smb = @(@{ Protocol='TCP'; Address='0.0.0.0'; Port=445 })
+        $block = @{ Name='Block SMB on Public'; Action='Block'; Profiles=4; Protocol='TCP'; LocalPorts=@('445') }
+        $allow = @{ Name='File and Printer Sharing (SMB-In)'; Action='Allow'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); Program='System' }
+        (Get-Np02PortAssessment -Listeners $smb -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -Rules @($allow, $block)).Status | Should -Be 'Pass'
+        (Get-Np02PortAssessment -Listeners $smb -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -PublicDefaultAllow $true -Rules @($block)).Status | Should -Be 'Pass'
+    }
+    It 'ignores Block rules scoped to one program or one remote range' {
+        $smb = @(@{ Protocol='TCP'; Address='0.0.0.0'; Port=445 })
+        $allow = @{ Name='File and Printer Sharing (SMB-In)'; Action='Allow'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); Program='System' }
+        foreach ($block in @(
+            @{ Name='Block agent'; Action='Block'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); Program='C:\Tools\agent.exe' },
+            @{ Name='Block 10/8'; Action='Block'; Profiles=4; Protocol='TCP'; LocalPorts=@('445'); RemoteAddresses=@('10.0.0.0/8') }
+        )) {
+            (Get-Np02PortAssessment -Listeners $smb -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -Rules @($allow, $block)).Status | Should -Be 'Fail'
+        }
+    }
+    It 'fails when the Public profile is off or defaults to Allow even though rules are unreadable' {
+        $off = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $false -FirewallError 'Access is denied.'
+        $off.Status | Should -Be 'Fail'
+        ($off.Failures -join "`n") | Should -Match 'the Public firewall profile being off'
+        (Get-Np02PortAssessment -Listeners @(@{ Protocol='TCP'; Address='0.0.0.0'; Port=445 }) -PublicAddresses @('192.168.1.20') -PublicFirewallEnabled $true -PublicDefaultAllow $true -FirewallError 'Access is denied.').Status | Should -Be 'Fail'
+    }
+    It 'reports Partial when network categories cannot be read' {
+        $result = Get-Np02PortAssessment -Listeners (New-DefaultWorkstationListeners) -NetworkProfileError 'Invalid class'
+        $result.Status | Should -Be 'Partial'
+        ($result.Reviews -join "`n") | Should -Match "network categories couldn't be read"
+    }
+    It 'reads the firewall from the active store with each read failing on its own' {
+        $block = Get-Block -Text $script:Text -Start "'NP02' = @\{ Type='Local'" -End "'NP03' = @\{"
+        $block | Should -Match 'Get-NetFirewallProfile -Name Public -PolicyStore ActiveStore'
+        $block | Should -Match 'Get-NetFirewallRule -Enabled True -Direction Inbound -PolicyStore ActiveStore'
+        $block | Should -Match 'Get-NetFirewallServiceFilter -All -PolicyStore ActiveStore'
+        $block | Should -Match '\$fwProfileError = '
+        $block | Should -Match '\$netProfileError = '
+    }
+}
+
+Describe 'EP01 primary antivirus decision (nested check helper via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Ep01PrimaryAv' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+    }
+
+    It 'treats an active third-party AV as primary when Defender is passive' {
+        $result = Get-Ep01PrimaryAv -AntivirusEnabled $true -RealTimeProtectionEnabled $false -AmRunningMode 'Passive Mode' -Products @(@{ Name='Windows Defender'; State=0x060100 }, @{ Name='Sophos Anti-Virus'; State=0x041000 })
+        $result.ThirdPartyPrimary | Should -BeTrue
+        $result.ActiveThirdParty | Should -Be @('Sophos Anti-Virus')
+    }
+    It 'keeps Defender primary in normal mode' {
+        $result = Get-Ep01PrimaryAv -AntivirusEnabled $true -RealTimeProtectionEnabled $true -AmRunningMode 'Normal' -Products @(@{ Name='Windows Defender'; State=0x061100 })
+        $result.DefenderPrimary | Should -BeTrue
+        $result.ThirdPartyPrimary | Should -BeFalse
+    }
+    It 'does not credit a registered but disabled third-party AV' {
+        $result = Get-Ep01PrimaryAv -AntivirusEnabled $false -RealTimeProtectionEnabled $false -AmRunningMode 'Not running' -Products @(@{ Name='Sophos Anti-Virus'; State=0x040100 })
+        $result.ThirdPartyPrimary | Should -BeFalse
+    }
+    It 'requires OnboardingState 1 before reporting Defender for Endpoint as onboarded' {
+        $block = Get-Block -Text $script:Text -Start "'EP01' = @\{ Type='Local'" -End "'EP02' = @\{"
+        $block | Should -Match "Status -eq 'Running' -and \`$mdeOnboarding -eq 1"
     }
 }
 

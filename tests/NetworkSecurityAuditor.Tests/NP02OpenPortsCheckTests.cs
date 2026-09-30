@@ -43,16 +43,125 @@ public sealed class NP02OpenPortsCheckTests(Xunit.Abstractions.ITestOutputHelper
             Listeners = DefaultWorkstationListeners(),
             PublicInterfaceAddresses = ["192.168.1.20"],
             PublicFirewallEnabled = true,
-            // Stock rules: SMB-In is Private/Domain only, WinRM HTTP-In is Domain/Private, Teams allows any port for its own program.
+            // Stock rules: SMB-In is Private/Domain only, WinRM HTTP-In is Domain/Private, Teams allows any port for its
+            // own program, a Store app rule is scoped to its AppContainer package, and a service rule to its service.
             FirewallRules =
             [
                 InboundAllow("File and Printer Sharing (SMB-In)", "445", profiles: 3, program: "System"),
                 InboundAllow("Windows Remote Management (HTTP-In)", "5985", profiles: 3, program: "System"),
                 new("{teams}", "Microsoft Teams", string.Empty, 1, 2, "TCP", [], [], [], Profiles: 4, Program: @"C:\Program Files\Teams\ms-teams.exe"),
+                new("{store}", "Xbox Game Bar", string.Empty, 1, 2, "Any", [], [], [], Profiles: 0, Program: "Any",
+                    Package: "S-1-15-2-1861897761-1695161497-2927542615-642690995-327840285-2659745135-2630312742"),
+                new("{svc}", "Delivery Optimization (TCP-In)", string.Empty, 1, 2, "TCP", [], [], [], Profiles: 0, Program: @"%SystemRoot%\system32\svchost.exe", Service: "DoSvc"),
             ],
         });
 
         Assert.NotEqual(CheckStatus.Fail, assessment.Status);
+        Assert.Equal(CheckStatus.Pass, assessment.Status);
+    }
+
+    [Fact]
+    public void Unscoped_Any_Port_Allow_Rule_On_Public_Exposes_Role_Ports()
+    {
+        var assessment = NP02_OpenPortsCheck.Assess(new Snapshot
+        {
+            Listeners = DefaultWorkstationListeners(),
+            PublicInterfaceAddresses = ["192.168.1.20"],
+            PublicFirewallEnabled = true,
+            FirewallRules = [new("{open}", "Allow everything", string.Empty, 1, 2, "Any", [], [], [], Profiles: 4)],
+        });
+
+        Assert.Equal(CheckStatus.Fail, assessment.Status);
+        Assert.Contains("via inbound rule 'Allow everything'", assessment.Findings);
+    }
+
+    [Fact]
+    public void Block_Rule_Overrides_Allow_Rule_And_Default_Allow()
+    {
+        var block = new FirewallRuleSnapshot("{block}", "Block SMB on Public", string.Empty, 1, 4, "TCP", ["445"], [], [], Profiles: 4);
+        var withAllow = NP02_OpenPortsCheck.Assess(new Snapshot
+        {
+            Listeners = [new("TCP", "0.0.0.0", 445)],
+            PublicInterfaceAddresses = ["192.168.1.20"],
+            PublicFirewallEnabled = true,
+            FirewallRules = [InboundAllow("File and Printer Sharing (SMB-In)", "445", profiles: 4, program: "System"), block],
+        });
+        var withDefaultAllow = NP02_OpenPortsCheck.Assess(new Snapshot
+        {
+            Listeners = [new("TCP", "0.0.0.0", 445)],
+            PublicInterfaceAddresses = ["192.168.1.20"],
+            PublicFirewallEnabled = true,
+            PublicDefaultInboundAllow = true,
+            FirewallRules = [block],
+        });
+
+        Assert.Equal(CheckStatus.Pass, withAllow.Status);
+        Assert.Equal(CheckStatus.Pass, withDefaultAllow.Status);
+    }
+
+    [Fact]
+    public void Scoped_Block_Rule_Does_Not_Hide_An_Open_Port()
+    {
+        var allow = InboundAllow("File and Printer Sharing (SMB-In)", "445", profiles: 4, program: "System");
+        FirewallRuleSnapshot Block(string? program = null, string[]? remote = null) =>
+            new("{block}", "Partial block", string.Empty, 1, 4, "TCP", ["445"], [], remote ?? [], Profiles: 4, Program: program);
+
+        foreach (var block in new[] { Block(program: @"C:\Tools\agent.exe"), Block(remote: ["10.0.0.0/8"]) })
+        {
+            var assessment = NP02_OpenPortsCheck.Assess(new Snapshot
+            {
+                Listeners = [new("TCP", "0.0.0.0", 445)],
+                PublicInterfaceAddresses = ["192.168.1.20"],
+                PublicFirewallEnabled = true,
+                FirewallRules = [allow, block],
+            });
+
+            Assert.Equal(CheckStatus.Fail, assessment.Status);
+        }
+    }
+
+    [Fact]
+    public void Public_Firewall_Off_Is_Known_Even_When_Rules_Are_Unreadable()
+    {
+        // The non-elevated case: profiles read fine, port filters return access denied.
+        var assessment = NP02_OpenPortsCheck.Assess(new Snapshot
+        {
+            Listeners = DefaultWorkstationListeners(),
+            PublicInterfaceAddresses = ["192.168.1.20"],
+            PublicFirewallEnabled = false,
+            FirewallError = "Access denied",
+        });
+
+        Assert.Equal(CheckStatus.Fail, assessment.Status);
+        Assert.Contains("the Public firewall profile being off", assessment.Findings);
+    }
+
+    [Fact]
+    public void Default_Inbound_Allow_With_Unreadable_Rules_Is_Exposed()
+    {
+        var assessment = NP02_OpenPortsCheck.Assess(new Snapshot
+        {
+            Listeners = [new("TCP", "0.0.0.0", 445)],
+            PublicInterfaceAddresses = ["192.168.1.20"],
+            PublicFirewallEnabled = true,
+            PublicDefaultInboundAllow = true,
+            FirewallError = "Access denied",
+        });
+
+        Assert.Equal(CheckStatus.Fail, assessment.Status);
+    }
+
+    [Fact]
+    public void Unreadable_Network_Categories_Are_Partial_Not_Pass()
+    {
+        var assessment = NP02_OpenPortsCheck.Assess(new Snapshot
+        {
+            Listeners = DefaultWorkstationListeners(),
+            NetworkProfileError = "Invalid class",
+        });
+
+        Assert.Equal(CheckStatus.Partial, assessment.Status);
+        Assert.Contains("network categories couldn't be read", assessment.Findings);
     }
 
     [Fact]
@@ -163,15 +272,24 @@ public sealed class NP02OpenPortsCheckTests(Xunit.Abstractions.ITestOutputHelper
     [Fact]
     public void Unreadable_Firewall_On_A_Public_Network_Is_Partial_Not_Pass_Or_Fail()
     {
+        var profileUnknown = NP02_OpenPortsCheck.Assess(new Snapshot
+        {
+            Listeners = DefaultWorkstationListeners(),
+            PublicInterfaceAddresses = ["192.168.1.20"],
+            FirewallProfileError = "Access denied",
+            FirewallError = "Access denied",
+        });
         var assessment = NP02_OpenPortsCheck.Assess(new Snapshot
         {
             Listeners = DefaultWorkstationListeners(),
             PublicInterfaceAddresses = ["192.168.1.20"],
+            PublicFirewallEnabled = true,
             FirewallError = "Access denied",
         });
 
+        Assert.Equal(CheckStatus.Partial, profileUnknown.Status);
         Assert.Equal(CheckStatus.Partial, assessment.Status);
-        Assert.Contains("firewall couldn't be read", assessment.Findings);
+        Assert.Contains("couldn't be read to confirm it's blocked", assessment.Findings);
         Assert.DoesNotContain("not exposed to a Public-profile network", assessment.Findings.Split('\n').First(l => l.Contains("TCP 445")));
     }
 

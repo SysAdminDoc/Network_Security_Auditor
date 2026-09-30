@@ -284,6 +284,13 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: EP06 reads listeners from the IP Helper API; default role ports only raise the issue when NP02 would call them publicly exposed; insecure listeners still raise it; existing EP06 tests keep their intent with listener fixtures; a default workstation fixture doesn't set `hasIssue` from ports alone.
   Complexity: S
 
+- [ ] P1 — NSA-107 Read NP01, NP05 and NP06 firewall rules from the active store
+  Why: those three call `FirewallRuleReader.GetEnabledRules(ct)` with no policy store, which reads the local persistent store, so rules pushed by Group Policy are invisible (on this PC ActiveStore had 519 rules against 516). A domain host whose any/any allow or temporary rule comes from a GPO passes NP01/NP06, and NP05 misses GPO egress rules. NP01 and NP06 also don't use the new application scope fields, so a program-scoped any-port allow may still read as any/any. Found 2026-09-30 during the NSA-067 follow-up.
+  Evidence: `src/NetworkSecurityAuditor/Checks/NetworkPerimeter/NP01_FirewallRulesCheck.cs:35`, `NP05_EgressFilteringCheck.cs:39`, `NP06_TempRulesCheck.cs:37`; NP02 already passes `FirewallRuleReader.ActiveStore`. The PS1 NP01/NP05/NP06 blocks call `Get-NetFirewallRule` without `-PolicyStore`.
+  Touches: the three checks and their tests, the PS1 blocks, evidence text naming the store read.
+  Acceptance: all three read `ActiveStore` on both surfaces; NP01's any/any finding requires `HasNoApplicationScope`; a fixture with a GPO-sourced rule (or an ActiveStore-only rule) is seen; a live test confirms the ActiveStore read completes.
+  Complexity: S
+
 ### P2
 
 - [ ] P2 — NSA-084 Add an LDAP signing and channel binding check for domain controllers

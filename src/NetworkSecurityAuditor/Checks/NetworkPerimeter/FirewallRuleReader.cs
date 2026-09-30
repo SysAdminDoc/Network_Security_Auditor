@@ -13,7 +13,10 @@ internal sealed record FirewallRuleSnapshot(
     string[] RemotePorts,
     string[] RemoteAddresses,
     int Profiles = 0,
-    string? Program = null)
+    string? Program = null,
+    string? Package = null,
+    string? Service = null,
+    string? Owner = null)
 {
     public bool IsInbound => Direction == 1;
     public bool IsOutbound => Direction == 2;
@@ -24,26 +27,45 @@ internal sealed record FirewallRuleSnapshot(
     public bool HasAnyRemoteAddress => FirewallRuleReader.IsAnyValue(RemoteAddresses);
     // MSFT_NetFirewallRule.Profiles: 0 = Any, 1 = Domain, 2 = Private, 4 = Public.
     public bool AppliesToPublicProfile => Profiles == 0 || (Profiles & 4) != 0;
-    public bool HasAnyProgram => string.IsNullOrWhiteSpace(Program) ||
-        Program.Trim().Equals("Any", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// True when the rule isn't narrowed to a program, an AppContainer package, a service or a
+    /// per-user owner, so an any-port rule really opens every port.
+    /// </summary>
+    public bool HasNoApplicationScope =>
+        FirewallRuleReader.IsUnscoped(Program) && FirewallRuleReader.IsUnscoped(Package) &&
+        FirewallRuleReader.IsUnscoped(Service) && FirewallRuleReader.IsUnscoped(Owner);
 }
 
 internal static class FirewallRuleReader
 {
     private const string NamespacePath = @"root\StandardCimv2";
 
-    public static IReadOnlyList<FirewallRuleSnapshot> GetEnabledRules(CancellationToken ct)
+    internal const string RuleQuery =
+        "SELECT InstanceID, ElementName, Description, Direction, Action, Enabled, Profiles, Owner, " +
+        "CreationClassName, PolicyRuleName, SystemCreationClassName, SystemName " +
+        "FROM MSFT_NetFirewallRule WHERE Enabled = 1";
+    internal const string PortFilterQuery = "SELECT InstanceID, Protocol, LocalPort, RemotePort FROM MSFT_NetProtocolPortFilter";
+    internal const string AddressFilterQuery = "SELECT InstanceID, RemoteAddress FROM MSFT_NetAddressFilter";
+    internal const string ApplicationFilterQuery = "SELECT InstanceID, AppPath, Package FROM MSFT_NetApplicationFilter";
+    internal const string ServiceFilterQuery = "SELECT InstanceID, ServiceName FROM MSFT_NetServiceFilter";
+
+    internal static readonly string[] Queries = [RuleQuery, PortFilterQuery, AddressFilterQuery, ApplicationFilterQuery, ServiceFilterQuery];
+    /// <summary>The store Get-NetFirewallRule -PolicyStore ActiveStore reads: local and Group Policy rules merged.</summary>
+    public const string ActiveStore = "ActiveStore";
+
+    /// <summary>
+    /// Reads enabled rules. With <paramref name="policyStore"/> null the provider's default
+    /// (local persistent) store is used; pass <see cref="ActiveStore"/> to include Group Policy rules.
+    /// </summary>
+    public static IReadOnlyList<FirewallRuleSnapshot> GetEnabledRules(CancellationToken ct, string? policyStore = null)
     {
-        using var searcher = new ManagementObjectSearcher(
-            NamespacePath,
-            "SELECT InstanceID, ElementName, Description, Direction, Action, Enabled, Profiles, " +
-            "CreationClassName, PolicyRuleName, SystemCreationClassName, SystemName " +
-            "FROM MSFT_NetFirewallRule WHERE Enabled = 1");
+        using var searcher = CreateSearcher(RuleQuery, policyStore);
 
         var rules = new List<FirewallRuleSnapshot>();
-        var portFilters = LoadProtocolPortFilters(ct);
-        var addressFilters = LoadAddressFilters(ct);
-        var programs = LoadApplicationFilters(ct);
+        var portFilters = LoadProtocolPortFilters(ct, policyStore);
+        var addressFilters = LoadAddressFilters(ct, policyStore);
+        var applicationFilters = LoadApplicationFilters(ct, policyStore);
+        var serviceFilters = LoadServiceFilters(ct, policyStore);
 
         using var results = searcher.Get();
         foreach (ManagementObject rule in results)
@@ -55,7 +77,8 @@ internal static class FirewallRuleReader
                 var instanceId = GetString(rule["InstanceID"], string.Empty);
                 portFilters.TryGetValue(instanceId, out var protocolFilter);
                 addressFilters.TryGetValue(instanceId, out var addressFilter);
-                programs.TryGetValue(instanceId, out var program);
+                applicationFilters.TryGetValue(instanceId, out var applicationFilter);
+                serviceFilters.TryGetValue(instanceId, out var service);
 
                 rules.Add(new FirewallRuleSnapshot(
                     instanceId,
@@ -68,7 +91,10 @@ internal static class FirewallRuleReader
                     protocolFilter?.RemotePorts ?? [],
                     addressFilter?.RemoteAddresses ?? [],
                     GetInt(rule["Profiles"]),
-                    program));
+                    applicationFilter?.AppPath,
+                    applicationFilter?.Package,
+                    service,
+                    GetString(rule["Owner"], null)));
             }
         }
 
@@ -97,6 +123,11 @@ internal static class FirewallRuleReader
         return !seen;
     }
 
+    internal static bool IsUnscoped(string? value) =>
+        string.IsNullOrWhiteSpace(value) ||
+        value.Trim().Equals("Any", StringComparison.OrdinalIgnoreCase) ||
+        value.Trim().Equals("*", StringComparison.Ordinal);
+
     public static string FormatValues(IEnumerable<string> values)
     {
         var filtered = values
@@ -107,11 +138,21 @@ internal static class FirewallRuleReader
         return filtered.Length == 0 ? "Any" : string.Join(",", filtered);
     }
 
-    private static Dictionary<string, ProtocolPortFilter> LoadProtocolPortFilters(CancellationToken ct)
+    /// <summary>
+    /// Builds a searcher on root\StandardCimv2. The NetSecurity provider reads the WMI context value
+    /// PolicyStore the same way it reads the -PolicyStore operation option from PowerShell.
+    /// </summary>
+    internal static ManagementObjectSearcher CreateSearcher(string query, string? policyStore)
     {
-        using var searcher = new ManagementObjectSearcher(
-            NamespacePath,
-            "SELECT InstanceID, Protocol, LocalPort, RemotePort FROM MSFT_NetProtocolPortFilter");
+        var options = new EnumerationOptions();
+        if (!string.IsNullOrWhiteSpace(policyStore))
+            options.Context = new ManagementNamedValueCollection { { "PolicyStore", policyStore } };
+        return new ManagementObjectSearcher(new ManagementScope(NamespacePath), new ObjectQuery(query), options);
+    }
+
+    private static Dictionary<string, ProtocolPortFilter> LoadProtocolPortFilters(CancellationToken ct, string? policyStore)
+    {
+        using var searcher = CreateSearcher(PortFilterQuery, policyStore);
 
         var filters = new Dictionary<string, ProtocolPortFilter>(StringComparer.OrdinalIgnoreCase);
         using var results = searcher.Get();
@@ -134,11 +175,9 @@ internal static class FirewallRuleReader
         return filters;
     }
 
-    private static Dictionary<string, AddressFilter> LoadAddressFilters(CancellationToken ct)
+    private static Dictionary<string, AddressFilter> LoadAddressFilters(CancellationToken ct, string? policyStore)
     {
-        using var searcher = new ManagementObjectSearcher(
-            NamespacePath,
-            "SELECT InstanceID, RemoteAddress FROM MSFT_NetAddressFilter");
+        using var searcher = CreateSearcher(AddressFilterQuery, policyStore);
 
         var filters = new Dictionary<string, AddressFilter>(StringComparer.OrdinalIgnoreCase);
         using var results = searcher.Get();
@@ -158,11 +197,32 @@ internal static class FirewallRuleReader
         return filters;
     }
 
-    private static Dictionary<string, string> LoadApplicationFilters(CancellationToken ct)
+    // MSFT_NetApplicationFilter exposes AppPath and Package (PowerShell shows AppPath as Program).
+    private static Dictionary<string, ApplicationFilter> LoadApplicationFilters(CancellationToken ct, string? policyStore)
     {
-        using var searcher = new ManagementObjectSearcher(
-            NamespacePath,
-            "SELECT InstanceID, Program FROM MSFT_NetApplicationFilter");
+        using var searcher = CreateSearcher(ApplicationFilterQuery, policyStore);
+
+        var filters = new Dictionary<string, ApplicationFilter>(StringComparer.OrdinalIgnoreCase);
+        using var results = searcher.Get();
+        foreach (ManagementObject filter in results)
+        {
+            using (filter)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var instanceId = GetString(filter["InstanceID"], string.Empty);
+                if (string.IsNullOrWhiteSpace(instanceId)) continue;
+
+                filters[instanceId] = new ApplicationFilter(GetString(filter["AppPath"], null), GetString(filter["Package"], null));
+            }
+        }
+
+        return filters;
+    }
+
+    private static Dictionary<string, string> LoadServiceFilters(CancellationToken ct, string? policyStore)
+    {
+        using var searcher = CreateSearcher(ServiceFilterQuery, policyStore);
 
         var filters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         using var results = searcher.Get();
@@ -175,7 +235,7 @@ internal static class FirewallRuleReader
                 var instanceId = GetString(filter["InstanceID"], string.Empty);
                 if (string.IsNullOrWhiteSpace(instanceId)) continue;
 
-                filters[instanceId] = GetString(filter["Program"], "Any");
+                filters[instanceId] = GetString(filter["ServiceName"], "Any");
             }
         }
 
@@ -213,4 +273,6 @@ internal static class FirewallRuleReader
     private sealed record ProtocolPortFilter(string? Protocol, string[] LocalPorts, string[] RemotePorts);
 
     private sealed record AddressFilter(string[] RemoteAddresses);
+
+    private sealed record ApplicationFilter(string? AppPath, string? Package);
 }
