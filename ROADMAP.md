@@ -361,7 +361,42 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: both cases are expanded in fixtures on both surfaces, or reported as not expanded with the group named.
   Complexity: M
 
+- [ ] P2 — NSA-128 Say in the exports when a run didn't finish
+  Why: after Ctrl+C or `--deadline-minutes`, unfinished checks show as a plain "Error" in the HTML report and count as generic errors in the coverage section. The JSON has no run-complete flag, so the dashboard scores a partial run like a full scan. Exit code 69 is the only run-level signal.
+  Evidence: `CheckResult.IsIncompleteEvidence` is read only by tests; `HtmlReportGenerator.cs` status labels; `CoverageSummary`.
+  Touches: JSON export (run complete flag and unfinished count), HTML header and coverage section, the dashboard import, their tests.
+  Acceptance: a cancelled run's JSON and HTML both say the run didn't finish and how many checks were left; the dashboard marks or leaves out incomplete runs; each has a test.
+  Complexity: M
+
+- [ ] P2 — NSA-130 Find Domain Admins by SID in the app's CF01
+  Why: `CF01_DaServiceAccountsCheck.cs` searches `(cn=Domain Admins)`, so a German or French domain comes back "Not assessed" and service accounts in Domain Admins are never reviewed there. The other AD checks resolve groups by SID since NSA-078.
+  Evidence: `CF01_DaServiceAccountsCheck.cs` Domain Admins search; `Services/PrivilegedGroupResolver.cs`.
+  Touches: app CF01, a localized CF01 fixture.
+  Acceptance: a German fixture gives the same CF01 result as the English one.
+  Complexity: S
+
+- [ ] P2 — NSA-132 Report IA01's operator-group members and stop calling new or disabled admins stale
+  Why: since NSA-078, members of Account, Backup, Server and Print Operators are only listed in the evidence ("protected through ..."), so a helpdesk user in Account Operators gets a clean IA01. Staleness also ignores `whenCreated` and disabled state, so a Domain Admin added last week or the unused built-in Administrator Microsoft recommends leaving alone is marked [STALE] and fails.
+  Evidence: `IA01_PrivilegedGroupsCheck.cs` orphan and staleness logic; the `IA01-pass` fixture's `b.backup` member; CF04's new-account rule.
+  Touches: IA01 on both surfaces, IA01 fixtures.
+  Acceptance: an operator-group member raises a finding line and at least Partial; a never-used account created inside the threshold and a disabled member aren't stale (disabled members are listed apart); fixtures for each on both surfaces.
+  Complexity: M
+
 ### P3
+
+- [ ] P3 — NSA-129 Let NP06 find stale-rule words joined to digits
+  Why: NP06 splits rule names on anything but letters and digits, so "Test1 RDP" and "temp2 allow" aren't flagged.
+  Evidence: `NP06` indicator matching on both surfaces (NSA-113).
+  Touches: both NP06 surfaces and their shared word list.
+  Acceptance: a boundary between letters and digits also splits words, so "Test1" matches "test" without "Win10" or "Office365" producing a new false hit; fixtures on both surfaces.
+  Complexity: S
+
+- [ ] P3 — NSA-131 Model inherited object types in directory ACL fixtures
+  Why: `IA12-clean.json` grants Helpdesk GenericAll on OU=Apps as inherit-only with no inherited object type. Real AD would copy that onto `CN=dmsa_sql,OU=Apps`, and IA12 would rightly flag it, so the clean pass rests on an ACL AD wouldn't produce. `DirectoryAccessRule` can't express an inherited object type.
+  Evidence: `Fixtures/Directory/IA12-clean.json`; `DirectoryAccessRule` in `Services/DirectoryReader.cs`.
+  Touches: `DirectoryAccessRule` (an additive inherited object type), `LdapDirectoryReader`, `FixtureDirectoryReader`, IA12 fixtures.
+  Acceptance: the clean fixture scopes the ACE to group objects and still passes; a fixture that carries the unscoped ACE's inherited copy on the dMSA fails.
+  Complexity: S
 
 - [ ] P3 — NSA-099 Report Sysmon configuration maturity, not just presence
   Why: "Sysmon installed with default or empty config" is a common gap; LM06 and LM07 detect the service only.
