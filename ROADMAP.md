@@ -398,13 +398,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: the unused types and properties are gone; the registry-count test still passes; no behavior changes.
   Complexity: S
 
-- [ ] P3 — NSA-104 State plainly in the README that MSP and consultant use is free
-  Why: PingCastle and Purple Knight restrict free use to your own environment, so "free for auditing client environments" is the main reason an MSP would choose this tool.
-  Evidence: https://www.pingcastle.com/terms-and-conditions/; https://www.capterra.com/p/10052219/PingCastle/; README "Why This Exists".
-  Touches: README "Why This Exists".
-  Acceptance: the README says the MIT license allows auditing client and third-party environments at no cost, without naming competitors' prices.
-  Complexity: S
-
 - [ ] P3 — NSA-105 Replace the box-drawing banner comments in the PS1 with ASCII
   Why: `NetworkSecurityAudit.ps1` is BOM-less UTF-8 and the repo rule is ASCII-only for Windows PowerShell 5.1, yet 158 section-banner comments use U+2500 (`# ── ... ──`); 5.1 decodes them through the ANSI code page. Harmless while they stay in comments, but it hides real non-ASCII regressions from a simple scan. Found 2026-09-30 during NSA-066.
   Evidence: `NetworkSecurityAudit.ps1:374` and 157 similar lines (`Select-String -Pattern '[^\x00-\x7F]'`).

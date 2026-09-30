@@ -75,6 +75,7 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 - Recorded directory fixtures return only the attributes a search asks for, as a domain controller does, so a check that stops requesting an attribute fails its tests. IA04 and CF04 tests pin their 90-day thresholds.
 
 ### Docs
+- The README says plainly that client work is free. The MIT license covers auditing MSP clients and other third-party networks with no per-client or per-technician fee.
 - The README no longer asks a visitor to paste an `Invoke-WebRequest` fetch-and-run block. Getting
   the script is now a download link followed by local-only commands (`Unblock-File`, `Get-FileHash`,
   `Get-AuthenticodeSignature`, review, then run).

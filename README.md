@@ -36,6 +36,8 @@ Most security audit tools are either expensive commercial platforms that require
 
 This tool fills that gap. It auto-detects the environment, runs every check it can, skips what doesn't apply, scores the results against real compliance frameworks, and generates reports suitable for executives, IT managers, and technical staff. It runs silently via RMM for scheduled fleet assessments or interactively through a polished GUI for on-site audits.
 
+It's free for client work too. The MIT license lets you run it in any environment you're hired to assess, including MSP clients and other third-party networks, at no cost and with no per-client or per-technician fee. If you pass the code on, keep the license notice with it. That's the only condition.
+
 ---
 
 ## Quick Start
