@@ -29,7 +29,11 @@ public class Tier0PrincipalsTests
     {
         Assert.True(Tier0Principals.IsTier0(Domain + "-519", Child, forestRootSid: Domain));
         Assert.True(Tier0Principals.IsTier0(Child + "-512", Child, forestRootSid: Domain));
-        Assert.False(Tier0Principals.IsTier0(Domain + "-512", Child, forestRootSid: Domain));
+        // The forest root's Domain Admins and built-in Administrator control the whole forest.
+        Assert.True(Tier0Principals.IsTier0(Domain + "-512", Child, forestRootSid: Domain));
+        Assert.True(Tier0Principals.IsTier0(Domain + "-500", Child, forestRootSid: Domain));
+        // The root's ordinary principals stay outside a child domain's Tier 0.
+        Assert.False(Tier0Principals.IsTier0(Domain + "-513", Child, forestRootSid: Domain));
     }
 
     [Fact]

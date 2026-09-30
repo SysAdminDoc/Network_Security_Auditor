@@ -165,13 +165,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P1
 
-- [ ] P1 — NSA-078 Resolve privileged groups by SID and nested membership
-  Why: IA01, IA02, CF04 and IA12 match English group names and direct membership only, so non-English domains and nested admins give wrong results.
-  Evidence: `IA01_PrivilegedGroupsCheck.cs:55`, `IA02_ServiceAccountCheck.cs:76`, `CF04_FormerEmployeeCheck.cs:77`, `IA12_DmsaCheck.cs:121-124`.
-  Touches: a shared well-known-SID resolver (domain SID plus RID 512, 518, 519, 544 and others), `LDAP_MATCHING_RULE_IN_CHAIN` membership queries, the four checks, PS1 equivalents.
-  Acceptance: groups resolve from domain SID and RID; nested members appear with their path; a fixture with localized group names (for example "Domänen-Admins") produces the same result as the English fixture.
-  Complexity: M
-
 - [ ] P1 — NSA-080 Port the PS1 AD attack-indicator checks to C#
   Why: DCSync rights for non-default principals, AdminSDHolder ACL tampering, Protected Users coverage of Tier 0 and unconstrained delegation exist only in the PS1; C# EP03 labels the LSA `AllowTgtSessionKey` value as "Kerberos delegation".
   Evidence: `NetworkSecurityAudit.ps1:3524-3530`, `:3538-3553`, `:3596-3606`; `src/NetworkSecurityAuditor/Checks/EndpointSecurity/EP03_SmbNtlmCheck.cs:286-295`.
@@ -192,13 +185,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: `tools/Publish-CSharpRelease.ps1` (add the PS1 and its hash to `SHA256SUMS.txt`), README download link to `releases/latest/download/NetworkSecurityAudit.ps1`, screenshots for GUI, HTML report, executive summary and silent-mode console, CHANGELOG release heading.
   Acceptance: after NSA-065, a release exists with the C# ZIP, SBOM, manifest, `NetworkSecurityAudit.ps1` and one `SHA256SUMS.txt` covering all of them; the README download link resolves (HTTP 200) and the documented hash command matches; screenshots show the released version.
   Complexity: S
-
-- [ ] P1 — NSA-116 Stop IA01, IA02, IA07 and CF04 from failing every real domain
-  Why: converting the AD checks to recorded fixtures (NSA-073) showed results no real domain can pass, apart from the nested-group and non-English cases NSA-078 covers. IA01's orphaned-adminCount test flags `krbtgt`, which always has adminCount=1. IA02's SPN filter includes `krbtgt` and disabled accounts, so every domain has a "kerberoastable" account, and an account matching two name patterns is counted twice. IA07's "admin" pattern matches the built-in Administrator. CF04 treats `(!(lastLogonTimestamp=*))` as a former employee, so a hire created yesterday is CRITICAL, and it requests `whenCreated` without using it.
-  Evidence: `Checks/IdentityAccess/IA01_PrivilegedGroupsCheck.cs` orphan loop; `IA02_ServiceAccountCheck.cs` filter and pattern count; `IA07_SharedAccountsCheck.cs` pattern list; `Checks/CommonFindings/CF04_FormerEmployeeCheck.cs` filter; fixtures under `tests/NetworkSecurityAuditor.Tests/Fixtures/Directory/`.
-  Touches: the four checks, their fixtures and tests, and the PS1 counterparts where they share the logic.
-  Acceptance: a fixture domain with `krbtgt`, a disabled account with an SPN, the built-in Administrator and a week-old account that never logged on passes IA01, IA02, IA07 and CF04; a real orphaned adminCount account, an enabled user with an SPN, a shared "frontdesk" account and a 200-day-idle account still fail; IA02 counts each account once.
-  Complexity: M
 
 - [ ] P2 — NSA-084 Add an LDAP signing and channel binding check for domain controllers
   Why: C# has no LDAP signing or channel binding check and the PS1 reads only the local DC registry; Server 2025 DCs require signing by default while channel binding stays "when supported", so unconfigured means different things by OS.
@@ -359,6 +345,20 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Evidence: `Checks/IdentityAccess/IA11_KerberosEncryptionCheck.cs` (`PreEnforcementDefault`, `_kdcEvents`); PS1 IA11 trust section.
   Touches: IA11 on both surfaces, fixtures.
   Acceptance: a DC whose build carries the April 2026 update is treated as 0x18 when nothing is set, from a documented build table; the app lists trusts with RC4-only or unset etypes as the PS1 does; a remote event read that doesn't answer in time names the DC and moves on.
+  Complexity: M
+
+- [ ] P2 — NSA-126 Match the script's remaining AD principals by SID, and fix its AdminSDHolder baseline
+  Why: NSA-078 moved the group lookups to SIDs, but several PS1 filters still match English names. IA01's DCSync filter drops `Domain Controllers|SYSTEM|Administrators|Domain Admins|Enterprise Admins` by name, so on a German domain every standard principal is reported as a DCSync risk. IA06 builds its Tier 0 list from English names, CF01 and IA06 call `Get-ADGroupMember 'Domain Admins'`, and CF04 picks remote-access groups by matching `VPN|Remote|RAS|DirectAccess`. IA01's AdminSDHolder baseline leaves out Authenticated Users, Everyone and SELF, which are on every domain's AdminSDHolder, so it likely flags every domain.
+  Evidence: `NetworkSecurityAudit.ps1` IA01 DCSync and AdminSDHolder sections, IA06 `$tier0Groups` and `$daMembers`, CF01 `$da`, CF04 `$staleRemote`.
+  Touches: those PS1 blocks (reusing the NSA-078 SID helpers), Pester tests with localized names.
+  Acceptance: a German-named domain gives the same DCSync, Tier 0 and Domain Admins results as an English one in Pester; a default AdminSDHolder ACL passes; CF04's remote-access list says how it chose the groups.
+  Complexity: M
+
+- [ ] P2 — NSA-127 Close the privileged-group resolver's known gaps
+  Why: `PrivilegedGroupResolver` (NSA-078) doesn't expand members nested in from another domain, and it misses a user whose primary group is itself nested inside a privileged group. The script relies on `Get-ADGroupMember` returning primary-group members.
+  Evidence: `Services/PrivilegedGroupResolver.cs`; PS1 IA01, IA02, CF04 membership helpers.
+  Touches: the resolver, fixtures for a foreign-domain member and a nested primary group.
+  Acceptance: both cases are expanded in fixtures on both surfaces, or reported as not expanded with the group named.
   Complexity: M
 
 ### P3

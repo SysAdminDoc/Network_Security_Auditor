@@ -39,8 +39,10 @@ public static class Tier0Principals
         [AdministratorRid, KrbtgtRid, DomainAdminsRid, DomainControllersRid, ReadOnlyDomainControllersRid,
          KeyAdminsRid, EnterpriseKeyAdminsRid]);
 
+    // Principals of the forest root domain that are Tier 0 in every domain of the forest. The root's Domain Admins
+    // and built-in Administrator control Enterprise and Schema Admins, so they reach every domain.
     private static readonly FrozenSet<int> s_forestRootRids = FrozenSet.ToFrozenSet(
-        [SchemaAdminsRid, EnterpriseAdminsRid, EnterpriseKeyAdminsRid]);
+        [AdministratorRid, DomainAdminsRid, SchemaAdminsRid, EnterpriseAdminsRid, EnterpriseKeyAdminsRid]);
 
     /// <summary>The SID of a domain-relative principal, for example Domain Admins is <c>Of(domainSid, 512)</c>.</summary>
     public static string Of(string domainSid, int rid) => string.Create(CultureInfo.InvariantCulture, $"{domainSid}-{rid}");
