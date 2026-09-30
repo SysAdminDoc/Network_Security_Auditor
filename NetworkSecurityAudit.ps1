@@ -7409,26 +7409,55 @@ $script:AutoChecks = @{
 
     'NP06' = @{ Type='Local'; Label='Scan Stale Firewall Rules'
         Script = {
-            $sb = [System.Text.StringBuilder]::new(); $issues = 0
+            # Whole words (or word sequences) only, the same list as the app's NP06_TempRulesCheck.StaleIndicators
+            # (a test keeps them identical). A substring match flagged "Droplet Template", "Google Chrome for
+            # Testing" and "Folder".
+            function Get-Np06StaleIndicator {
+                param([string]$Text)
+                $indicators = @('temp','temporary','tmp','test','old','delete','remove','deprecated','disable','unused','trial','debug','troubleshoot','fixme','todo','copy of')
+                $words = @(([string]$Text).ToLowerInvariant() -split '[^\p{L}\p{Nd}]+' | Where-Object { $_ })
+                foreach ($indicator in $indicators) {
+                    $parts = @($indicator -split ' ')
+                    for ($i = 0; $i + $parts.Count -le $words.Count; $i++) {
+                        $hit = $true
+                        for ($k = 0; $k -lt $parts.Count; $k++) { if ($words[$i + $k] -ne $parts[$k]) { $hit = $false; break } }
+                        if ($hit) { return $indicator }
+                    }
+                }
+                return $null
+            }
+            # A 2015-2030 year followed by - / or . (for example 2024-03-01), the same rule as the app's HasDatePattern.
+            function Test-Np06DatePattern {
+                param([string]$Name)
+                if ([string]::IsNullOrEmpty($Name)) { return $false }
+                for ($i = 0; $i -le $Name.Length - 10; $i++) {
+                    $year = 0
+                    if ([int]::TryParse($Name.Substring($i, 4), [System.Globalization.NumberStyles]::None, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$year) -and
+                        $year -ge 2015 -and $year -le 2030 -and '-/.'.Contains([string]$Name[$i + 4])) { return $true }
+                }
+                return $false
+            }
+            $sb = [System.Text.StringBuilder]::new()
             # ActiveStore includes Group Policy and service-added rules, and is readable without elevation.
             $rules = @(Get-NetFirewallRule -Enabled True -PolicyStore ActiveStore -EA Stop)
-            # Find potentially stale rules (common indicators)
-            $staleIndicators = @('temp','test','troubleshoot','vendor','old','backup','delete','remove','fixme','TODO','trial')
             $staleRules = @()
             foreach ($r in $rules) {
-                $isStale = $staleIndicators | Where-Object { $r.DisplayName -match $_ -or $r.Description -match $_ }
-                if ($isStale) { $staleRules += $r }
+                $indicator = Get-Np06StaleIndicator $r.DisplayName
+                if (-not $indicator) { $indicator = Get-Np06StaleIndicator $r.Description }
+                if ($indicator) { $staleRules += @{ Rule=$r; Why="matched: $indicator" } }
+                elseif (Test-Np06DatePattern $r.DisplayName) { $staleRules += @{ Rule=$r; Why='date in name' } }
             }
             [void]$sb.AppendLine("POTENTIALLY STALE FIREWALL RULES ($($staleRules.Count)):")
             foreach ($sr in ($staleRules | Select-Object -First 20)) {
-                $issues++
-                [void]$sb.AppendLine("  $($sr.DisplayName) | Dir:$($sr.Direction) | Action:$($sr.Action) | Profile:$($sr.Profile)")
+                [void]$sb.AppendLine("  $($sr.Rule.DisplayName) | Dir:$($sr.Rule.Direction) | Action:$($sr.Rule.Action) | Profile:$($sr.Rule.Profile) | $($sr.Why)")
             }
+            if ($staleRules.Count -gt 20) { [void]$sb.AppendLine("  ... and $($staleRules.Count - 20) more.") }
             if ($staleRules.Count -eq 0) { [void]$sb.AppendLine("  No rules with stale-looking names found") }
-            # Check total rule count (excessive rules = likely uncurated)
             [void]$sb.AppendLine("`nTOTAL ENABLED RULES: $($rules.Count)")
-            if ($rules.Count -gt 200) { [void]$sb.AppendLine("  [!] High rule count suggests rules may not be regularly reviewed"); $issues++ }
-            $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 3) {'Partial'} else {'Fail'}
+            # Informational only, as in the app: a long list is where stale rules hide, but it isn't a finding by itself.
+            if ($rules.Count -gt 200) { [void]$sb.AppendLine("  INFO: $($rules.Count) enabled rules is a lot to review") }
+            # Same rule as the app: stale-looking rules need a review (Partial), they don't prove exposure (Fail).
+            $status = if ($staleRules.Count -eq 0) {'Pass'} else {'Partial'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Stale firewall rule scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }

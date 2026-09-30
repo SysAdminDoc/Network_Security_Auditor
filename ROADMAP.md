@@ -356,13 +356,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: every STIG reference names a real rule from a named STIG release (checked against the published XCCDF) or says plainly that no rule maps; a test pins the source release.
   Complexity: M
 
-- [ ] P2 — NSA-113 Match NP06 stale-rule indicators on words, not substrings
-  Why: both surfaces test each indicator with a substring match, so "temp" hits "Droplet Template", "test" hits "Google Chrome for Testing" and "old" would hit "Folder" or "Hold". On this PC six rules came back as stale for that reason and the PS1 NP06 said Fail. The PS1 also counts one issue per stale rule (four or more is Fail) where the app caps NP06 at Partial, and the two indicator lists differ ("troubleshoot", "vendor", "fixme", "TODO" vs "tmp", "debug", "deprecated", "disable", "unused", "copy of").
-  Evidence: `src/NetworkSecurityAuditor/Checks/NetworkPerimeter/NP06_TempRulesCheck.cs` `ProcessRuleForStaleness`; PS1 NP06 `$staleIndicators` loop; live PS1 NP06 run 2026-09-30.
-  Touches: NP06 on both surfaces, one shared indicator list with a parity test, NP06 tests.
-  Acceptance: indicators match whole words (or a documented prefix like `tmp_`); "Template", "Testing" and "Folder" fixtures aren't stale; "TEMP vendor access" is; both surfaces use the same list and the same status rule.
-  Complexity: S
-
 - [ ] P2 — NSA-115 Bring the PS1 status model in line with the app (questionnaires, Error, Pass-only thresholds)
   Why: NSA-072 changed the app only. The PS1's questionnaire checks still return `Partial` when they find nothing (NA04, BR02, BR04, BR05, BR07, CF03, PS01 to PS03 return nothing else), so an unanswered question earns half credit in `Get-FrameworkScores` and the risk score. Some also return Pass or Fail from local hints (PS04, NA07, NP10, BR03, BR08, PS06), which the app treats as questionnaire answers the operator gives. A check whose runspace throws still has no Error state.
   Evidence: PS1 check blocks for the 16 IDs in `CheckCatalog.QuestionnaireIds`; `Get-FrameworkScores` counts `Partial` as 0.5 and everything else as Not Assessed; app behavior in `StatusModelTests`.

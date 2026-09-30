@@ -1792,6 +1792,36 @@ Describe 'NP01, NP05 and NP06 read the active store (nested check helper via AST
     }
 }
 
+Describe 'NP06 stale-rule indicators (nested check helpers via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Get-Np06StaleIndicator','Test-Np06DatePattern') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+    It 'matches indicators on whole words, not inside other words' {
+        foreach ($name in 'Droplet Template','Google Chrome for Testing','Folder Sync','Hold Music Server','Contoso Backup Agent','Vendor Portal') {
+            Get-Np06StaleIndicator $name | Should -BeNullOrEmpty -Because "$name isn't stale"
+        }
+        Get-Np06StaleIndicator 'TEMP vendor access' | Should -Be 'temp'
+        Get-Np06StaleIndicator 'tmp_rdp_rule' | Should -Be 'tmp'
+        Get-Np06StaleIndicator 'Copy of Remote Desktop' | Should -Be 'copy of'
+        Get-Np06StaleIndicator 'Old SQL port' | Should -Be 'old'
+        Get-Np06StaleIndicator 'Remove after go-live' | Should -Be 'remove'
+    }
+    It 'flags a dated rule name the way the app does' {
+        Test-Np06DatePattern 'Allow vendor 2024-03-01' | Should -BeTrue
+        Test-Np06DatePattern 'Build 20240301' | Should -BeFalse
+        Test-Np06DatePattern 'Port 1999-2000 range' | Should -BeFalse
+    }
+    It 'caps stale rules at Partial and leaves the rule count unscored, as the app does' {
+        $np06 = Get-Block -Text $script:Text -Start "'NP06' = @\{ Type='Local'" -End "'NP07' = @\{ Type='Local'"
+        $np06 | Should -Match "\`$status = if \(\`$staleRules.Count -eq 0\) \{'Pass'\} else \{'Partial'\}"
+        $np06 | Should -Not -Match "'Fail'"
+    }
+}
+
 Describe 'EP06 listener findings (nested check helpers via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)

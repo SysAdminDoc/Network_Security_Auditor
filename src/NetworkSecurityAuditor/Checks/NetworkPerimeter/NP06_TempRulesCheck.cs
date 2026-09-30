@@ -2,16 +2,17 @@ namespace NetworkSecurityAuditor.Checks.NetworkPerimeter;
 
 using System.Management;
 using System.Text;
+using System.Text.RegularExpressions;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// NP06 - Temporary Firewall Rules: Check firewall rules for stale/temporary indicators --
-/// rules with "temp", "test", "old" in names, or very old creation dates. Only names and
+/// rules whose name or description has a word like "temp", "test" or "old", or a date. Only names and
 /// descriptions are needed, so the rules are read from the active store without their filters,
 /// which works without elevation and includes Group Policy and service-added rules.
 /// </summary>
-public sealed class NP06_TempRulesCheck : ISecurityCheck
+public sealed partial class NP06_TempRulesCheck : ISecurityCheck
 {
     private readonly Func<CancellationToken, string?, IReadOnlyList<FirewallRuleSnapshot>> _readRules;
     private readonly Func<string, string, CancellationToken, string> _runCommand;
@@ -31,11 +32,17 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
         _runCommand = runCommand ?? ((file, args, ct) => CommandRunner.RunForOutput(file, args, TimeSpan.FromSeconds(30), ct));
     }
 
-    private static readonly string[] StaleIndicators =
+    // Whole words (or word sequences) only: a substring match flagged "Droplet Template", "Google Chrome for
+    // Testing" and "Folder". "backup" and "vendor" aren't here because backup agents and vendor tools keep
+    // permanent rules. The PS1 NP06 block carries the same list, and a test keeps them identical.
+    internal static readonly string[] StaleIndicators =
     [
-        "temp", "test", "old", "delete", "remove", "tmp", "debug",
-        "deprecated", "disable", "unused", "backup", "copy of", "trial"
+        "temp", "temporary", "tmp", "test", "old", "delete", "remove", "deprecated", "disable",
+        "unused", "trial", "debug", "troubleshoot", "fixme", "todo", "copy of"
     ];
+
+    // More enabled rules than this suggests nobody reviews them. Reported, never scored.
+    internal const int HighRuleCount = 200;
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -74,6 +81,8 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
             evidence.AppendLine($"  Rules with stale indicators: {staleRules.Count}");
 
             sb.AppendLine($"Scanned {totalRules} enabled firewall rules for staleness indicators.");
+            if (totalRules > HighRuleCount)
+                sb.AppendLine($"INFO: {totalRules} enabled rules is a lot to review. A long rule list is where stale rules hide.");
 
             if (staleRules.Count > 0)
             {
@@ -107,7 +116,27 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
         }
     }
 
-    private static bool HasDatePattern(string name)
+    /// <summary>The indicator found as a whole word or word sequence in <paramref name="text"/>, or null.</summary>
+    internal static string? MatchStaleIndicator(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return null;
+        var words = WordSeparator().Split(text.ToLowerInvariant()).Where(w => w.Length > 0).ToArray();
+        foreach (var indicator in StaleIndicators)
+        {
+            var parts = indicator.Split(' ');
+            for (int i = 0; i + parts.Length <= words.Length; i++)
+            {
+                if (parts.Select((part, k) => words[i + k] == part).All(hit => hit))
+                    return indicator;
+            }
+        }
+        return null;
+    }
+
+    [GeneratedRegex(@"[^\p{L}\p{Nd}]+")]
+    private static partial Regex WordSeparator();
+
+    internal static bool HasDatePattern(string name)
     {
         // Check for common date patterns: YYYY-MM-DD, MM/DD/YYYY, YYYYMMDD
         if (string.IsNullOrEmpty(name)) return false;
@@ -115,8 +144,8 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
         // Look for 4-digit years followed by separators and digits
         for (int i = 0; i <= name.Length - 10; i++)
         {
-            if (char.IsDigit(name[i]) && char.IsDigit(name[i + 1]) &&
-                char.IsDigit(name[i + 2]) && char.IsDigit(name[i + 3]))
+            if (char.IsAsciiDigit(name[i]) && char.IsAsciiDigit(name[i + 1]) &&
+                char.IsAsciiDigit(name[i + 2]) && char.IsAsciiDigit(name[i + 3]))
             {
                 int year = int.Parse(name.AsSpan(i, 4));
                 if (year is >= 2015 and <= 2030)
@@ -197,17 +226,12 @@ public sealed class NP06_TempRulesCheck : ISecurityCheck
         string name,
         string desc)
     {
-        foreach (string indicator in StaleIndicators)
+        if ((MatchStaleIndicator(name) ?? MatchStaleIndicator(desc)) is { } indicator)
         {
-            if (name.Contains(indicator, StringComparison.OrdinalIgnoreCase) ||
-                desc.Contains(indicator, StringComparison.OrdinalIgnoreCase))
-            {
-                staleRules.Add(name);
-                evidence.AppendLine($"  STALE INDICATOR: \"{name}\" (matched: \"{indicator}\")");
-                if (!string.IsNullOrEmpty(desc))
-                    evidence.AppendLine($"    Description: {desc}");
-                break;
-            }
+            staleRules.Add(name);
+            evidence.AppendLine($"  STALE INDICATOR: \"{name}\" (matched: \"{indicator}\")");
+            if (!string.IsNullOrEmpty(desc))
+                evidence.AppendLine($"    Description: {desc}");
         }
 
         if (HasDatePattern(name) && !staleRules.Contains(name))
