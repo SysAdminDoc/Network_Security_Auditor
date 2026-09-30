@@ -3,28 +3,31 @@ namespace NetworkSecurityAuditor.Checks.EndpointSecurity;
 using System.Globalization;
 using System.Management;
 using System.Text;
+using NetworkSecurityAuditor.Checks.NetworkPerimeter;
 using NetworkSecurityAuditor.Models;
 using NetworkSecurityAuditor.Services;
 
 /// <summary>
-/// EP06 - Windows Firewall profile status, default actions, log sizes, high-risk inbound ports.
+/// EP06 - Windows Firewall profile status, default actions, log sizes, high-risk listeners.
+/// Listeners come from NP02's IP Helper read and classification, so default Windows role ports
+/// (RPC, NetBIOS, SMB, WinRM) only count when a Public-profile network can reach them.
 /// </summary>
 public sealed class EP06_HostFirewallCheck : ISecurityCheck
 {
     private readonly Func<IReadOnlyList<FirewallProfileSnapshot>> _profileProvider;
     private readonly Func<string, string, CancellationToken, string> _runCommand;
+    private readonly Func<CancellationToken, NP02_OpenPortsCheck.PortSnapshot> _portSnapshotProvider;
 
     public string Id => "EP06";
 
-    private static readonly int[] HighRiskPorts =
-        [21, 23, 69, 135, 139, 445, 1433, 3389, 5900, 5985, 5986];
-
     internal EP06_HostFirewallCheck(
         Func<IReadOnlyList<FirewallProfileSnapshot>>? profileProvider = null,
-        Func<string, string, CancellationToken, string>? runCommand = null)
+        Func<string, string, CancellationToken, string>? runCommand = null,
+        Func<CancellationToken, NP02_OpenPortsCheck.PortSnapshot>? portSnapshotProvider = null)
     {
         _profileProvider = profileProvider ?? QueryFirewallProfilesViaWmi;
         _runCommand = runCommand ?? RunCommand;
+        _portSnapshotProvider = portSnapshotProvider ?? NP02_OpenPortsCheck.CollectSnapshot;
     }
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
@@ -40,9 +43,9 @@ public sealed class EP06_HostFirewallCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             CheckFirewallProfiles(sb, evidence, ref hasFailure, ref hasWarning, ct);
 
-            // -- High-risk inbound ports --
+            // -- High-risk listeners --
             ct.ThrowIfCancellationRequested();
-            CheckHighRiskPorts(sb, evidence, ref hasFailure, ct);
+            CheckListeners(sb, evidence, ref hasFailure, ref hasWarning, ct);
 
             if (!hasFailure && !hasWarning)
                 sb.Insert(0, "All Windows Firewall profiles enabled with appropriate defaults.\n");
@@ -384,61 +387,52 @@ public sealed class EP06_HostFirewallCheck : ISecurityCheck
         _ => "Unknown"
     };
 
-    private void CheckHighRiskPorts(StringBuilder sb, StringBuilder evidence, ref bool hasIssue, CancellationToken ct)
+    /// <summary>
+    /// Insecure listeners and role ports a Public-profile network can reach fail; sensitive services
+    /// beyond loopback are a warning. Default role ports on a private or domain network are evidence only.
+    /// </summary>
+    private void CheckListeners(StringBuilder sb, StringBuilder evidence, ref bool hasFailure, ref bool hasWarning, CancellationToken ct)
     {
-        evidence.AppendLine("\n[High-Risk Inbound Ports - Listening]");
+        evidence.AppendLine("\n[High-Risk Listeners (IP Helper API)]");
 
+        NP02_OpenPortsCheck.PortSnapshot snapshot;
         try
         {
-            // Use netstat to find listening TCP ports
-            string output = _runCommand("netstat", "-an -p TCP", ct);
-            var listeningPorts = new HashSet<int>();
-
-            foreach (var line in output.Split('\n'))
-            {
-                if (!line.Contains("LISTENING", StringComparison.OrdinalIgnoreCase)) continue;
-
-                // Parse: TCP    0.0.0.0:PORT    0.0.0.0:0    LISTENING
-                var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length < 4) continue;
-
-                string local = parts[1];
-                int colonIdx = local.LastIndexOf(':');
-                if (colonIdx > 0 && int.TryParse(local[(colonIdx + 1)..], out int port))
-                {
-                    listeningPorts.Add(port);
-                }
-            }
-
-            var openHighRisk = new List<(int port, string desc)>();
-            foreach (int port in HighRiskPorts)
-            {
-                if (listeningPorts.Contains(port))
-                {
-                    string desc = GetPortDescription(port);
-                    openHighRisk.Add((port, desc));
-                    evidence.AppendLine($"  OPEN: {port}/tcp ({desc})");
-                }
-            }
-
-            if (openHighRisk.Count > 0)
-            {
-                hasIssue = true;
-                sb.AppendLine($"WARNING: {openHighRisk.Count} high-risk port(s) are listening:");
-                foreach (var (port, desc) in openHighRisk)
-                    sb.AppendLine($"  - {port}/tcp ({desc})");
-            }
-            else
-            {
-                sb.AppendLine("PASS: No high-risk ports are actively listening.");
-            }
-
-            evidence.AppendLine($"  Total listening TCP ports: {listeningPorts.Count}");
+            snapshot = _portSnapshotProvider(ct);
         }
         catch (Exception ex)
         {
-            evidence.AppendLine($"  netstat error: {ex.Message}");
+            evidence.AppendLine($"  Listener read failed: {ex.Message}");
+            return;
         }
+        if (snapshot.ListenerError is not null)
+        {
+            evidence.AppendLine($"  Listeners couldn't be read: {snapshot.ListenerError}");
+            return;
+        }
+
+        var (failures, reviews, informational) = NP02_OpenPortsCheck.Classify(snapshot);
+        foreach (var item in failures) evidence.AppendLine($"  FAIL: {item}");
+        foreach (var item in reviews) evidence.AppendLine($"  REVIEW: {item}");
+        foreach (var item in informational) evidence.AppendLine($"  INFO: {item}");
+        evidence.AppendLine($"  Total listening TCP ports: {snapshot.Listeners.Where(l => l.Protocol == "TCP").Select(l => l.Port).Distinct().Count()}");
+
+        if (failures.Count > 0)
+        {
+            hasFailure = true;
+            sb.AppendLine($"FAIL: {failures.Count} high-risk listener(s):");
+            foreach (var item in failures)
+                sb.AppendLine($"  - {item}");
+        }
+        if (reviews.Count > 0)
+        {
+            hasWarning = true;
+            sb.AppendLine($"REVIEW: {reviews.Count} sensitive service(s) listening beyond loopback:");
+            foreach (var item in reviews)
+                sb.AppendLine($"  - {item}");
+        }
+        if (failures.Count == 0 && reviews.Count == 0)
+            sb.AppendLine("PASS: No high-risk listeners, and no default role port is exposed to a Public-profile network.");
     }
 
     private static bool ContainsProfileDisabled(string output, string profileName)
@@ -455,22 +449,6 @@ public sealed class EP06_HostFirewallCheck : ISecurityCheck
 
         return stateLine.Contains("OFF", StringComparison.OrdinalIgnoreCase);
     }
-
-    private static string GetPortDescription(int port) => port switch
-    {
-        21 => "FTP",
-        23 => "Telnet",
-        69 => "TFTP",
-        135 => "RPC/DCOM",
-        139 => "NetBIOS Session",
-        445 => "SMB",
-        1433 => "SQL Server",
-        3389 => "RDP",
-        5900 => "VNC",
-        5985 => "WinRM HTTP",
-        5986 => "WinRM HTTPS",
-        _ => "Unknown"
-    };
 
     private static string RunCommand(string fileName, string arguments, CancellationToken ct)
     {

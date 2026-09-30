@@ -88,6 +88,8 @@ public sealed class NP02_OpenPortsCheck : ISecurityCheck
 
     internal sealed record PortAssessment(CheckStatus Status, string Findings, string Evidence, string? Error);
 
+    internal sealed record ListenerClassification(IReadOnlyList<string> Failures, IReadOnlyList<string> Reviews, IReadOnlyList<string> Informational);
+
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
         try
@@ -145,6 +147,51 @@ public sealed class NP02_OpenPortsCheck : ISecurityCheck
         else if (snapshot.FirewallRules.Count > 0)
             evidence.AppendLine($"  Inbound rules applying to Public (active store): {snapshot.FirewallRules.Count(r => r.IsAllow)} allow, {snapshot.FirewallRules.Count(r => r.IsBlock)} block.");
 
+        var (failures, reviews, informational) = Classify(snapshot);
+
+        int reachableTcp = tcp.Count(l => !IsLoopback(l.Address));
+        sb.AppendLine($"Listening TCP endpoints: {tcp.Count} ({reachableTcp} beyond loopback).");
+
+        if (failures.Count > 0)
+        {
+            sb.AppendLine($"\nFAIL: {failures.Count} high-risk listener(s):");
+            foreach (var item in failures) sb.AppendLine($"  {item}");
+        }
+        if (reviews.Count > 0)
+        {
+            sb.AppendLine($"\nREVIEW: {reviews.Count} sensitive service(s) listening beyond loopback:");
+            foreach (var item in reviews) sb.AppendLine($"  {item}");
+        }
+        if (informational.Count > 0)
+        {
+            sb.AppendLine("\nInformational:");
+            foreach (var item in informational) sb.AppendLine($"  {item}");
+        }
+        if (failures.Count > 0 || reviews.Count > 0)
+        {
+            sb.AppendLine("\nRecommendation: Disable services that aren't needed, restrict the rest with firewall rules scoped to trusted networks, " +
+                "and replace cleartext protocols (SFTP instead of FTP, SSH instead of Telnet). Require authentication on database listeners.");
+        }
+        else
+        {
+            sb.AppendLine("PASS: No high-risk listeners, and no default role port is exposed to a Public-profile network.");
+        }
+
+        if (reachableTcp > 30)
+            sb.AppendLine($"WARNING: {reachableTcp} TCP listeners beyond loopback is a large attack surface. Review for unnecessary services.");
+
+        var status = failures.Count > 0 ? CheckStatus.Fail
+            : reviews.Count > 0 ? CheckStatus.Partial
+            : CheckStatus.Pass;
+        return new PortAssessment(status, sb.ToString().TrimEnd(), evidence.ToString().TrimEnd(), null);
+    }
+
+    /// <summary>
+    /// Sorts the classified listeners into failures, reviews and informational lines. EP06 uses the
+    /// same result, so both checks agree on which listeners are a problem.
+    /// </summary>
+    internal static ListenerClassification Classify(PortSnapshot snapshot)
+    {
         var failures = new List<string>();
         var reviews = new List<string>();
         var informational = new List<string>();
@@ -187,42 +234,7 @@ public sealed class NP02_OpenPortsCheck : ISecurityCheck
                 informational.Add($"{label} on {binds}; default Windows role port, not exposed to a Public-profile network");
             }
         }
-
-        int reachableTcp = tcp.Count(l => !IsLoopback(l.Address));
-        sb.AppendLine($"Listening TCP endpoints: {tcp.Count} ({reachableTcp} beyond loopback).");
-
-        if (failures.Count > 0)
-        {
-            sb.AppendLine($"\nFAIL: {failures.Count} high-risk listener(s):");
-            foreach (var item in failures) sb.AppendLine($"  {item}");
-        }
-        if (reviews.Count > 0)
-        {
-            sb.AppendLine($"\nREVIEW: {reviews.Count} sensitive service(s) listening beyond loopback:");
-            foreach (var item in reviews) sb.AppendLine($"  {item}");
-        }
-        if (informational.Count > 0)
-        {
-            sb.AppendLine("\nInformational:");
-            foreach (var item in informational) sb.AppendLine($"  {item}");
-        }
-        if (failures.Count > 0 || reviews.Count > 0)
-        {
-            sb.AppendLine("\nRecommendation: Disable services that aren't needed, restrict the rest with firewall rules scoped to trusted networks, " +
-                "and replace cleartext protocols (SFTP instead of FTP, SSH instead of Telnet). Require authentication on database listeners.");
-        }
-        else
-        {
-            sb.AppendLine("PASS: No high-risk listeners, and no default role port is exposed to a Public-profile network.");
-        }
-
-        if (reachableTcp > 30)
-            sb.AppendLine($"WARNING: {reachableTcp} TCP listeners beyond loopback is a large attack surface. Review for unnecessary services.");
-
-        var status = failures.Count > 0 ? CheckStatus.Fail
-            : reviews.Count > 0 ? CheckStatus.Partial
-            : CheckStatus.Pass;
-        return new PortAssessment(status, sb.ToString().TrimEnd(), evidence.ToString().TrimEnd(), null);
+        return new ListenerClassification(failures, reviews, informational);
     }
 
     /// <summary>
@@ -331,7 +343,7 @@ public sealed class NP02_OpenPortsCheck : ISecurityCheck
     private static string FormatEndpoint(ListenerEndpoint listener) =>
         listener.Address.Contains(':') ? $"[{listener.Address}]:{listener.Port}" : $"{listener.Address}:{listener.Port}";
 
-    private static PortSnapshot CollectSnapshot(CancellationToken ct)
+    internal static PortSnapshot CollectSnapshot(CancellationToken ct)
     {
         List<ListenerEndpoint> listeners;
         string? listenerError = null;

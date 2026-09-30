@@ -4822,6 +4822,37 @@ $script:AutoChecks = @{
 
     'EP06' = @{ Type='Local'; Label='Scan Host Firewall + Attack Surface'
         Script = {
+            # Defined inside the check so it survives fresh runspaces and Invoke-Command.
+            # Same port classes as NP02's Get-Np02PortAssessment (a Pester test keeps them in step).
+            # Insecure listeners fail and sensitive services beyond loopback are reviewed. Default role
+            # ports (135/139/445/5985/5986) are listed only; NP02 decides whether a Public network reaches them.
+            function Get-Ep06ListenerFindings {
+                param([object[]]$Listeners = @())
+                $classes = @{
+                    'TCP:21'=@('FTP','Insecure'); 'TCP:23'=@('Telnet','Insecure'); 'UDP:69'=@('TFTP','Insecure')
+                    'TCP:5900'=@('VNC','Insecure'); 'TCP:5901'=@('VNC','Insecure'); 'TCP:5902'=@('VNC','Insecure'); 'TCP:5903'=@('VNC','Insecure')
+                    'TCP:6379'=@('Redis (no auth by default)','Insecure'); 'TCP:9200'=@('Elasticsearch HTTP (no auth by default before 8.0)','Insecure')
+                    'TCP:11211'=@('Memcached (no auth)','Insecure'); 'UDP:11211'=@('Memcached (no auth)','Insecure'); 'TCP:27017'=@('MongoDB (no auth by default)','Insecure')
+                    'TCP:25'=@('SMTP','Review'); 'TCP:110'=@('POP3','Review'); 'TCP:143'=@('IMAP','Review'); 'TCP:1433'=@('MSSQL','Review'); 'UDP:1434'=@('MSSQL Browser','Review')
+                    'TCP:3306'=@('MySQL','Review'); 'TCP:3389'=@('RDP','Review'); 'TCP:5432'=@('PostgreSQL','Review'); 'TCP:8080'=@('HTTP Proxy/Alt','Review'); 'TCP:8443'=@('HTTPS Alt','Review')
+                    'TCP:135'=@('RPC/DCOM','DefaultRole'); 'TCP:139'=@('NetBIOS Session','DefaultRole'); 'TCP:445'=@('SMB','DefaultRole')
+                    'TCP:5985'=@('WinRM HTTP','DefaultRole'); 'TCP:5986'=@('WinRM HTTPS','DefaultRole')
+                }
+                $failures = @(); $reviews = @(); $info = @()
+                $groups = @($Listeners | Where-Object { $classes.ContainsKey("$($_.Protocol):$($_.Port)") } | Group-Object { "$($_.Protocol):$($_.Port)" } | Sort-Object { [int](($_.Name -split ':')[1]) })
+                foreach ($g in $groups) {
+                    $service = $classes[$g.Name][0]; $risk = $classes[$g.Name][1]
+                    $label = "$(($g.Name -split ':')[0]) $(($g.Name -split ':')[1]) ($service)"
+                    $reach = @($g.Group | Where-Object { $a = [string]$_.Address; -not ($a -eq '::1' -or $a -like '127.*') })
+                    if ($reach.Count -eq 0) { $info += "$label on loopback only"; continue }
+                    $binds = (@($reach | ForEach-Object { $a = [string]$_.Address; if ($a -eq '0.0.0.0' -or $a -eq '::') { "$a (all interfaces)" } else { $a } } | Select-Object -Unique)) -join ', '
+                    if ($risk -eq 'Insecure') { $failures += "$label listening on $binds" }
+                    elseif ($risk -eq 'Review') { $reviews += "$label listening on $binds" }
+                    else { $info += "$label on $binds; default Windows role port (NP02 checks Public-network exposure)" }
+                }
+                return @{ Failures=$failures; Reviews=$reviews; Info=$info }
+            }
+
             $profiles = Get-NetFirewallProfile -EA Stop
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
             [void]$sb.AppendLine("FIREWALL PROFILES:")
@@ -4839,18 +4870,22 @@ $script:AutoChecks = @{
             # Inbound allow rule summary
             $inboundAllow = Get-NetFirewallRule -Enabled True -Direction Inbound -Action Allow -EA SilentlyContinue | Measure-Object
             [void]$sb.AppendLine("`nInbound Allow rules (enabled): $($inboundAllow.Count)")
-            # High-risk inbound ports check
-            $riskyPorts = @(21,23,69,135,139,445,1433,3389,5900,5985,5986)
-            $riskyOpen = @()
-            foreach ($port in $riskyPorts) {
-                $found = Get-NetFirewallPortFilter -EA SilentlyContinue | Where-Object { $_.LocalPort -eq $port } |
-                    Get-NetFirewallRule -EA SilentlyContinue | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' }
-                if ($found) { $riskyOpen += $port }
+            # High-risk listeners from the IP Helper API (Get-NetTCPConnection), which reads the same on any display language
+            $ports = $null
+            try {
+                $endpoints = @(Get-NetTCPConnection -State Listen -EA Stop | ForEach-Object { @{ Protocol='TCP'; Address=[string]$_.LocalAddress; Port=[int]$_.LocalPort } })
+                $endpoints += @(Get-NetUDPEndpoint -EA SilentlyContinue | Where-Object { [int]$_.LocalPort -in @(69,1434,11211) } | ForEach-Object { @{ Protocol='UDP'; Address=[string]$_.LocalAddress; Port=[int]$_.LocalPort } })
+                $ports = Get-Ep06ListenerFindings -Listeners $endpoints
+                if ($ports.Failures.Count) { [void]$sb.AppendLine("`nHIGH-RISK LISTENERS [!]:"); foreach ($l in $ports.Failures) { [void]$sb.AppendLine("  $l") } }
+                if ($ports.Reviews.Count) { [void]$sb.AppendLine("`nREVIEW (sensitive services beyond loopback):"); foreach ($l in $ports.Reviews) { [void]$sb.AppendLine("  $l") } }
+                if ($ports.Info.Count) { [void]$sb.AppendLine("`nLISTENERS (informational):"); foreach ($l in $ports.Info) { [void]$sb.AppendLine("  $l") } }
+                if (-not $ports.Failures.Count -and -not $ports.Reviews.Count) { [void]$sb.AppendLine("`nNo high-risk listeners.") }
+            } catch {
+                [void]$sb.AppendLine("`nListeners couldn't be read: $($_.Exception.Message.Trim())")
             }
-            if ($riskyOpen.Count -gt 0) {
-                [void]$sb.AppendLine("[!] High-risk inbound ports allowed: $($riskyOpen -join ', ')")
-            }
-            $status = if ($issues -eq 0) {'Pass'} elseif ($issues -le 1) {'Partial'} else {'Fail'}
+            $status = if ($ports -and $ports.Failures.Count) {'Fail'}
+                elseif ($issues -eq 0 -and -not ($ports -and $ports.Reviews.Count)) {'Pass'}
+                elseif ($issues -le 1) {'Partial'} else {'Fail'}
             @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Host firewall + attack surface scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }

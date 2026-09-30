@@ -1756,6 +1756,54 @@ Describe 'NP02 listener classification (nested check helper via AST)' {
     }
 }
 
+Describe 'EP06 listener findings (nested check helper via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in @('Get-Ep06ListenerFindings','Get-Np02PortAssessment') }, $true)
+        $script:Ep06Fn = @($fns | Where-Object Name -eq 'Get-Ep06ListenerFindings')[0]
+        $script:Np02Fn = @($fns | Where-Object Name -eq 'Get-Np02PortAssessment')[0]
+        . ([scriptblock]::Create($script:Ep06Fn.Extent.Text))
+        $script:StockListeners = @(
+            @{ Protocol='TCP'; Address='0.0.0.0'; Port=135 }, @{ Protocol='TCP'; Address='::'; Port=135 },
+            @{ Protocol='TCP'; Address='192.168.1.20'; Port=139 },
+            @{ Protocol='TCP'; Address='0.0.0.0'; Port=445 }, @{ Protocol='TCP'; Address='::'; Port=445 },
+            @{ Protocol='TCP'; Address='0.0.0.0'; Port=5985 }, @{ Protocol='TCP'; Address='0.0.0.0'; Port=49664 },
+            @{ Protocol='TCP'; Address='127.0.0.1'; Port=5939 }
+        )
+    }
+
+    It 'lists default role ports on a stock workstation without raising anything' {
+        $result = Get-Ep06ListenerFindings -Listeners $script:StockListeners
+        @($result.Failures).Count | Should -Be 0
+        @($result.Reviews).Count | Should -Be 0
+        ($result.Info -join "`n") | Should -Match 'TCP 445 \(SMB\) on 0\.0\.0\.0 \(all interfaces\), :: \(all interfaces\); default Windows role port'
+    }
+    It 'fails an insecure listener and reviews a sensitive one, but not on loopback' {
+        $listeners = $script:StockListeners + @(
+            @{ Protocol='TCP'; Address='0.0.0.0'; Port=23 },
+            @{ Protocol='TCP'; Address='10.0.0.5'; Port=3389 },
+            @{ Protocol='TCP'; Address='127.0.0.1'; Port=6379 }
+        )
+        $result = Get-Ep06ListenerFindings -Listeners $listeners
+        @($result.Failures) | Should -Be @('TCP 23 (Telnet) listening on 0.0.0.0 (all interfaces)')
+        @($result.Reviews) | Should -Be @('TCP 3389 (RDP) listening on 10.0.0.5')
+        ($result.Info -join "`n") | Should -Match 'TCP 6379 \(Redis \(no auth by default\)\) on loopback only'
+    }
+    It 'uses the same port classes as NP02' {
+        $tableOf = { param($fn) ([regex]::Match($fn.Extent.Text, '(?s)\$classes = @\{(.*?)\r?\n\s*\}')).Groups[1].Value -replace '\s+', ' ' }
+        $ep06 = & $tableOf $script:Ep06Fn
+        $ep06 | Should -Match "'TCP:23'=@\('Telnet','Insecure'\)"
+        $ep06 | Should -Be (& $tableOf $script:Np02Fn)
+    }
+    It 'reads listeners through Get-NetTCPConnection, not netstat or per-port rule filters' {
+        $block = Get-Block -Text $script:Text -Start "'EP06' = @\{ Type='Local'" -End "'EP09' = @\{ Type='Local'"
+        $block | Should -Match 'Get-NetTCPConnection -State Listen'
+        $block | Should -Not -Match 'netstat'
+        $block | Should -Not -Match 'riskyPorts'
+        $block | Should -Match "if \(\`$ports -and \`$ports.Failures.Count\) \{'Fail'\}"
+    }
+}
+
 Describe 'IA06 LAPS coverage (nested check helper via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
