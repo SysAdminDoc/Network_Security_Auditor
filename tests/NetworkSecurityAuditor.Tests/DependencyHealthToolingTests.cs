@@ -373,10 +373,7 @@ public sealed class DependencyHealthToolingTests
             if (release)
                 process.StartInfo.ArgumentList.Add("-Release");
 
-            Assert.True(process.Start(), "Failed to launch dependency health gate.");
-            Assert.True(process.WaitForExit(20_000), "Dependency health gate timed out.");
-            var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-            return (process.ExitCode, output);
+            return TestProcess.RunToExit(process, "The dependency health gate");
         }
 
         public void Dispose()

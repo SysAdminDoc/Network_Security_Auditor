@@ -83,11 +83,8 @@ public class ReleaseToolingTests
         process.StartInfo.ArgumentList.Add("-SkipTests");
         process.StartInfo.ArgumentList.Add("-SkipSigning");
 
-        Assert.True(process.Start(), "Failed to launch the release script.");
-        Assert.True(process.WaitForExit(30_000), $"Release validation did not stop for '{relativePath}'.");
-
-        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-        Assert.NotEqual(0, process.ExitCode);
+        var (exitCode, output) = TestProcess.RunToExit(process, $"Release validation for '{relativePath}'");
+        Assert.NotEqual(0, exitCode);
         Assert.Contains("Refusing", output, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(markerBefore, File.ReadAllBytes(markerPath));
     }
@@ -455,12 +452,8 @@ public class ReleaseToolingTests
         if (requireSignature)
             process.StartInfo.ArgumentList.Add("-RequireSignature");
 
-        Assert.True(process.Start(), "Failed to launch the release verifier.");
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        Assert.True(process.WaitForExit(20_000), "Release verifier did not finish within 20 seconds.");
-        Task.WaitAll(stdout, stderr);
-        return new VerifierResult(process.ExitCode, stdout.Result + stderr.Result);
+        var (exitCode, output) = TestProcess.RunToExit(process, "The release verifier");
+        return new VerifierResult(exitCode, output);
     }
 
     private sealed record VerifierResult(int ExitCode, string Output);
