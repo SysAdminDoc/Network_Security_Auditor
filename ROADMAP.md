@@ -170,13 +170,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P0
 
-- [ ] P0 — NSA-070 Correct EP04 and EP10 lifecycle data and run local EOL evaluation on every host
-  Why: EP04 lists build 19045 (Windows 10 22H2, end of support 2025-10-14) as current and doesn't know 26200 (Windows 11 25H2); EP10 is typed AD, so its local end-of-life logic never runs on workgroup hosts; Windows 10 ESU year 1 and Server 2012 R2 ESU end 2026-10-13.
-  Evidence: `src/NetworkSecurityAuditor/Checks/EndpointSecurity/EP04_PatchComplianceCheck.cs:18-28`; `Data/CheckCatalog.cs` EP10 `CheckType.AD`; `Checks/CheckRunner.cs:144`; https://learn.microsoft.com/en-us/windows/whats-new/extended-security-updates.
-  Touches: EP04, EP10, a dated lifecycle table in `Data/` shared with the PS1 table at `NetworkSecurityAudit.ps1:4754-4768`, catalog type, tests.
-  Acceptance: a single dated lifecycle table lists end-of-support and ESU end dates (Windows 10 22H2, 11 22H2/23H2/24H2/25H2, Server 2012 R2 through 2025, SQL Server 2016, Office and Exchange 2016/2019); EP10 evaluates the local OS on any host and adds the AD sweep only when domain-joined, excluding disabled computers; an ESU-enrolled Windows 10 host reports Partial with the ESU end date, not Pass; hotpatch-baseline builds are not flagged as stale; tests pin the evaluation date.
-  Complexity: M
-
 - [ ] P0 — NSA-071 Add a correct Secure Boot 2023 certificate transition check on both surfaces
   Why: Windows Production PCA 2011 expires 2026-10-19 (KEK CA 2011 and UEFI CA 2011 expired 2026-06-24 and 2026-06-27); the PS1 switches `UEFICA2023Status` on integers although Microsoft documents string states and reads `AvailableUpdates` from the wrong key; C# has no check.
   Evidence: `NetworkSecurityAudit.ps1:5996-6005`; https://support.microsoft.com/en-us/servicing/os/secure-boot/2025/06/windows-secure-boot-certificate-expiration-and-ca-updates; https://techcommunity.microsoft.com/blog/windows-itpro-blog/secure-boot-playbook-for-certificates-expiring-in-2026/4469235.
@@ -241,6 +234,13 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: EP04, a `KevCatalogService` with cache under the output or app-data folder, the internet gate from NSA-048, ransomware readiness input for `knownRansomwareCampaignUse`.
   Acceptance: with internet allowed, EP04 matches installed products from uninstall keys against the KEV JSON feed and lists matches with CVE and due date; offline or feed failure reports cache age or `Skipped: OfflineMode`; KEV entries with known ransomware use feed the ransomware score; tests use a recorded feed fixture.
   Complexity: M
+
+- [ ] P1 — NSA-108 Stop PS1 EP04 failing fully patched hosts on product-name KEV matches
+  Why: the PS1 EP04 marks every Microsoft KEV entry from the last 365 days whose product matches "Windows" as a hit, sets Fail on any ransomware-linked one and labels them all OVERDUE, without checking whether the installed update fixes the CVE. On this Windows 11 25H2 PC, patched 8 days earlier (KB5129195, 2026-09-22), it failed with 15 "overdue" entries, including CVE-2008-4250.
+  Evidence: `NetworkSecurityAudit.ps1` EP04 block, the `$msKevHits` filter and `$kevRansomware` status line; live run 2026-09-30.
+  Touches: PS1 EP04 KEV matching and status, Pester fixtures with a recorded feed; NSA-079 must not port the same logic to C#.
+  Acceptance: a KEV entry counts against the host only when its dateAdded falls after the newest installed OS update (or the entry names a product the host runs outside Windows servicing); a host patched inside 30 days with no such entries passes EP04; "overdue" means the due date has passed and the host's newest OS update predates the KEV entry; Pester covers a patched host, a host that missed the fixing month, and a ransomware-linked entry.
+  Complexity: S
 
 - [ ] P1 — NSA-080 Port the PS1 AD attack-indicator checks to C#
   Why: DCSync rights for non-default principals, AdminSDHolder ACL tampering, Protected Users coverage of Tier 0 and unconstrained delegation exist only in the PS1; C# EP03 labels the LSA `AllowTgtSessionKey` value as "Kerberos delegation".

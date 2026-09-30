@@ -269,8 +269,8 @@ if ($scriptText -notmatch 'CVE-2025-33073 NTLM REFLECTION BLAST RADIUS' -or
 if ($scriptText -notmatch 'UEFICA2023Status' -or $scriptText -notmatch 'KB5025885') {
     Add-Failure 'EP08 must check Secure Boot 2023 CA status and reference KB5025885.'
 }
-if ($scriptText -notmatch 'ESU Enrollment' -or $scriptText -notmatch 'EnableESUSubscriptionCheck') {
-    Add-Failure 'EP10 must detect Windows 10 ESU enrollment via registry.'
+if ($scriptText -notmatch 'ESU Enrollment' -or $scriptText -notmatch 'SoftwareLicensingProduct' -or $scriptText -notmatch 'f520e45e-7413-4a34-a497-d2765967d094') {
+    Add-Failure 'EP10 must detect Windows 10 ESU enrollment from the documented ESU add-on license activation IDs.'
 }
 if ($scriptText -notmatch 'function Export-AttackNavigator' -or $scriptText -notmatch 'CliExportNavigator' -or $scriptText -notmatch '_navigator\.json') {
     Add-Failure 'ATT&CK Navigator export must define Export-AttackNavigator, honor CliExportNavigator, and write _navigator.json.'

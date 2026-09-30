@@ -287,7 +287,7 @@ imports or future Graph-backed checks for tenant proof.
 | EP07 | Application Control + Macro Policy (AppLocker/WDAC) | Medium |
 | EP08 | Hardware Security (VBS, Credential Guard, LSA, TPM, Secure Boot) | High |
 | EP09 | AutoRun / AutoPlay | Low |
-| EP10 | End-of-Life Operating Systems | High |
+| EP10 | End-of-Life OS and Server Software (lifecycle table, Windows 10 ESU) | High |
 
 </details>
 
@@ -559,8 +559,8 @@ console evidence.
 - **No external modules required**: the script handles everything
 
 Optional for full coverage:
-- **RSAT / Active Directory module**: required for AD-type checks (IA01-IA08, IA10-IA12, CF01, CF04, EP10). The tool auto-offers to install RSAT on first run.
-- **Domain-joined machine**: non-domain machines skip AD checks automatically and run all 55 local checks.
+- **RSAT / Active Directory module**: required for AD-type checks (IA01-IA08, IA10-IA12, CF01, CF04) and for EP10's sweep of AD computer objects. The tool auto-offers to install RSAT on first run.
+- **Domain-joined machine**: non-domain machines skip AD checks automatically and run all 56 local checks. EP10 still judges the local OS and installed server software there.
 
 ---
 

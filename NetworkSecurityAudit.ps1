@@ -4438,25 +4438,64 @@ $script:AutoChecks = @{
 
     'EP04' = @{ Type='Local'; Label='Scan Patch Level + CISA KEV'
         Script = {
+            # Defined inside the check so it survives fresh runspaces and Invoke-Command.
+            # Monthly OS updates, hotpatches included; mirrors EP04_PatchComplianceCheck.IsOsQualityUpdate.
+            function Test-Ep04OsQualityUpdate {
+                param([string]$Title, [int]$OsBuild)
+                if ([string]::IsNullOrWhiteSpace($Title)) { return $false }
+                if ($Title -match '\.NET|Security Intelligence|Defender|Definition|Malicious Software') { return $false }
+                if ($OsBuild -gt 0 -and $Title.Contains("($OsBuild.")) { return $true }
+                return ($Title -match 'Hotpatch|Cumulative Update for (Windows|Microsoft server operating system)|Monthly Quality Rollup')
+            }
+            # The newer of the hotfix list and the Windows Update history. A hotpatch month installs
+            # without a new baseline, so it only shows in the history.
+            function Get-Ep04LatestOsUpdate {
+                param([object[]]$Hotfixes, [object[]]$History, [int]$OsBuild)
+                $candidates = @()
+                $hf = @($Hotfixes | Where-Object { $_.InstalledOn } | Sort-Object { [datetime]$_.InstalledOn } -Descending) | Select-Object -First 1
+                if ($hf) { $candidates += @{ Date=([datetime]$hf.InstalledOn).Date; Label="$($hf.HotFixID) (hotfix list)" } }
+                $wu = @($History | Where-Object { $_ -and (Test-Ep04OsQualityUpdate -Title $_.Title -OsBuild $OsBuild) } | Sort-Object { [datetime]$_.Date } -Descending) | Select-Object -First 1
+                if ($wu) { $candidates += @{ Date=([datetime]$wu.Date).Date; Label="$($wu.Title) (Windows Update history)" } }
+                $candidates | Sort-Object { $_.Date } -Descending | Select-Object -First 1
+            }
+
             $kevRisk = $false
             $kevRansomware = $false
             $fixes = Get-HotFix -EA Stop | Sort-Object InstalledOn -Descending -EA SilentlyContinue
             $latest = $fixes | Select-Object -First 1
             $sb = [System.Text.StringBuilder]::new()
-            $daysSince = if ($latest.InstalledOn) { ((Get-Date) - $latest.InstalledOn).Days } else { 999 }
+            $osBuild = [int](Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).BuildNumber
+            $wuHistory = $null; $wuError = $null
+            try {
+                $wuSearcher = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher()
+                $wuTotal = $wuSearcher.GetTotalHistoryCount()
+                $wuHistory = @()
+                if ($wuTotal -gt 0) {
+                    foreach ($h in @($wuSearcher.QueryHistory(0, [math]::Min($wuTotal, 1000)))) {
+                        # Operation 1 is an install; ResultCode 2 and 3 are succeeded and succeeded with errors.
+                        if ($h.Operation -eq 1 -and $h.ResultCode -in @(2, 3)) { $wuHistory += @{ Title=[string]$h.Title; Date=([datetime]$h.Date).ToLocalTime() } }
+                    }
+                }
+            } catch { $wuHistory = $null; $wuError = $_.Exception.Message.Trim() }
+            $latestOs = Get-Ep04LatestOsUpdate -Hotfixes $fixes -History $wuHistory -OsBuild $osBuild
+            $daysSince = if ($latestOs) { ((Get-Date).Date - $latestOs.Date).Days } else { 999 }
             $cve33073PatchDate = [datetime]'2025-06-10'
             $cve33073Patch = @($fixes | Where-Object { $_.InstalledOn -and ([datetime]$_.InstalledOn) -ge $cve33073PatchDate } | Select-Object -First 1)
-            $cve33073Patched = ($cve33073Patch.Count -gt 0)
+            $cve33073Patched = ($cve33073Patch.Count -gt 0) -or ($latestOs -and $latestOs.Date -ge $cve33073PatchDate)
             [void]$sb.AppendLine("Total patches installed: $($fixes.Count)")
-            [void]$sb.AppendLine("Most recent patch      : $($latest.HotFixID) on $(if($latest.InstalledOn){$latest.InstalledOn.ToString('yyyy-MM-dd')}else{'Unknown'}) ($daysSince days ago)")
+            [void]$sb.AppendLine("Most recent hotfix     : $($latest.HotFixID) on $(if($latest.InstalledOn){$latest.InstalledOn.ToString('yyyy-MM-dd')}else{'Unknown'})")
+            [void]$sb.AppendLine("Most recent OS update  : $(if ($latestOs) { "$($latestOs.Label), $($latestOs.Date.ToString('yyyy-MM-dd')) ($daysSince days ago)" } else { 'unknown' })")
+            if ($null -eq $wuHistory) { [void]$sb.AppendLine("Windows Update history : couldn't be read ($wuError), recency comes from the hotfix list only") }
             [void]$sb.AppendLine("`nLast 10 patches:")
             foreach ($h in ($fixes | Select-Object -First 10)) {
                 [void]$sb.AppendLine("  $($h.HotFixID) | $($h.Description) | $(if($h.InstalledOn){$h.InstalledOn.ToString('yyyy-MM-dd')}else{'N/A'})")
             }
             [void]$sb.AppendLine("`nCVE-2025-33073 PATCH EVIDENCE:")
-            if ($cve33073Patched) {
+            if ($cve33073Patch.Count -gt 0) {
                 $firstPatch = $cve33073Patch[0]
                 [void]$sb.AppendLine("  June 2025+ cumulative update evidence: $($firstPatch.HotFixID) installed $(if($firstPatch.InstalledOn){$firstPatch.InstalledOn.ToString('yyyy-MM-dd')}else{'unknown date'}) [OK]")
+            } elseif ($cve33073Patched) {
+                [void]$sb.AppendLine("  June 2025+ OS update evidence: $($latestOs.Label) installed $($latestOs.Date.ToString('yyyy-MM-dd')) [OK]")
             } else {
                 $kevRisk = $true
                 [void]$sb.AppendLine("  [HIGH] No June 10 2025 or newer hotfix is visible in Get-HotFix. Verify Microsoft CVE-2025-33073 remediation or current cumulative update state.")
@@ -4577,7 +4616,7 @@ $script:AutoChecks = @{
                 }
             }
             $status = if ($daysSince -le 30 -and -not $kevRisk -and -not $kevRansomware) {'Pass'} elseif ($kevRansomware) {'Fail'} elseif ($daysSince -le 60) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Get-HotFix + CISA KEV @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME (source: $kevSource)" }
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="Get-HotFix + Windows Update history + CISA KEV @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME (source: $kevSource)" }
         }
     }
 
@@ -4769,82 +4808,239 @@ $script:AutoChecks = @{
         }
     }
 
-    'EP10' = @{ Type='AD'; Label='Scan EOL Operating Systems'
+    'EP10' = @{ Type='Local'; Label='Scan EOL Operating Systems'
         Script = {
-            $sb = [System.Text.StringBuilder]::new(); $eolCount = 0
-            $lifecycleTable = @(
-                @{ Pattern='Windows XP';          Status='EndOfUpdates'; EOL='2014-04-08'; ESU=$false; Note='No security updates since 2014' }
-                @{ Pattern='Windows Vista';       Status='EndOfUpdates'; EOL='2017-04-11'; ESU=$false; Note='No security updates since 2017' }
-                @{ Pattern='Windows 7';           Status='EndOfUpdates'; EOL='2023-01-10'; ESU=$false; Note='ESU ended Jan 2023' }
-                @{ Pattern='Windows 8';           Status='EndOfUpdates'; EOL='2023-01-10'; ESU=$false; Note='No security updates since Jan 2023' }
-                @{ Pattern='Windows 10';          Status='EndOfUpdates'; EOL='2025-10-14'; ESU=$true;  Note='ESU available Oct 2025 - Oct 2028' }
-                @{ Pattern='Server 2003';         Status='EndOfUpdates'; EOL='2015-07-14'; ESU=$false; Note='No security updates since 2015' }
-                @{ Pattern='Server 2008';         Status='EndOfUpdates'; EOL='2023-01-10'; ESU=$false; Note='ESU ended Jan 2023' }
-                @{ Pattern='Server 2012';         Status='EndOfUpdates'; EOL='2023-10-10'; ESU=$false; Note='ESU ended Oct 2026' }
-                @{ Pattern='Server 2016';         Status='EndOfUpdates'; EOL='2027-01-12'; ESU=$false; Note='Mainstream ended Jan 2022; extended support until Jan 2027' }
-                @{ Pattern='Server 2019';         Status='Supported';    EOL='2029-01-09'; ESU=$false; Note='Extended support until Jan 2029' }
-                @{ Pattern='Server 2022';         Status='Supported';    EOL='2031-10-14'; ESU=$false; Note='Extended support until Oct 2031' }
-                @{ Pattern='Server 2025';         Status='Supported';    EOL='2034-10-10'; ESU=$false; Note='Extended support until Oct 2034' }
-            )
-            $lifecycleSource = 'https://learn.microsoft.com/en-us/lifecycle/products/'
-            $lifecycleReviewed = '2026-06-14'
-            $eolPatterns = @($lifecycleTable | Where-Object { $_.Status -eq 'EndOfUpdates' } | ForEach-Object { $_.Pattern })
-            [void]$sb.AppendLine("LIFECYCLE TABLE: source=$lifecycleSource reviewed=$lifecycleReviewed entries=$($lifecycleTable.Count)")
-            # Check local machine first
-            $localOS = (Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).Caption
-            $localMatch = $lifecycleTable | Where-Object { $localOS -match [regex]::Escape($_.Pattern) } | Select-Object -First 1
-            if ($localMatch -and $localMatch.Status -eq 'EndOfUpdates') {
-                $eolCount++
-                [void]$sb.AppendLine("[!] LOCAL MACHINE IS END OF LIFE: $localOS")
-                [void]$sb.AppendLine("  EOL: $($localMatch.EOL) | $($localMatch.Note)")
-                if ($localOS -match 'Windows 10' -and $localMatch.ESU) {
-                    try {
-                        $esuKey = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\ESU' -EA SilentlyContinue
-                        $esuActivation = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\TargetVersionUpgradeExperienceIndicators\NI22H2' -EA SilentlyContinue
-                        if ($esuKey -and $esuKey.EnableESUSubscriptionCheck -eq 1) {
-                            [void]$sb.AppendLine("  ESU Enrollment : Enabled [Partial - covered until Oct 2028]")
-                            $eolCount--
-                        } elseif ($esuActivation -and $esuActivation.GatedBlockId -match 'ESU') {
-                            [void]$sb.AppendLine("  ESU Enrollment : Detected via activation indicator [Partial]")
-                            $eolCount--
-                        } else {
-                            [void]$sb.AppendLine("  ESU Enrollment : Not detected [!] - no Extended Security Updates coverage")
-                        }
-                    } catch { [void]$sb.AppendLine("  ESU Enrollment : Could not query") }
+            # Defined inside the check so it survives fresh runspaces and Invoke-Command.
+            # Same rows as the app's Data/LifecycleTable.cs; LifecycleTableTests fails if they drift.
+            # EOS and ESU are the last day updates are published. First match wins.
+            function Get-Ep10LifecycleTable {
+                @(
+                    @{ Key='win11-25h2-homepro'; Product='Windows 11 25H2 (Home/Pro)'; Match='Windows 11'; Build=26200; Edition='HomePro'; EOS='2027-10-12'; ESU='' }
+                    @{ Key='win11-25h2-ent'; Product='Windows 11 25H2 (Enterprise/Education)'; Match='Windows 11'; Build=26200; Edition='EnterpriseEducation'; EOS='2028-10-10'; ESU='' }
+                    @{ Key='win11-ltsc2024-iot'; Product='Windows 11 IoT Enterprise LTSC 2024'; Match='Windows 11'; Build=26100; Edition='IotLtsc'; EOS='2034-10-10'; ESU='' }
+                    @{ Key='win11-ltsc2024'; Product='Windows 11 Enterprise LTSC 2024'; Match='Windows 11'; Build=26100; Edition='Ltsc'; EOS='2029-10-09'; ESU='' }
+                    @{ Key='win11-24h2-homepro'; Product='Windows 11 24H2 (Home/Pro)'; Match='Windows 11'; Build=26100; Edition='HomePro'; EOS='2026-10-13'; ESU='' }
+                    @{ Key='win11-24h2-ent'; Product='Windows 11 24H2 (Enterprise/Education)'; Match='Windows 11'; Build=26100; Edition='EnterpriseEducation'; EOS='2027-10-12'; ESU='' }
+                    @{ Key='win11-23h2-homepro'; Product='Windows 11 23H2 (Home/Pro)'; Match='Windows 11'; Build=22631; Edition='HomePro'; EOS='2025-11-11'; ESU='' }
+                    @{ Key='win11-23h2-ent'; Product='Windows 11 23H2 (Enterprise/Education)'; Match='Windows 11'; Build=22631; Edition='EnterpriseEducation'; EOS='2026-11-10'; ESU='' }
+                    @{ Key='win11-22h2-homepro'; Product='Windows 11 22H2 (Home/Pro)'; Match='Windows 11'; Build=22621; Edition='HomePro'; EOS='2024-10-08'; ESU='' }
+                    @{ Key='win11-22h2-ent'; Product='Windows 11 22H2 (Enterprise/Education)'; Match='Windows 11'; Build=22621; Edition='EnterpriseEducation'; EOS='2025-10-14'; ESU='' }
+                    @{ Key='win11-21h2-homepro'; Product='Windows 11 21H2 (Home/Pro)'; Match='Windows 11'; Build=22000; Edition='HomePro'; EOS='2023-10-10'; ESU='' }
+                    @{ Key='win11-21h2-ent'; Product='Windows 11 21H2 (Enterprise/Education)'; Match='Windows 11'; Build=22000; Edition='EnterpriseEducation'; EOS='2024-10-08'; ESU='' }
+                    @{ Key='win10-ltsc2021-iot'; Product='Windows 10 IoT Enterprise LTSC 2021'; Match='Windows 10'; Build=19044; Edition='IotLtsc'; EOS='2032-01-13'; ESU='' }
+                    @{ Key='win10-ltsc2021'; Product='Windows 10 Enterprise LTSC 2021'; Match='Windows 10'; Build=19044; Edition='Ltsc'; EOS='2027-01-12'; ESU='' }
+                    @{ Key='win10-ltsc2019'; Product='Windows 10 Enterprise LTSC 2019'; Match='Windows 10'; Build=17763; Edition='Ltsc'; EOS='2029-01-09'; ESU='' }
+                    @{ Key='win10-ltsc2019-iot'; Product='Windows 10 IoT Enterprise LTSC 2019'; Match='Windows 10'; Build=17763; Edition='IotLtsc'; EOS='2029-01-09'; ESU='' }
+                    @{ Key='win10-ltsb2016'; Product='Windows 10 Enterprise LTSB 2016'; Match='Windows 10'; Build=14393; Edition='Ltsc'; EOS='2026-10-13'; ESU='' }
+                    @{ Key='win10-ltsb2016-iot'; Product='Windows 10 IoT Enterprise LTSB 2016'; Match='Windows 10'; Build=14393; Edition='IotLtsc'; EOS='2026-10-13'; ESU='' }
+                    @{ Key='win10-22h2'; Product='Windows 10 22H2'; Match='Windows 10'; Build=19045; Edition='Any'; EOS='2025-10-14'; ESU='2028-10-10' }
+                    @{ Key='win10-older'; Product='Windows 10 (older than 22H2)'; Match='Windows 10'; Build=$null; Edition='Any'; EOS='2024-06-11'; ESU='' }
+                    @{ Key='win81'; Product='Windows 8.1'; Match='Windows 8.1'; Build=$null; Edition='Any'; EOS='2023-01-10'; ESU='' }
+                    @{ Key='win8'; Product='Windows 8'; Match='Windows 8'; Build=$null; Edition='Any'; EOS='2016-01-12'; ESU='' }
+                    @{ Key='win7'; Product='Windows 7'; Match='Windows 7'; Build=$null; Edition='Any'; EOS='2020-01-14'; ESU='2023-01-10' }
+                    @{ Key='winvista'; Product='Windows Vista'; Match='Windows Vista'; Build=$null; Edition='Any'; EOS='2017-04-11'; ESU='' }
+                    @{ Key='winxp'; Product='Windows XP'; Match='Windows XP'; Build=$null; Edition='Any'; EOS='2014-04-08'; ESU='' }
+                    @{ Key='server2025'; Product='Windows Server 2025'; Match='Server 2025'; Build=$null; Edition='Any'; EOS='2034-11-14'; ESU='' }
+                    @{ Key='server2022'; Product='Windows Server 2022'; Match='Server 2022'; Build=$null; Edition='Any'; EOS='2031-10-14'; ESU='' }
+                    @{ Key='server2019'; Product='Windows Server 2019'; Match='Server 2019'; Build=$null; Edition='Any'; EOS='2029-01-09'; ESU='' }
+                    @{ Key='server2016'; Product='Windows Server 2016'; Match='Server 2016'; Build=$null; Edition='Any'; EOS='2027-01-12'; ESU='' }
+                    @{ Key='server2012r2'; Product='Windows Server 2012 R2'; Match='Server 2012 R2'; Build=$null; Edition='Any'; EOS='2023-10-10'; ESU='2026-10-13' }
+                    @{ Key='server2012'; Product='Windows Server 2012'; Match='Server 2012'; Build=$null; Edition='Any'; EOS='2023-10-10'; ESU='2026-10-13' }
+                    @{ Key='server2008r2'; Product='Windows Server 2008 R2'; Match='Server 2008 R2'; Build=$null; Edition='Any'; EOS='2020-01-14'; ESU='2023-01-10' }
+                    @{ Key='server2008'; Product='Windows Server 2008'; Match='Server 2008'; Build=$null; Edition='Any'; EOS='2020-01-14'; ESU='2023-01-10' }
+                    @{ Key='server2003'; Product='Windows Server 2003'; Match='Server 2003'; Build=$null; Edition='Any'; EOS='2015-07-14'; ESU='' }
+                    @{ Key='sql2019'; Product='SQL Server 2019'; Match='SQL Server 2019'; Build=$null; Edition='Any'; EOS='2030-01-08'; ESU='' }
+                    @{ Key='sql2017'; Product='SQL Server 2017'; Match='SQL Server 2017'; Build=$null; Edition='Any'; EOS='2027-10-12'; ESU='' }
+                    @{ Key='sql2016'; Product='SQL Server 2016'; Match='SQL Server 2016'; Build=$null; Edition='Any'; EOS='2026-07-14'; ESU='2029-07-16' }
+                    @{ Key='sql2014'; Product='SQL Server 2014'; Match='SQL Server 2014'; Build=$null; Edition='Any'; EOS='2024-07-09'; ESU='2027-07-12' }
+                    @{ Key='sql2012-older'; Product='SQL Server 2012 or older'; Match='SQL Server 2012 or older'; Build=$null; Edition='Any'; EOS='2022-07-12'; ESU='' }
+                    @{ Key='office2019'; Product='Office 2019'; Match='Office 2019'; Build=$null; Edition='Any'; EOS='2025-10-14'; ESU='' }
+                    @{ Key='office2016'; Product='Office 2016'; Match='Office 2016'; Build=$null; Edition='Any'; EOS='2025-10-14'; ESU='' }
+                    @{ Key='exchange2019'; Product='Exchange Server 2019'; Match='Exchange Server 2019'; Build=$null; Edition='Any'; EOS='2025-10-14'; ESU='' }
+                    @{ Key='exchange2016'; Product='Exchange Server 2016'; Match='Exchange Server 2016'; Build=$null; Edition='Any'; EOS='2025-10-14'; ESU='' }
+                )
+            }
+            # Windows 10 ESU add-on license activation IDs and the last day each year covers.
+            function Get-Ep10EsuYears {
+                @(
+                    @{ Year=1; Id='f520e45e-7413-4a34-a497-d2765967d094'; Until='2026-10-13' }
+                    @{ Year=2; Id='1043add5-23b1-4afb-9a0f-64343c8f3f8d'; Until='2027-10-12' }
+                    @{ Year=3; Id='83d49986-add3-41d7-ba33-87c7bfb5c0fb'; Until='2028-10-10' }
+                )
+            }
+            function Find-Ep10Release {
+                param([object[]]$Table, [string]$Caption, [int]$Build = 0)
+                if ([string]::IsNullOrWhiteSpace($Caption)) { return $null }
+                $isLtsc = ($Caption -match 'LTSC|LTSB')
+                $edition = if ($isLtsc) { if ($Caption -match 'IoT') { 'IotLtsc' } else { 'Ltsc' } }
+                           elseif ($Caption -match 'Pro Education') { 'HomePro' }
+                           elseif ($Caption -match 'Enterprise|Education') { 'EnterpriseEducation' }
+                           else { 'HomePro' }
+                foreach ($e in $Table) {
+                    if ($Caption.IndexOf([string]$e.Match, [StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
+                    if ($null -ne $e.Build -and [int]$e.Build -ne $Build) { continue }
+                    if ($e.Edition -ne 'Any' -and $e.Edition -ne $edition) { continue }
+                    # LTSB/LTSC share build numbers with general-availability Windows 10/11 releases but have their own dates.
+                    if ($isLtsc -and $e.Edition -eq 'Any' -and ([string]$e.Match).StartsWith('Windows 1')) { continue }
+                    return $e
                 }
-            } elseif ($localMatch) {
-                [void]$sb.AppendLine("Local OS: $localOS [$($localMatch.Status) until $($localMatch.EOL)]")
-            } else {
-                [void]$sb.AppendLine("Local OS: $localOS [Unknown lifecycle - not in table]")
+                return $null
             }
-            # Scan AD computers
-            $comps = Get-ADComputer -Filter {Enabled -eq $true} -Properties OperatingSystem,OperatingSystemVersion,LastLogonDate -EA Stop
-            $grouped = $comps | Group-Object OperatingSystem | Sort-Object Count -Descending
-            [void]$sb.AppendLine("`nAD OS DISTRIBUTION ($($comps.Count) total computers):")
-            foreach ($g in $grouped) {
-                $osMatch = $lifecycleTable | Where-Object { $g.Name -match [regex]::Escape($_.Pattern) } | Select-Object -First 1
-                $isEOL = ($osMatch -and $osMatch.Status -eq 'EndOfUpdates')
-                if ($isEOL) { $eolCount += $g.Count }
-                $label = if ($isEOL) { '[END OF LIFE!]' } elseif ($osMatch) { "[$($osMatch.Status)]" } else { '' }
-                [void]$sb.AppendLine("  $($g.Count.ToString().PadLeft(4)) x $($g.Name) $label")
+            function Get-Ep10Verdict {
+                param($Entry, [datetime]$Today, [string]$Esu = 'Unknown', $EsuCoversUntil = $null)
+                if ($null -eq $Entry) { return @{ State='Unknown'; Text='not in the lifecycle table' } }
+                $inv = [Globalization.CultureInfo]::InvariantCulture
+                $eos = [datetime]::ParseExact([string]$Entry.EOS, 'yyyy-MM-dd', $inv)
+                $days = ($eos - $Today.Date).Days
+                if ($days -ge 0) {
+                    if ($days -le 180) { return @{ State='EndingSoon'; Text="$($Entry.Product): support ends $($Entry.EOS) ($days days)" } }
+                    return @{ State='Supported'; Text="$($Entry.Product): supported until $($Entry.EOS) ($days days)" }
+                }
+                if ($Entry.ESU) {
+                    $esuEnd = [datetime]::ParseExact([string]$Entry.ESU, 'yyyy-MM-dd', $inv)
+                    if ($Today.Date -le $esuEnd) {
+                        if ($Esu -eq 'Enrolled' -and $EsuCoversUntil) {
+                            $until = [datetime]::ParseExact([string]$EsuCoversUntil, 'yyyy-MM-dd', $inv)
+                            if ($Today.Date -le $until) {
+                                if ($until -gt $esuEnd) { $until = $esuEnd }
+                                return @{ State='EsuCovered'; Text="$($Entry.Product): past end of support ($($Entry.EOS)), covered by Extended Security Updates until $($until.ToString('yyyy-MM-dd'))" }
+                            }
+                        }
+                        if ($Esu -eq 'Unknown') { return @{ State='EsuEligible'; Text="$($Entry.Product): past end of support ($($Entry.EOS)); Extended Security Updates run until $($Entry.ESU) for enrolled systems, and enrollment can't be confirmed here" } }
+                        return @{ State='EndOfSupport'; Text="$($Entry.Product): end of support $($Entry.EOS), not enrolled in Extended Security Updates (available until $($Entry.ESU))" }
+                    }
+                    return @{ State='EndOfSupport'; Text="$($Entry.Product): end of support $($Entry.EOS), Extended Security Updates ended $($Entry.ESU)" }
+                }
+                return @{ State='EndOfSupport'; Text="$($Entry.Product): end of support $($Entry.EOS)" }
             }
-            if ($eolCount -gt 0) {
-                [void]$sb.AppendLine("`nEOL SYSTEMS ($eolCount):")
-                $eolSystems = @($comps | Where-Object { $eos = $_; $eolPatterns | Where-Object { $eos.OperatingSystem -match [regex]::Escape($_) } } | Select-Object -First 20)
-                foreach ($c in $eolSystems) { [void]$sb.AppendLine("  $($c.Name) | $($c.OperatingSystem) | Last logon: $(if($c.LastLogonDate){$c.LastLogonDate.ToString('yyyy-MM-dd')}else{'Never'})") }
+            function ConvertTo-Ep10SqlProduct {
+                param([string]$InstanceId, [string]$Version)
+                $major = 0
+                if ($Version -match '^(\d+)\.') { $major = [int]$Matches[1] } elseif ($InstanceId -match '^MSSQL(\d+)\.') { $major = [int]$Matches[1] }
+                if ($major -le 0) { return $null }
+                if ($major -lt 12) { return 'SQL Server 2012 or older' }
+                switch ($major) { 12 { return 'SQL Server 2014' } 13 { return 'SQL Server 2016' } 14 { return 'SQL Server 2017' } 15 { return 'SQL Server 2019' } 16 { return 'SQL Server 2022' } }
+                return "SQL Server (version $major)"
             }
-            # Windows 10 migration progress
-            $win10 = ($comps | Where-Object { $_.OperatingSystem -match 'Windows 10' }).Count
-            $win11 = ($comps | Where-Object { $_.OperatingSystem -match 'Windows 11' }).Count
-            $totalWS = $win10 + $win11
-            if ($totalWS -gt 0) {
-                $migPct = [math]::Round($win11 / $totalWS * 100, 1)
-                [void]$sb.AppendLine("`nWINDOWS 10 -> 11 MIGRATION:")
-                [void]$sb.AppendLine("  Windows 10: $win10 | Windows 11: $win11 | Migration: $migPct%")
-                if ($win10 -gt 0) { [void]$sb.AppendLine("  [!] Windows 10 reached EOL Oct 2025 - $win10 systems need upgrade or ESU") }
+            function ConvertTo-Ep10OfficeProduct {
+                param([string]$DisplayName)
+                if ($DisplayName -notmatch '^Microsoft Office\b.*\b(2016|2019)\b') { return $null }
+                $year = $Matches[1]
+                if ($DisplayName -match 'Language Pack|Proofing|MUI|Interop|Shared|Web Components|Update') { return $null }
+                return "Office $year"
             }
-            $status = if ($eolCount -eq 0) {'Pass'} elseif ($eolCount -le 3) {'Partial'} else {'Fail'}
-            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="EOL OS scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm')" }
+            function ConvertTo-Ep10ExchangeProduct {
+                param([int]$Major, [int]$Minor, [int]$Build)
+                if ($Major -ne 15) { return $null }
+                if ($Minor -eq 1) { return 'Exchange Server 2016' }
+                if ($Minor -ne 2) { return $null }
+                if ($Build -lt 0) { return 'Exchange Server 2019 or Subscription Edition (build unknown)' }
+                if ($Build -lt 2562) { return 'Exchange Server 2019' }
+                return 'Exchange Server Subscription Edition'
+            }
+
+            $sb = [System.Text.StringBuilder]::new()
+            $counts = @{ Fail=0; Partial=0 }
+            $tally = { param($v, [int]$n) if ($v.State -eq 'EndOfSupport') { $counts.Fail += $n } elseif ($v.State -in @('EsuCovered','EsuEligible')) { $counts.Partial += $n } }
+            $lifecycleTable = Get-Ep10LifecycleTable
+            $lifecycleSource = 'https://learn.microsoft.com/en-us/lifecycle/products/'
+            $lifecycleReviewed = '2026-09-30'
+            $today = (Get-Date).Date
+            [void]$sb.AppendLine("LIFECYCLE TABLE: source=$lifecycleSource reviewed=$lifecycleReviewed entries=$($lifecycleTable.Count) evaluated=$($today.ToString('yyyy-MM-dd'))")
+            if (($today - [datetime]::ParseExact($lifecycleReviewed, 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)).Days -gt 365) {
+                [void]$sb.AppendLine("[i] The lifecycle table was last reviewed $lifecycleReviewed. Releases after that date aren't in it.")
+            }
+            # Local OS, with the Windows 10 ESU add-on license when it applies
+            $os = Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue
+            $localOS = [string]$os.Caption; $localBuild = [int]$os.BuildNumber
+            $localEntry = Find-Ep10Release -Table $lifecycleTable -Caption $localOS -Build $localBuild
+            $esu = 'Unknown'; $esuUntil = $null
+            if ($localEntry -and $localEntry.Key -eq 'win10-22h2') {
+                try {
+                    $years = Get-Ep10EsuYears; $best = $null
+                    foreach ($lic in @(Get-CimInstance -ClassName SoftwareLicensingProduct -Filter 'LicenseStatus = 1 AND PartialProductKey IS NOT NULL' -EA Stop)) {
+                        $y = $years | Where-Object { $_.Id -eq ([string]$lic.ID).ToLowerInvariant() } | Select-Object -First 1
+                        if (-not $y -and [string]$lic.Name -match '\bESU\b.*?Year\s*(\d)') { $n = [int]$Matches[1]; $y = $years | Where-Object { $_.Year -eq $n } | Select-Object -First 1 }
+                        if ($y -and (-not $best -or $y.Year -gt $best.Year)) { $best = $y }
+                    }
+                    if ($best) { $esu = 'Enrolled'; $esuUntil = $best.Until; [void]$sb.AppendLine("  ESU Enrollment : Year $($best.Year) license active, covers until $($best.Until)") }
+                    else { $esu = 'NotEnrolled'; [void]$sb.AppendLine("  ESU Enrollment : no ESU license found") }
+                } catch { [void]$sb.AppendLine("  ESU Enrollment : licenses couldn't be read ($($_.Exception.Message.Trim()))") }
+            }
+            $localVerdict = Get-Ep10Verdict -Entry $localEntry -Today $today -Esu $esu -EsuCoversUntil $esuUntil
+            & $tally $localVerdict 1
+            switch ($localVerdict.State) {
+                'EndOfSupport' { [void]$sb.AppendLine("[!] LOCAL OS $($localVerdict.Text). It gets no security updates.") }
+                'EsuCovered'   { [void]$sb.AppendLine("[~] Local OS $($localVerdict.Text). Plan the upgrade before ESU ends.") }
+                'EsuEligible'  { [void]$sb.AppendLine("[~] Local OS $($localVerdict.Text).") }
+                'EndingSoon'   { [void]$sb.AppendLine("[!] Local OS $($localVerdict.Text). Plan the upgrade.") }
+                'Supported'    { [void]$sb.AppendLine("Local OS $($localVerdict.Text).") }
+                default        { [void]$sb.AppendLine("Local OS: $localOS (build $localBuild) isn't in the lifecycle table. Confirm it's supported on Microsoft's lifecycle pages.") }
+            }
+            if ($localEntry -and $localEntry.Key -eq 'win10-22h2' -and $localVerdict.State -eq 'EndOfSupport' -and $today -le [datetime]'2028-10-10') {
+                [void]$sb.AppendLine("  Consumer ESU enrollment through a Microsoft account leaves no license this check can read; if this PC is enrolled that way, record a waiver.")
+            }
+            # SQL Server, Office 2016/2019 and Exchange installed on this host
+            $products = @()
+            foreach ($root in @('HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SQL Server')) {
+                $names = Get-ItemProperty -LiteralPath "$root\Instance Names\SQL" -EA SilentlyContinue
+                if (-not $names) { continue }
+                foreach ($prop in @($names.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' })) {
+                    $ver = (Get-ItemProperty -LiteralPath "$root\$($prop.Value)\Setup" -Name Version -EA SilentlyContinue).Version
+                    $name = ConvertTo-Ep10SqlProduct -InstanceId ([string]$prop.Value) -Version ([string]$ver)
+                    if ($name) { $products += @{ Product=$name; Detail="instance $($prop.Name), $(if ($ver) { $ver } else { $prop.Value })" } }
+                }
+            }
+            $officeSeen = @{}
+            foreach ($root in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
+                foreach ($app in @(Get-ItemProperty $root -EA SilentlyContinue | Where-Object { $_.DisplayName })) {
+                    $name = ConvertTo-Ep10OfficeProduct -DisplayName ([string]$app.DisplayName)
+                    if ($name -and -not $officeSeen.ContainsKey($name)) { $officeSeen[$name] = $true; $products += @{ Product=$name; Detail=[string]$app.DisplayName } }
+                }
+            }
+            $exSetup = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\ExchangeServer\v15\Setup' -EA SilentlyContinue
+            if ($exSetup) {
+                $exBuild = if ($null -ne $exSetup.MsiBuildMajor) { [int]$exSetup.MsiBuildMajor } else { -1 }
+                $name = ConvertTo-Ep10ExchangeProduct -Major ([int]$exSetup.MsiProductMajor) -Minor ([int]$exSetup.MsiProductMinor) -Build $exBuild
+                if ($name) { $products += @{ Product=$name; Detail='ExchangeServer\v15\Setup' } }
+            }
+            if ($products.Count -gt 0) { [void]$sb.AppendLine("`nLOCAL PRODUCTS:") }
+            foreach ($prod in $products) {
+                $entry = $lifecycleTable | Where-Object { $_.Match -eq $prod.Product } | Select-Object -First 1
+                $v = Get-Ep10Verdict -Entry $entry -Today $today
+                & $tally $v 1
+                $flag = switch ($v.State) { 'EndOfSupport' { '[!] ' } 'EsuEligible' { '[~] ' } 'EndingSoon' { '[!] ' } default { '' } }
+                [void]$sb.AppendLine("  $flag$(if ($entry) { $v.Text } else { "$($prod.Product): $($v.Text)" }) ($($prod.Detail))")
+            }
+            # Enabled AD computers, on domain members only
+            $cs = Get-CimInstance Win32_ComputerSystem -EA SilentlyContinue
+            if (-not $cs.PartOfDomain) { [void]$sb.AppendLine("`nAD OS DISTRIBUTION: skipped, this computer isn't domain-joined") }
+            elseif (-not (Get-Command Get-ADComputer -EA SilentlyContinue)) { [void]$sb.AppendLine("`nAD OS DISTRIBUTION: skipped, the ActiveDirectory module isn't available (install RSAT)") }
+            else {
+                try {
+                    $comps = @(Get-ADComputer -Filter 'Enabled -eq $true' -Properties OperatingSystem,OperatingSystemVersion,LastLogonDate -EA Stop)
+                    [void]$sb.AppendLine("`nAD OS DISTRIBUTION ($($comps.Count) enabled computers):")
+                    $groups = @($comps | Group-Object { "$($_.OperatingSystem)|$(if ([string]$_.OperatingSystemVersion -match '\((\d+)\)') { $Matches[1] } else { 0 })" } | Sort-Object Count -Descending)
+                    $eolComputers = @()
+                    foreach ($g in $groups) {
+                        $osName, $osBuild = $g.Name -split '\|', 2
+                        $v = Get-Ep10Verdict -Entry (Find-Ep10Release -Table $lifecycleTable -Caption $osName -Build ([int]$osBuild)) -Today $today
+                        & $tally $v $g.Count
+                        $label = switch ($v.State) { 'EndOfSupport' { '[END OF SUPPORT]' } 'EsuEligible' { '[ESU window - confirm enrollment]' } 'EndingSoon' { '[ENDING SOON]' } 'Supported' { '[Supported]' } default { '[not in table]' } }
+                        [void]$sb.AppendLine("  $($g.Count.ToString().PadLeft(4)) x $(if ($osName) { $osName } else { 'Unknown' })$(if ([int]$osBuild -gt 0) { " ($osBuild)" }) $label")
+                        if ($v.State -eq 'EndOfSupport') { $eolComputers += $g.Group }
+                    }
+                    if ($eolComputers.Count -gt 0) {
+                        [void]$sb.AppendLine("`nEND-OF-SUPPORT SYSTEMS ($($eolComputers.Count)):")
+                        foreach ($c in ($eolComputers | Select-Object -First 20)) { [void]$sb.AppendLine("  $($c.Name) | $($c.OperatingSystem) | Last logon: $(if($c.LastLogonDate){$c.LastLogonDate.ToString('yyyy-MM-dd')}else{'Never'})") }
+                    }
+                    $win10 = @($comps | Where-Object { $_.OperatingSystem -match 'Windows 10' }).Count
+                    $win11 = @($comps | Where-Object { $_.OperatingSystem -match 'Windows 11' }).Count
+                    if ($win10 + $win11 -gt 0) { [void]$sb.AppendLine("`nWINDOWS 10 -> 11 MIGRATION: $([math]::Floor($win11 * 100 / ($win10 + $win11)))% ($win11/$($win10 + $win11) workstations on Windows 11)") }
+                } catch { [void]$sb.AppendLine("`nAD OS DISTRIBUTION: couldn't query AD computer objects ($($_.Exception.Message.Trim())); only this host was evaluated") }
+            }
+            $status = if ($counts.Fail -gt 0) {'Fail'} elseif ($counts.Partial -gt 0) {'Partial'} else {'Pass'}
+            @{ Status=$status; Findings=$sb.ToString().Trim(); Evidence="EOL scan @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
         }
     }
 
@@ -8143,7 +8339,7 @@ $script:MitreMap = @{
     'EP07' = @{ Tactics=@('TA0002','TA0005'); Techniques=@('T1059','T1204.002','T1137','T1221'); Desc='Missing AppLocker/WDAC and unrestricted macros enable arbitrary code execution and initial access via documents' }
     'EP08' = @{ Tactics=@('TA0006','TA0005','TA0004'); Techniques=@('T1003.001','T1003.004','T1003.005','T1547.008'); Desc='Missing Credential Guard/LSA Protection enables LSASS dumping, DCSync, and credential theft' }
     'EP09' = @{ Tactics=@('TA0005','TA0003'); Techniques=@('T1562.001','T1112'); Desc='Misconfigured systems expand attack surface through unnecessary services and weak defaults' }
-    'EP10' = @{ Tactics=@('TA0005','TA0010'); Techniques=@('T1091','T1052'); Desc='Uncontrolled removable media enables physical delivery of malware and data exfiltration' }
+    'EP10' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1210'); Desc='End-of-life operating systems expose public and internal services to known exploitation' }
     # ── Logging & Monitoring ──
     'LM01' = @{ Tactics=@('TA0005'); Techniques=@('T1562.002','T1070.001'); Desc='Inadequate audit policy creates blind spots; attackers operate undetected' }
     'LM02' = @{ Tactics=@('TA0005','TA0040'); Techniques=@('T1562.002','T1485'); Desc='No SIEM means no correlation, alerting, or forensic capability during active compromise' }

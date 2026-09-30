@@ -1622,6 +1622,103 @@ Describe 'EP01 primary antivirus decision (nested check helper via AST)' {
     }
 }
 
+Describe 'EP10 lifecycle evaluation (nested check helpers via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in @('Get-Ep10LifecycleTable','Get-Ep10EsuYears','Find-Ep10Release','Get-Ep10Verdict','ConvertTo-Ep10SqlProduct','ConvertTo-Ep10OfficeProduct','ConvertTo-Ep10ExchangeProduct')) {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        $table = Get-Ep10LifecycleTable
+        $today = [datetime]'2026-09-30'
+    }
+
+    It 'finds the release by caption, build and edition' {
+        (Find-Ep10Release -Table $table -Caption 'Microsoft Windows 11 Pro' -Build 26200).Key | Should -Be 'win11-25h2-homepro'
+        (Find-Ep10Release -Table $table -Caption 'Microsoft Windows 11 Education' -Build 22631).Key | Should -Be 'win11-23h2-ent'
+        (Find-Ep10Release -Table $table -Caption 'Microsoft Windows 10 Enterprise LTSC' -Build 19044).Key | Should -Be 'win10-ltsc2021'
+        (Find-Ep10Release -Table $table -Caption 'Windows 10 Enterprise' -Build 19044).Key | Should -Be 'win10-older'
+        (Find-Ep10Release -Table $table -Caption 'Microsoft Windows Server 2012 R2 Standard' -Build 9600).Key | Should -Be 'server2012r2'
+        Find-Ep10Release -Table $table -Caption 'Microsoft Windows 11 Pro' -Build 28000 | Should -BeNullOrEmpty
+        Find-Ep10Release -Table $table -Caption 'Microsoft Windows 10 Enterprise LTSC' -Build 20348 | Should -BeNullOrEmpty
+    }
+    It 'reports ESU-enrolled Windows 10 as covered, not supported' {
+        $win10 = Find-Ep10Release -Table $table -Caption 'Microsoft Windows 10 Pro' -Build 19045
+        $covered = Get-Ep10Verdict -Entry $win10 -Today $today -Esu 'Enrolled' -EsuCoversUntil '2026-10-13'
+        $covered.State | Should -Be 'EsuCovered'
+        $covered.Text | Should -Be 'Windows 10 22H2: past end of support (2025-10-14), covered by Extended Security Updates until 2026-10-13'
+        (Get-Ep10Verdict -Entry $win10 -Today $today -Esu 'Unknown').State | Should -Be 'EsuEligible'
+        $ended = Get-Ep10Verdict -Entry $win10 -Today $today -Esu 'NotEnrolled'
+        $ended.State | Should -Be 'EndOfSupport'
+        $ended.Text | Should -Be 'Windows 10 22H2: end of support 2025-10-14, not enrolled in Extended Security Updates (available until 2028-10-10)'
+        (Get-Ep10Verdict -Entry $win10 -Today ([datetime]'2026-11-01') -Esu 'Enrolled' -EsuCoversUntil '2026-10-13').State | Should -Be 'EndOfSupport'
+    }
+    It 'pins the evaluation date for supported, ending and closed ESU releases' {
+        $pro24h2 = Get-Ep10Verdict -Entry (Find-Ep10Release -Table $table -Caption 'Windows 11 Pro' -Build 26100) -Today $today
+        $pro24h2.State | Should -Be 'EndingSoon'
+        $pro24h2.Text | Should -Be 'Windows 11 24H2 (Home/Pro): support ends 2026-10-13 (13 days)'
+        (Get-Ep10Verdict -Entry (Find-Ep10Release -Table $table -Caption 'Windows 11 Pro' -Build 26200) -Today $today).State | Should -Be 'Supported'
+        $r2 = Find-Ep10Release -Table $table -Caption 'Windows Server 2012 R2 Standard' -Build 9600
+        (Get-Ep10Verdict -Entry $r2 -Today ([datetime]'2026-10-13')).State | Should -Be 'EsuEligible'
+        (Get-Ep10Verdict -Entry $r2 -Today ([datetime]'2026-10-14')).Text | Should -Be 'Windows Server 2012 R2: end of support 2023-10-10, Extended Security Updates ended 2026-10-13'
+        (Get-Ep10Verdict -Entry $null -Today $today).State | Should -Be 'Unknown'
+    }
+    It 'maps installed SQL Server, Office and Exchange versions' {
+        ConvertTo-Ep10SqlProduct -InstanceId 'MSSQL13.MSSQLSERVER' -Version '13.0.6300.2' | Should -Be 'SQL Server 2016'
+        ConvertTo-Ep10SqlProduct -InstanceId 'MSSQL15.SQLEXPRESS' -Version '' | Should -Be 'SQL Server 2019'
+        ConvertTo-Ep10SqlProduct -InstanceId 'MSSQL11.MSSQLSERVER' -Version '11.0.7001.0' | Should -Be 'SQL Server 2012 or older'
+        ConvertTo-Ep10OfficeProduct -DisplayName 'Microsoft Office Professional Plus 2019 - en-us' | Should -Be 'Office 2019'
+        ConvertTo-Ep10OfficeProduct -DisplayName 'Microsoft Office 2016 Language Pack - French' | Should -BeNullOrEmpty
+        ConvertTo-Ep10OfficeProduct -DisplayName 'Microsoft 365 Apps for enterprise - en-us' | Should -BeNullOrEmpty
+        ConvertTo-Ep10ExchangeProduct -Major 15 -Minor 1 -Build 225 | Should -Be 'Exchange Server 2016'
+        ConvertTo-Ep10ExchangeProduct -Major 15 -Minor 2 -Build 1748 | Should -Be 'Exchange Server 2019'
+        ConvertTo-Ep10ExchangeProduct -Major 15 -Minor 2 -Build 2562 | Should -Be 'Exchange Server Subscription Edition'
+    }
+    It 'lists the three Windows 10 ESU years by activation ID' {
+        $years = Get-Ep10EsuYears
+        $years.Year | Should -Be @(1, 2, 3)
+        $years[-1].Until | Should -Be ($table | Where-Object { $_.Key -eq 'win10-22h2' }).ESU
+    }
+    It 'runs locally on every host and sweeps only enabled AD computers' {
+        $block = Get-Block -Text $script:Text -Start "'EP10' = @\{ Type='Local'" -End "'LM03' = @\{"
+        $block | Should -Match "Get-ADComputer -Filter 'Enabled -eq \`$true'"
+        $block | Should -Match 'PartOfDomain'
+        $block | Should -Match 'SoftwareLicensingProduct'
+        $block | Should -Not -Match 'EnableESUSubscriptionCheck'
+    }
+}
+
+Describe 'EP04 hotpatch-aware patch recency (nested check helpers via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in @('Test-Ep04OsQualityUpdate','Get-Ep04LatestOsUpdate')) {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+
+    It 'recognizes monthly OS updates and hotpatches but not .NET or definitions' {
+        Test-Ep04OsQualityUpdate -Title '2026-09 Security Update (KB5129195) (26200.9457)' -OsBuild 26200 | Should -BeTrue
+        Test-Ep04OsQualityUpdate -Title '2026-09 Security Update (KB5129195) (26200.9457)' -OsBuild 26100 | Should -BeFalse
+        Test-Ep04OsQualityUpdate -Title '2026-05 Hotpatch for Windows Server 2025 (KB5058497)' -OsBuild 26100 | Should -BeTrue
+        Test-Ep04OsQualityUpdate -Title '2026-09 .NET Framework Security Update (KB5126052)' -OsBuild 26200 | Should -BeFalse
+        Test-Ep04OsQualityUpdate -Title 'Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.437.1)' -OsBuild 26200 | Should -BeFalse
+    }
+    It 'counts a hotpatch month that only shows in the Windows Update history' {
+        $fixes = @([pscustomobject]@{ HotFixID='KB5051987'; InstalledOn=[datetime]'2026-07-22' })
+        $history = @(@{ Title='2026-09 Hotpatch for Windows 11 Version 24H2 (KB5130001) (26100.4061)'; Date=[datetime]'2026-09-18' })
+        $latest = Get-Ep04LatestOsUpdate -Hotfixes $fixes -History $history -OsBuild 26100
+        $latest.Date | Should -Be ([datetime]'2026-09-18')
+        $latest.Label | Should -Match 'Windows Update history'
+    }
+    It 'falls back to the hotfix list when the history has no OS update or is unreadable' {
+        $fixes = @([pscustomobject]@{ HotFixID='KB5051987'; InstalledOn=[datetime]'2026-06-10' })
+        (Get-Ep04LatestOsUpdate -Hotfixes $fixes -History @(@{ Title='2026-09 .NET Framework Security Update (KB5126052)'; Date=[datetime]'2026-09-20' }) -OsBuild 26200).Date | Should -Be ([datetime]'2026-06-10')
+        (Get-Ep04LatestOsUpdate -Hotfixes $fixes -History $null -OsBuild 26200).Label | Should -Be 'KB5051987 (hotfix list)'
+        Get-Ep04LatestOsUpdate -Hotfixes @() -History $null -OsBuild 26200 | Should -BeNullOrEmpty
+    }
+}
+
 Describe 'Lint cleanliness (PSScriptAnalyzer)' {
     It 'has zero analyzer findings under the project settings' -Skip:(-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
         $settings = Join-Path $script:RepoRoot 'PSScriptAnalyzerSettings.psd1'

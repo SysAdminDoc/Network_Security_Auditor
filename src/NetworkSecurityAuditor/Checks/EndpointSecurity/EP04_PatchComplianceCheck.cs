@@ -3,10 +3,14 @@ namespace NetworkSecurityAuditor.Checks.EndpointSecurity;
 using System.Globalization;
 using System.Management;
 using System.Text;
+using System.Text.RegularExpressions;
+using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
 
 /// <summary>
-/// EP04 - Patch compliance: hotfix recency, OS build currency, patch count.
+/// EP04 - Patch compliance: OS update recency and whether the OS release still gets updates.
+/// The last update date is the newer of Win32_QuickFixEngineering and the Windows Update install
+/// history, so hotpatch months (installed without a new baseline) count as patched.
 /// </summary>
 public sealed class EP04_PatchComplianceCheck : ISecurityCheck
 {
@@ -14,79 +18,39 @@ public sealed class EP04_PatchComplianceCheck : ISecurityCheck
 
     private const int StalePatchDays = 30;
 
-    // Known current Windows 10/11/Server builds as of 2025-Q2.
-    // Key = major build number, Value = (friendly name, is current).
-    private static readonly Dictionary<int, string> KnownCurrentBuilds = new()
+    internal sealed record HotfixInfo(string HotFixId, DateTime InstalledOn, string Description);
+
+    internal sealed record UpdateHistoryEntry(string Title, DateTime Date);
+
+    internal sealed record PatchSnapshot
     {
-        { 26100, "Windows 11 24H2 / Server 2025" },
-        { 22631, "Windows 11 23H2" },
-        { 22621, "Windows 11 22H2" },
-        { 19045, "Windows 10 22H2" },
-        { 20348, "Windows Server 2022" },
-        { 17763, "Windows Server 2019 / Windows 10 1809 LTSC" },
-        { 14393, "Windows Server 2016 / Windows 10 1607 LTSC" },
-    };
+        public IReadOnlyList<HotfixInfo> Hotfixes { get; init; } = [];
+        public string? HotfixError { get; init; }
+        /// <summary>Successful installs from the Windows Update Agent history; null when it couldn't be read.</summary>
+        public IReadOnlyList<UpdateHistoryEntry>? UpdateHistory { get; init; }
+        public string? UpdateHistoryError { get; init; }
+        public string OsCaption { get; init; } = "";
+        public int OsBuild { get; init; }
+        public string OsVersion { get; init; } = "";
+    }
+
+    internal sealed record PatchAssessment(CheckStatus Status, string Findings, string Evidence);
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
         try
         {
-            var sb = new StringBuilder();
-            var evidence = new StringBuilder();
-            bool hasIssue = false;
-
-            // -- Query installed hotfixes via WMI --
-            ct.ThrowIfCancellationRequested();
-            var hotfixes = QueryHotfixes(evidence, ct);
-
-            evidence.AppendLine($"\n[Summary] Total hotfixes returned: {hotfixes.Count}");
-
-            if (hotfixes.Count == 0)
-            {
-                hasIssue = true;
-                sb.AppendLine("WARNING: No hotfix records returned from WMI (Win32_QuickFixEngineering).");
-                sb.AppendLine("  This may indicate WMI issues or that updates are managed by a non-standard mechanism.");
-            }
-            else
-            {
-                // Find most recent hotfix
-                var mostRecent = hotfixes
-                    .Where(h => h.InstalledOn != DateTime.MinValue)
-                    .OrderByDescending(h => h.InstalledOn)
-                    .FirstOrDefault();
-
-                if (mostRecent != default)
-                {
-                    int daysSinceLast = (int)(DateTime.Now - mostRecent.InstalledOn).TotalDays;
-                    evidence.AppendLine($"  Most recent hotfix: {mostRecent.HotFixId} installed {FormatDate(mostRecent.InstalledOn)} ({daysSinceLast} days ago)");
-
-                    sb.AppendLine($"Hotfix count: {hotfixes.Count}. Most recent: {mostRecent.HotFixId} ({FormatDate(mostRecent.InstalledOn)}, {daysSinceLast}d ago).");
-
-                    if (daysSinceLast > StalePatchDays)
-                    {
-                        hasIssue = true;
-                        sb.AppendLine($"FAIL: Last hotfix is {daysSinceLast} days old (threshold: {StalePatchDays} days). System may be missing security updates.");
-                    }
-                }
-                else
-                {
-                    sb.AppendLine($"Hotfix count: {hotfixes.Count}, but no install dates could be parsed.");
-                    sb.AppendLine("WARNING: Cannot determine patch recency without install dates.");
-                }
-            }
-
-            // -- OS build currency --
-            ct.ThrowIfCancellationRequested();
-            CheckBuildCurrency(env, sb, evidence, ref hasIssue);
-
-            var status = hasIssue ? CheckStatus.Fail : CheckStatus.Pass;
-
+            var assessment = Assess(CollectSnapshot(env, ct), DateOnly.FromDateTime(DateTime.Now));
             return Task.FromResult(new CheckResult
             {
-                Status = status,
-                Findings = sb.ToString().TrimEnd(),
-                Evidence = evidence.ToString().TrimEnd()
+                Status = assessment.Status,
+                Findings = assessment.Findings,
+                Evidence = assessment.Evidence
             });
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -94,34 +58,133 @@ public sealed class EP04_PatchComplianceCheck : ISecurityCheck
         }
     }
 
-    private static List<HotfixInfo> QueryHotfixes(StringBuilder evidence, CancellationToken ct)
+    internal static PatchAssessment Assess(PatchSnapshot snapshot, DateOnly today)
+    {
+        var sb = new StringBuilder();
+        var evidence = new StringBuilder();
+        var hasIssue = false;
+
+        evidence.AppendLine("[Installed Hotfixes (Win32_QuickFixEngineering)]");
+        if (snapshot.HotfixError is not null)
+            evidence.AppendLine($"  WMI error: {snapshot.HotfixError}");
+        foreach (var h in snapshot.Hotfixes)
+            evidence.AppendLine($"  {h.HotFixId}: {(h.InstalledOn == DateTime.MinValue ? "date unknown" : FormatDate(h.InstalledOn))}, {h.Description}");
+        evidence.AppendLine($"\n[Summary] Total hotfixes returned: {snapshot.Hotfixes.Count}");
+
+        var lastHotfix = snapshot.Hotfixes
+            .Where(h => h.InstalledOn != DateTime.MinValue)
+            .OrderByDescending(h => h.InstalledOn)
+            .FirstOrDefault();
+        var osUpdates = (snapshot.UpdateHistory ?? [])
+            .Where(u => IsOsQualityUpdate(u.Title, snapshot.OsBuild))
+            .OrderByDescending(u => u.Date)
+            .ToList();
+        var lastOsUpdate = osUpdates.FirstOrDefault();
+
+        evidence.AppendLine("\n[Windows Update History (OS quality updates)]");
+        if (snapshot.UpdateHistory is null)
+            evidence.AppendLine($"  Couldn't read: {snapshot.UpdateHistoryError ?? "unavailable"}");
+        foreach (var u in osUpdates.Take(5))
+            evidence.AppendLine($"  {FormatDate(u.Date)}: {u.Title}");
+
+        // The newer of the two sources is the last time this OS was patched.
+        var candidates = new List<(DateTime Date, string Label)>();
+        if (lastHotfix is not null)
+            candidates.Add((lastHotfix.InstalledOn, $"{lastHotfix.HotFixId} (hotfix list)"));
+        if (lastOsUpdate is not null)
+            candidates.Add((lastOsUpdate.Date.Date, $"{lastOsUpdate.Title} (Windows Update history)"));
+        var latest = candidates.OrderByDescending(x => x.Date).FirstOrDefault();
+
+        if (candidates.Count == 0)
+        {
+            if (snapshot.Hotfixes.Count == 0)
+            {
+                hasIssue = true;
+                sb.AppendLine("WARNING: No hotfix records returned from WMI (Win32_QuickFixEngineering) and no OS update in the Windows Update history.");
+                sb.AppendLine("  This may indicate WMI issues or that updates are managed by a non-standard mechanism.");
+            }
+            else
+            {
+                sb.AppendLine($"Hotfix count: {snapshot.Hotfixes.Count}, but no install dates could be parsed.");
+                sb.AppendLine("WARNING: Cannot determine patch recency without install dates.");
+            }
+        }
+        else
+        {
+            var daysSince = today.DayNumber - DateOnly.FromDateTime(latest.Date).DayNumber;
+            evidence.AppendLine($"\n  Most recent OS update: {latest.Label} on {FormatDate(latest.Date)} ({daysSince} days ago)");
+            sb.AppendLine($"Hotfix count: {snapshot.Hotfixes.Count}. Most recent OS update: {latest.Label}, {FormatDate(latest.Date)} ({daysSince}d ago).");
+            if (daysSince > StalePatchDays)
+            {
+                hasIssue = true;
+                sb.AppendLine($"FAIL: Last OS update is {daysSince} days old (threshold: {StalePatchDays} days). System may be missing security updates.");
+            }
+        }
+
+        CheckBuildCurrency(snapshot, today, sb, evidence, ref hasIssue);
+
+        return new PatchAssessment(hasIssue ? CheckStatus.Fail : CheckStatus.Pass, sb.ToString().TrimEnd(), evidence.ToString().TrimEnd());
+    }
+
+    /// <summary>
+    /// True for monthly OS updates, including hotpatches: titles that carry this OS build
+    /// ("2026-09 Security Update (KB5129195) (26200.9457)") or name a cumulative update, rollup or
+    /// hotpatch. .NET, Defender definitions and the malicious software removal tool don't count.
+    /// </summary>
+    internal static bool IsOsQualityUpdate(string title, int osBuild)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return false;
+        if (Regex.IsMatch(title, @"\.NET|Security Intelligence|Defender|Definition|Malicious Software", RegexOptions.IgnoreCase))
+            return false;
+        if (osBuild > 0 && title.Contains($"({osBuild.ToString(CultureInfo.InvariantCulture)}.", StringComparison.Ordinal))
+            return true;
+        return Regex.IsMatch(title, @"Hotpatch|Cumulative Update for (Windows|Microsoft server operating system)|Monthly Quality Rollup", RegexOptions.IgnoreCase);
+    }
+
+    private static PatchSnapshot CollectSnapshot(EnvironmentInfo env, CancellationToken ct)
+    {
+        var (hotfixes, hotfixError) = QueryHotfixes(ct);
+        ct.ThrowIfCancellationRequested();
+        var (history, historyError) = UpdateHistoryReader.ReadInstalls(ct);
+        return new PatchSnapshot
+        {
+            Hotfixes = hotfixes,
+            HotfixError = hotfixError,
+            UpdateHistory = history,
+            UpdateHistoryError = historyError,
+            OsCaption = env.OSCaption,
+            OsBuild = env.OSBuild,
+            OsVersion = env.OSVersion,
+        };
+    }
+
+    private static (List<HotfixInfo> Hotfixes, string? Error) QueryHotfixes(CancellationToken ct)
     {
         var results = new List<HotfixInfo>();
-        evidence.AppendLine("[Installed Hotfixes (Win32_QuickFixEngineering)]");
-
         try
         {
             using var searcher = new ManagementObjectSearcher(
                 "SELECT HotFixID, InstalledOn, Description, InstalledBy FROM Win32_QuickFixEngineering");
 
-            foreach (ManagementObject obj in searcher.Get())
+            using var collection = searcher.Get();
+            foreach (ManagementObject obj in collection)
             {
-                ct.ThrowIfCancellationRequested();
-
-                string id = obj["HotFixID"]?.ToString() ?? "Unknown";
-                string desc = obj["Description"]?.ToString() ?? "";
-                DateTime installedOn = ParseInstalledOn(obj["InstalledOn"]);
-
-                results.Add(new HotfixInfo(id, installedOn, desc));
-                evidence.AppendLine($"  {id}: {(installedOn == DateTime.MinValue ? "date unknown" : FormatDate(installedOn))}, {desc}");
+                using (obj)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    results.Add(new HotfixInfo(
+                        obj["HotFixID"]?.ToString() ?? "Unknown",
+                        ParseInstalledOn(obj["InstalledOn"]),
+                        obj["Description"]?.ToString() ?? ""));
+                }
             }
         }
         catch (ManagementException ex)
         {
-            evidence.AppendLine($"  WMI error: {ex.Message}");
+            return (results, ex.Message.Trim());
         }
 
-        return results;
+        return (results, null);
     }
 
     internal static DateTime ParseInstalledOn(object? raw)
@@ -198,38 +261,40 @@ public sealed class EP04_PatchComplianceCheck : ISecurityCheck
         return false;
     }
 
-    private static void CheckBuildCurrency(EnvironmentInfo env, StringBuilder sb, StringBuilder evidence, ref bool hasIssue)
+    private static void CheckBuildCurrency(PatchSnapshot snapshot, DateOnly today, StringBuilder sb, StringBuilder evidence, ref bool hasIssue)
     {
-        evidence.AppendLine($"\n[OS Build Currency]");
-        evidence.AppendLine($"  OS Build: {env.OSBuild}");
-        evidence.AppendLine($"  OS Version: {env.OSVersion}");
-        evidence.AppendLine($"  OS Caption: {env.OSCaption}");
+        evidence.AppendLine("\n[OS Build Currency]");
+        evidence.AppendLine($"  OS Build: {snapshot.OsBuild}");
+        evidence.AppendLine($"  OS Version: {snapshot.OsVersion}");
+        evidence.AppendLine($"  OS Caption: {snapshot.OsCaption}");
+        evidence.AppendLine($"  Lifecycle table reviewed: {LifecycleVerdict.Format(LifecycleTable.Reviewed)}");
 
-        if (env.OSBuild <= 0)
+        if (snapshot.OsBuild <= 0)
         {
             sb.AppendLine("INFO: OS build number not available for currency check.");
             return;
         }
 
-        if (KnownCurrentBuilds.TryGetValue(env.OSBuild, out string? buildName))
+        var verdict = LifecycleTable.Evaluate(LifecycleTable.FindOs(snapshot.OsCaption, snapshot.OsBuild), today);
+        evidence.AppendLine($"  Verdict: {verdict.State}");
+        switch (verdict.State)
         {
-            sb.AppendLine($"OS build {env.OSBuild} ({buildName}) is a recognized current release.");
-        }
-        else
-        {
-            // Check if it's an older/unknown build
-            bool isOlder = env.OSBuild < 14393; // Anything older than Server 2016 / Win10 1607
-            if (isOlder)
-            {
+            case LifecycleState.EndOfSupport:
                 hasIssue = true;
-                sb.AppendLine($"CRITICAL: OS build {env.OSBuild} is not a recognized current build. This system may be running an end-of-life or unsupported OS version.");
-            }
-            else
-            {
-                sb.AppendLine($"INFO: OS build {env.OSBuild} is not in the known-current list. Verify it is receiving security updates.");
-            }
+                sb.AppendLine($"FAIL: OS build {snapshot.OsBuild} is {verdict.Describe(today)}. This release no longer gets security updates.");
+                break;
+            case LifecycleState.EsuEligible:
+                sb.AppendLine($"INFO: OS build {snapshot.OsBuild} is {verdict.Describe(today)}. EP10 checks for an ESU license.");
+                break;
+            case LifecycleState.EndingSoon:
+                sb.AppendLine($"WARNING: OS build {snapshot.OsBuild} is {verdict.Describe(today)}.");
+                break;
+            case LifecycleState.Supported:
+                sb.AppendLine($"OS build {snapshot.OsBuild} is {verdict.Describe(today)}.");
+                break;
+            default:
+                sb.AppendLine($"INFO: OS build {snapshot.OsBuild} isn't in the lifecycle table (reviewed {LifecycleVerdict.Format(LifecycleTable.Reviewed)}). Verify it is receiving security updates.");
+                break;
         }
     }
-
-    private readonly record struct HotfixInfo(string HotFixId, DateTime InstalledOn, string Description);
 }
