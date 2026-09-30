@@ -2065,6 +2065,39 @@ Describe 'EP04 CISA KEV matching against installed updates (nested check helpers
         # .NET falls back to the OS update when no .NET update date is known.
         @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families @('.NET') -UpdateDates @{} -LatestOsDate ([datetime]'2026-09-01') -Today $script:KevToday).CveId | Should -Be @('CVE-2026-40003')
     }
+    It 'treats an old CVE KEV re-added as fixed by any update from after the following year' {
+        # CVE-2023-21529 was fixed in February 2023 and added to KEV on 2026-04-13.
+        $exchange = @([pscustomobject]@{ cveID='CVE-2023-21529'; vendorProject='Microsoft'; product='Exchange Server'; vulnerabilityName='Microsoft Exchange Server Remote Code Execution'; dateAdded='2026-04-13'; dueDate='2026-04-27'; knownRansomwareCampaignUse='Known' })
+        @(Get-Ep04KevHits -Entries $exchange -Families @('Windows','Exchange') -UpdateDates @{ 'Exchange'=[datetime]'2025-03-11' } -LatestOsDate ([datetime]'2026-09-27') -Today $script:KevToday).Count | Should -Be 0
+        @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families @('SQL Server') -UpdateDates @{ 'SQL Server'=[datetime]'2026-07-15' } -LatestOsDate ([datetime]'2026-09-27') -Today $script:KevToday).Count | Should -Be 0
+        # An Exchange server not updated since 2024 still gets it, overdue and ransomware-linked.
+        $stale = @(Get-Ep04KevHits -Entries $exchange -Families @('Exchange') -UpdateDates @{ 'Exchange'=[datetime]'2024-06-11' } -LatestOsDate ([datetime]'2026-09-27') -Today $script:KevToday)
+        @($stale.CveId) | Should -Be @('CVE-2023-21529')
+        $stale[0].Overdue | Should -BeTrue
+        $stale[0].Ransomware | Should -BeTrue
+        # The year rule never hides a current-year entry added after the last update.
+        @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families @('Windows') -UpdateDates @{} -LatestOsDate ([datetime]'2026-08-11') -Today $script:KevToday).CveId | Should -Contain 'CVE-2026-40001'
+    }
+    It 'dates products from their own update titles, not Store packages or SQL client drivers' {
+        $fn = ([System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)).FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Ep04NewestTitledDate' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+        # Titles as this PC's Windows Update history shows them, plus SQL Server and Exchange shapes.
+        $history = @(
+            [pscustomobject]@{ Date=[datetime]'2026-09-20'; Title='9PLL735RFDSM-Microsoft.NET.Native.Runtime.2.2' },
+            [pscustomobject]@{ Date=[datetime]'2026-09-08'; Title='2026-09 .NET Framework Security Update (KB5126052)' },
+            [pscustomobject]@{ Date=[datetime]'2026-09-22'; Title='Security Update for Microsoft OLE DB Driver 18 for SQL Server (KB5040711)' },
+            [pscustomobject]@{ Date=[datetime]'2026-07-15'; Title='Security Update for SQL Server 2019 RTM GDR (KB5046859)' },
+            [pscustomobject]@{ Date=[datetime]'2026-05-12'; Title='Security Update for Exchange Server 2019 Cumulative Update 14 (KB5049233)' },
+            [pscustomobject]@{ Date=[datetime]'2026-09-25'; Title='Security Intelligence Update for Microsoft Defender Antivirus - KB2267602' }
+        )
+        Get-Ep04NewestTitledDate -History $history -Family '.NET' | Should -Be ([datetime]'2026-09-08')
+        Get-Ep04NewestTitledDate -History $history -Family 'SQL Server' | Should -Be ([datetime]'2026-07-15')
+        Get-Ep04NewestTitledDate -History $history -Family 'Exchange' | Should -Be ([datetime]'2026-05-12')
+        Get-Ep04NewestTitledDate -History $history -Family 'Office' | Should -BeNullOrEmpty
+        $block = Get-Block -Text $script:Text -Start "'EP04' = @\{ Type='Local'" -End "'EP05' = @\{"
+        $block | Should -Not -Match '\$newestTitled'
+        $block | Should -Match "Get-Ep04NewestTitledDate -History \`$wuHistory -Family '\.NET'"
+    }
 }
 
 Describe 'EP08 TPM reporting without elevation (nested check helper via AST)' {
@@ -2075,7 +2108,7 @@ Describe 'EP08 TPM reporting without elevation (nested check helper via AST)' {
     }
     It 'reports a standard user TPM 2.0 from its PnP device without counting an issue' {
         # What Get-Tpm hands a standard user: a message string, not a TPM object.
-        $a = Get-Ep08TpmAssessment -Tpm 'Administrator privilege is required to execute this command.' -SpecVersion '' -PnpCompatibleIds @('ACPI\MSFT0101','MSFT0101') -PnpStatus 'OK'
+        $a = Get-Ep08TpmAssessment -Tpm 'Administrator privilege is required to execute this command.' -SpecVersion '' -PnpDeviceIds @('ACPI\MSFT0101','MSFT0101') -PnpStatus 'OK'
         $a.Issue | Should -BeFalse
         $a.Lines | Should -Contain "TPM Present     : True (device status OK); readiness couldn't be read without elevation"
         $a.Lines | Should -Contain 'TPM Version     : 2.0 [TPM 2.0 OK]'
@@ -2083,23 +2116,32 @@ Describe 'EP08 TPM reporting without elevation (nested check helper via AST)' {
     }
     It 'says the TPM could not be read instead of claiming TPM 1.2 when nothing is readable' {
         $empty = [pscustomobject]@{ TpmPresent=$null; TpmReady=$null; TpmEnabled=$null }
-        $a = Get-Ep08TpmAssessment -Tpm $empty -SpecVersion '' -PnpCompatibleIds @() -PnpStatus '' -PnpQueryOk $false
+        $a = Get-Ep08TpmAssessment -Tpm $empty -SpecVersion '' -PnpDeviceIds @() -PnpStatus '' -PnpQueryOk $false
         $a.Issue | Should -BeFalse
         $a.Lines | Should -Be @("TPM             : couldn't be read without elevation")
     }
     It 'keeps the elevated checks' {
-        $ready = Get-Ep08TpmAssessment -Tpm ([pscustomobject]@{ TpmPresent=$true; TpmReady=$true; TpmEnabled=$true }) -SpecVersion '2.0, 0, 1.38' -PnpCompatibleIds @('MSFT0101') -PnpStatus 'OK'
+        $ready = Get-Ep08TpmAssessment -Tpm ([pscustomobject]@{ TpmPresent=$true; TpmReady=$true; TpmEnabled=$true }) -SpecVersion '2.0, 0, 1.38' -PnpDeviceIds @('MSFT0101') -PnpStatus 'OK'
         $ready.Issue | Should -BeFalse
         $ready.Lines | Should -Contain 'TPM Present     : True | Ready: True | Enabled: True'
         $ready.Lines | Should -Contain 'TPM Version     : 2.0 [TPM 2.0 OK]'
-        (Get-Ep08TpmAssessment -Tpm ([pscustomobject]@{ TpmPresent=$true; TpmReady=$false; TpmEnabled=$true }) -SpecVersion '2.0, 0, 1.38' -PnpCompatibleIds @() -PnpStatus '').Issue | Should -BeTrue
-        (Get-Ep08TpmAssessment -Tpm ([pscustomobject]@{ TpmPresent=$true; TpmReady=$true; TpmEnabled=$true }) -SpecVersion '1.2, 2, 3' -PnpCompatibleIds @() -PnpStatus '').Lines | Should -Contain 'TPM Version     : 1.2 [TPM 1.2 - upgrade recommended]'
+        (Get-Ep08TpmAssessment -Tpm ([pscustomobject]@{ TpmPresent=$true; TpmReady=$false; TpmEnabled=$true }) -SpecVersion '2.0, 0, 1.38' -PnpDeviceIds @() -PnpStatus '').Issue | Should -BeTrue
+        (Get-Ep08TpmAssessment -Tpm ([pscustomobject]@{ TpmPresent=$true; TpmReady=$true; TpmEnabled=$true }) -SpecVersion '1.2, 2, 3' -PnpDeviceIds @() -PnpStatus '').Lines | Should -Contain 'TPM Version     : 1.2 [TPM 1.2 - upgrade recommended]'
     }
     It 'counts a missing TPM when the device list was readable and shows none' {
-        $a = Get-Ep08TpmAssessment -Tpm 'Administrator privilege is required to execute this command.' -SpecVersion '' -PnpCompatibleIds @() -PnpStatus '' -PnpQueryOk $true
+        $a = Get-Ep08TpmAssessment -Tpm 'Administrator privilege is required to execute this command.' -SpecVersion '' -PnpDeviceIds @() -PnpStatus '' -PnpQueryOk $true
         $a.Issue | Should -BeTrue
         $a.Lines | Should -Contain 'TPM Present     : no TPM device found [!]'
-        (Get-Ep08TpmAssessment -Tpm 'x' -SpecVersion '' -PnpCompatibleIds @('ACPI\PNP0C31') -PnpStatus 'OK').Lines | Should -Contain 'TPM Version     : 1.2 [TPM 1.2 - upgrade recommended]'
+        (Get-Ep08TpmAssessment -Tpm 'x' -SpecVersion '' -PnpDeviceIds @('ACPI\PNP0C31') -PnpStatus 'OK').Lines | Should -Contain 'TPM Version     : 1.2 [TPM 1.2 - upgrade recommended]'
+    }
+    It 'finds a TPM 2.0 whose MSFT0101 is only in its hardware IDs' {
+        # A TPM whose ACPI _HID is MSFT0101 can carry no compatible ID; its hardware IDs are these.
+        $a = Get-Ep08TpmAssessment -Tpm 'Administrator privilege is required to execute this command.' -SpecVersion '' -PnpDeviceIds @('ACPI\VEN_MSFT&DEV_0101','ACPI\MSFT0101','*MSFT0101') -PnpStatus 'OK'
+        $a.Issue | Should -BeFalse
+        $a.Lines | Should -Contain 'TPM Version     : 2.0 [TPM 2.0 OK]'
+        $block = Get-Block -Text $script:Text -Start "'EP08' = @\{ Type='Local'" -End "'LM02' = @\{ Type='Local'"
+        $block | Should -Match '\(@\(\$_\.CompatibleID\) \+ @\(\$_\.HardwareID\)\) -match'
+        $block | Should -Match '-PnpDeviceIds @\(\$tpmPnp \| ForEach-Object \{ @\(\$_\.CompatibleID\) \+ @\(\$_\.HardwareID\) \}\)'
     }
 }
 

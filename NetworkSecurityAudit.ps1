@@ -4488,9 +4488,11 @@ $script:AutoChecks = @{
             # and added to KEV after the newest update that would carry the fix (the OS update for Windows
             # and IIS, the newer of that and the .NET update for .NET, the product's own update date for
             # Office, Exchange, SQL Server and Edge). KEV often adds old CVEs years after the fix shipped,
-            # so an entry added before that update is treated as fixed. With no update date to compare, the
-            # entry counts. For a counted entry the fix isn't known to be installed, so it's overdue once its
-            # due date has passed.
+            # so an entry added before that update is treated as fixed. Microsoft updates are cumulative and a
+            # CVE ships its fix within about a year of its ID year, so an update dated after the end of the
+            # following year carries the fix too (CVE-2023-21529, fixed February 2023, was added in 2026).
+            # With no update date to compare, the entry counts. For a counted entry the fix isn't known to be
+            # installed, so it's overdue once its due date has passed.
             function Get-Ep04KevHits {
                 param([object[]]$Entries, [string[]]$Families, [hashtable]$UpdateDates, $LatestOsDate, [datetime]$Today)
                 if (-not $UpdateDates) { $UpdateDates = @{} }
@@ -4510,6 +4512,7 @@ $script:AutoChecks = @{
                     }
                     if (-not $due -or $due -le $Today.AddDays(-365)) { continue }
                     if ($baseline -and $added -and $added -le $baseline) { continue }
+                    if ($baseline -and [string]$entry.cveID -match '^CVE-(\d{4})-' -and [datetime]::new([int]$Matches[1] + 1, 12, 31) -lt $baseline) { continue }
                     $hits += [pscustomobject]@{
                         CveId = [string]$entry.cveID; Product = [string]$entry.product; Name = [string]$entry.vulnerabilityName; Family = $family
                         DateAdded = $added; DueDate = $due; Overdue = [bool]($due -and $due -lt $Today)
@@ -4517,6 +4520,24 @@ $script:AutoChecks = @{
                     }
                 }
                 @($hits | Sort-Object { $_.DueDate } -Descending | Select-Object -First 15)
+            }
+            # Newest install date in the Windows Update history for one product. Store app packages
+            # ("9PLL735RFDSM-Microsoft.NET.Native.Runtime.2.2") and SQL Server client drivers don't patch
+            # the product, so they don't count.
+            function Get-Ep04NewestTitledDate {
+                param([object[]]$History, [string]$Family)
+                $rules = @{
+                    'Exchange'   = @('Exchange Server 20\d\d', '')
+                    'SQL Server' = @('SQL Server (19|20)\d\d', 'Driver|Native Client|Management Studio')
+                    '.NET'       = @('\.NET (Framework|\d+\.\d+)', '')
+                    'Office'     = @('Microsoft Office|Office 20\d\d|Microsoft (Word|Excel|Outlook|PowerPoint)', '')
+                }
+                if (-not $rules.ContainsKey($Family)) { return $null }
+                $pattern = $rules[$Family][0]; $exclude = $rules[$Family][1]
+                @($History | Where-Object {
+                    $t = [string]$_.Title
+                    $_ -and $t -match $pattern -and $t -notmatch 'Defender|Security Intelligence' -and $t -cnotmatch '^[0-9A-Z]{12}-' -and (-not $exclude -or $t -notmatch $exclude)
+                } | ForEach-Object { ([datetime]$_.Date).Date } | Sort-Object -Descending) | Select-Object -First 1
             }
 
             $kevRisk = $false
@@ -4630,7 +4651,6 @@ $script:AutoChecks = @{
                     }
                     # Products on this host, and the newest update date each one can show.
                     $families = @('Windows'); $updateDates = @{}
-                    $newestTitled = { param([string]$Pattern) @($wuHistory | Where-Object { $_ -and $_.Title -match $Pattern -and $_.Title -notmatch 'Defender|Security Intelligence' } | ForEach-Object { ([datetime]$_.Date).Date } | Sort-Object -Descending) | Select-Object -First 1 }
                     # Server products replace their service binary with each update; the least recently updated instance decides.
                     $serviceExeDate = {
                         param([string[]]$Names)
@@ -4643,15 +4663,15 @@ $script:AutoChecks = @{
                         @($dates | Sort-Object) | Select-Object -First 1
                     }
                     $newerOf = { param($a, $b) @($a, $b) | Where-Object { $_ } | Sort-Object -Descending | Select-Object -First 1 }
-                    if (Get-Service MSExchangeIS -EA SilentlyContinue) { $families += 'Exchange'; $updateDates['Exchange'] = & $newerOf (& $serviceExeDate @('MSExchangeIS')) (& $newestTitled 'Exchange Server') }
-                    if (Get-Service 'MSSQLSERVER','MSSQL$*' -EA SilentlyContinue) { $families += 'SQL Server'; $updateDates['SQL Server'] = & $newerOf (& $serviceExeDate @('MSSQLSERVER','MSSQL$*')) (& $newestTitled 'SQL Server') }
+                    if (Get-Service MSExchangeIS -EA SilentlyContinue) { $families += 'Exchange'; $updateDates['Exchange'] = & $newerOf (& $serviceExeDate @('MSExchangeIS')) (Get-Ep04NewestTitledDate -History $wuHistory -Family 'Exchange') }
+                    if (Get-Service 'MSSQLSERVER','MSSQL$*' -EA SilentlyContinue) { $families += 'SQL Server'; $updateDates['SQL Server'] = & $newerOf (& $serviceExeDate @('MSSQLSERVER','MSSQL$*')) (Get-Ep04NewestTitledDate -History $wuHistory -Family 'SQL Server') }
                     if (Get-Service W3SVC -EA SilentlyContinue) { $families += 'IIS' }
-                    if (Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -EA SilentlyContinue) { $families += '.NET'; $updateDates['.NET'] = & $newestTitled '\.NET' }
+                    if (Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -EA SilentlyContinue) { $families += '.NET'; $updateDates['.NET'] = Get-Ep04NewestTitledDate -History $wuHistory -Family '.NET' }
                     $c2r = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration' -EA SilentlyContinue
                     if ($c2r -or (Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Office' -EA SilentlyContinue | Where-Object { $_.PSChildName -match '^\d+\.\d+$' })) {
                         $families += 'Office'
                         # Click-to-Run replaces the app binaries with each build; MSI Office updates show in the Windows Update history.
-                        $officeDates = @(& $newestTitled 'Microsoft Office|Office 20\d\d|Microsoft (Word|Excel|Outlook|PowerPoint)')
+                        $officeDates = @(Get-Ep04NewestTitledDate -History $wuHistory -Family 'Office')
                         if ($c2r -and $c2r.InstallationPath) {
                             $officeDates += @(foreach ($exe in 'WINWORD.EXE','EXCEL.EXE','OUTLOOK.EXE','POWERPNT.EXE') { $f = Get-Item -LiteralPath (Join-Path $c2r.InstallationPath "root\Office16\$exe") -EA SilentlyContinue; if ($f) { $f.LastWriteTime.Date } })
                         }
@@ -6500,13 +6520,14 @@ $script:AutoChecks = @{
     'EP08' = @{ Type='Local'; Label='Scan Hardware Security (UEFI/TPM/VBS)'
         Script = {
             # TPM lines from whatever this account can read. The PnP device is visible to any user:
-            # compatible ID MSFT0101 is a TPM 2.0 and PNP0C31 a TPM 1.2. Only an elevated Get-Tpm
+            # a hardware or compatible ID of MSFT0101 is a TPM 2.0 and PNP0C31 a TPM 1.2 (a TPM whose
+            # ACPI _HID is MSFT0101 can have no compatible ID at all). Only an elevated Get-Tpm
             # says whether it's ready, so an unreadable TPM is reported, not counted as an issue.
             function Get-Ep08TpmAssessment {
-                param($Tpm, [string]$SpecVersion, [string[]]$PnpCompatibleIds, [string]$PnpStatus, [bool]$PnpQueryOk = $true)
+                param($Tpm, [string]$SpecVersion, [string[]]$PnpDeviceIds, [string]$PnpStatus, [bool]$PnpQueryOk = $true)
                 $lines = @(); $issue = $false
                 $readable = ($null -ne $Tpm) -and ($Tpm -isnot [string]) -and ($null -ne $Tpm.TpmPresent)
-                $pnpTpm = @($PnpCompatibleIds | Where-Object { $_ -match '^(ACPI\\)?(MSFT0101|PNP0C31)$' })
+                $pnpTpm = @($PnpDeviceIds | Where-Object { $_ -match '^(ACPI\\|\*)?(MSFT0101|PNP0C31)$' })
                 $version = if ($SpecVersion) { ($SpecVersion -split ',')[0].Trim() }
                     elseif (@($pnpTpm | Where-Object { $_ -match 'MSFT0101' }).Count -gt 0) { '2.0' }
                     elseif ($pnpTpm.Count -gt 0) { '1.2' } else { '' }
@@ -6524,7 +6545,9 @@ $script:AutoChecks = @{
                 if ($version) { $lines += "TPM Version     : $version $(if ($version -match '^2\.') { '[TPM 2.0 OK]' } else { '[TPM 1.2 - upgrade recommended]' })" }
                 elseif ($readable -and $Tpm.TpmPresent) { $lines += "TPM Version     : couldn't be read" }
                 @{ Lines = $lines; Issue = $issue }
-            }            $sb = [System.Text.StringBuilder]::new(); $issues = 0
+            }
+
+            $sb = [System.Text.StringBuilder]::new(); $issues = 0
             # Secure Boot. Confirm-SecureBootUEFI needs elevation; the State value is readable by any user.
             # The 2023 certificate transition is EP11's job.
             try {
@@ -6540,8 +6563,8 @@ $script:AutoChecks = @{
             $tpm = $null; try { $tpm = Get-Tpm -EA Stop } catch { $tpm = $null }
             $tpmSpec = (Get-CimInstance -Namespace 'root\cimv2\Security\MicrosoftTpm' -ClassName Win32_Tpm -EA SilentlyContinue).SpecVersion
             $tpmPnpOk = $true; $tpmPnp = @()
-            try { $tpmPnp = @(Get-CimInstance Win32_PnPEntity -Filter "PNPClass='SecurityDevices'" -EA Stop | Where-Object { @($_.CompatibleID) -match '^(ACPI\\)?(MSFT0101|PNP0C31)$' }) } catch { $tpmPnpOk = $false }
-            $tpmAssessment = Get-Ep08TpmAssessment -Tpm $tpm -SpecVersion ([string]$tpmSpec) -PnpCompatibleIds @($tpmPnp | ForEach-Object { @($_.CompatibleID) }) -PnpStatus ([string]($tpmPnp | Select-Object -First 1).Status) -PnpQueryOk $tpmPnpOk
+            try { $tpmPnp = @(Get-CimInstance Win32_PnPEntity -Filter "PNPClass='SecurityDevices'" -EA Stop | Where-Object { (@($_.CompatibleID) + @($_.HardwareID)) -match '^(ACPI\\|\*)?(MSFT0101|PNP0C31)$' }) } catch { $tpmPnpOk = $false }
+            $tpmAssessment = Get-Ep08TpmAssessment -Tpm $tpm -SpecVersion ([string]$tpmSpec) -PnpDeviceIds @($tpmPnp | ForEach-Object { @($_.CompatibleID) + @($_.HardwareID) }) -PnpStatus ([string]($tpmPnp | Select-Object -First 1).Status) -PnpQueryOk $tpmPnpOk
             foreach ($line in $tpmAssessment.Lines) { [void]$sb.AppendLine($line) }
             if ($tpmAssessment.Issue) { $issues++ }
             # Boot mode / firmware type
