@@ -1911,6 +1911,75 @@ Describe 'EP04 hotpatch-aware patch recency (nested check helpers via AST)' {
     }
 }
 
+Describe 'EP04 CISA KEV matching against installed updates (nested check helpers via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in @('Get-Ep04KevFamily','Get-Ep04KevHits')) {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        # Recorded in the CISA feed's shape (entries as published, trimmed to the fields the check reads).
+        $script:KevFeed = @'
+{"catalogVersion":"2026.09.29","count":8,"vulnerabilities":[
+ {"cveID":"CVE-2008-4250","vendorProject":"Microsoft","product":"Windows","vulnerabilityName":"Microsoft Windows Server Service Remote Code Execution Vulnerability","dateAdded":"2026-03-03","dueDate":"2026-03-24","knownRansomwareCampaignUse":"Known"},
+ {"cveID":"CVE-2026-40001","vendorProject":"Microsoft","product":"Windows","vulnerabilityName":"Microsoft Windows Common Log File System Driver Privilege Escalation","dateAdded":"2026-09-08","dueDate":"2026-09-29","knownRansomwareCampaignUse":"Known"},
+ {"cveID":"CVE-2026-40002","vendorProject":"Microsoft","product":"Windows","vulnerabilityName":"Microsoft Windows Kernel Privilege Escalation","dateAdded":"2026-09-26","dueDate":"2026-10-17","knownRansomwareCampaignUse":"Unknown"},
+ {"cveID":"CVE-2026-33824","vendorProject":"Microsoft","product":"Internet Key Exchange (IKE) Service Extensions","vulnerabilityName":"Microsoft Windows IKE Extension Remote Code Execution","dateAdded":"2026-08-18","dueDate":"2026-08-21","knownRansomwareCampaignUse":"Unknown"},
+ {"cveID":"CVE-2009-0238","vendorProject":"Microsoft","product":"Office","vulnerabilityName":"Microsoft Office Remote Code Execution Vulnerability","dateAdded":"2026-04-14","dueDate":"2026-04-28","knownRansomwareCampaignUse":"Unknown"},
+ {"cveID":"CVE-2019-1068","vendorProject":"Microsoft","product":"SQL Server","vulnerabilityName":"Microsoft SQL Server Remote Code Execution Vulnerability","dateAdded":"2026-08-26","dueDate":"2026-08-29","knownRansomwareCampaignUse":"Unknown"},
+ {"cveID":"CVE-2020-0618","vendorProject":"Microsoft","product":"SQL Server","vulnerabilityName":"Microsoft SQL Server Reporting Services Remote Code Execution Vulnerability","dateAdded":"2024-09-18","dueDate":"2024-10-09","knownRansomwareCampaignUse":"Known"},
+ {"cveID":"CVE-2026-40003","vendorProject":"Microsoft","product":".NET Framework","vulnerabilityName":"Microsoft .NET Framework Remote Code Execution","dateAdded":"2026-09-10","dueDate":"2026-10-01","knownRansomwareCampaignUse":"Unknown"}
+]}
+'@ | ConvertFrom-Json
+        $script:KevToday = [datetime]'2026-09-30'
+    }
+
+    It 'maps KEV product names to the update stream that fixes them' {
+        Get-Ep04KevFamily -Product 'Windows' | Should -Be 'Windows'
+        Get-Ep04KevFamily -Product 'Exchange Server' | Should -Be 'Exchange'
+        Get-Ep04KevFamily -Product 'Internet Key Exchange (IKE) Service Extensions' | Should -BeNullOrEmpty
+        Get-Ep04KevFamily -Product 'Word' | Should -Be 'Office'
+        Get-Ep04KevFamily -Product '.NET Framework' | Should -Be '.NET'
+        Get-Ep04KevFamily -Product 'SQL Server' | Should -Be 'SQL Server'
+    }
+    It 'passes a host patched after every Windows entry was added, including old CVEs KEV re-added' {
+        $hits = @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families @('Windows') -UpdateDates @{} -LatestOsDate ([datetime]'2026-09-27') -Today $script:KevToday)
+        $hits.Count | Should -Be 0
+    }
+    It 'counts entries added after a host missed the fixing month and marks them overdue' {
+        $hits = @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families @('Windows') -UpdateDates @{} -LatestOsDate ([datetime]'2026-08-11') -Today $script:KevToday)
+        @($hits.CveId) | Should -Be @('CVE-2026-40002','CVE-2026-40001')
+        ($hits | Where-Object CveId -eq 'CVE-2026-40001').Overdue | Should -BeTrue
+        ($hits | Where-Object CveId -eq 'CVE-2026-40002').Overdue | Should -BeFalse
+        @($hits | Where-Object { $_.CveId -eq 'CVE-2008-4250' }).Count | Should -Be 0
+    }
+    It 'flags a ransomware-linked entry, and fails the check only once it is overdue' {
+        $hits = @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families @('Windows') -UpdateDates @{} -LatestOsDate ([datetime]'2026-08-11') -Today $script:KevToday)
+        $ransom = $hits | Where-Object CveId -eq 'CVE-2026-40001'
+        $ransom.Ransomware | Should -BeTrue
+        $ransom.Overdue | Should -BeTrue
+        $early = @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families @('Windows') -UpdateDates @{} -LatestOsDate ([datetime]'2026-08-11') -Today ([datetime]'2026-09-20'))
+        ($early | Where-Object CveId -eq 'CVE-2026-40001').Overdue | Should -BeFalse
+        $block = Get-Block -Text $script:Text -Start "'EP04' = @\{ Type='Local'" -End "'EP05' = @\{"
+        $block | Should -Match 'if \(@\(\$ransomHits \| Where-Object \{ \$_\.Overdue \}\)\.Count -gt 0\) \{ \$kevRansomware = \$true \}'
+        $block | Should -Match "elseif \(\`$kevRansomware\) \{'Fail'\}"
+        $block | Should -Not -Match '\$p -match \$dp'
+    }
+    It 'judges separately serviced products against their own update date' {
+        $families = @('Windows','Office','SQL Server','.NET')
+        $dated = @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families $families -LatestOsDate ([datetime]'2026-09-27') -Today $script:KevToday `
+            -UpdateDates @{ 'Office'=[datetime]'2026-09-26'; 'SQL Server'=[datetime]'2019-09-24'; '.NET'=[datetime]'2026-09-15' })
+        @($dated.CveId) | Should -Be @('CVE-2019-1068')
+        $dated[0].Unverified | Should -BeFalse
+        # CVE-2020-0618 was due more than a year ago, so the SQL Server date doesn't bring it back.
+        $undated = @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families $families -UpdateDates @{} -LatestOsDate ([datetime]'2026-09-27') -Today $script:KevToday)
+        @($undated.CveId | Sort-Object) | Should -Be @('CVE-2009-0238','CVE-2019-1068')
+        @($undated | Where-Object { -not $_.Unverified }).Count | Should -Be 0
+        # .NET falls back to the OS update when no .NET update date is known.
+        @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families @('.NET') -UpdateDates @{} -LatestOsDate ([datetime]'2026-09-01') -Today $script:KevToday).CveId | Should -Be @('CVE-2026-40003')
+    }
+}
+
 Describe 'EP11 Secure Boot 2023 certificate transition (nested check helpers via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)

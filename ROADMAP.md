@@ -214,13 +214,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: with internet allowed, EP04 matches installed products from uninstall keys against the KEV JSON feed and lists matches with CVE and due date; offline or feed failure reports cache age or `Skipped: OfflineMode`; KEV entries with known ransomware use feed the ransomware score; tests use a recorded feed fixture.
   Complexity: M
 
-- [ ] P1 — NSA-108 Stop PS1 EP04 failing fully patched hosts on product-name KEV matches
-  Why: the PS1 EP04 marks every Microsoft KEV entry from the last 365 days whose product matches "Windows" as a hit, sets Fail on any ransomware-linked one and labels them all OVERDUE, without checking whether the installed update fixes the CVE. On this Windows 11 25H2 PC, patched 8 days earlier (KB5129195, 2026-09-22), it failed with 15 "overdue" entries, including CVE-2008-4250.
-  Evidence: `NetworkSecurityAudit.ps1` EP04 block, the `$msKevHits` filter and `$kevRansomware` status line; live run 2026-09-30.
-  Touches: PS1 EP04 KEV matching and status, Pester fixtures with a recorded feed; NSA-079 must not port the same logic to C#.
-  Acceptance: a KEV entry counts against the host only when its dateAdded falls after the newest installed OS update (or the entry names a product the host runs outside Windows servicing); a host patched inside 30 days with no such entries passes EP04; "overdue" means the due date has passed and the host's newest OS update predates the KEV entry; Pester covers a patched host, a host that missed the fixing month, and a ransomware-linked entry.
-  Complexity: S
-
 - [ ] P1 — NSA-109 Stop PS1 EP08 failing standard users on TPM data it can't read
   Why: `Get-Tpm` returns empty properties without elevation, so the PS1 EP08 prints "TPM Present : | Ready:", counts an issue and labels the TPM "1.2 - upgrade recommended" because `Win32_Tpm.SpecVersion` is unreadable too. A standard user on a TPM 2.0 machine gets Fail.
   Evidence: `NetworkSecurityAudit.ps1` EP08 block, TPM section; live run 2026-09-30 on a Windows 11 25H2 PC with a TPM 2.0, non-elevated.

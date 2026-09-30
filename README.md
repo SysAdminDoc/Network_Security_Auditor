@@ -422,7 +422,7 @@ All 70 checks also map to MITRE D3FEND defensive techniques (v1.4.0). Reports sh
 
 ### CISA KEV Cross-Reference
 
-The EP04 patch compliance check automatically downloads the [CISA Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and cross-references it against detected Microsoft products on the system, flagging any actively exploited CVEs with remediation due dates. It also calls out CVE-2025-33073 Windows SMB Client remediation evidence and correlates missing June 2025+ patch state with SMB signing and AD delegation exposure.
+The PowerShell EP04 patch compliance check downloads the [CISA Known Exploited Vulnerabilities catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and compares it with the Microsoft products it finds on the system (Windows, .NET, IIS, Office, Exchange, SQL Server, Edge). An entry only counts when CISA added it after that product's newest update: the last OS update for Windows, the Click-to-Run build date for Microsoft 365 Apps, the service binary date for SQL Server and Exchange. KEV often adds CVEs that were fixed years ago, and a host that has updated since isn't flagged for them. A counted entry past its due date is overdue, and an overdue ransomware-linked entry fails the check. It also calls out CVE-2025-33073 Windows SMB Client remediation evidence and correlates missing June 2025+ patch state with SMB signing and AD delegation exposure.
 
 ### Active Directory IOC Detection
 

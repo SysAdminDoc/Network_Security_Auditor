@@ -4471,6 +4471,53 @@ $script:AutoChecks = @{
                 if ($wu) { $candidates += @{ Date=([datetime]$wu.Date).Date; Label="$($wu.Title) (Windows Update history)" } }
                 $candidates | Sort-Object { $_.Date } -Descending | Select-Object -First 1
             }
+            # The update stream that fixes a Microsoft KEV entry's product, or $null for a product this
+            # check doesn't look for. "Internet Key Exchange" is a Windows component, not Exchange Server.
+            function Get-Ep04KevFamily {
+                param([string]$Product)
+                if ($Product -match 'Exchange Server') { return 'Exchange' }
+                if ($Product -match 'SQL Server') { return 'SQL Server' }
+                if ($Product -match '^(Office|Word|Excel|PowerPoint|Outlook)\b|365 Apps') { return 'Office' }
+                if ($Product -match '\bEdge\b') { return 'Edge' }
+                if ($Product -match '\.NET') { return '.NET' }
+                if ($Product -match 'Internet Information Services') { return 'IIS' }
+                if ($Product -match 'Windows') { return 'Windows' }
+                return $null
+            }
+            # KEV entries that count against this host: due in the last year, for a product the host runs,
+            # and added to KEV after the newest update that would carry the fix (the OS update for Windows
+            # and IIS, the newer of that and the .NET update for .NET, the product's own update date for
+            # Office, Exchange, SQL Server and Edge). KEV often adds old CVEs years after the fix shipped,
+            # so an entry added before that update is treated as fixed. With no update date to compare, the
+            # entry counts. For a counted entry the fix isn't known to be installed, so it's overdue once its
+            # due date has passed.
+            function Get-Ep04KevHits {
+                param([object[]]$Entries, [string[]]$Families, [hashtable]$UpdateDates, $LatestOsDate, [datetime]$Today)
+                if (-not $UpdateDates) { $UpdateDates = @{} }
+                $hits = @()
+                foreach ($entry in @($Entries)) {
+                    if (-not $entry -or [string]$entry.vendorProject -ne 'Microsoft') { continue }
+                    $family = Get-Ep04KevFamily -Product ([string]$entry.product)
+                    if (-not $family -or $Families -notcontains $family) { continue }
+                    $added = $null; $due = $null
+                    try { $added = [datetime]$entry.dateAdded } catch { $added = $null }
+                    try { $due = [datetime]$entry.dueDate } catch { $due = $null }
+                    $baseline = switch ($family) {
+                        'Windows' { $LatestOsDate }
+                        'IIS' { $LatestOsDate }
+                        '.NET' { @($LatestOsDate, $UpdateDates['.NET']) | Where-Object { $_ } | Sort-Object -Descending | Select-Object -First 1 }
+                        default { $UpdateDates[$family] }
+                    }
+                    if (-not $due -or $due -le $Today.AddDays(-365)) { continue }
+                    if ($baseline -and $added -and $added -le $baseline) { continue }
+                    $hits += [pscustomobject]@{
+                        CveId = [string]$entry.cveID; Product = [string]$entry.product; Name = [string]$entry.vulnerabilityName; Family = $family
+                        DateAdded = $added; DueDate = $due; Overdue = [bool]($due -and $due -lt $Today)
+                        Ransomware = ([string]$entry.knownRansomwareCampaignUse -eq 'Known'); Unverified = (-not $baseline)
+                    }
+                }
+                @($hits | Sort-Object { $_.DueDate } -Descending | Select-Object -First 15)
+            }
 
             $kevRisk = $false
             $kevRansomware = $false
@@ -4581,51 +4628,65 @@ $script:AutoChecks = @{
                             [void]$sb.AppendLine("  [HIGH] CVE-2025-33073 is in CISA KEV and local hotfix evidence does not show a June 2025+ update.")
                         }
                     }
-                    $msKevEntries = @($kevVulns | Where-Object { $_.vendorProject -eq 'Microsoft' })
-                    $osCaption = (Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue).Caption
-                    $detectedProducts = @('Windows')
-                    if (Get-Service MSExchangeIS -EA SilentlyContinue) { $detectedProducts += 'Exchange' }
-                    if (Get-Service MSSQLSERVER -EA SilentlyContinue) { $detectedProducts += 'SQL Server' }
-                    if (Get-Service W3SVC -EA SilentlyContinue) { $detectedProducts += 'Internet Information Services' }
-                    $dotNet = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -EA SilentlyContinue
-                    if ($dotNet) { $detectedProducts += '\.NET' }
-                    $officeKey = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Office' -EA SilentlyContinue | Where-Object { $_.PSChildName -match '^\d+\.\d+$' }
-                    if ($officeKey) { $detectedProducts += 'Office'; $detectedProducts += '365 Apps' }
-                    $edgeVer = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Edge\BLBeacon' -EA SilentlyContinue).version
-                    if ($edgeVer) { $detectedProducts += 'Edge' }
-                    [void]$sb.AppendLine("  Detected products: $($detectedProducts -join ', ')")
-                    $msKevHits = @($msKevEntries | Where-Object {
-                        $p = $_.product
-                        foreach ($dp in $detectedProducts) {
-                            if ($p -match $dp) { return $true }
+                    # Products on this host, and the newest update date each one can show.
+                    $families = @('Windows'); $updateDates = @{}
+                    $newestTitled = { param([string]$Pattern) @($wuHistory | Where-Object { $_ -and $_.Title -match $Pattern -and $_.Title -notmatch 'Defender|Security Intelligence' } | ForEach-Object { ([datetime]$_.Date).Date } | Sort-Object -Descending) | Select-Object -First 1 }
+                    # Server products replace their service binary with each update; the least recently updated instance decides.
+                    $serviceExeDate = {
+                        param([string[]]$Names)
+                        $dates = foreach ($svc in @(Get-Service -Name $Names -EA SilentlyContinue)) {
+                            $image = [string](Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$($svc.Name)" -Name ImagePath -EA SilentlyContinue).ImagePath
+                            $exe = if ($image -match '^\s*"([^"]+)"') { $Matches[1] } elseif ($image -match '^\s*(\S+\.exe)') { $Matches[1] } else { '' }
+                            $exe = [Environment]::ExpandEnvironmentVariables($exe)
+                            if ($exe -and (Test-Path -LiteralPath $exe)) { (Get-Item -LiteralPath $exe).LastWriteTime.Date }
                         }
-                        return $false
-                    } | Where-Object { $_.dueDate -and [datetime]$_.dueDate -gt (Get-Date).AddDays(-365) } |
-                        Sort-Object { [datetime]$_.dueDate } -Descending | Select-Object -First 15)
-                    if ($msKevHits.Count -gt 0) {
-                        $overdue = @($msKevHits | Where-Object { [datetime]$_.dueDate -lt (Get-Date) })
-                        $ransomHits = @($msKevHits | Where-Object { $_.knownRansomwareCampaignUse -eq 'Known' })
-                        [void]$sb.AppendLine("  KEV matches for detected products: $($msKevHits.Count) (overdue: $($overdue.Count), ransomware-linked: $($ransomHits.Count))")
+                        @($dates | Sort-Object) | Select-Object -First 1
+                    }
+                    $newerOf = { param($a, $b) @($a, $b) | Where-Object { $_ } | Sort-Object -Descending | Select-Object -First 1 }
+                    if (Get-Service MSExchangeIS -EA SilentlyContinue) { $families += 'Exchange'; $updateDates['Exchange'] = & $newerOf (& $serviceExeDate @('MSExchangeIS')) (& $newestTitled 'Exchange Server') }
+                    if (Get-Service 'MSSQLSERVER','MSSQL$*' -EA SilentlyContinue) { $families += 'SQL Server'; $updateDates['SQL Server'] = & $newerOf (& $serviceExeDate @('MSSQLSERVER','MSSQL$*')) (& $newestTitled 'SQL Server') }
+                    if (Get-Service W3SVC -EA SilentlyContinue) { $families += 'IIS' }
+                    if (Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -EA SilentlyContinue) { $families += '.NET'; $updateDates['.NET'] = & $newestTitled '\.NET' }
+                    $c2r = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration' -EA SilentlyContinue
+                    if ($c2r -or (Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Office' -EA SilentlyContinue | Where-Object { $_.PSChildName -match '^\d+\.\d+$' })) {
+                        $families += 'Office'
+                        # Click-to-Run replaces the app binaries with each build; MSI Office updates show in the Windows Update history.
+                        $officeDates = @(& $newestTitled 'Microsoft Office|Office 20\d\d|Microsoft (Word|Excel|Outlook|PowerPoint)')
+                        if ($c2r -and $c2r.InstallationPath) {
+                            $officeDates += @(foreach ($exe in 'WINWORD.EXE','EXCEL.EXE','OUTLOOK.EXE','POWERPNT.EXE') { $f = Get-Item -LiteralPath (Join-Path $c2r.InstallationPath "root\Office16\$exe") -EA SilentlyContinue; if ($f) { $f.LastWriteTime.Date } })
+                        }
+                        $updateDates['Office'] = @($officeDates | Where-Object { $_ } | Sort-Object -Descending) | Select-Object -First 1
+                    }
+                    if ((Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Edge\BLBeacon' -EA SilentlyContinue).version) {
+                        $families += 'Edge'
+                        $edgeExe = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+                        if ($edgeExe) { $updateDates['Edge'] = (Get-Item -LiteralPath $edgeExe).LastWriteTime.Date }
+                    }
+                    $latestOsDate = if ($latestOs) { $latestOs.Date } else { $null }
+                    [void]$sb.AppendLine("  Detected products: $($families -join ', ')")
+                    $dateNotes = @("Windows $(if ($latestOsDate) { $latestOsDate.ToString('yyyy-MM-dd') } else { 'unknown' })")
+                    foreach ($fam in @($families | Where-Object { $_ -notin @('Windows','IIS') })) { $dateNotes += "$fam $(if ($updateDates[$fam]) { ([datetime]$updateDates[$fam]).ToString('yyyy-MM-dd') } else { 'unknown' })" }
+                    [void]$sb.AppendLine("  Newest update per product: $($dateNotes -join ', '). KEV entries added before that are treated as fixed.")
+                    $kevHits = @(Get-Ep04KevHits -Entries $kevVulns -Families $families -UpdateDates $updateDates -LatestOsDate $latestOsDate -Today (Get-Date).Date)
+                    if ($kevHits.Count -gt 0) {
+                        $kevRisk = $true
+                        $overdue = @($kevHits | Where-Object { $_.Overdue })
+                        $ransomHits = @($kevHits | Where-Object { $_.Ransomware })
+                        # A ransomware-linked entry fails the check once it's overdue; before that it's a warning.
+                        if (@($ransomHits | Where-Object { $_.Overdue }).Count -gt 0) { $kevRansomware = $true }
+                        [void]$sb.AppendLine("  KEV entries newer than this host's updates: $($kevHits.Count) (overdue: $($overdue.Count), ransomware-linked: $($ransomHits.Count))")
                         if ($ransomHits.Count -gt 0) {
-                            $kevRansomware = $true
                             [void]$sb.AppendLine("`n  RANSOMWARE-LINKED KEV ENTRIES:")
                             foreach ($rh in ($ransomHits | Select-Object -First 5)) {
-                                $dueStr = $rh.dueDate
-                                $isOverdue = [datetime]$rh.dueDate -lt (Get-Date)
-                                $flag = if ($isOverdue) { ' [OVERDUE]' } else { '' }
-                                [void]$sb.AppendLine("    $($rh.cveID) | $($rh.product) | $($rh.vulnerabilityName) | Due: $dueStr$flag")
+                                [void]$sb.AppendLine("    $($rh.CveId) | $($rh.Product) | $($rh.Name) | Due: $(if ($rh.DueDate) { $rh.DueDate.ToString('yyyy-MM-dd') } else { 'not specified' })$(if ($rh.Overdue) { ' [OVERDUE]' })")
                             }
                         }
-                        [void]$sb.AppendLine("`n  Recent KEV entries for detected products:")
-                        foreach ($kh in $msKevHits) {
-                            $dueStr = $kh.dueDate
-                            $isOverdue = [datetime]$kh.dueDate -lt (Get-Date)
-                            $flag = if ($isOverdue) { ' [OVERDUE]' } else { '' }
-                            $rw = if ($kh.knownRansomwareCampaignUse -eq 'Known') { ' [RANSOMWARE]' } else { '' }
-                            [void]$sb.AppendLine("    $($kh.cveID) | $($kh.product) | $($kh.vulnerabilityName) | Due: $dueStr$flag$rw")
+                        [void]$sb.AppendLine("`n  KEV entries to act on:")
+                        foreach ($kh in $kevHits) {
+                            $tags = "$(if ($kh.Overdue) { ' [OVERDUE]' })$(if ($kh.Ransomware) { ' [RANSOMWARE]' })$(if ($kh.Unverified) { " [no $($kh.Family) update date to compare]" })"
+                            [void]$sb.AppendLine("    $($kh.CveId) | $($kh.Product) | $($kh.Name) | Added: $(if ($kh.DateAdded) { $kh.DateAdded.ToString('yyyy-MM-dd') } else { '?' }) | Due: $(if ($kh.DueDate) { $kh.DueDate.ToString('yyyy-MM-dd') } else { 'not specified' })$tags")
                         }
-                        if ($daysSince -gt 30) { $kevRisk = $true }
-                    } else { [void]$sb.AppendLine("  No recent KEV matches for detected products [OK]") }
+                    } else { [void]$sb.AppendLine("  No KEV entries newer than this host's updates for detected products [OK]") }
                 }
             }
             $status = if ($daysSince -le 30 -and -not $kevRisk -and -not $kevRansomware) {'Pass'} elseif ($kevRansomware) {'Fail'} elseif ($daysSince -le 60) {'Partial'} else {'Fail'}
