@@ -15,6 +15,12 @@ public sealed class EP10_EolOsCheck : ISecurityCheck
 {
     public string Id => "EP10";
 
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public EP10_EolOsCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal EP10_EolOsCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
+
     internal const string AdComputerFilter = "(&(objectCategory=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))";
     private const int MaxEolComputersListed = 20;
 
@@ -57,7 +63,7 @@ public sealed class EP10_EolOsCheck : ISecurityCheck
     {
         try
         {
-            var assessment = Assess(CollectSnapshot(env, ct), DateOnly.FromDateTime(DateTime.Now));
+            var assessment = Assess(CollectSnapshot(env, _directory, ct), DateOnly.FromDateTime(DateTime.Now));
             return Task.FromResult(new CheckResult
             {
                 Status = assessment.Status,
@@ -202,7 +208,7 @@ public sealed class EP10_EolOsCheck : ISecurityCheck
             sb.AppendLine($"Windows 10 to 11 migration: {win11 * 100 / (win10 + win11)}% ({win11}/{win10 + win11} workstations on Windows 11).");
     }
 
-    internal static EolSnapshot CollectSnapshot(EnvironmentInfo env, CancellationToken ct)
+    internal static EolSnapshot CollectSnapshot(EnvironmentInfo env, Func<EnvironmentInfo, IDirectoryReader> directory, CancellationToken ct)
     {
         var osEntry = LifecycleTable.FindOs(env.OSCaption, env.OSBuild);
         var esu = EsuEnrollment.NotApplicable;
@@ -221,7 +227,7 @@ public sealed class EP10_EolOsCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             try
             {
-                adComputers = QueryAdComputers(ct);
+                adComputers = QueryAdComputers(directory(env), ct);
             }
             catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or UnauthorizedAccessException or InvalidOperationException)
             {
@@ -243,36 +249,29 @@ public sealed class EP10_EolOsCheck : ISecurityCheck
         };
     }
 
-    private static List<AdComputer> QueryAdComputers(CancellationToken ct)
+    internal static List<AdComputer> QueryAdComputers(IDirectoryReader directory, CancellationToken ct)
     {
-        using var entry = new System.DirectoryServices.DirectoryEntry("LDAP://RootDSE");
-        var defaultNamingContext = entry.Properties["defaultNamingContext"]?.Value?.ToString();
+        var rootDse = directory.ReadEntry(DirectoryReader.RootDse, ["defaultNamingContext"], ct);
+        var defaultNamingContext = rootDse.String("defaultNamingContext");
         if (string.IsNullOrEmpty(defaultNamingContext))
             throw new InvalidOperationException("RootDSE returned no defaultNamingContext.");
 
-        using var searchRoot = new System.DirectoryServices.DirectoryEntry($"LDAP://{defaultNamingContext}");
-        using var adSearcher = new System.DirectoryServices.DirectorySearcher(searchRoot)
+        var query = new DirectoryQuery(AdComputerFilter, ["name", "operatingSystem", "operatingSystemVersion"])
         {
-            Filter = AdComputerFilter,
-            PageSize = 1000,
+            SearchBase = defaultNamingContext,
         };
-        adSearcher.PropertiesToLoad.AddRange(["name", "operatingSystem", "operatingSystemVersion"]);
 
         var computers = new List<AdComputer>();
-        using var results = adSearcher.FindAll();
-        foreach (System.DirectoryServices.SearchResult result in results)
+        foreach (var result in directory.Search(query, ct))
         {
             ct.ThrowIfCancellationRequested();
             computers.Add(new AdComputer(
-                First(result, "name") ?? result.Path,
-                First(result, "operatingSystem"),
-                First(result, "operatingSystemVersion")));
+                result.String("name") ?? result.Path,
+                result.String("operatingSystem"),
+                result.String("operatingSystemVersion")));
         }
         return computers;
     }
-
-    private static string? First(System.DirectoryServices.SearchResult result, string property) =>
-        result.Properties[property] is { Count: > 0 } values ? values[0]?.ToString() : null;
 
     private static List<InstalledProduct> CollectProducts()
     {

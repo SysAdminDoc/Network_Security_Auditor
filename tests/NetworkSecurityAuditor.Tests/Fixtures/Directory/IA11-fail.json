@@ -1,0 +1,52 @@
+{
+  "entries": {
+    "(domain)": {}
+  },
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectClass=user)(sAMAccountName=krbtgt))",
+      "results": [
+        {
+          "$path": "LDAP://CN=krbtgt,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "krbtgt",
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 400
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=svc_sql,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_sql",
+          "distinguishedName": "CN=svc_sql,OU=Service Accounts,DC=corp,DC=example",
+          "userAccountControl": 66048,
+          "msDS-SupportedEncryptionTypes": 24
+        },
+        {
+          "$path": "LDAP://CN=svc_backup,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_backup",
+          "distinguishedName": "CN=svc_backup,OU=Service Accounts,DC=corp,DC=example",
+          "userAccountControl": 66048,
+          "msDS-SupportedEncryptionTypes": 4
+        },
+        {
+          "$path": "LDAP://CN=svc_legacy,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_legacy",
+          "distinguishedName": "CN=svc_legacy,OU=Service Accounts,DC=corp,DC=example",
+          "userAccountControl": 2163200
+        },
+        {
+          "$path": "LDAP://CN=svc_print,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_print",
+          "distinguishedName": "CN=svc_print,OU=Service Accounts,DC=corp,DC=example",
+          "userAccountControl": 512
+        }
+      ]
+    }
+  ]
+}

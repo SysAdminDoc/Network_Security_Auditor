@@ -1,0 +1,49 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*vendor*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*contractor*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*consultant*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*extern*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*guest*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*partner*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*3rdparty*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*thirdparty*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*outsource*))",
+      "results": []
+    }
+  ]
+}

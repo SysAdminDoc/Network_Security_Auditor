@@ -1,0 +1,128 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filterPattern": "\\(&\\(objectCategory=person\\)\\(objectClass=user\\)\\(!\\(userAccountControl:1\\.2\\.840\\.113556\\.1\\.4\\.803:=2\\)\\)\\(lastLogonTimestamp<=\\d+\\)\\)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Former User 01,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "former.user01",
+          "distinguishedName": "CN=Former User 01,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 220
+          },
+          "whenCreated": {
+            "$daysAgo": 1201
+          }
+        },
+        {
+          "$path": "LDAP://CN=Former User 02,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "former.user02",
+          "distinguishedName": "CN=Former User 02,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 250
+          },
+          "whenCreated": {
+            "$daysAgo": 1202
+          }
+        },
+        {
+          "$path": "LDAP://CN=Former User 03,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "former.user03",
+          "distinguishedName": "CN=Former User 03,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 280
+          },
+          "whenCreated": {
+            "$daysAgo": 1203
+          }
+        },
+        {
+          "$path": "LDAP://CN=Former User 04,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "former.user04",
+          "distinguishedName": "CN=Former User 04,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 310
+          },
+          "whenCreated": {
+            "$daysAgo": 1204
+          }
+        },
+        {
+          "$path": "LDAP://CN=Former User 05,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "former.user05",
+          "distinguishedName": "CN=Former User 05,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 340
+          },
+          "whenCreated": {
+            "$daysAgo": 1205
+          }
+        },
+        {
+          "$path": "LDAP://CN=Former User 06,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "former.user06",
+          "distinguishedName": "CN=Former User 06,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 370
+          },
+          "whenCreated": {
+            "$daysAgo": 1206
+          }
+        },
+        {
+          "$path": "LDAP://CN=Former User 07,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "former.user07",
+          "distinguishedName": "CN=Former User 07,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 400
+          },
+          "whenCreated": {
+            "$daysAgo": 1207
+          }
+        },
+        {
+          "$path": "LDAP://CN=Former User 08,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "former.user08",
+          "distinguishedName": "CN=Former User 08,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 430
+          },
+          "whenCreated": {
+            "$daysAgo": 1208
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(lastLogonTimestamp=*)))",
+      "results": [
+        {
+          "sAMAccountName": "new.hire1",
+          "whenCreated": {
+            "$daysAgo": 310
+          }
+        },
+        {
+          "sAMAccountName": "new.hire2",
+          "whenCreated": {
+            "$daysAgo": 320
+          }
+        },
+        {
+          "sAMAccountName": "new.hire3",
+          "whenCreated": {
+            "$daysAgo": 330
+          }
+        },
+        {
+          "sAMAccountName": "new.hire4",
+          "whenCreated": {
+            "$daysAgo": 340
+          }
+        }
+      ]
+    }
+  ]
+}

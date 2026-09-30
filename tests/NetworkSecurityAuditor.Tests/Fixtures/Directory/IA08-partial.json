@@ -1,0 +1,68 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*vendor*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Acme Vendor,OU=Vendors,DC=corp,DC=example",
+          "sAMAccountName": "vendor.acme",
+          "distinguishedName": "CN=Acme Vendor,OU=Vendors,DC=corp,DC=example",
+          "userAccountControl": 512,
+          "accountExpires": 134431920000000000,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 3
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*contractor*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*consultant*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*extern*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*guest*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Guest,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Guest",
+          "distinguishedName": "CN=Guest,CN=Users,DC=corp,DC=example",
+          "userAccountControl": 66082,
+          "accountExpires": 9223372036854775807
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*partner*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*3rdparty*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*thirdparty*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*outsource*))",
+      "results": []
+    }
+  ]
+}

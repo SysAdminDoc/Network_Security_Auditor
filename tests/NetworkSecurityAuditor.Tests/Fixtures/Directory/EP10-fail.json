@@ -1,0 +1,68 @@
+{
+  "entries": {
+    "RootDSE": {
+      "defaultNamingContext": "DC=corp,DC=example",
+      "schemaNamingContext": "CN=Schema,CN=Configuration,DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": "DC=corp,DC=example",
+      "filter": "(&(objectCategory=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))",
+      "results": [
+        {
+          "$path": "LDAP://CN=WS11-01,OU=Workstations,DC=corp,DC=example",
+          "name": "WS11-01",
+          "operatingSystem": "Windows 11 Enterprise",
+          "operatingSystemVersion": "10.0 (26100)"
+        },
+        {
+          "$path": "LDAP://CN=WS11-02,OU=Workstations,DC=corp,DC=example",
+          "name": "WS11-02",
+          "operatingSystem": "Windows 11 Enterprise",
+          "operatingSystemVersion": "10.0 (26100)"
+        },
+        {
+          "$path": "LDAP://CN=WS11-03,OU=Workstations,DC=corp,DC=example",
+          "name": "WS11-03",
+          "operatingSystem": "Windows 11 Enterprise",
+          "operatingSystemVersion": "10.0 (26100)"
+        },
+        {
+          "$path": "LDAP://CN=WS11-04,OU=Workstations,DC=corp,DC=example",
+          "name": "WS11-04",
+          "operatingSystem": "Windows 11 Enterprise",
+          "operatingSystemVersion": "10.0 (26100)"
+        },
+        {
+          "$path": "LDAP://CN=DC01,OU=Domain Controllers,DC=corp,DC=example",
+          "name": "DC01",
+          "operatingSystem": "Windows Server 2022 Standard",
+          "operatingSystemVersion": "10.0 (20348)"
+        },
+        {
+          "$path": "LDAP://CN=APP01,OU=Servers,DC=corp,DC=example",
+          "name": "APP01",
+          "operatingSystem": "Windows Server 2019 Datacenter",
+          "operatingSystemVersion": "10.0 (17763)"
+        },
+        {
+          "$path": "LDAP://CN=LEGACY01,OU=Workstations,DC=corp,DC=example",
+          "name": "LEGACY01",
+          "operatingSystem": "Windows 7 Professional",
+          "operatingSystemVersion": "6.1 (7601)"
+        },
+        {
+          "$path": "LDAP://CN=FILE01,OU=Servers,DC=corp,DC=example",
+          "name": "FILE01",
+          "operatingSystem": "Windows Server 2008 R2 Standard",
+          "operatingSystemVersion": "6.1 (7601)"
+        },
+        {
+          "$path": "LDAP://CN=NAS01,OU=Servers,DC=corp,DC=example",
+          "name": "NAS01"
+        }
+      ]
+    }
+  ]
+}

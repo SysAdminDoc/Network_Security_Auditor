@@ -1,0 +1,42 @@
+{
+  "entries": {
+    "(domain)": {
+      "msDS-SupportedEncryptionTypes": 24
+    }
+  },
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectClass=user)(sAMAccountName=krbtgt))",
+      "results": [
+        {
+          "$path": "LDAP://CN=krbtgt,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "krbtgt",
+          "pwdLastSet": {
+            "$fileTimeDaysAgo": 30
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=svc_sql,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_sql",
+          "distinguishedName": "CN=svc_sql,OU=Service Accounts,DC=corp,DC=example",
+          "userAccountControl": 66048,
+          "msDS-SupportedEncryptionTypes": 24
+        },
+        {
+          "$path": "LDAP://CN=svc_web,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_web",
+          "distinguishedName": "CN=svc_web,OU=Service Accounts,DC=corp,DC=example",
+          "userAccountControl": 66048,
+          "msDS-SupportedEncryptionTypes": 28
+        }
+      ]
+    }
+  ]
+}

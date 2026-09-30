@@ -9,7 +9,13 @@ public sealed class ResourceDisposalTests
 
         Assert.DoesNotContain("ManagementObjectSearcher", source);
         Assert.DoesNotContain("foreach (System.DirectoryServices.SearchResult result in adSearcher.FindAll())", source);
-        Assert.Contains("using var results = adSearcher.FindAll();", source);
+        // EP10 searches through IDirectoryReader now; the LDAP reader owns and disposes the result collection.
+        Assert.DoesNotContain("FindAll()", source);
+        Assert.Contains("directory.Search(query, ct)", source);
+
+        var reader = ReadSourceFile("src", "NetworkSecurityAuditor", "Services", "DirectoryReader.cs");
+        Assert.DoesNotContain("in searcher.FindAll())", reader);
+        Assert.Contains("using var results = searcher.FindAll();", reader);
     }
 
     [Theory]

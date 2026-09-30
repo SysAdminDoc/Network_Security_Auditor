@@ -1,0 +1,44 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filterPattern": "\\(&\\(objectCategory=person\\)\\(objectClass=user\\)\\(!\\(userAccountControl:1\\.2\\.840\\.113556\\.1\\.4\\.803:=2\\)\\)\\(lastLogonTimestamp<=\\d+\\)\\)",
+      "results": [
+        {
+          "$path": "LDAP://CN=Rob Miller,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "r.miller",
+          "distinguishedName": "CN=Rob Miller,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 200
+          },
+          "whenCreated": {
+            "$daysAgo": 900
+          }
+        },
+        {
+          "$path": "LDAP://CN=Amy Chen,OU=Staff,DC=corp,DC=example",
+          "sAMAccountName": "a.chen",
+          "distinguishedName": "CN=Amy Chen,OU=Staff,DC=corp,DC=example",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 365
+          },
+          "whenCreated": {
+            "$daysAgo": 1500
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(lastLogonTimestamp=*)))",
+      "results": [
+        {
+          "sAMAccountName": "svc_scan",
+          "whenCreated": {
+            "$daysAgo": 400
+          }
+        }
+      ]
+    }
+  ]
+}

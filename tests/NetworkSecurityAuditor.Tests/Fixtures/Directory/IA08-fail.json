@@ -1,0 +1,95 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*vendor*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=External Vendor 01,OU=Vendors,DC=corp,DC=example",
+          "sAMAccountName": "external.vendor01",
+          "distinguishedName": "CN=External Vendor 01,OU=Vendors,DC=corp,DC=example",
+          "userAccountControl": 66048,
+          "accountExpires": 9223372036854775807
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*contractor*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=John Smith (Contractor),OU=Vendors,DC=corp,DC=example",
+          "sAMAccountName": "contractor.jsmith",
+          "distinguishedName": "CN=John Smith (Contractor),OU=Vendors,DC=corp,DC=example",
+          "userAccountControl": 512,
+          "accountExpires": 0,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 12
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*consultant*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*extern*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=External Vendor 01,OU=Vendors,DC=corp,DC=example",
+          "sAMAccountName": "external.vendor01",
+          "distinguishedName": "CN=External Vendor 01,OU=Vendors,DC=corp,DC=example",
+          "userAccountControl": 66048,
+          "accountExpires": 9223372036854775807
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*guest*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Guest,CN=Users,DC=corp,DC=example",
+          "sAMAccountName": "Guest",
+          "distinguishedName": "CN=Guest,CN=Users,DC=corp,DC=example",
+          "userAccountControl": 66082,
+          "accountExpires": 9223372036854775807
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*partner*))",
+      "results": [
+        {
+          "$path": "LDAP://CN=Globex Partner,OU=Vendors,DC=corp,DC=example",
+          "sAMAccountName": "partner.globex",
+          "distinguishedName": "CN=Globex Partner,OU=Vendors,DC=corp,DC=example",
+          "userAccountControl": 512,
+          "accountExpires": 134509680000000000,
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 40
+          }
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*3rdparty*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*thirdparty*))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=person)(objectClass=user)(sAMAccountName=*outsource*))",
+      "results": []
+    }
+  ]
+}

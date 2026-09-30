@@ -188,4 +188,115 @@ public class IA06PamCheckTests
 
         Assert.Equal(CheckStatus.NA, result.Status);
     }
+
+    private const string SchemaNc = "CN=Schema,CN=Configuration,DC=corp,DC=example";
+
+    private static Task<CheckResult> Run(string fixture) =>
+        new IA06_PamCheck(_ => FixtureDirectoryReader.Load(fixture))
+            .ExecuteAsync(FixtureDirectoryReader.DomainMember, new AuditOptions(), CancellationToken.None);
+
+    [Fact]
+    public void Snapshot_Reads_The_Schema_And_Requests_Only_Attributes_It_Defines()
+    {
+        var directory = FixtureDirectoryReader.Load("IA06-pass.json");
+
+        var snapshot = IA06_PamCheck.CollectSnapshot(directory, CancellationToken.None);
+
+        Assert.True(snapshot.WindowsLapsSchema);
+        Assert.False(snapshot.LegacyLapsSchema);
+        Assert.Null(snapshot.SchemaError);
+        Assert.Null(snapshot.SearchError);
+        Assert.Equal(20, snapshot.Computers!.Count);
+        Assert.Equal(19, snapshot.Computers.Count(c => c.WindowsLaps));
+        Assert.DoesNotContain(snapshot.Computers, c => c.LegacyLaps);
+        // An expiration time of 0 means LAPS never set a password there.
+        Assert.Contains(snapshot.Computers, c => c.DistinguishedName == "CN=WS020,OU=Workstations,DC=corp,DC=example" && !c.WindowsLaps);
+
+        var schemaQueries = directory.Queries.Where(q => q.Filter.StartsWith("(&(objectClass=attributeSchema)", StringComparison.Ordinal)).ToList();
+        Assert.Equal(2, schemaQueries.Count);
+        Assert.All(schemaQueries, q =>
+        {
+            Assert.Equal(SchemaNc, q.SearchBase);
+            Assert.Equal(System.DirectoryServices.SearchScope.OneLevel, q.Scope);
+        });
+        var population = Assert.Single(directory.Queries, q => q.Filter == IA06_PamCheck.PopulationFilter);
+        Assert.Null(population.SearchBase);
+        Assert.Equal(new[] { "distinguishedName", IA06_PamCheck.WindowsLapsExpiration }, population.Properties);
+    }
+
+    [Fact]
+    public void Snapshot_Of_A_Denied_Search_Keeps_The_Access_Denied_Flag()
+    {
+        var snapshot = IA06_PamCheck.CollectSnapshot(FixtureDirectoryReader.Load("IA06-denied.json"), CancellationToken.None);
+
+        Assert.Null(snapshot.Computers);
+        Assert.True(snapshot.SearchAccessDenied);
+        Assert.Equal("Access is denied.", snapshot.SearchError);
+        Assert.True(snapshot.WindowsLapsSchema);
+    }
+
+    [Fact]
+    public void Snapshot_With_An_Unreadable_Schema_Requests_Both_Attributes()
+    {
+        var directory = FixtureDirectoryReader.Load("IA06-schema-unreadable.json");
+
+        var snapshot = IA06_PamCheck.CollectSnapshot(directory, CancellationToken.None);
+
+        Assert.Equal("The server is not operational.", snapshot.SchemaError);
+        Assert.Null(snapshot.WindowsLapsSchema);
+        Assert.Null(snapshot.LegacyLapsSchema);
+        Assert.Collection(snapshot.Computers!,
+            c => Assert.True(c.WindowsLaps && !c.LegacyLaps),
+            c => Assert.True(c.LegacyLaps && !c.WindowsLaps));
+        var population = Assert.Single(directory.Queries);
+        Assert.Equal(new[] { "distinguishedName", IA06_PamCheck.WindowsLapsExpiration, IA06_PamCheck.LegacyLapsExpiration }, population.Properties);
+    }
+
+    [Fact]
+    public async Task Fixture_Fleet_At_95_Percent_Passes()
+    {
+        var result = await Run("IA06-pass.json");
+
+        Assert.Equal(CheckStatus.Pass, result.Status);
+        Assert.Contains("PASS: LAPS coverage is 95.0% (19/20).", result.Findings);
+        Assert.Contains("CN=WS020,OU=Workstations,DC=corp,DC=example", result.Evidence);
+    }
+
+    [Fact]
+    public async Task Fixture_Fleet_At_30_Percent_Fails()
+    {
+        var result = await Run("IA06-fail.json");
+
+        Assert.Equal(CheckStatus.Fail, result.Status);
+        Assert.Contains("FAIL: LAPS coverage is 30.0% (3/10, target >= 80%).", result.Findings);
+        Assert.Contains("Both Windows LAPS and legacy LAPS are in use", result.Findings);
+    }
+
+    [Fact]
+    public async Task Fixture_Schema_Without_Laps_Fails()
+    {
+        var result = await Run("IA06-noschema.json");
+
+        Assert.Equal(CheckStatus.Fail, result.Status);
+        Assert.Contains("schema has neither the Windows LAPS nor the legacy LAPS attributes", result.Findings);
+    }
+
+    [Fact]
+    public async Task Fixture_Access_Denied_Search_Is_Not_Assessed()
+    {
+        var result = await Run("IA06-denied.json");
+
+        Assert.Equal(CheckStatus.NotAssessed, result.Status);
+        Assert.Contains("denied access to computer objects", result.Findings);
+        Assert.Equal("Access is denied.", result.Error);
+    }
+
+    [Fact]
+    public async Task Directory_Failure_Is_An_Error()
+    {
+        var result = await new IA06_PamCheck(_ => throw new COMException("The server is not operational.", unchecked((int)0x8007203A)))
+            .ExecuteAsync(FixtureDirectoryReader.DomainMember, new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(CheckStatus.Error, result.Status);
+    }
 }

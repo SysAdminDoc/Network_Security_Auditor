@@ -1,0 +1,7 @@
+{
+  "entries": {
+    "RootDSE": {
+      "schemaNamingContext": "CN=Schema,CN=Configuration,DC=corp,DC=example"
+    }
+  }
+}

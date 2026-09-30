@@ -182,4 +182,110 @@ public class EP10EolOsCheckTests(ITestOutputHelper output)
         Assert.Contains("[Lifecycle Table]", result.Evidence);
         Assert.Contains("[Local Products]", result.Evidence);
     }
+
+    private static EnvironmentInfo Win11DomainMember()
+    {
+        var env = FixtureDirectoryReader.DomainMember;
+        env.OSCaption = "Microsoft Windows 11 Pro";
+        env.OSBuild = 26200;
+        return env;
+    }
+
+    // The local SQL/Office/Exchange scan reads this host's registry, so the directory verdicts are judged without it.
+    private static Snapshot CollectFromFixture(string fixture) =>
+        EP10_EolOsCheck.CollectSnapshot(Win11DomainMember(), _ => FixtureDirectoryReader.Load(fixture), CancellationToken.None) with { Products = [] };
+
+    [Fact]
+    public void Directory_Sweep_Searches_Under_The_Default_Naming_Context()
+    {
+        var directory = FixtureDirectoryReader.Load("EP10-fail.json");
+
+        var computers = EP10_EolOsCheck.QueryAdComputers(directory, CancellationToken.None);
+
+        Assert.Equal(9, computers.Count);
+        Assert.Contains(computers, c => c.Name == "LEGACY01" && c.OperatingSystem == "Windows 7 Professional" && c.OperatingSystemVersion == "6.1 (7601)");
+        Assert.Contains(computers, c => c.Name == "NAS01" && c.OperatingSystem is null && c.OperatingSystemVersion is null);
+        var query = Assert.Single(directory.Queries);
+        Assert.Equal("DC=corp,DC=example", query.SearchBase);
+        Assert.Equal(EP10_EolOsCheck.AdComputerFilter, query.Filter);
+        Assert.Equal(new[] { "name", "operatingSystem", "operatingSystemVersion" }, query.Properties);
+    }
+
+    [Fact]
+    public void Fixture_Directory_Of_Supported_Releases_Passes()
+    {
+        var snapshot = CollectFromFixture("EP10-pass.json");
+        var assessment = EP10_EolOsCheck.Assess(snapshot, Today);
+
+        Assert.Equal(6, snapshot.AdComputers!.Count);
+        Assert.Null(snapshot.AdError);
+        Assert.Equal(CheckStatus.Pass, assessment.Status);
+        Assert.Contains("AD: 6 enabled computers evaluated.", assessment.Findings);
+        Assert.Contains("Windows 10 to 11 migration: 100% (4/4 workstations on Windows 11).", assessment.Findings);
+        Assert.DoesNotContain("past end of support", assessment.Findings);
+    }
+
+    [Fact]
+    public void Fixture_Directory_With_Windows10_Awaiting_Esu_Is_Partial()
+    {
+        var assessment = EP10_EolOsCheck.Assess(CollectFromFixture("EP10-partial.json"), Today);
+
+        Assert.Equal(CheckStatus.Partial, assessment.Status);
+        Assert.Contains("PARTIAL: 2 enabled computer(s) are past end of support but inside an Extended Security Updates window", assessment.Findings);
+    }
+
+    [Fact]
+    public void Fixture_Directory_With_Ended_Releases_Fails()
+    {
+        var assessment = EP10_EolOsCheck.Assess(CollectFromFixture("EP10-fail.json"), Today);
+
+        Assert.Equal(CheckStatus.Fail, assessment.Status);
+        Assert.Contains("AD: 9 enabled computers evaluated.", assessment.Findings);
+        Assert.Contains("FAIL: 2 enabled computer(s) run software past end of support:", assessment.Findings);
+        Assert.Contains("LEGACY01 | Windows 7 Professional", assessment.Evidence);
+        Assert.Contains("FILE01 | Windows Server 2008 R2 Standard", assessment.Evidence);
+        Assert.Contains("1 x Unknown: Unknown", assessment.Evidence);
+    }
+
+    [Fact]
+    public async Task Fixture_Directory_With_Ended_Releases_Fails_End_To_End()
+    {
+        var result = await new EP10_EolOsCheck(_ => FixtureDirectoryReader.Load("EP10-fail.json"))
+            .ExecuteAsync(Win11DomainMember(), new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(CheckStatus.Fail, result.Status);
+        Assert.Contains("FAIL: 2 enabled computer(s) run software past end of support:", result.Findings);
+    }
+
+    [Fact]
+    public void RootDse_Without_A_Naming_Context_Is_Reported_As_A_Directory_Error()
+    {
+        var snapshot = CollectFromFixture("EP10-no-naming-context.json");
+
+        Assert.Null(snapshot.AdComputers);
+        Assert.Equal("RootDSE returned no defaultNamingContext.", snapshot.AdError);
+    }
+
+    [Fact]
+    public async Task Directory_Failure_Keeps_The_Local_Result()
+    {
+        // EP10 is a local check first: a directory failure drops only the AD sweep.
+        var result = await new EP10_EolOsCheck(_ => throw new System.Runtime.InteropServices.COMException("The server is not operational.", unchecked((int)0x8007203A)))
+            .ExecuteAsync(Win11DomainMember(), new AuditOptions(), CancellationToken.None);
+
+        Assert.NotEqual(CheckStatus.Error, result.Status);
+        Assert.Null(result.Error);
+        Assert.Contains("INFO: Couldn't query AD computer objects, so only this host was evaluated.", result.Findings);
+        Assert.Contains("Query failed: The server is not operational.", result.Evidence);
+    }
+
+    [Fact]
+    public async Task Unexpected_Directory_Failure_Is_An_Error()
+    {
+        var result = await new EP10_EolOsCheck(_ => throw new NotSupportedException("The directory provider isn't available."))
+            .ExecuteAsync(Win11DomainMember(), new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(CheckStatus.Error, result.Status);
+        Assert.Equal("The directory provider isn't available.", result.Error);
+    }
 }

@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
-using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA10 - Inactive Accounts: Enabled AD users with LastLogonDate > 180 days
@@ -11,6 +11,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class IA10_InactiveAccountsCheck : ISecurityCheck
 {
     public string Id => "IA10";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA10_InactiveAccountsCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA10_InactiveAccountsCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     public Task<CheckResult> ExecuteAsync(EnvironmentInfo env, AuditOptions options, CancellationToken ct)
     {
@@ -29,8 +35,7 @@ public sealed class IA10_InactiveAccountsCheck : ISecurityCheck
             var sb = new StringBuilder();
             var evidence = new StringBuilder();
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry) { PageSize = 1000 };
+            var directory = _directory(env);
 
             long inactiveThresholdFt = DateTime.UtcNow.AddDays(-180).ToFileTimeUtc();
 
@@ -38,54 +43,42 @@ public sealed class IA10_InactiveAccountsCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("[Inactive Accounts (>180 days or never logged on)]");
 
-            searcher.Filter = $"(&(objectCategory=person)(objectClass=user)" +
-                              $"(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
-                              $"(lastLogonTimestamp<={inactiveThresholdFt}))";
-            searcher.PropertiesToLoad.Clear();
-            searcher.PropertiesToLoad.AddRange(["sAMAccountName", "lastLogonTimestamp",
-                "whenCreated", "distinguishedName"]);
+            var oldQuery = new DirectoryQuery(
+                $"(&(objectCategory=person)(objectClass=user)" +
+                $"(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
+                $"(lastLogonTimestamp<={inactiveThresholdFt}))",
+                ["sAMAccountName", "lastLogonTimestamp", "whenCreated", "distinguishedName"]);
 
             var inactiveAccounts = new List<(string Sam, DateTime LastLogon, DateTime Created)>();
 
-            using (var oldResults = searcher.FindAll())
+            foreach (var sr in directory.Search(oldQuery, ct))
             {
-                foreach (SearchResult sr in oldResults)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
+                ct.ThrowIfCancellationRequested();
+                string sam = sr.String("sAMAccountName") ?? "";
 
-                    long ts = sr.Properties["lastLogonTimestamp"].Count > 0
-                        ? (long)sr.Properties["lastLogonTimestamp"][0] : 0;
-                    DateTime lastLogon = ts > 0 ? DateTime.FromFileTimeUtc(ts) : DateTime.MinValue;
+                long ts = sr.Long("lastLogonTimestamp");
+                DateTime lastLogon = ts > 0 ? DateTime.FromFileTimeUtc(ts) : DateTime.MinValue;
 
-                    DateTime created = sr.Properties["whenCreated"].Count > 0
-                        ? (DateTime)sr.Properties["whenCreated"][0]
-                        : DateTime.MinValue;
+                DateTime created = sr.Time("whenCreated") ?? DateTime.MinValue;
 
-                    inactiveAccounts.Add((sam, lastLogon, created));
-                }
+                inactiveAccounts.Add((sam, lastLogon, created));
             }
 
             // Part 2: Enabled users that have NEVER logged on (no lastLogonTimestamp attribute)
             ct.ThrowIfCancellationRequested();
-            searcher.Filter = "(&(objectCategory=person)(objectClass=user)" +
-                              "(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
-                              "(!(lastLogonTimestamp=*)))";
-            searcher.PropertiesToLoad.Clear();
-            searcher.PropertiesToLoad.AddRange(["sAMAccountName", "whenCreated"]);
+            var neverQuery = new DirectoryQuery(
+                "(&(objectCategory=person)(objectClass=user)" +
+                "(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
+                "(!(lastLogonTimestamp=*)))",
+                ["sAMAccountName", "whenCreated"]);
 
-            using (var neverResults = searcher.FindAll())
+            foreach (var sr in directory.Search(neverQuery, ct))
             {
-                foreach (SearchResult sr in neverResults)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
-                    DateTime created = sr.Properties["whenCreated"].Count > 0
-                        ? (DateTime)sr.Properties["whenCreated"][0]
-                        : DateTime.MinValue;
+                ct.ThrowIfCancellationRequested();
+                string sam = sr.String("sAMAccountName") ?? "";
+                DateTime created = sr.Time("whenCreated") ?? DateTime.MinValue;
 
-                    inactiveAccounts.Add((sam, DateTime.MinValue, created));
-                }
+                inactiveAccounts.Add((sam, DateTime.MinValue, created));
             }
 
             int totalInactive = inactiveAccounts.Count;

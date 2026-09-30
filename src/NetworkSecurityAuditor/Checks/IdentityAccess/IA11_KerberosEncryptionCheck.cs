@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
-using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA11 - Kerberos Encryption Readiness: krbtgt password age, RC4/DES usage
@@ -11,6 +11,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class IA11_KerberosEncryptionCheck : ISecurityCheck
 {
     public string Id => "IA11";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA11_KerberosEncryptionCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA11_KerberosEncryptionCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     // msDS-SupportedEncryptionTypes bit flags
     private const int DES_CBC_CRC = 0x1;
@@ -37,22 +43,21 @@ public sealed class IA11_KerberosEncryptionCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasIssue = false;
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry) { PageSize = 1000 };
+            var directory = _directory(env);
 
             // 1. Check krbtgt password age
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("[krbtgt Account]");
 
-            searcher.Filter = "(&(objectClass=user)(sAMAccountName=krbtgt))";
-            searcher.PropertiesToLoad.Clear();
-            searcher.PropertiesToLoad.AddRange(["pwdLastSet", "sAMAccountName"]);
+            var krbtgtQuery = new DirectoryQuery("(&(objectClass=user)(sAMAccountName=krbtgt))", ["pwdLastSet", "sAMAccountName"])
+            {
+                SizeLimit = 1
+            };
 
-            var krbtgtResult = searcher.FindOne();
+            var krbtgtResult = directory.Search(krbtgtQuery, ct).FirstOrDefault();
             if (krbtgtResult != null)
             {
-                long pwdTs = krbtgtResult.Properties["pwdLastSet"].Count > 0
-                    ? (long)krbtgtResult.Properties["pwdLastSet"][0] : 0;
+                long pwdTs = krbtgtResult.Long("pwdLastSet");
 
                 if (pwdTs > 0)
                 {
@@ -91,10 +96,9 @@ public sealed class IA11_KerberosEncryptionCheck : ISecurityCheck
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("\n[Kerberos Encryption Types on SPN Accounts]");
 
-            searcher.Filter = "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))";
-            searcher.PropertiesToLoad.Clear();
-            searcher.PropertiesToLoad.AddRange(["sAMAccountName", "msDS-SupportedEncryptionTypes",
-                "userAccountControl"]);
+            var spnQuery = new DirectoryQuery(
+                "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
+                ["sAMAccountName", "msDS-SupportedEncryptionTypes", "userAccountControl"]);
 
             int totalSpn = 0;
             int desEnabled = 0;
@@ -102,19 +106,16 @@ public sealed class IA11_KerberosEncryptionCheck : ISecurityCheck
             int aesSupported = 0;
             int noEncTypeSet = 0;
 
-            using var spnResults = searcher.FindAll();
-            foreach (SearchResult sr in spnResults)
+            foreach (var sr in directory.Search(spnQuery, ct))
             {
                 ct.ThrowIfCancellationRequested();
                 totalSpn++;
-                string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
+                string sam = sr.String("sAMAccountName") ?? "";
 
-                int uac = sr.Properties["userAccountControl"].Count > 0
-                    ? (int)sr.Properties["userAccountControl"][0] : 0;
+                int uac = sr.Int("userAccountControl");
                 bool useDes = (uac & 0x200000) != 0; // ADS_UF_USE_DES_KEY_ONLY
 
-                int encTypes = sr.Properties["msDS-SupportedEncryptionTypes"].Count > 0
-                    ? (int)sr.Properties["msDS-SupportedEncryptionTypes"][0] : 0;
+                int encTypes = sr.Int("msDS-SupportedEncryptionTypes");
 
                 bool hasDes = useDes || (encTypes & (DES_CBC_CRC | DES_CBC_MD5)) != 0;
                 bool hasRc4 = (encTypes & RC4_HMAC) != 0;
@@ -153,10 +154,9 @@ public sealed class IA11_KerberosEncryptionCheck : ISecurityCheck
             int domainEncTypes = 0;
             try
             {
-                rootEntry.RefreshCache(["msDS-SupportedEncryptionTypes"]);
-                var domEncVal = rootEntry.Properties["msDS-SupportedEncryptionTypes"]?.Value;
-                if (domEncVal is int dei)
-                    domainEncTypes = dei;
+                var domainRoot = directory.ReadEntry(null, ["msDS-SupportedEncryptionTypes"], ct);
+                if (domainRoot.First("msDS-SupportedEncryptionTypes") is int or long)
+                    domainEncTypes = domainRoot.Int("msDS-SupportedEncryptionTypes");
             }
             catch { /* attribute may not exist */ }
 

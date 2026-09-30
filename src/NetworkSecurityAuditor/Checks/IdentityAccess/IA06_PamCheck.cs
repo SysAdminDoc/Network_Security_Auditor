@@ -35,6 +35,12 @@ public sealed class IA06_PamCheck : ISecurityCheck
 
     public string Id => "IA06";
 
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA06_PamCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA06_PamCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
+
     internal sealed record LapsComputer(string DistinguishedName, bool WindowsLaps, bool LegacyLaps);
 
     internal sealed record LapsSnapshot
@@ -68,7 +74,7 @@ public sealed class IA06_PamCheck : ISecurityCheck
 
         try
         {
-            var assessment = Assess(CollectSnapshot(env.DomainName, ct));
+            var assessment = Assess(CollectSnapshot(_directory(env), ct));
             return Task.FromResult(new CheckResult
             {
                 Status = assessment.Status,
@@ -203,20 +209,18 @@ public sealed class IA06_PamCheck : ISecurityCheck
         return new LapsAssessment(status, sb.ToString().TrimEnd(), evidence.ToString().TrimEnd(), covered, total, assessmentError);
     }
 
-    internal static LapsSnapshot CollectSnapshot(string domainName, CancellationToken ct)
+    internal static LapsSnapshot CollectSnapshot(IDirectoryReader directory, CancellationToken ct)
     {
-        var prefix = "LDAP://" + domainName;
         bool? windowsSchema = null, legacySchema = null;
         string? schemaError = null;
         try
         {
-            using var rootDse = new DirectoryEntry(prefix + "/RootDSE");
-            var schemaNc = rootDse.Properties["schemaNamingContext"].Value as string;
+            var rootDse = directory.ReadEntry(DirectoryReader.RootDse, ["schemaNamingContext"], ct);
+            var schemaNc = rootDse.First("schemaNamingContext") as string;
             if (!string.IsNullOrWhiteSpace(schemaNc))
             {
-                using var schemaRoot = new DirectoryEntry(prefix + "/" + schemaNc);
-                windowsSchema = SchemaHasAttribute(schemaRoot, WindowsLapsExpiration);
-                legacySchema = SchemaHasAttribute(schemaRoot, LegacyLapsExpiration);
+                windowsSchema = SchemaHasAttribute(directory, schemaNc, WindowsLapsExpiration, ct);
+                legacySchema = SchemaHasAttribute(directory, schemaNc, LegacyLapsExpiration, ct);
             }
             else
             {
@@ -234,21 +238,16 @@ public sealed class IA06_PamCheck : ISecurityCheck
         var accessDenied = false;
         try
         {
-            using var root = new DirectoryEntry(prefix);
-            using var searcher = new DirectorySearcher(root) { Filter = PopulationFilter, PageSize = 1000 };
-            searcher.PropertiesToLoad.Add("distinguishedName");
+            var properties = new List<string> { "distinguishedName" };
             // Unknown attributes are never requested, so a partly extended schema can't break the search.
-            if (windowsSchema != false) searcher.PropertiesToLoad.Add(WindowsLapsExpiration);
-            if (legacySchema != false) searcher.PropertiesToLoad.Add(LegacyLapsExpiration);
+            if (windowsSchema != false) properties.Add(WindowsLapsExpiration);
+            if (legacySchema != false) properties.Add(LegacyLapsExpiration);
 
             computers = [];
-            using var results = searcher.FindAll();
-            foreach (SearchResult result in results)
+            foreach (var result in directory.Search(new DirectoryQuery(PopulationFilter, properties), ct))
             {
                 ct.ThrowIfCancellationRequested();
-                var dn = result.Properties["distinguishedName"] is { Count: > 0 } dnValues
-                    ? dnValues[0]?.ToString() ?? result.Path
-                    : result.Path;
+                var dn = result.String("distinguishedName") ?? result.Path;
                 computers.Add(new LapsComputer(
                     dn,
                     HasValue(result, WindowsLapsExpiration),
@@ -284,21 +283,19 @@ public sealed class IA06_PamCheck : ISecurityCheck
         _ => false,
     };
 
-    private static bool SchemaHasAttribute(DirectoryEntry schemaRoot, string ldapDisplayName)
+    private static bool SchemaHasAttribute(IDirectoryReader directory, string schemaNc, string ldapDisplayName, CancellationToken ct)
     {
-        using var searcher = new DirectorySearcher(schemaRoot)
+        var query = new DirectoryQuery($"(&(objectClass=attributeSchema)(lDAPDisplayName={ldapDisplayName}))", ["lDAPDisplayName"])
         {
-            Filter = $"(&(objectClass=attributeSchema)(lDAPDisplayName={ldapDisplayName}))",
-            SearchScope = SearchScope.OneLevel,
+            SearchBase = schemaNc,
+            Scope = SearchScope.OneLevel,
+            PageSize = 0,
         };
-        searcher.PropertiesToLoad.Add("lDAPDisplayName");
-        using var result = searcher.FindAll();
-        return result.Count > 0;
+        return directory.Search(query, ct).Count > 0;
     }
 
-    private static bool HasValue(SearchResult result, string attribute) =>
-        result.Properties.Contains(attribute) && result.Properties[attribute].Count > 0 &&
-        result.Properties[attribute][0] is not null && !IsZeroFileTime(result.Properties[attribute][0]);
+    private static bool HasValue(DirectoryRecord result, string attribute) =>
+        result.First(attribute) is { } value && !IsZeroFileTime(value);
 
     // An expiration time of 0 means LAPS never set a password on that object.
     private static bool IsZeroFileTime(object value) => value switch

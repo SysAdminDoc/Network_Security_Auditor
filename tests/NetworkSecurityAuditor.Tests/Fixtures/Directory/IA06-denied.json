@@ -1,0 +1,34 @@
+{
+  "entries": {
+    "RootDSE": {
+      "schemaNamingContext": "CN=Schema,CN=Configuration,DC=corp,DC=example",
+      "defaultNamingContext": "DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": "CN=Schema,CN=Configuration,DC=corp,DC=example",
+      "filter": "(&(objectClass=attributeSchema)(lDAPDisplayName=msLAPS-PasswordExpirationTime))",
+      "results": [
+        {
+          "$path": "LDAP://CN=msLAPS-PasswordExpirationTime,CN=Schema,CN=Configuration,DC=corp,DC=example",
+          "lDAPDisplayName": "msLAPS-PasswordExpirationTime"
+        }
+      ]
+    },
+    {
+      "base": "CN=Schema,CN=Configuration,DC=corp,DC=example",
+      "filter": "(&(objectClass=attributeSchema)(lDAPDisplayName=ms-Mcs-AdmPwdExpirationTime))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(primaryGroupID=516))(!(primaryGroupID=521)))",
+      "$error": {
+        "hresult": "0x80070005",
+        "message": "Access is denied.\r\n"
+      },
+      "results": []
+    }
+  ]
+}

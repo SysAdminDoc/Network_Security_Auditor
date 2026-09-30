@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
-using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA08 - Guest/Vendor Accounts: Search AD for vendor/contractor/consultant/guest
@@ -11,6 +11,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class IA08_VendorAccountsCheck : ISecurityCheck
 {
     public string Id => "IA08";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA08_VendorAccountsCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA08_VendorAccountsCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     private static readonly string[] VendorPatterns =
     [
@@ -36,8 +42,7 @@ public sealed class IA08_VendorAccountsCheck : ISecurityCheck
             var evidence = new StringBuilder();
             bool hasIssue = false;
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry) { PageSize = 1000 };
+            var directory = _directory(env);
 
             evidence.AppendLine("[Vendor/Guest Account Scan]");
 
@@ -47,26 +52,22 @@ public sealed class IA08_VendorAccountsCheck : ISecurityCheck
             foreach (var pattern in VendorPatterns)
             {
                 ct.ThrowIfCancellationRequested();
-                searcher.Filter = $"(&(objectCategory=person)(objectClass=user)(sAMAccountName=*{pattern}*))";
-                searcher.PropertiesToLoad.Clear();
-                searcher.PropertiesToLoad.AddRange(["sAMAccountName", "distinguishedName",
-                    "userAccountControl", "accountExpires", "lastLogonTimestamp"]);
+                var query = new DirectoryQuery(
+                    $"(&(objectCategory=person)(objectClass=user)(sAMAccountName=*{pattern}*))",
+                    ["sAMAccountName", "distinguishedName", "userAccountControl", "accountExpires", "lastLogonTimestamp"]);
 
-                using var results = searcher.FindAll();
-                foreach (SearchResult sr in results)
+                foreach (var sr in directory.Search(query, ct))
                 {
-                    string dn = sr.Properties["distinguishedName"][0]?.ToString() ?? "";
+                    string dn = sr.String("distinguishedName") ?? "";
                     if (!seen.Add(dn)) continue;
 
-                    string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
+                    string sam = sr.String("sAMAccountName") ?? "";
 
-                    int uac = sr.Properties["userAccountControl"].Count > 0
-                        ? (int)sr.Properties["userAccountControl"][0] : 0;
+                    int uac = sr.Int("userAccountControl");
                     bool enabled = (uac & 0x2) == 0;
 
                     // accountExpires: 0 or 0x7FFFFFFFFFFFFFFF = never expires
-                    long expiresTicks = sr.Properties["accountExpires"].Count > 0
-                        ? (long)sr.Properties["accountExpires"][0] : 0;
+                    long expiresTicks = sr.Long("accountExpires");
 
                     string expirationStr;
                     bool hasExpiration;
@@ -90,8 +91,7 @@ public sealed class IA08_VendorAccountsCheck : ISecurityCheck
                         }
                     }
 
-                    long logonTs = sr.Properties["lastLogonTimestamp"].Count > 0
-                        ? (long)sr.Properties["lastLogonTimestamp"][0] : 0;
+                    long logonTs = sr.Long("lastLogonTimestamp");
                     string lastLogon = logonTs > 0
                         ? DateTime.FromFileTimeUtc(logonTs).ToString("yyyy-MM-dd")
                         : "Never";

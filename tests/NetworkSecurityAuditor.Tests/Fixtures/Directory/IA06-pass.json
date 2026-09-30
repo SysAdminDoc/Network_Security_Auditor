@@ -1,0 +1,131 @@
+{
+  "entries": {
+    "RootDSE": {
+      "schemaNamingContext": "CN=Schema,CN=Configuration,DC=corp,DC=example",
+      "defaultNamingContext": "DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": "CN=Schema,CN=Configuration,DC=corp,DC=example",
+      "filter": "(&(objectClass=attributeSchema)(lDAPDisplayName=msLAPS-PasswordExpirationTime))",
+      "results": [
+        {
+          "$path": "LDAP://CN=msLAPS-PasswordExpirationTime,CN=Schema,CN=Configuration,DC=corp,DC=example",
+          "lDAPDisplayName": "msLAPS-PasswordExpirationTime"
+        }
+      ]
+    },
+    {
+      "base": "CN=Schema,CN=Configuration,DC=corp,DC=example",
+      "filter": "(&(objectClass=attributeSchema)(lDAPDisplayName=ms-Mcs-AdmPwdExpirationTime))",
+      "results": []
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(primaryGroupID=516))(!(primaryGroupID=521)))",
+      "results": [
+        {
+          "$path": "LDAP://CN=WS001,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS001,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134354160000000000
+        },
+        {
+          "$path": "LDAP://CN=WS002,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS002,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134355024000000000
+        },
+        {
+          "$path": "LDAP://CN=WS003,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS003,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134355888000000000
+        },
+        {
+          "$path": "LDAP://CN=WS004,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS004,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134356752000000000
+        },
+        {
+          "$path": "LDAP://CN=WS005,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS005,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134357616000000000
+        },
+        {
+          "$path": "LDAP://CN=WS006,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS006,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134358480000000000
+        },
+        {
+          "$path": "LDAP://CN=WS007,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS007,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134359344000000000
+        },
+        {
+          "$path": "LDAP://CN=WS008,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS008,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134360208000000000
+        },
+        {
+          "$path": "LDAP://CN=WS009,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS009,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134361072000000000
+        },
+        {
+          "$path": "LDAP://CN=WS010,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS010,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134361936000000000
+        },
+        {
+          "$path": "LDAP://CN=WS011,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS011,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134362800000000000
+        },
+        {
+          "$path": "LDAP://CN=WS012,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS012,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134363664000000000
+        },
+        {
+          "$path": "LDAP://CN=WS013,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS013,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134364528000000000
+        },
+        {
+          "$path": "LDAP://CN=WS014,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS014,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134365392000000000
+        },
+        {
+          "$path": "LDAP://CN=WS015,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS015,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134366256000000000
+        },
+        {
+          "$path": "LDAP://CN=WS016,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS016,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134367120000000000
+        },
+        {
+          "$path": "LDAP://CN=WS017,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS017,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134367984000000000
+        },
+        {
+          "$path": "LDAP://CN=WS018,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS018,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134368848000000000
+        },
+        {
+          "$path": "LDAP://CN=WS019,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS019,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134369712000000000
+        },
+        {
+          "$path": "LDAP://CN=WS020,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS020,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 0
+        }
+      ]
+    }
+  ]
+}

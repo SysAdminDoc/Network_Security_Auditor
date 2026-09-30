@@ -1,0 +1,28 @@
+{
+  "entries": {
+    "RootDSE": {
+      "$error": {
+        "hresult": "0x8007203A",
+        "message": "The server is not operational."
+      }
+    }
+  },
+  "searches": [
+    {
+      "base": null,
+      "filter": "(&(objectCategory=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(primaryGroupID=516))(!(primaryGroupID=521)))",
+      "results": [
+        {
+          "$path": "LDAP://CN=WS001,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS001,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134362800000000000
+        },
+        {
+          "$path": "LDAP://CN=WS002,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS002,OU=Workstations,DC=corp,DC=example",
+          "ms-Mcs-AdmPwdExpirationTime": 134364528000000000
+        }
+      ]
+    }
+  ]
+}

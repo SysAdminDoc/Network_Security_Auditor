@@ -1,0 +1,79 @@
+{
+  "entries": {
+    "RootDSE": {
+      "schemaNamingContext": "CN=Schema,CN=Configuration,DC=corp,DC=example",
+      "defaultNamingContext": "DC=corp,DC=example"
+    }
+  },
+  "searches": [
+    {
+      "base": "CN=Schema,CN=Configuration,DC=corp,DC=example",
+      "filter": "(&(objectClass=attributeSchema)(lDAPDisplayName=msLAPS-PasswordExpirationTime))",
+      "results": [
+        {
+          "$path": "LDAP://CN=msLAPS-PasswordExpirationTime,CN=Schema,CN=Configuration,DC=corp,DC=example",
+          "lDAPDisplayName": "msLAPS-PasswordExpirationTime"
+        }
+      ]
+    },
+    {
+      "base": "CN=Schema,CN=Configuration,DC=corp,DC=example",
+      "filter": "(&(objectClass=attributeSchema)(lDAPDisplayName=ms-Mcs-AdmPwdExpirationTime))",
+      "results": [
+        {
+          "$path": "LDAP://CN=ms-Mcs-AdmPwdExpirationTime,CN=Schema,CN=Configuration,DC=corp,DC=example",
+          "lDAPDisplayName": "ms-Mcs-AdmPwdExpirationTime"
+        }
+      ]
+    },
+    {
+      "base": null,
+      "filter": "(&(objectCategory=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(!(primaryGroupID=516))(!(primaryGroupID=521)))",
+      "results": [
+        {
+          "$path": "LDAP://CN=WS001,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS001,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134362800000000000
+        },
+        {
+          "$path": "LDAP://CN=WS002,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS002,OU=Workstations,DC=corp,DC=example",
+          "msLAPS-PasswordExpirationTime": 134368848000000000
+        },
+        {
+          "$path": "LDAP://CN=APP01,OU=Servers,DC=corp,DC=example",
+          "distinguishedName": "CN=APP01,OU=Servers,DC=corp,DC=example",
+          "ms-Mcs-AdmPwdExpirationTime": 134374032000000000
+        },
+        {
+          "$path": "LDAP://CN=WS003,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS003,OU=Workstations,DC=corp,DC=example"
+        },
+        {
+          "$path": "LDAP://CN=WS004,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS004,OU=Workstations,DC=corp,DC=example"
+        },
+        {
+          "$path": "LDAP://CN=WS005,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS005,OU=Workstations,DC=corp,DC=example"
+        },
+        {
+          "$path": "LDAP://CN=WS006,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS006,OU=Workstations,DC=corp,DC=example"
+        },
+        {
+          "$path": "LDAP://CN=WS007,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS007,OU=Workstations,DC=corp,DC=example"
+        },
+        {
+          "$path": "LDAP://CN=WS008,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS008,OU=Workstations,DC=corp,DC=example"
+        },
+        {
+          "$path": "LDAP://CN=WS009,OU=Workstations,DC=corp,DC=example",
+          "distinguishedName": "CN=WS009,OU=Workstations,DC=corp,DC=example"
+        }
+      ]
+    }
+  ]
+}
