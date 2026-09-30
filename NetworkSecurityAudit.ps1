@@ -11284,6 +11284,7 @@ function Start-AsyncTurnkey {
         Sel_FW_EventLog     = ($sel.Contains('FW_EventLog') -and $sel['FW_EventLog'])
         Sel_FW_FilePrinter  = ($sel.Contains('FW_FilePrinter') -and $sel['FW_FilePrinter'])
         Sel_AuditPolicies   = ($sel.Contains('AuditPolicies') -and $sel['AuditPolicies'])
+        AuditPolicyFunction = "function Set-AuditPolicyBaseline {${function:Set-AuditPolicyBaseline}}"
         Sel_DiscoverDCs     = ($sel.Contains('DiscoverDCs') -and $sel['DiscoverDCs'])
     }
     $sharedStatus = $script:TurnkeyStatus
@@ -11490,26 +11491,11 @@ function Start-AsyncTurnkey {
         $Shared.Phase = 'auditpol'
         if ($Env.Sel_AuditPolicies -and $Env.IsAdmin) {
             Log "Configuring Windows audit policies..." 'INFO'
-            $configured = 0; $failed = 0
-            $policies = @(
-                @{ Sub='Logon'; Setting='/success:enable /failure:enable' }
-                @{ Sub='Account Logon'; Setting='/success:enable /failure:enable' }
-                @{ Sub='Account Management'; Setting='/success:enable /failure:enable' }
-                @{ Sub='Policy Change'; Setting='/success:enable /failure:enable' }
-                @{ Sub='Object Access'; Setting='/success:enable /failure:enable' }
-                @{ Sub='Privilege Use'; Setting='/success:enable /failure:enable' }
-                @{ Sub='System'; Setting='/success:enable /failure:enable' }
-            )
-            foreach ($p in $policies) {
-                try {
-                    $cmd = "auditpol /set /subcategory:`"$($p.Sub)`" $($p.Setting)"
-                    $out = cmd.exe /c $cmd 2>&1
-                    if ($LASTEXITCODE -eq 0) { $configured++ }
-                    else { $failed++; Log "Audit policy failed: $($p.Sub)" 'WARN' }
-                } catch { $failed++ }
-            }
-            $results.AuditPolicies = @{ Configured=$configured; Failed=$failed }
-            Log "Audit policies: $configured configured, $failed failed" $(if($failed -eq 0){'INFO'}else{'WARN'})
+            . ([scriptblock]::Create($Env.AuditPolicyFunction))
+            $audit = Set-AuditPolicyBaseline
+            foreach ($failure in $audit.Failures) { Log "Audit policy failed: $failure" 'WARN' }
+            $results.AuditPolicies = @{ Configured=$audit.Configured; Failed=$audit.Failed; Failures=@($audit.Failures) }
+            Log "Audit policies: $($audit.Configured) of $($audit.Total) subcategories configured, $($audit.Failed) failed" $(if($audit.Failed -eq 0){'INFO'}else{'WARN'})
         } else {
             if (-not $Env.Sel_AuditPolicies) { Log "Audit policies: skipped by user" 'INFO' }
             else { Log "Skipping audit policies (admin required)" 'WARN' }
@@ -15724,6 +15710,55 @@ $el['btnConfigWinRM'].Add_Click({
     }
 })
 
+# Sets the audit subcategories LM03 checks, by GUID so it works in any display
+# language (category names such as "Account Logon" aren't valid /subcategory:
+# values). It only enables: a direction LM03 doesn't require is left as it is.
+# $Invoker runs auditpol with an argument array and returns ExitCode and Output;
+# tests pass a fake. Turnkey setup runs this in its own runspace, so it has to
+# stay self-contained.
+function Set-AuditPolicyBaseline {
+    param([scriptblock]$Invoker)
+    if (-not $Invoker) {
+        $Invoker = {
+            param([string[]]$Arguments)
+            $out = & auditpol.exe @Arguments 2>&1
+            [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = (($out | Out-String).Trim() -replace '\s+', ' ') }
+        }
+    }
+    $baseline = @(
+        @{ Name='Credential Validation'; Guid='{0CCE923F-69AE-11D9-BED3-505054503030}'; Setting='Success and Failure' }
+        @{ Name='Application Group Management'; Guid='{0CCE9239-69AE-11D9-BED3-505054503030}'; Setting='Success and Failure' }
+        @{ Name='Security Group Management'; Guid='{0CCE9237-69AE-11D9-BED3-505054503030}'; Setting='Success and Failure' }
+        @{ Name='User Account Management'; Guid='{0CCE9235-69AE-11D9-BED3-505054503030}'; Setting='Success and Failure' }
+        @{ Name='Computer Account Management'; Guid='{0CCE9236-69AE-11D9-BED3-505054503030}'; Setting='Success' }
+        @{ Name='Logon'; Guid='{0CCE9215-69AE-11D9-BED3-505054503030}'; Setting='Success and Failure' }
+        @{ Name='Logoff'; Guid='{0CCE9216-69AE-11D9-BED3-505054503030}'; Setting='Success' }
+        @{ Name='Account Lockout'; Guid='{0CCE9217-69AE-11D9-BED3-505054503030}'; Setting='Failure' }
+        @{ Name='Special Logon'; Guid='{0CCE921B-69AE-11D9-BED3-505054503030}'; Setting='Success' }
+        @{ Name='Audit Policy Change'; Guid='{0CCE922F-69AE-11D9-BED3-505054503030}'; Setting='Success' }
+        @{ Name='Authentication Policy Change'; Guid='{0CCE9230-69AE-11D9-BED3-505054503030}'; Setting='Success' }
+        @{ Name='Sensitive Privilege Use'; Guid='{0CCE9228-69AE-11D9-BED3-505054503030}'; Setting='Success and Failure' }
+        @{ Name='System Integrity'; Guid='{0CCE9212-69AE-11D9-BED3-505054503030}'; Setting='Success and Failure' }
+        @{ Name='Security State Change'; Guid='{0CCE9210-69AE-11D9-BED3-505054503030}'; Setting='Success' }
+        @{ Name='Security System Extension'; Guid='{0CCE9211-69AE-11D9-BED3-505054503030}'; Setting='Success' }
+        @{ Name='Other Object Access Events'; Guid='{0CCE9227-69AE-11D9-BED3-505054503030}'; Setting='Success and Failure' }
+        @{ Name='Removable Storage'; Guid='{0CCE9245-69AE-11D9-BED3-505054503030}'; Setting='Success and Failure' }
+        @{ Name='Process Creation'; Guid='{0CCE922B-69AE-11D9-BED3-505054503030}'; Setting='Success' }
+    )
+    $configured = 0; $failures = @()
+    foreach ($entry in $baseline) {
+        $arguments = @('/set', "/subcategory:$($entry.Guid)")
+        if ($entry.Setting -match 'Success') { $arguments += '/success:enable' }
+        if ($entry.Setting -match 'Failure') { $arguments += '/failure:enable' }
+        try {
+            $result = & $Invoker $arguments
+            if ([int]$result.ExitCode -eq 0) { $configured++ }
+            else { $failures += "$($entry.Name) (exit $($result.ExitCode)): $($result.Output)" }
+        } catch { $failures += "$($entry.Name): $($_.Exception.Message)" }
+    }
+    return [ordered]@{ Total = $baseline.Count; Configured = $configured; Failed = $failures.Count; Failures = $failures }
+}
+
 # ── Enable Required Audit Policies (standalone - for manual button use) ────
 function Enable-AuditPolicies {
     $blocked = Block-IfReadOnly -ActionId 'setup.auditpolicies' -Provider 'Audit policy setup' -Destination 'Local audit policy (auditpol)' -ActionLabel 'Audit policy configuration'
@@ -15732,26 +15767,10 @@ function Enable-AuditPolicies {
         Write-Log "Cannot configure audit policies without admin privileges" 'WARN'
         return @{ Success=$false; Message='Admin privileges required' }
     }
-    $configured = 0; $failed = 0
-    $policies = @(
-        @{ Sub='Logon'; Setting='/success:enable /failure:enable' }
-        @{ Sub='Account Logon'; Setting='/success:enable /failure:enable' }
-        @{ Sub='Account Management'; Setting='/success:enable /failure:enable' }
-        @{ Sub='Policy Change'; Setting='/success:enable /failure:enable' }
-        @{ Sub='Object Access'; Setting='/success:enable /failure:enable' }
-        @{ Sub='Privilege Use'; Setting='/success:enable /failure:enable' }
-        @{ Sub='System'; Setting='/success:enable /failure:enable' }
-    )
-    foreach ($p in $policies) {
-        try {
-            $cmd = "auditpol /set /subcategory:`"$($p.Sub)`" $($p.Setting)"
-            $out = cmd.exe /c $cmd 2>&1
-            if ($LASTEXITCODE -eq 0) { $configured++; Write-Log "Audit policy enabled: $($p.Sub)" 'INFO' }
-            else { $failed++; Write-Log "Audit policy failed: $($p.Sub) - $out" 'WARN' }
-        }
-        catch { $failed++; Write-Log "Audit policy error: $($p.Sub) - $_" 'ERROR' }
-    }
-    return @{ Success=($failed -eq 0); Configured=$configured; Failed=$failed; Message="$configured policies configured, $failed failed" }
+    $audit = Set-AuditPolicyBaseline
+    foreach ($failure in $audit.Failures) { Write-Log "Audit policy failed: $failure" 'WARN' }
+    Write-Log "Audit policies: $($audit.Configured) of $($audit.Total) subcategories configured" $(if ($audit.Failed -eq 0) { 'INFO' } else { 'WARN' })
+    return @{ Success=($audit.Failed -eq 0); Configured=$audit.Configured; Failed=$audit.Failed; Failures=@($audit.Failures); Message="$($audit.Configured) of $($audit.Total) audit subcategories configured, $($audit.Failed) failed" }
 }
 
 function Export-DiagnosticsReport {

@@ -179,13 +179,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: every AD check runs against fixtures in tests; at least one pass and one fail fixture per AD check; production behavior is unchanged (existing tests stay green).
   Complexity: L
 
-- [ ] P1 — NSA-074 Fix PS1 Enable-AuditPolicies so every requested audit setting applies
-  Why: category names ("Account Logon", "System" and others) are passed to `auditpol /set /subcategory:`, so six of seven calls fail and setup leaves auditing incomplete.
-  Evidence: `NetworkSecurityAudit.ps1:15067-15078`, `:10860-10873`.
-  Touches: `Enable-AuditPolicies` and the GUI setup path.
-  Acceptance: settings use subcategory GUIDs (locale-independent) matching the LM03 expected baseline; a Pester test with a mocked `auditpol` asserts the exact arguments; each failure is reported per subcategory.
-  Complexity: S
-
 - [ ] P1 — NSA-075 Revalidate ATT&CK mappings for the v19 tactic split and correct external version constants
   Why: ATT&CK v19 (2026-04-28) split Defense Evasion into Stealth (TA0005) and Defense Impairment (TA0112); the mappings reference TA0005 in 14 places and claim version "19.1", which MITRE's versions page doesn't list (current is v19.2); OSCAL 1.2.3 (2026-08-07) is the current patch.
   Evidence: `src/NetworkSecurityAuditor/Export/ExternalVersions.cs`; `Data/MitreMappings.cs`; PS1 `$script:MitreMap`; https://attack.mitre.org/resources/updates/updates-april-2026/; https://attack.mitre.org/resources/versions/; https://github.com/usnistgov/OSCAL/releases.

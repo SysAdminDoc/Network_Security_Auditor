@@ -1530,6 +1530,69 @@ Describe 'LM02 log forwarding decision (nested check helper via AST)' {
     }
 }
 
+Describe 'Audit policy setup (real function via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Set-AuditPolicyBaseline' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+        $script:AuditBaselineRows = @([regex]::Matches($fn.Extent.Text, "@\{ Name='(?<name>[^']+)'; Guid='(?<guid>[^']+)'; Setting='(?<setting>[^']+)' \}") |
+            ForEach-Object { [pscustomobject]@{ Name=$_.Groups['name'].Value; Guid=$_.Groups['guid'].Value; Setting=$_.Groups['setting'].Value } })
+    }
+    It 'passes subcategory GUIDs and only the directions LM03 requires' {
+        $calls = [System.Collections.Generic.List[object]]::new()
+        $result = Set-AuditPolicyBaseline -Invoker { param([string[]]$Arguments) $calls.Add($Arguments); [pscustomobject]@{ ExitCode=0; Output='' } }
+        $result.Total | Should -Be 18
+        $result.Configured | Should -Be 18
+        $result.Failed | Should -Be 0
+        $calls.Count | Should -Be 18
+        ($calls[0] -join ' ') | Should -Be '/set /subcategory:{0CCE923F-69AE-11D9-BED3-505054503030} /success:enable /failure:enable'
+        ($calls | Where-Object { $_[1] -eq '/subcategory:{0CCE9217-69AE-11D9-BED3-505054503030}' }) -join ' ' | Should -Be '/set /subcategory:{0CCE9217-69AE-11D9-BED3-505054503030} /failure:enable'
+        ($calls | Where-Object { $_[1] -eq '/subcategory:{0CCE9216-69AE-11D9-BED3-505054503030}' }) -join ' ' | Should -Be '/set /subcategory:{0CCE9216-69AE-11D9-BED3-505054503030} /success:enable'
+        foreach ($call in $calls) {
+            $call[0] | Should -Be '/set'
+            $call[1] | Should -Match '^/subcategory:\{[0-9A-F]{8}-69AE-11D9-BED3-505054503030\}$'
+            @($call | Where-Object { $_ -match 'disable' }).Count | Should -Be 0
+        }
+    }
+    It 'reports each failed subcategory with its exit code and output' {
+        $result = Set-AuditPolicyBaseline -Invoker {
+            param([string[]]$Arguments)
+            if ($Arguments[1] -eq '/subcategory:{0CCE9215-69AE-11D9-BED3-505054503030}') { [pscustomobject]@{ ExitCode=87; Output='The parameter is incorrect.' } }
+            elseif ($Arguments[1] -eq '/subcategory:{0CCE922B-69AE-11D9-BED3-505054503030}') { throw 'auditpol.exe not found' }
+            else { [pscustomobject]@{ ExitCode=0; Output='' } }
+        }
+        $result.Configured | Should -Be 16
+        $result.Failed | Should -Be 2
+        $result.Failures | Should -Contain 'Logon (exit 87): The parameter is incorrect.'
+        $result.Failures | Should -Contain 'Process Creation: auditpol.exe not found'
+    }
+    It 'sets exactly the subcategories and settings LM03 checks' {
+        $lm03 = Get-Block -Text $script:Text -Start "'LM03' = @\{ Type='Local'" -End "foreach \(\`$sub in \`$cisRequired\.Keys\)"
+        $required = @([regex]::Matches($lm03, "'(?<name>[^']+)' = '(?<setting>Success and Failure|Success|Failure)'") | ForEach-Object { "$($_.Groups['name'].Value)=$($_.Groups['setting'].Value)" } | Sort-Object)
+        $required.Count | Should -Be 18
+        @($script:AuditBaselineRows | ForEach-Object { "$($_.Name)=$($_.Setting)" } | Sort-Object) | Should -Be $required
+    }
+    It 'uses GUIDs that auditpol lists for those subcategories' {
+        $listing = (& auditpol.exe /list /subcategory:* /v 2>&1 | Out-String)
+        foreach ($row in $script:AuditBaselineRows) {
+            $listing | Should -Match ([regex]::Escape($row.Guid))
+            if ($listing -match "(?m)^\s+$([regex]::Escape($row.Name))\s+\{") { $listing | Should -Match "(?m)^\s+$([regex]::Escape($row.Name))\s+$([regex]::Escape($row.Guid))" }
+        }
+    }
+    It 'runs the same function in the turnkey setup runspace and no longer uses category names' {
+        $definition = "function Set-AuditPolicyBaseline {${function:Set-AuditPolicyBaseline}}"
+        $count = & { . ([scriptblock]::Create($definition)); (Set-AuditPolicyBaseline -Invoker { param([string[]]$Arguments) [pscustomobject]@{ ExitCode=0; Output='' } }).Configured }
+        $count | Should -Be 18
+        $script:Text | Should -Match 'AuditPolicyFunction = "function Set-AuditPolicyBaseline \{\$\{function:Set-AuditPolicyBaseline\}\}"'
+        $step = Get-Block -Text $script:Text -Start 'Step 6: Audit Policies' -End 'Step 7: Remote Registry'
+        $step | Should -Match '\. \(\[scriptblock\]::Create\(\$Env\.AuditPolicyFunction\)\)'
+        $step | Should -Not -Match "Sub='Account Logon'"
+        $enable = Get-Block -Text $script:Text -Start 'function Enable-AuditPolicies \{' -End 'function Export-DiagnosticsReport'
+        $enable | Should -Match 'Set-AuditPolicyBaseline'
+        $script:Text | Should -Not -Match 'auditpol /set /subcategory:`"\$\(\$p\.Sub\)`"'
+    }
+}
+
 Describe 'NP07 and LM06 agent service names' {
     It 'looks agents up by exact service name, not a wildcard that matches built-in services' {
         $np07 = Get-Block -Text $script:Text -Start "'NP07' = @\{ Type='Local'" -End "'NP08' = @\{"

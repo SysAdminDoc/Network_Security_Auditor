@@ -485,7 +485,7 @@ Full WPF interface with:
 - **Per-check controls**: status dropdown, findings, evidence, notes, remediation assignment/due date/status
 - **Live risk score dashboard** updated as checks complete
 - **Pre-flight connectivity check** before scanning (ping, WinRM, AD module, SMB, DNS, elevation, Defender)
-- **Turnkey environment setup**: auto-installs RSAT, configures WinRM, sets audit policies
+- **Turnkey environment setup**: auto-installs RSAT, configures WinRM, sets audit policies (the 18 subcategories LM03 checks, by GUID, so it works on any display language)
 
 ### Headless / Silent Mode
 
