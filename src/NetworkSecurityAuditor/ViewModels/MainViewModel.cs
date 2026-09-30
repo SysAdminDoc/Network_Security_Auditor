@@ -891,9 +891,11 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStopScan))]
     private void StopScan()
     {
-        _scanCts?.Cancel();
+        // Status first: Cancel() runs the token's callbacks on this thread, and a scan that ends inside them writes
+        // its final "Scan cancelled" status before Cancel() returns.
         ScanStatus = UiText.Cancelling;
         AppendActivity(UiText.ScanCancellationRequested);
+        _scanCts?.Cancel();
     }
 
     private bool CanStopScan() => IsScanning;

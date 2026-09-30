@@ -417,6 +417,37 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public async Task StopScan_Keeps_The_Cancelled_Status_When_The_Scan_Ends_Inside_Cancel()
+    {
+        // No synchronization context, and a runner that ends on the cancelling thread the moment the token is
+        // cancelled: the scan's final status is written before StopScan returns, and must not be overwritten.
+        await Task.Run(async () =>
+        {
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var vm = new MainViewModel(async (_, _, _, ct, startedProgress) =>
+            {
+                startedProgress?.Report(("EP01", 1, 1));
+                var stopped = new TaskCompletionSource();
+                using var registration = ct.Register(() => stopped.TrySetCanceled(ct));
+                started.TrySetResult();
+                await stopped.Task.ConfigureAwait(false);
+                return new Dictionary<string, CheckResult>();
+            });
+            vm.LoadCheckCatalog();
+            vm.IsEnvironmentReady = true;
+            vm.SelectedProfile = ScanProfileType.Quick;
+
+            var scanTask = vm.StartScanCommand.ExecuteAsync(null);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            vm.StopScanCommand.Execute(null);
+            await scanTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.False(vm.IsScanning);
+            Assert.Contains("Scan cancelled", vm.ScanStatus);
+        });
+    }
+
+    [Fact]
     public async Task Shutdown_Cancels_Active_Scan_And_Prevents_Restart()
     {
         var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
