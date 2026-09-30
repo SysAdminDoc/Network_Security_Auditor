@@ -95,11 +95,11 @@ public class CheckCatalogTests
     }
 
     [Theory]
-    [InlineData("NA03", "Wireless security", "wireless", "Wireless Filtering", "3.1.16, 3.1.17", "AC.L2-3.1.16, AC.L2-3.1.17")]
-    [InlineData("NA04", "Network documentation", "diagram", "Access Modeling", "3.4.1, 3.4.2", "CM.L2-3.4.1, CM.L2-3.4.2")]
-    [InlineData("NA05", "802.1X/NAC", "802.1X", "Credential Transmission Scoping", "3.1.1, 3.1.2, 3.1.20", "AC.L2-3.1.1, AC.L2-3.1.2, AC.L2-3.1.20")]
-    [InlineData("NA06", "Management interface isolation", "management", "Inbound/Outbound Port Restriction", "3.13.1, 3.13.5, 3.13.6", "SC.L2-3.13.1, SC.L2-3.13.5, SC.L2-3.13.6")]
-    [InlineData("NA07", "Guest network isolation", "guest", "Wireless Filtering", "3.13.1, 3.13.2", "SC.L2-3.13.1, SC.L2-3.13.2")]
+    [InlineData("NA03", "Wireless security", "wireless", "Network Access Mediation", "3.1.16, 3.1.17", "AC.L2-3.1.16, AC.L2-3.1.17")]
+    [InlineData("NA04", "Network documentation", "diagram", "Network Mapping", "3.4.1, 3.4.2", "CM.L2-3.4.1, CM.L2-3.4.2")]
+    [InlineData("NA05", "802.1X/NAC", "802.1X", "LAN Access Mediation", "3.1.1, 3.1.2, 3.1.20", "AC.L2-3.1.1, AC.L2-3.1.2, AC.L2-3.1.20")]
+    [InlineData("NA06", "Management interface isolation", "management", "Network Isolation", "3.13.1, 3.13.5, 3.13.6", "SC.L2-3.13.1, SC.L2-3.13.5, SC.L2-3.13.6")]
+    [InlineData("NA07", "Guest network isolation", "guest", "Broadcast Domain Isolation", "3.13.1, 3.13.2", "SC.L2-3.13.1, SC.L2-3.13.2")]
     public void Network_Architecture_Mappings_Match_Current_Catalog(
         string id,
         string expectedLabel,
@@ -133,11 +133,11 @@ public class CheckCatalogTests
     }
 
     [Theory]
-    [InlineData("BR03", "Restore testing", "restore", "File Verification", "3.6.1, 3.6.3", "IR.L2-3.6.1, IR.L2-3.6.3")]
-    [InlineData("BR04", "RTO/RPO documentation", "RTO/RPO", "Access Modeling", "3.6.1", "IR.L2-3.6.1")]
-    [InlineData("BR05", "Backup encryption", "encrypt", "Disk Encryption", "3.8.1, 3.8.6, 3.13.11", "MP.L2-3.8.1, MP.L2-3.8.6, SC.L2-3.13.11")]
+    [InlineData("BR03", "Restore testing", "restore", "Restore File", "3.6.1, 3.6.3", "IR.L2-3.6.1, IR.L2-3.6.3")]
+    [InlineData("BR04", "RTO/RPO documentation", "RTO/RPO", "Operational Dependency Mapping", "3.6.1", "IR.L2-3.6.1")]
+    [InlineData("BR05", "Backup encryption", "encrypt", "File Encryption", "3.8.1, 3.8.6, 3.13.11", "MP.L2-3.8.1, MP.L2-3.8.6, SC.L2-3.13.11")]
     [InlineData("BR06", "Backup monitoring", "monitor", "Platform Monitoring", "3.6.1, 3.6.2", "IR.L2-3.6.1, IR.L2-3.6.2")]
-    [InlineData("BR07", "DR plan", "DR plan", "Access Modeling", "3.6.1, 3.6.2", "IR.L2-3.6.1, IR.L2-3.6.2")]
+    [InlineData("BR07", "DR plan", "DR plan", "Restore Configuration", "3.6.1, 3.6.2", "IR.L2-3.6.1, IR.L2-3.6.2")]
     public void Backup_Recovery_Mappings_Match_Current_Catalog(
         string id,
         string expectedLabel,
@@ -262,15 +262,15 @@ public class CheckCatalogTests
     }
 
     [Theory]
-    [InlineData("NP04", "DNS filtering", "DNS", "T1071.004", "T1190", "Network Traffic Filtering", "3.13.1, 3.13.15", "SC-20, SC-21, SC-22")]
-    [InlineData("NP06", "Temporary firewall rules", "firewall", "T1133", "T1071.001", "Inbound/Outbound Port Restriction", "3.13.1, 3.13.6", "SC-7, SC-7(4), CM-7")]
-    [InlineData("CF02", "Egress filtering test", "egress", "T1071", "T1021.002", "Inbound/Outbound Port Restriction", "3.13.1, 3.13.5", "SC-7, SC-7(5), SC-7(8)")]
-    [InlineData("CF04", "Former employee access", "former employee", "T1078.002", "T1048", "User Account Permissions", "3.1.1, 3.1.2, 3.1.12", "AC-2, PS-4, PS-5")]
+    [InlineData("NP04", "DNS filtering", "DNS", "T1071.004", "T1190", "DNS Denylisting", "3.13.1, 3.13.15", "SC-20, SC-21, SC-22")]
+    [InlineData("NP06", "Temporary firewall rules", "firewall", "T1133", "T1071.001", "Network Traffic Policy Mapping", "3.13.1, 3.13.6", "SC-7, SC-7(4), CM-7")]
+    [InlineData("CF02", "Egress filtering test", "egress", "T1071", "T1021.002", "Outbound Traffic Filtering", "3.13.1, 3.13.5", "SC-7, SC-7(5), SC-7(8)")]
+    [InlineData("CF04", "Former employee access", "former employee", "T1078.002", "T1048", "Account Locking", "3.1.1, 3.1.2, 3.1.12", "AC-2, PS-4, PS-5")]
     [InlineData("CF06", "Network flatness", "flat", "T1021", "T1021.001", "Network Isolation", "3.13.1, 3.13.2", "AC-4, SC-7, SC-7(4)")]
-    [InlineData("CF08", "DNS filtering test", "DNS", "T1071.004", "T1190", "Network Traffic Filtering", "3.13.1, 3.13.8", "SC-20, SC-21, SC-22")]
-    [InlineData("LM01", "DNS logging", "DNS", "T1071.004", "T1070.001", "Network Monitoring", "3.3.1, 3.3.2", "AU-2, AU-3, AU-12")]
-    [InlineData("LM05", "Failed logon monitoring", "failed logon", "T1110", "T1070.002", "Platform Monitoring", "3.3.3, 3.3.4", "AU-6, AC-7, SI-4")]
-    [InlineData("LM06", "File integrity monitoring", "file integrity", "T1685", "T1562.001", "File Verification", "3.14.6, 3.14.7", "SI-7, CM-6, AU-9")]
+    [InlineData("CF08", "DNS filtering test", "DNS", "T1071.004", "T1190", "DNS Denylisting", "3.13.1, 3.13.8", "SC-20, SC-21, SC-22")]
+    [InlineData("LM01", "DNS logging", "DNS", "T1071.004", "T1070.001", "DNS Traffic Analysis", "3.3.1, 3.3.2", "AU-2, AU-3, AU-12")]
+    [InlineData("LM05", "Failed logon monitoring", "failed logon", "T1110", "T1070.002", "Authentication Event Thresholding", "3.3.3, 3.3.4", "AU-6, AC-7, SI-4")]
+    [InlineData("LM06", "File integrity monitoring", "file integrity", "T1685", "T1562.001", "File Integrity Monitoring", "3.14.6, 3.14.7", "SI-7, CM-6, AU-9")]
     [InlineData("CF07", "Local admin rights", "local admin", "T1078.003", "T1078.001", "User Account Permissions", "3.1.5, 3.1.6", "AC-6, AU-9")]
     public void Drifted_Mappings_Match_Current_Catalog_Labels(
         string id,

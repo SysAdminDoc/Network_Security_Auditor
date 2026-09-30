@@ -349,13 +349,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Acceptance: all PS1 exports go through the helper; a Pester test writes to a path containing `[x]` and verifies no partial file remains after a simulated failure.
   Complexity: S
 
-- [ ] P2 — NSA-110 Fix the D3FEND "Backup" mappings that use D3-BA
-  Why: the C# D3FEND table maps BR01, BR02, BR03, BR05, BR06, BR07 and BR08 to D3-BA labeled "Backup". In D3FEND, D3-BA is Bootloader Authentication, and EP11 now uses it correctly, so reports show one technique ID with two meanings.
-  Evidence: `src/NetworkSecurityAuditor/Data/D3FendMappings.cs` BR entries; https://d3fend.mitre.org/technique/d3f:BootloaderAuthentication/.
-  Touches: C# and PS1 D3FEND tables for the BR checks, CheckCatalogTests label assertions.
-  Acceptance: no check maps a D3FEND ID to a label that D3FEND doesn't give it; the BR checks use D3FEND Restore techniques that exist in the pinned version; a test fails when one technique ID carries two labels.
-  Complexity: S
-
 - [ ] P2 — NSA-111 Verify or replace the PS1 DISA STIG V-IDs
   Why: the PS1 `$stigMap` gives most checks sequential IDs (V-254247 through V-254300), which don't look like real rule IDs from one STIG. IA11, IA12 and EP11 already use plain descriptions instead.
   Evidence: `NetworkSecurityAudit.ps1` `$stigMap`; `BenchmarkMetadata.json` source `disa-windows-server-2025-stig` covers only IA11 and IA12.

@@ -311,7 +311,7 @@ $script:ExternalVersions = [ordered]@{
     AttackEnterprise = '19.2'
     AttackNavigator  = '4.5'
     AttackNavigatorApp = '5.3.2'
-    D3FEND          = '1.4.0'
+    D3FEND          = '1.6.0'
     OCSF            = '1.8.0'
     OSCAL           = '1.2.3'
 }
@@ -335,10 +335,10 @@ $script:ExternalVersionSources = [ordered]@{
         ReviewedOn = '2026-06-16'
     }
     D3FEND = [ordered]@{
-        SourceVersion = '1.4.0'
-        SourceUrl = 'https://d3fend.mitre.org/'
-        ReleaseDate = ''
-        ReviewedOn = '2026-06-16'
+        SourceVersion = '1.6.0'
+        SourceUrl = 'https://d3fend.mitre.org/ontologies/d3fend/1.6.0/d3fend.json'
+        ReleaseDate = '2026-08-31'
+        ReviewedOn = '2026-09-30'
     }
     OCSF = [ordered]@{
         SourceVersion = '1.8.0'
@@ -8887,94 +8887,95 @@ $script:MitreMap = @{
     'PS06' = @{ Tactics=@('TA0001','TA0043','TA0002'); Techniques=@('T1566','T1598','T1204'); Desc='Without ongoing training users remain the weakest link' }
 }
 
-# MITRE D3FEND defensive technique mapping (v1.4.0)
+# MITRE D3FEND defensive technique mapping (v1.6.0). Kept identical to the C# D3FendMappings;
+# the C# tests check both against the pinned D3FEND 1.6.0 release.
 # Format: CheckID -> @{ Stages=@('Harden',...); Techniques=@('D3-xxx',...); Labels=@('Name',...); Desc='short defensive context' }
 $script:D3FendMap = @{
     # Identity & Access
-    'IA01' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-AM','D3F-UGPH','D3-UAP'); Labels=@('Access Modeling','User Group Permissions','User Account Permissions'); Desc='Models and restricts privileged identities and administrative group membership' }
+    'IA01' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-AM','D3-UGPH','D3-UAP'); Labels=@('Access Modeling','User Group Permissions','User Account Permissions'); Desc='Models and restricts privileged identities and administrative group membership' }
     'IA02' = @{ Stages=@('Harden'); Techniques=@('D3-CH','D3-CRO','D3-PR'); Labels=@('Credential Hardening','Credential Rotation','Password Rotation'); Desc='Hardens service-account credentials and reduces Kerberoast exposure' }
-    'IA03' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MFA','D3-CTS'); Labels=@('Multi-factor Authentication','Credential Transmission Scoping'); Desc='Requires stronger authentication and scopes credential use for remote access' }
-    'IA04' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP','D3-APA'); Labels=@('Domain Account Monitoring','User Account Permissions','Access Policy Administration'); Desc='Monitors and revokes access for separated users' }
-    'IA05' = @{ Stages=@('Harden'); Techniques=@('D3-SPP','D3-PWA','D3-PR'); Labels=@('Strong Password Policy','Password Authentication','Password Rotation'); Desc='Enforces password strength, authentication, and rotation controls' }
-    'IA06' = @{ Stages=@('Isolate','Harden'); Techniques=@('D3-AMED','D3-UAP','D3-CH'); Labels=@('Access Mediation','User Account Permissions','Credential Hardening'); Desc='Mediates privileged access and hardens administrator credential handling' }
-    'IA07' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP'); Labels=@('Domain Account Monitoring','User Account Permissions'); Desc='Identifies shared accounts and restores user-level accountability' }
+    'IA03' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MFA','D3-CTS'); Labels=@('Multi-factor Authentication','Credential Transmission Scoping'); Desc='Requires stronger authentication and scopes where credentials can be used' }
+    'IA04' = @{ Stages=@('Detect','Isolate','Evict'); Techniques=@('D3-DAM','D3-UAP','D3-AL'); Labels=@('Domain Account Monitoring','User Account Permissions','Account Locking'); Desc='Finds stale accounts so they can be locked before someone reuses them' }
+    'IA05' = @{ Stages=@('Harden'); Techniques=@('D3-SPP','D3-PWA','D3-PR'); Labels=@('Strong Password Policy','Password Authentication','Password Rotation'); Desc='Enforces password strength and rotation' }
+    'IA06' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-AMED','D3-CRO','D3-UAP'); Labels=@('Access Mediation','Credential Rotation','User Account Permissions'); Desc='Mediates privileged access and rotates local administrator passwords' }
+    'IA07' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP'); Labels=@('Domain Account Monitoring','User Account Permissions'); Desc='Finds shared accounts and restores per-user accountability' }
     'IA08' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-APA','D3-UAP'); Labels=@('Domain Account Monitoring','Access Policy Administration','User Account Permissions'); Desc='Controls guest and vendor account lifecycle and permissions' }
-    'IA09' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MFA','D3-WSAM','D3-CTS'); Labels=@('Multi-factor Authentication','Web Session Access Mediation','Credential Transmission Scoping'); Desc='Mediates remote administration sessions and scopes unmanaged remote-access paths' }
-    'IA10' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DAM','D3-UAP'); Labels=@('Domain Account Monitoring','User Account Permissions'); Desc='Finds inactive accounts so access can be removed before abuse' }
-    'IA11' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-CH','D3-CRO','D3-MENCR','D3-DAM'); Labels=@('Credential Hardening','Credential Rotation','Message Encryption','Domain Account Monitoring'); Desc='Hardens Kerberos encryption by identifying RC4/DES dependencies and AES readiness gaps' }
-    'IA12' = @{ Stages=@('Model','Harden','Detect','Isolate'); Techniques=@('D3-AM','D3-UAP','D3-APA','D3-DAM'); Labels=@('Access Modeling','User Account Permissions','Access Policy Administration','Domain Account Monitoring'); Desc='Models and restricts dMSA creation/migration rights while monitoring BadSuccessor abuse indicators' }
+    'IA09' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MFA','D3-DRA','D3-CTS'); Labels=@('Multi-factor Authentication','Disable Remote Access','Credential Transmission Scoping'); Desc='Removes unmanaged remote access paths and requires strong authentication for the rest' }
+    'IA10' = @{ Stages=@('Detect','Evict'); Techniques=@('D3-DAM','D3-AL'); Labels=@('Domain Account Monitoring','Account Locking'); Desc='Finds inactive accounts so they can be locked before abuse' }
+    'IA11' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-CH','D3-CRO','D3-MENCR','D3-DAM'); Labels=@('Credential Hardening','Credential Rotation','Message Encryption','Domain Account Monitoring'); Desc='Hardens Kerberos encryption by finding RC4 and DES dependencies' }
+    'IA12' = @{ Stages=@('Model','Detect','Isolate'); Techniques=@('D3-AM','D3-UAP','D3-APA','D3-DAM'); Labels=@('Access Modeling','User Account Permissions','Access Policy Administration','Domain Account Monitoring'); Desc='Models and restricts dMSA creation rights while watching for BadSuccessor abuse' }
 
     # Endpoint Security
-    'EP01' = @{ Stages=@('Detect','Harden'); Techniques=@('D3-PM','D3-OSM','D3-PH'); Labels=@('Platform Monitoring','Operating System Monitoring','Platform Hardening'); Desc='Validates endpoint protection, ASR, and anti-malware monitoring controls' }
-    'EP02' = @{ Stages=@('Harden'); Techniques=@('D3-DENCR','D3-FE'); Labels=@('Disk Encryption','File Encryption'); Desc='Protects endpoint data at rest through disk and file encryption' }
-    'EP03' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-CH','D3-NTF','D3-MENCR'); Labels=@('Credential Hardening','Network Traffic Filtering','Message Encryption'); Desc='Hardens SMB, NTLM, LLMNR, and credential relay exposure' }
-    'EP04' = @{ Stages=@('Model','Harden'); Techniques=@('D3-SWI','D3-SU','D3-SYSVA'); Labels=@('Software Inventory','Software Update','System Vulnerability Assessment'); Desc='Inventories and updates vulnerable software and operating systems' }
-    'EP05' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-SICA','D3-SCP','D3-UAP'); Labels=@('System Init Config Analysis','System Configuration Permissions','User Account Permissions'); Desc='Identifies local privilege escalation and unsafe startup/configuration paths' }
-    'EP06' = @{ Stages=@('Isolate'); Techniques=@('D3-NTF','D3-ITF','D3-OTF'); Labels=@('Network Traffic Filtering','Inbound Traffic Filtering','Outbound Traffic Filtering'); Desc='Enforces host firewall and attack-surface traffic controls' }
-    'EP07' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-EAL','D3-SCF','D3-FFV'); Labels=@('Executable Allowlisting','System Call Filtering','File Format Verification'); Desc='Controls script, macro, and executable launch paths' }
-    'EP08' = @{ Stages=@('Harden'); Techniques=@('D3-CH','D3-HBPI','D3-TBI'); Labels=@('Credential Hardening','Hardware-based Process Isolation','TPM Boot Integrity'); Desc='Uses hardware-backed isolation and boot integrity to protect credentials' }
-    'EP09' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-SICA','D3-OPR','D3-IOPR'); Labels=@('System Init Config Analysis','Operating Mode Restriction','IO Port Restriction'); Desc='Restricts AutoRun/AutoPlay and removable-media execution paths' }
-    'EP10' = @{ Stages=@('Model','Harden'); Techniques=@('D3-AI','D3-SWI','D3-SU'); Labels=@('Asset Inventory','Software Inventory','Software Update'); Desc='Identifies unsupported operating systems and upgrade/ESU gaps' }
+    'EP01' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-PM','D3-OSM','D3-PH'); Labels=@('Platform Monitoring','Operating System Monitoring','Platform Hardening'); Desc='Validates endpoint protection, ASR and anti-malware monitoring' }
+    'EP02' = @{ Stages=@('Harden'); Techniques=@('D3-DENCR','D3-FE'); Labels=@('Disk Encryption','File Encryption'); Desc='Protects data at rest with disk and file encryption' }
+    'EP03' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-MAN','D3-MENCR','D3-CH','D3-NTF'); Labels=@('Message Authentication','Message Encryption','Credential Hardening','Network Traffic Filtering'); Desc='Signs and encrypts SMB, hardens NTLM and filters relay paths' }
+    'EP04' = @{ Stages=@('Model','Harden'); Techniques=@('D3-SWI','D3-AVE','D3-SU'); Labels=@('Software Inventory','Asset Vulnerability Enumeration','Software Update'); Desc='Inventories software, enumerates known exploited vulnerabilities and keeps updates current' }
+    'EP05' = @{ Stages=@('Harden','Detect','Isolate'); Techniques=@('D3-SICA','D3-SCP','D3-UAP'); Labels=@('System Init Config Analysis','System Configuration Permissions','User Account Permissions'); Desc='Finds local privilege escalation paths and unsafe configuration permissions' }
+    'EP06' = @{ Stages=@('Isolate'); Techniques=@('D3-NTF','D3-ITF','D3-OTF'); Labels=@('Network Traffic Filtering','Inbound Traffic Filtering','Outbound Traffic Filtering'); Desc='Enforces host firewall filtering for inbound and outbound traffic' }
+    'EP07' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-EAL','D3-ACH'); Labels=@('Executable Allowlisting','Application Configuration Hardening'); Desc='Allowlists executables and hardens Office macro settings' }
+    'EP08' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-CH','D3-HBPI','D3-TBI'); Labels=@('Credential Hardening','Hardware-based Process Isolation','TPM Boot Integrity'); Desc='Uses hardware-backed isolation and boot integrity to protect credentials' }
+    'EP09' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-IOPR','D3-PH'); Labels=@('IO Port Restriction','Platform Hardening'); Desc='Restricts removable media and turns off AutoRun and AutoPlay' }
+    'EP10' = @{ Stages=@('Model','Harden'); Techniques=@('D3-AI','D3-SWI','D3-SU'); Labels=@('Asset Inventory','Software Inventory','Software Update'); Desc='Inventories end-of-life operating systems so they can be upgraded or covered by ESU' }
     'EP11' = @{ Stages=@('Harden'); Techniques=@('D3-BA','D3-SU'); Labels=@('Bootloader Authentication','Software Update'); Desc='Moves Secure Boot trust to the 2023 certificates so boot manager revocations keep applying' }
 
     # Logging & Monitoring
-    'LM01' = @{ Stages=@('Detect'); Techniques=@('D3-OSM','D3-DAM','D3-AET'); Labels=@('Operating System Monitoring','Domain Account Monitoring','Authentication Event Thresholding'); Desc='Validates audit policy and authentication event visibility' }
-    'LM02' = @{ Stages=@('Detect'); Techniques=@('D3-NTA','D3-PM','D3-OSM'); Labels=@('Network Traffic Analysis','Platform Monitoring','Operating System Monitoring'); Desc='Centralizes telemetry for correlation and investigation' }
-    'LM03' = @{ Stages=@('Detect'); Techniques=@('D3-SEA','D3-SICA','D3-PLA'); Labels=@('Script Execution Analysis','System Init Config Analysis','Process Lineage Analysis'); Desc='Collects PowerShell and process evidence for script-based attacks' }
-    'LM04' = @{ Stages=@('Detect'); Techniques=@('D3-NTA','D3-NTSA','D3-NTCD'); Labels=@('Network Traffic Analysis','Network Traffic Signature Analysis','Network Traffic Community Deviation'); Desc='Validates firewall and IDS/IPS network telemetry' }
-    'LM05' = @{ Stages=@('Detect'); Techniques=@('D3-FIM','D3-SFA','D3-SICA'); Labels=@('File Integrity Monitoring','System File Analysis','System Init Config Analysis'); Desc='Detects unauthorized changes to files, logs, and system configuration' }
-    'LM06' = @{ Stages=@('Detect'); Techniques=@('D3-UBA','D3-DAM','D3-AET'); Labels=@('User Behavior Analysis','Domain Account Monitoring','Authentication Event Thresholding'); Desc='Turns collected events into reviewed and actionable alerts' }
-    'LM07' = @{ Stages=@('Detect'); Techniques=@('D3-OSM','D3-PM'); Labels=@('Operating System Monitoring','Platform Monitoring'); Desc='Preserves enough event data for incident reconstruction' }
-    'LM08' = @{ Stages=@('Detect'); Techniques=@('D3-AET','D3-NTSA','D3-UBA'); Labels=@('Authentication Event Thresholding','Network Traffic Signature Analysis','User Behavior Analysis'); Desc='Validates alerting for authentication, network, and behavior anomalies' }
+    'LM01' = @{ Stages=@('Detect'); Techniques=@('D3-DNSTA','D3-NTA'); Labels=@('DNS Traffic Analysis','Network Traffic Analysis'); Desc='Analyzes DNS query logs to spot DNS-based command and control' }
+    'LM02' = @{ Stages=@('Detect'); Techniques=@('D3-OSM','D3-PM'); Labels=@('Operating System Monitoring','Platform Monitoring'); Desc='Centralizes operating system and platform telemetry for correlation' }
+    'LM03' = @{ Stages=@('Detect'); Techniques=@('D3-SEA','D3-PLA','D3-OSM'); Labels=@('Script Execution Analysis','Process Lineage Analysis','Operating System Monitoring'); Desc='Records script execution and process lineage through audit policy and PowerShell logging' }
+    'LM04' = @{ Stages=@('Detect'); Techniques=@('D3-NTA','D3-CAA'); Labels=@('Network Traffic Analysis','Connection Attempt Analysis'); Desc='Analyzes firewall logs for connection attempts and traffic patterns' }
+    'LM05' = @{ Stages=@('Detect'); Techniques=@('D3-ANET','D3-LAM','D3-DAM'); Labels=@('Authentication Event Thresholding','Local Account Monitoring','Domain Account Monitoring'); Desc='Thresholds failed logon events on local and domain accounts' }
+    'LM06' = @{ Stages=@('Detect'); Techniques=@('D3-FIM','D3-SFA'); Labels=@('File Integrity Monitoring','System File Analysis'); Desc='Detects unauthorized changes with file integrity monitoring and system file analysis' }
+    'LM07' = @{ Stages=@('Detect'); Techniques=@('D3-OSM','D3-PM'); Labels=@('Operating System Monitoring','Platform Monitoring'); Desc='Keeps enough operating system and platform event history for an investigation' }
+    'LM08' = @{ Stages=@('Detect'); Techniques=@('D3-ANET','D3-NTSA','D3-UBA'); Labels=@('Authentication Event Thresholding','Network Traffic Signature Analysis','User Behavior Analysis'); Desc='Raises alerts on authentication thresholds, network signatures and user behavior' }
 
     # Network Architecture
-    'NA01' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-NM','D3-NI','D3-NRAM'); Labels=@('Network Mapping','Network Isolation','Network Resource Access Mediation'); Desc='Models and isolates network zones to limit lateral movement' }
-    'NA02' = @{ Stages=@('Isolate'); Techniques=@('D3-NI','D3-NRAM','D3-RAM'); Labels=@('Network Isolation','Network Resource Access Mediation','Routing Access Mediation'); Desc='Controls traffic between client, server, and sensitive tiers' }
-    'NA03' = @{ Stages=@('Isolate'); Techniques=@('D3-NAM','D3-ITF','D3-PBWSAM'); Labels=@('Network Access Mediation','Inbound Traffic Filtering','Proxy-based Web Server Access Mediation'); Desc='Separates public-facing services from internal networks' }
-    'NA04' = @{ Stages=@('Isolate','Model'); Techniques=@('D3-NI','D3-NAM','D3-NM'); Labels=@('Network Isolation','Network Access Mediation','Network Mapping'); Desc='Segments wireless and guest access from production systems' }
-    'NA05' = @{ Stages=@('Isolate','Harden'); Techniques=@('D3-ET','D3-NAM','D3-CTS'); Labels=@('Encrypted Tunnels','Network Access Mediation','Credential Transmission Scoping'); Desc='Scopes VPN and remote access to required resources' }
-    'NA06' = @{ Stages=@('Detect'); Techniques=@('D3-NTA','D3-NTSA','D3-NTCD'); Labels=@('Network Traffic Analysis','Network Traffic Signature Analysis','Network Traffic Community Deviation'); Desc='Detects anomalous traffic and lateral movement attempts' }
-    'NA07' = @{ Stages=@('Isolate','Detect'); Techniques=@('D3-DNSAL','D3-DNSDL','D3-DNRA'); Labels=@('DNS Allowlisting','DNS Denylisting','Domain Name Reputation Analysis'); Desc='Controls and analyzes DNS resolution for malicious destinations' }
+    'NA01' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-NM','D3-NI','D3-NRAM'); Labels=@('Network Mapping','Network Isolation','Network Resource Access Mediation'); Desc='Maps the network and isolates zones to limit lateral movement' }
+    'NA02' = @{ Stages=@('Isolate'); Techniques=@('D3-BDI','D3-NI','D3-RAM'); Labels=@('Broadcast Domain Isolation','Network Isolation','Routing Access Mediation'); Desc='Separates broadcast domains with VLANs and mediates routing between them' }
+    'NA03' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-NAM','D3-MENCR'); Labels=@('Network Access Mediation','Message Encryption'); Desc='Mediates wireless network access and encrypts wireless traffic' }
+    'NA04' = @{ Stages=@('Model'); Techniques=@('D3-NM','D3-NNI','D3-AI'); Labels=@('Network Mapping','Network Node Inventory','Asset Inventory'); Desc='Keeps network diagrams, node inventories and asset records current' }
+    'NA05' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-LAMED','D3-NAM','D3-CBAN'); Labels=@('LAN Access Mediation','Network Access Mediation','Certificate-based Authentication'); Desc='Mediates LAN access with 802.1X and certificate-based device authentication' }
+    'NA06' = @{ Stages=@('Isolate'); Techniques=@('D3-NI','D3-NAM'); Labels=@('Network Isolation','Network Access Mediation'); Desc='Isolates management interfaces on their own network with mediated access' }
+    'NA07' = @{ Stages=@('Isolate'); Techniques=@('D3-NI','D3-BDI','D3-NAM'); Labels=@('Network Isolation','Broadcast Domain Isolation','Network Access Mediation'); Desc='Keeps guest networks in their own broadcast domain, away from internal systems' }
 
     # Network Perimeter
-    'NP01' = @{ Stages=@('Isolate'); Techniques=@('D3-NTF','D3-ITF','D3-OTF'); Labels=@('Network Traffic Filtering','Inbound Traffic Filtering','Outbound Traffic Filtering'); Desc='Filters traffic at the perimeter to reduce exposure' }
-    'NP02' = @{ Stages=@('Model','Detect'); Techniques=@('D3-NVA','D3-NTPM','D3-NNI'); Labels=@('Network Vulnerability Assessment','Network Traffic Policy Mapping','Network Node Inventory'); Desc='Enumerates externally exposed services and policy drift' }
-    'NP03' = @{ Stages=@('Isolate','Harden'); Techniques=@('D3-DRA','D3-NAM','D3-MFA'); Labels=@('Disable Remote Access','Network Access Mediation','Multi-factor Authentication'); Desc='Hardens VPN/RDP and remote administration exposure' }
-    'NP04' = @{ Stages=@('Isolate'); Techniques=@('D3-PBWSAM','D3-ITF','D3-CF'); Labels=@('Proxy-based Web Server Access Mediation','Inbound Traffic Filtering','Content Filtering'); Desc='Mediates web-facing traffic with WAF or equivalent edge controls' }
-    'NP05' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-NTPM','D3-NTF','D3-NRAM'); Labels=@('Network Traffic Policy Mapping','Network Traffic Filtering','Network Resource Access Mediation'); Desc='Reviews firewall ACL scope and route exposure' }
-    'NP06' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-MENCR','D3-PCA','D3-NTA'); Labels=@('Message Encryption','Passive Certificate Analysis','Network Traffic Analysis'); Desc='Assesses encrypted inspection and TLS visibility boundaries' }
-    'NP07' = @{ Stages=@('Detect'); Techniques=@('D3-NTA','D3-NTSA','D3-NTCD'); Labels=@('Network Traffic Analysis','Network Traffic Signature Analysis','Network Traffic Community Deviation'); Desc='Validates intrusion detection and prevention coverage' }
-    'NP08' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-MENCR','D3-PCA','D3-CERO'); Labels=@('Message Encryption','Passive Certificate Analysis','Certificate Rotation'); Desc='Assesses TLS protocol, certificate, and cryptographic hygiene' }
-    'NP09' = @{ Stages=@('Isolate','Model'); Techniques=@('D3-ITF','D3-NTPM','D3-NRAM'); Labels=@('Inbound Traffic Filtering','Network Traffic Policy Mapping','Network Resource Access Mediation'); Desc='Reviews NAT and port-forward exposure to internal hosts' }
-    'NP10' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-SU','D3-FV','D3-SYSVA'); Labels=@('Software Update','Firmware Verification','System Vulnerability Assessment'); Desc='Validates perimeter firmware currency and vulnerability posture' }
+    'NP01' = @{ Stages=@('Isolate'); Techniques=@('D3-NTF','D3-ITF','D3-OTF'); Labels=@('Network Traffic Filtering','Inbound Traffic Filtering','Outbound Traffic Filtering'); Desc='Filters inbound and outbound traffic at the perimeter' }
+    'NP02' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-NVA','D3-NTPM','D3-ITF'); Labels=@('Network Vulnerability Assessment','Network Traffic Policy Mapping','Inbound Traffic Filtering'); Desc='Assesses listening services and maps them against inbound filtering' }
+    'NP03' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-ET','D3-NAM','D3-MFA'); Labels=@('Encrypted Tunnels','Network Access Mediation','Multi-factor Authentication'); Desc='Scopes VPN access through encrypted tunnels with multi-factor authentication' }
+    'NP04' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DNSDL','D3-DNRA'); Labels=@('DNS Denylisting','Domain Name Reputation Analysis'); Desc='Blocks known-bad domains through DNS denylisting and reputation analysis' }
+    'NP05' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-OTF','D3-NTPM'); Labels=@('Outbound Traffic Filtering','Network Traffic Policy Mapping'); Desc='Maps egress policy and filters outbound traffic' }
+    'NP06' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-NTPM','D3-NTF'); Labels=@('Network Traffic Policy Mapping','Network Traffic Filtering'); Desc='Maps temporary firewall rules against policy so stale ones get removed' }
+    'NP07' = @{ Stages=@('Detect'); Techniques=@('D3-NTSA','D3-NTA','D3-NTCD'); Labels=@('Network Traffic Signature Analysis','Network Traffic Analysis','Network Traffic Community Deviation'); Desc='Validates intrusion detection and prevention coverage with signature and anomaly analysis' }
+    'NP08' = @{ Stages=@('Harden','Detect'); Techniques=@('D3-MENCR','D3-PCA','D3-NTA'); Labels=@('Message Encryption','Passive Certificate Analysis','Network Traffic Analysis'); Desc='Checks TLS encryption and certificate visibility for inspection' }
+    'NP09' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-ITF','D3-NTPM','D3-NRAM'); Labels=@('Inbound Traffic Filtering','Network Traffic Policy Mapping','Network Resource Access Mediation'); Desc='Reviews NAT and port-forward exposure to internal hosts' }
+    'NP10' = @{ Stages=@('Model','Harden','Detect'); Techniques=@('D3-SU','D3-FV','D3-SYSVA'); Labels=@('Software Update','Firmware Verification','System Vulnerability Assessment'); Desc='Keeps perimeter firmware updated and verified against known vulnerabilities' }
 
     # Backup & Recovery
-    'BR01' = @{ Stages=@('Restore'); Techniques=@('D3-RA','D3-RF','D3-RDI'); Labels=@('Restore Access','Restore File','Restore Disk Image'); Desc='Establishes a recoverable backup baseline' }
-    'BR02' = @{ Stages=@('Restore'); Techniques=@('D3-RDI','D3-RF','D3-RO'); Labels=@('Restore Disk Image','Restore File','Restore Object'); Desc='Protects backups from local destruction and supports offsite restore' }
-    'BR03' = @{ Stages=@('Restore','Model'); Techniques=@('D3-RC','D3-RA','D3-ORA'); Labels=@('Restore Configuration','Restore Access','Operational Risk Assessment'); Desc='Defines disaster recovery procedures and recovery priorities' }
-    'BR04' = @{ Stages=@('Restore'); Techniques=@('D3-RF','D3-RDI','D3-RO'); Labels=@('Restore File','Restore Disk Image','Restore Object'); Desc='Confirms that backup restore procedures actually work' }
-    'BR05' = @{ Stages=@('Restore','Model'); Techniques=@('D3-RC','D3-ORA','D3-ODM'); Labels=@('Restore Configuration','Operational Risk Assessment','Operational Dependency Mapping'); Desc='Documents recovery objectives and dependency priorities' }
-    'BR06' = @{ Stages=@('Detect','Restore'); Techniques=@('D3-PM','D3-RA','D3-RC'); Labels=@('Platform Monitoring','Restore Access','Restore Configuration'); Desc='Monitors backup jobs and raises failures before recovery is needed' }
-    'BR07' = @{ Stages=@('Harden','Restore'); Techniques=@('D3-FE','D3-MENCR','D3-RF'); Labels=@('File Encryption','Message Encryption','Restore File'); Desc='Protects backup data confidentiality during storage and restore' }
-    'BR08' = @{ Stages=@('Restore'); Techniques=@('D3-RS','D3-RE','D3-RD'); Labels=@('Restore Software','Restore Email','Restore Database'); Desc='Ensures critical SaaS and cloud workloads have restore paths' }
+    'BR01' = @{ Stages=@('Restore'); Techniques=@('D3-RF','D3-RDI'); Labels=@('Restore File','Restore Disk Image'); Desc='Establishes backups that can restore files and full disk images' }
+    'BR02' = @{ Stages=@('Restore'); Techniques=@('D3-RDI','D3-RF','D3-RO'); Labels=@('Restore Disk Image','Restore File','Restore Object'); Desc='Keeps offsite and immutable copies that can be restored after local destruction' }
+    'BR03' = @{ Stages=@('Restore'); Techniques=@('D3-RF','D3-RDI','D3-RO'); Labels=@('Restore File','Restore Disk Image','Restore Object'); Desc='Confirms that restore procedures actually bring back files, images and objects' }
+    'BR04' = @{ Stages=@('Model','Restore'); Techniques=@('D3-ODM','D3-ORA','D3-RC'); Labels=@('Operational Dependency Mapping','Operational Risk Assessment','Restore Configuration'); Desc='Documents RTO/RPO targets and the dependencies that set recovery order' }
+    'BR05' = @{ Stages=@('Harden','Restore'); Techniques=@('D3-FE','D3-MENCR','D3-RF'); Labels=@('File Encryption','Message Encryption','Restore File'); Desc='Protects backup data with encryption at rest and in transit' }
+    'BR06' = @{ Stages=@('Detect','Restore'); Techniques=@('D3-PM','D3-RA','D3-RC'); Labels=@('Platform Monitoring','Restore Access','Restore Configuration'); Desc='Monitors backup jobs and raises failures before a restore is needed' }
+    'BR07' = @{ Stages=@('Model','Restore'); Techniques=@('D3-RC','D3-RA','D3-ORA'); Labels=@('Restore Configuration','Restore Access','Operational Risk Assessment'); Desc='Keeps a DR plan with the configuration and access needed to recover' }
+    'BR08' = @{ Stages=@('Restore'); Techniques=@('D3-RS','D3-RE','D3-RD'); Labels=@('Restore Software','Restore Email','Restore Database'); Desc='Gives SaaS and cloud workloads restore paths for software, email and databases' }
 
     # Common Findings
-    'CF01' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-CH','D3-CRO','D3-UAP'); Labels=@('Credential Hardening','Credential Rotation','User Account Permissions'); Desc='Hardens common privileged-service-account and ADCS exposure paths' }
-    'CF02' = @{ Stages=@('Isolate','Harden'); Techniques=@('D3-NTF','D3-NI','D3-MENCR'); Labels=@('Network Traffic Filtering','Network Isolation','Message Encryption'); Desc='Removes legacy file-sharing protocols and weak lateral movement paths' }
-    'CF03' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-MA','D3-URA','D3-CF'); Labels=@('Message Analysis','URL Reputation Analysis','Content Filtering'); Desc='Reduces phishing exposure through message analysis and content controls' }
-    'CF04' = @{ Stages=@('Isolate','Model'); Techniques=@('D3-LFAM','D3-UAP','D3-AM'); Labels=@('Local File Access Mediation','User Account Permissions','Access Modeling'); Desc='Scopes file access to business need and least privilege' }
-    'CF05' = @{ Stages=@('Isolate'); Techniques=@('D3-LFP','D3-RFAM','D3-UAP'); Labels=@('Local File Permissions','Remote File Access Mediation','User Account Permissions'); Desc='Restricts open shares and network file access' }
-    'CF06' = @{ Stages=@('Isolate'); Techniques=@('D3-DRA','D3-NAM','D3-NI'); Labels=@('Disable Remote Access','Network Access Mediation','Network Isolation'); Desc='Removes unnecessary remote access paths and flat network reachability' }
-    'CF07' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-LAM','D3-UAP','D3-APA'); Labels=@('Local Account Monitoring','User Account Permissions','Access Policy Administration'); Desc='Finds and reduces excessive local administrator rights' }
-    'CF08' = @{ Stages=@('Model','Harden'); Techniques=@('D3-SYSVA','D3-SU','D3-SWI'); Labels=@('System Vulnerability Assessment','Software Update','Software Inventory'); Desc='Discovers and remediates vulnerable systems and software' }
+    'CF01' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-CH','D3-CRO','D3-UAP'); Labels=@('Credential Hardening','Credential Rotation','User Account Permissions'); Desc='Hardens privileged service-account credentials and certificate services exposure' }
+    'CF02' = @{ Stages=@('Isolate'); Techniques=@('D3-OTF','D3-NTF'); Labels=@('Outbound Traffic Filtering','Network Traffic Filtering'); Desc='Tests egress filtering so outbound traffic is limited to what the business needs' }
+    'CF03' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-MA','D3-URA','D3-CF'); Labels=@('Message Analysis','URL Reputation Analysis','Content Filtering'); Desc='Backs up security awareness training with message, URL and content filtering' }
+    'CF04' = @{ Stages=@('Detect','Evict'); Techniques=@('D3-DAM','D3-AL','D3-CR'); Labels=@('Domain Account Monitoring','Account Locking','Credential Revocation'); Desc='Finds former employee accounts, locks them and revokes their credentials' }
+    'CF05' = @{ Stages=@('Isolate'); Techniques=@('D3-LFP','D3-RFAM','D3-UAP'); Labels=@('Local File Permissions','Remote File Access Mediation','User Account Permissions'); Desc='Restricts open shares with local and remote file access controls' }
+    'CF06' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-NI','D3-NRAM','D3-NM'); Labels=@('Network Isolation','Network Resource Access Mediation','Network Mapping'); Desc='Breaks up a flat network with isolation and resource access mediation' }
+    'CF07' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-LAM','D3-UAP','D3-APA'); Labels=@('Local Account Monitoring','User Account Permissions','Access Policy Administration'); Desc='Monitors local admin accounts and reduces local administrator rights' }
+    'CF08' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-DNSDL','D3-DNRA'); Labels=@('DNS Denylisting','Domain Name Reputation Analysis'); Desc='Tests DNS denylisting and domain reputation filtering on the resolvers in use' }
 
     # Policies & Standards
     'PS01' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-APA','D3-ORA','D3-AM'); Labels=@('Access Policy Administration','Operational Risk Assessment','Access Modeling'); Desc='Defines security policy and control ownership' }
-    'PS02' = @{ Stages=@('Model'); Techniques=@('D3-APA','D3-OM'); Labels=@('Access Policy Administration','Organization Mapping'); Desc='Defines acceptable use responsibilities and organizational expectations' }
-    'PS03' = @{ Stages=@('Restore','Model'); Techniques=@('D3-RA','D3-ORA','D3-ODM'); Labels=@('Restore Access','Operational Risk Assessment','Operational Dependency Mapping'); Desc='Structures incident response and recovery decision making' }
-    'PS04' = @{ Stages=@('Model','Detect'); Techniques=@('D3-ORA','D3-CI','D3-PM'); Labels=@('Operational Risk Assessment','Configuration Inventory','Platform Monitoring'); Desc='Tracks compliance drift through periodic assessment' }
+    'PS02' = @{ Stages=@('Model','Isolate'); Techniques=@('D3-APA','D3-OM'); Labels=@('Access Policy Administration','Organization Mapping'); Desc='Defines acceptable use responsibilities and organizational expectations' }
+    'PS03' = @{ Stages=@('Model','Restore'); Techniques=@('D3-RA','D3-ORA','D3-ODM'); Labels=@('Restore Access','Operational Risk Assessment','Operational Dependency Mapping'); Desc='Structures incident response and recovery decisions' }
+    'PS04' = @{ Stages=@('Model','Detect'); Techniques=@('D3-ORA','D3-CI','D3-PM'); Labels=@('Operational Risk Assessment','Configuration Inventory','Platform Monitoring'); Desc='Tracks compliance drift through periodic assessment and configuration inventory' }
     'PS05' = @{ Stages=@('Model'); Techniques=@('D3-ORA','D3-SYSVA','D3-AI'); Labels=@('Operational Risk Assessment','System Vulnerability Assessment','Asset Inventory'); Desc='Identifies risks and vulnerable assets before exploitation' }
-    'PS06' = @{ Stages=@('Detect','Model'); Techniques=@('D3-MA','D3-UBA','D3-WSAA'); Labels=@('Message Analysis','User Behavior Analysis','Web Session Activity Analysis'); Desc='Improves user resilience and behavioral detection for social engineering' }
+    'PS06' = @{ Stages=@('Detect'); Techniques=@('D3-MA','D3-UBA','D3-WSAA'); Labels=@('Message Analysis','User Behavior Analysis','Web Session Activity Analysis'); Desc='Backs up user training with message, behavior and web session analysis' }
 }
 
 $script:D3FendStages = [ordered]@{

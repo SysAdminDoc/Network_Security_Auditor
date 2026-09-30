@@ -419,7 +419,7 @@ All 70 checks map to ATT&CK Enterprise techniques (v19.2) with tactic and techni
 
 ### MITRE D3FEND Mapping
 
-All 70 checks also map to MITRE D3FEND defensive techniques (v1.4.0). Reports show D3FEND stage coverage for Model, Harden, Detect, Isolate, Deceive, Evict, and Restore, while JSON, JSONL, CSV, and SARIF exports include D3FEND technique fields for downstream GRC, SIEM, and MSP analytics.
+All 70 checks also map to MITRE D3FEND defensive techniques (v1.6.0), with the same map in the app and the script. Tests check every technique ID and label against a pinned copy of that release, which `tools/Update-D3fendReference.ps1` refreshes. Reports show D3FEND stage coverage for Model, Harden, Detect, Isolate, Deceive, Evict, and Restore, while JSON, JSONL, CSV, and SARIF exports include D3FEND technique fields for downstream GRC, SIEM, and MSP analytics.
 
 ### CISA KEV Cross-Reference
 
@@ -856,6 +856,7 @@ tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
 tools/NetworkSecurityAudit.Tests.ps1        # Pester v5 quality-gate suite
 tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
 tools/Update-AttackReference.ps1           # Pins the ATT&CK Enterprise release the mapping tests use
+tools/Update-D3fendReference.ps1           # Pins the D3FEND release the mapping tests use
 tools/Test-DependencyHealth.ps1             # Package inventory/advisory/freshness release gate
 tools/dependency-health-exceptions.json      # Exact-version, dated dependency drift exceptions
 tools/Publish-CSharpRelease.ps1             # Local C# zip/checksum/signing artifact flow

@@ -231,7 +231,7 @@ Describe 'External export version contracts' {
             AttackEnterprise = '19.2'
             AttackNavigator = '4.5'
             AttackNavigatorApp = '5.3.2'
-            D3FEND = '1.4.0'
+            D3FEND = '1.6.0'
             OCSF = '1.8.0'
             OSCAL = '1.2.3'
         }

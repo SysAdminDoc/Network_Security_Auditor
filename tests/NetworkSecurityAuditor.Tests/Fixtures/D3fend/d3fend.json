@@ -1,0 +1,1100 @@
+{
+  "version": "1.6.0",
+  "source": "https://d3fend.mitre.org/ontologies/d3fend/1.6.0/d3fend.json",
+  "sha256": "e1546d432c6aa64d45b62dd9e9484b0774ae84de7ff3605ff9dd4e20278957bf",
+  "stages": [
+    "Model",
+    "Harden",
+    "Detect",
+    "Isolate",
+    "Deceive",
+    "Evict",
+    "Restore"
+  ],
+  "techniques": {
+    "D3-AA": {
+      "label": "Agent Authentication",
+      "stage": "Harden"
+    },
+    "D3-ABPI": {
+      "label": "Application-based Process Isolation",
+      "stage": "Isolate"
+    },
+    "D3-ACA": {
+      "label": "Active Certificate Analysis",
+      "stage": "Detect"
+    },
+    "D3-ACH": {
+      "label": "Application Configuration Hardening",
+      "stage": "Harden"
+    },
+    "D3-AEM": {
+      "label": "Application Exception Monitoring",
+      "stage": "Detect"
+    },
+    "D3-AH": {
+      "label": "Application Hardening",
+      "stage": "Harden"
+    },
+    "D3-AI": {
+      "label": "Asset Inventory",
+      "stage": "Model"
+    },
+    "D3-AL": {
+      "label": "Account Locking",
+      "stage": "Evict"
+    },
+    "D3-ALLM": {
+      "label": "Active Logical Link Mapping",
+      "stage": "Model"
+    },
+    "D3-AM": {
+      "label": "Access Modeling",
+      "stage": "Model"
+    },
+    "D3-AMED": {
+      "label": "Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-ANAA": {
+      "label": "Administrative Network Activity Analysis",
+      "stage": "Detect"
+    },
+    "D3-ANCI": {
+      "label": "Authentication Cache Invalidation",
+      "stage": "Evict"
+    },
+    "D3-ANET": {
+      "label": "Authentication Event Thresholding",
+      "stage": "Detect"
+    },
+    "D3-APA": {
+      "label": "Access Policy Administration",
+      "stage": "Isolate"
+    },
+    "D3-APCA": {
+      "label": "Application Protocol Command Analysis",
+      "stage": "Detect"
+    },
+    "D3-APLM": {
+      "label": "Active Physical Link Mapping",
+      "stage": "Model"
+    },
+    "D3-APM": {
+      "label": "Application Performance Monitoring",
+      "stage": "Detect"
+    },
+    "D3-AVE": {
+      "label": "Asset Vulnerability Enumeration",
+      "stage": "Model"
+    },
+    "D3-AZET": {
+      "label": "Authorization Event Thresholding",
+      "stage": "Detect"
+    },
+    "D3-BA": {
+      "label": "Bootloader Authentication",
+      "stage": "Harden"
+    },
+    "D3-BAN": {
+      "label": "Biometric Authentication",
+      "stage": "Harden"
+    },
+    "D3-BDI": {
+      "label": "Broadcast Domain Isolation",
+      "stage": "Isolate"
+    },
+    "D3-BMA": {
+      "label": "Bus Message Authentication",
+      "stage": "Harden"
+    },
+    "D3-BSE": {
+      "label": "Byte Sequence Emulation",
+      "stage": "Detect"
+    },
+    "D3-CA": {
+      "label": "Certificate Analysis",
+      "stage": "Detect"
+    },
+    "D3-CAA": {
+      "label": "Connection Attempt Analysis",
+      "stage": "Detect"
+    },
+    "D3-CBAN": {
+      "label": "Certificate-based Authentication",
+      "stage": "Harden"
+    },
+    "D3-CCSA": {
+      "label": "Credential Compromise Scope Analysis",
+      "stage": "Detect"
+    },
+    "D3-CDP": {
+      "label": "Change Default Password",
+      "stage": "Harden"
+    },
+    "D3-CE": {
+      "label": "Credential Eviction",
+      "stage": "Evict"
+    },
+    "D3-CERO": {
+      "label": "Certificate Rotation",
+      "stage": "Harden"
+    },
+    "D3-CF": {
+      "label": "Content Filtering",
+      "stage": "Isolate"
+    },
+    "D3-CFC": {
+      "label": "Content Format Conversion",
+      "stage": "Isolate"
+    },
+    "D3-CFI": {
+      "label": "Control Flow Integrity",
+      "stage": "Harden"
+    },
+    "D3-CH": {
+      "label": "Credential Hardening",
+      "stage": "Harden"
+    },
+    "D3-CHN": {
+      "label": "Connected Honeynet",
+      "stage": "Deceive"
+    },
+    "D3-CI": {
+      "label": "Configuration Inventory",
+      "stage": "Model"
+    },
+    "D3-CIA": {
+      "label": "Container Image Analysis",
+      "stage": "Model"
+    },
+    "D3-CM": {
+      "label": "Content Modification",
+      "stage": "Isolate"
+    },
+    "D3-CNE": {
+      "label": "Content Excision",
+      "stage": "Isolate"
+    },
+    "D3-CNR": {
+      "label": "Content Rebuild",
+      "stage": "Isolate"
+    },
+    "D3-CNS": {
+      "label": "Content Substitution",
+      "stage": "Isolate"
+    },
+    "D3-CP": {
+      "label": "Certificate Pinning",
+      "stage": "Harden"
+    },
+    "D3-CQ": {
+      "label": "Content Quarantine",
+      "stage": "Isolate"
+    },
+    "D3-CR": {
+      "label": "Credential Revocation",
+      "stage": "Evict"
+    },
+    "D3-CRO": {
+      "label": "Credential Rotation",
+      "stage": "Harden"
+    },
+    "D3-CS": {
+      "label": "Credential Scrubbing",
+      "stage": "Harden"
+    },
+    "D3-CSPP": {
+      "label": "Client-server Payload Profiling",
+      "stage": "Detect"
+    },
+    "D3-CTS": {
+      "label": "Credential Transmission Scoping",
+      "stage": "Isolate"
+    },
+    "D3-CV": {
+      "label": "Content Validation",
+      "stage": "Isolate"
+    },
+    "D3-DA": {
+      "label": "Dynamic Analysis",
+      "stage": "Detect"
+    },
+    "D3-DAM": {
+      "label": "Domain Account Monitoring",
+      "stage": "Detect"
+    },
+    "D3-DCE": {
+      "label": "Dead Code Elimination",
+      "stage": "Harden"
+    },
+    "D3-DE": {
+      "label": "Decoy Environment",
+      "stage": "Deceive"
+    },
+    "D3-DEM": {
+      "label": "Data Exchange Mapping",
+      "stage": "Model"
+    },
+    "D3-DENCR": {
+      "label": "Disk Encryption",
+      "stage": "Harden"
+    },
+    "D3-DF": {
+      "label": "Decoy File",
+      "stage": "Deceive"
+    },
+    "D3-DI": {
+      "label": "Data Inventory",
+      "stage": "Model"
+    },
+    "D3-DKE": {
+      "label": "Disk Erasure",
+      "stage": "Evict"
+    },
+    "D3-DKF": {
+      "label": "Disk Formatting",
+      "stage": "Evict"
+    },
+    "D3-DKP": {
+      "label": "Disk Partitioning",
+      "stage": "Evict"
+    },
+    "D3-DLIC": {
+      "label": "Driver Load Integrity Checking",
+      "stage": "Harden"
+    },
+    "D3-DLV": {
+      "label": "Domain Logic Validation",
+      "stage": "Harden"
+    },
+    "D3-DNL": {
+      "label": "Directional Network Link",
+      "stage": "Isolate"
+    },
+    "D3-DNR": {
+      "label": "Decoy Network Resource",
+      "stage": "Deceive"
+    },
+    "D3-DNRA": {
+      "label": "Domain Name Reputation Analysis",
+      "stage": "Detect"
+    },
+    "D3-DNSAL": {
+      "label": "DNS Allowlisting",
+      "stage": "Isolate"
+    },
+    "D3-DNSCE": {
+      "label": "DNS Cache Eviction",
+      "stage": "Evict"
+    },
+    "D3-DNSDL": {
+      "label": "DNS Denylisting",
+      "stage": "Isolate"
+    },
+    "D3-DNSTA": {
+      "label": "DNS Traffic Analysis",
+      "stage": "Detect"
+    },
+    "D3-DO": {
+      "label": "Decoy Object",
+      "stage": "Deceive"
+    },
+    "D3-DP": {
+      "label": "Decoy Persona",
+      "stage": "Deceive"
+    },
+    "D3-DPLM": {
+      "label": "Direct Physical Link Mapping",
+      "stage": "Model"
+    },
+    "D3-DPR": {
+      "label": "Decoy Public Release",
+      "stage": "Deceive"
+    },
+    "D3-DQSA": {
+      "label": "Database Query String Analysis",
+      "stage": "Detect"
+    },
+    "D3-DRA": {
+      "label": "Disable Remote Access",
+      "stage": "Harden"
+    },
+    "D3-DRT": {
+      "label": "Domain Registration Takedown",
+      "stage": "Evict"
+    },
+    "D3-DST": {
+      "label": "Decoy Session Token",
+      "stage": "Deceive"
+    },
+    "D3-DTP": {
+      "label": "Domain Trust Policy",
+      "stage": "Isolate"
+    },
+    "D3-DUC": {
+      "label": "Decoy User Credential",
+      "stage": "Deceive"
+    },
+    "D3-EAL": {
+      "label": "Executable Allowlisting",
+      "stage": "Isolate"
+    },
+    "D3-EBWSAM": {
+      "label": "Endpoint-based Web Server Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-EDL": {
+      "label": "Executable Denylisting",
+      "stage": "Isolate"
+    },
+    "D3-EF": {
+      "label": "Email Filtering",
+      "stage": "Isolate"
+    },
+    "D3-EFA": {
+      "label": "Emulated File Analysis",
+      "stage": "Detect"
+    },
+    "D3-EHB": {
+      "label": "Endpoint Health Beacon",
+      "stage": "Detect"
+    },
+    "D3-EHPV": {
+      "label": "Exception Handler Pointer Validation",
+      "stage": "Harden"
+    },
+    "D3-EI": {
+      "label": "Execution Isolation",
+      "stage": "Isolate"
+    },
+    "D3-ELM": {
+      "label": "Electronic Lock Monitoring",
+      "stage": "Detect"
+    },
+    "D3-EMH": {
+      "label": "Electromagnetic Radiation Hardening",
+      "stage": "Harden"
+    },
+    "D3-EPL": {
+      "label": "Physical Locking",
+      "stage": "Isolate"
+    },
+    "D3-ER": {
+      "label": "Email Removal",
+      "stage": "Evict"
+    },
+    "D3-ET": {
+      "label": "Encrypted Tunnels",
+      "stage": "Isolate"
+    },
+    "D3-FA": {
+      "label": "File Analysis",
+      "stage": "Detect"
+    },
+    "D3-FAPA": {
+      "label": "File Access Pattern Analysis",
+      "stage": "Detect"
+    },
+    "D3-FBA": {
+      "label": "Firmware Behavior Analysis",
+      "stage": "Detect"
+    },
+    "D3-FC": {
+      "label": "File Carving",
+      "stage": "Detect"
+    },
+    "D3-FCA": {
+      "label": "File Creation Analysis",
+      "stage": "Detect"
+    },
+    "D3-FCDC": {
+      "label": "File Content Decompression Checking",
+      "stage": "Isolate"
+    },
+    "D3-FCOA": {
+      "label": "File Content Analysis",
+      "stage": "Detect"
+    },
+    "D3-FCR": {
+      "label": "File Content Rules",
+      "stage": "Detect"
+    },
+    "D3-FE": {
+      "label": "File Encryption",
+      "stage": "Harden"
+    },
+    "D3-FEMC": {
+      "label": "Firmware Embedded Monitoring Code",
+      "stage": "Detect"
+    },
+    "D3-FEV": {
+      "label": "File Eviction",
+      "stage": "Evict"
+    },
+    "D3-FFV": {
+      "label": "File Format Verification",
+      "stage": "Isolate"
+    },
+    "D3-FH": {
+      "label": "File Hashing",
+      "stage": "Detect"
+    },
+    "D3-FHRA": {
+      "label": "File Hash Reputation Analysis",
+      "stage": "Detect"
+    },
+    "D3-FIM": {
+      "label": "File Integrity Monitoring",
+      "stage": "Detect"
+    },
+    "D3-FISV": {
+      "label": "File Internal Structure Verification",
+      "stage": "Isolate"
+    },
+    "D3-FMBV": {
+      "label": "File Magic Byte Verification",
+      "stage": "Isolate"
+    },
+    "D3-FMCV": {
+      "label": "File Metadata Consistency Validation",
+      "stage": "Isolate"
+    },
+    "D3-FMVV": {
+      "label": "File Metadata Value Verification",
+      "stage": "Isolate"
+    },
+    "D3-FRDDL": {
+      "label": "Forward Resolution Domain Denylisting",
+      "stage": "Isolate"
+    },
+    "D3-FRIDL": {
+      "label": "Forward Resolution IP Denylisting",
+      "stage": "Isolate"
+    },
+    "D3-FV": {
+      "label": "Firmware Verification",
+      "stage": "Detect"
+    },
+    "D3-HBPI": {
+      "label": "Hardware-based Process Isolation",
+      "stage": "Isolate"
+    },
+    "D3-HBWP": {
+      "label": "Hardware-based Write Protection",
+      "stage": "Harden"
+    },
+    "D3-HCI": {
+      "label": "Hardware Component Inventory",
+      "stage": "Model"
+    },
+    "D3-HD": {
+      "label": "Homoglyph Detection",
+      "stage": "Detect"
+    },
+    "D3-HDDL": {
+      "label": "Hierarchical Domain Denylisting",
+      "stage": "Isolate"
+    },
+    "D3-HDL": {
+      "label": "Homoglyph Denylisting",
+      "stage": "Isolate"
+    },
+    "D3-HR": {
+      "label": "Host Reboot",
+      "stage": "Evict"
+    },
+    "D3-HS": {
+      "label": "Host Shutdown",
+      "stage": "Evict"
+    },
+    "D3-IAA": {
+      "label": "Identifier Activity Analysis",
+      "stage": "Detect"
+    },
+    "D3-IBCA": {
+      "label": "Indirect Branch Call Analysis",
+      "stage": "Detect"
+    },
+    "D3-ID": {
+      "label": "Identifier Analysis",
+      "stage": "Detect"
+    },
+    "D3-IDA": {
+      "label": "Input Device Analysis",
+      "stage": "Detect"
+    },
+    "D3-IHN": {
+      "label": "Integrated Honeynet",
+      "stage": "Deceive"
+    },
+    "D3-IOPR": {
+      "label": "IO Port Restriction",
+      "stage": "Isolate"
+    },
+    "D3-IPCTA": {
+      "label": "IPC Traffic Analysis",
+      "stage": "Detect"
+    },
+    "D3-IPRA": {
+      "label": "IP Reputation Analysis",
+      "stage": "Detect"
+    },
+    "D3-IRA": {
+      "label": "Identifier Reputation Analysis",
+      "stage": "Detect"
+    },
+    "D3-IRV": {
+      "label": "Integer Range Validation",
+      "stage": "Harden"
+    },
+    "D3-ISVA": {
+      "label": "Inbound Session Volume Analysis",
+      "stage": "Detect"
+    },
+    "D3-ITF": {
+      "label": "Inbound Traffic Filtering",
+      "stage": "Isolate"
+    },
+    "D3-JFAPA": {
+      "label": "Job Function Access Pattern Analysis",
+      "stage": "Detect"
+    },
+    "D3-KBPI": {
+      "label": "Kernel-based Process Isolation",
+      "stage": "Isolate"
+    },
+    "D3-LAM": {
+      "label": "Local Account Monitoring",
+      "stage": "Detect"
+    },
+    "D3-LAMED": {
+      "label": "LAN Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-LFAM": {
+      "label": "Local File Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-LFP": {
+      "label": "Local File Permissions",
+      "stage": "Isolate"
+    },
+    "D3-LLM": {
+      "label": "Logical Link Mapping",
+      "stage": "Model"
+    },
+    "D3-MA": {
+      "label": "Message Analysis",
+      "stage": "Detect"
+    },
+    "D3-MAN": {
+      "label": "Message Authentication",
+      "stage": "Harden"
+    },
+    "D3-MBSV": {
+      "label": "Memory Block Start Validation",
+      "stage": "Harden"
+    },
+    "D3-MBT": {
+      "label": "Memory Boundary Tracking",
+      "stage": "Detect"
+    },
+    "D3-MENCR": {
+      "label": "Message Encryption",
+      "stage": "Harden"
+    },
+    "D3-MFA": {
+      "label": "Multi-factor Authentication",
+      "stage": "Harden"
+    },
+    "D3-MH": {
+      "label": "Message Hardening",
+      "stage": "Harden"
+    },
+    "D3-MSM": {
+      "label": "Motion Sensor Monitoring",
+      "stage": "Detect"
+    },
+    "D3-NAM": {
+      "label": "Network Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-NI": {
+      "label": "Network Isolation",
+      "stage": "Isolate"
+    },
+    "D3-NM": {
+      "label": "Network Mapping",
+      "stage": "Model"
+    },
+    "D3-NNI": {
+      "label": "Network Node Inventory",
+      "stage": "Model"
+    },
+    "D3-NPC": {
+      "label": "Null Pointer Checking",
+      "stage": "Harden"
+    },
+    "D3-NRAM": {
+      "label": "Network Resource Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-NTA": {
+      "label": "Network Traffic Analysis",
+      "stage": "Detect"
+    },
+    "D3-NTCD": {
+      "label": "Network Traffic Community Deviation",
+      "stage": "Detect"
+    },
+    "D3-NTF": {
+      "label": "Network Traffic Filtering",
+      "stage": "Isolate"
+    },
+    "D3-NTPM": {
+      "label": "Network Traffic Policy Mapping",
+      "stage": "Model"
+    },
+    "D3-NTSA": {
+      "label": "Network Traffic Signature Analysis",
+      "stage": "Detect"
+    },
+    "D3-NVA": {
+      "label": "Network Vulnerability Assessment",
+      "stage": "Model"
+    },
+    "D3-OAM": {
+      "label": "Operational Activity Mapping",
+      "stage": "Model"
+    },
+    "D3-ODM": {
+      "label": "Operational Dependency Mapping",
+      "stage": "Model"
+    },
+    "D3-OE": {
+      "label": "Object Eviction",
+      "stage": "Evict"
+    },
+    "D3-OLV": {
+      "label": "Operational Logic Validation",
+      "stage": "Harden"
+    },
+    "D3-OM": {
+      "label": "Organization Mapping",
+      "stage": "Model"
+    },
+    "D3-OMM": {
+      "label": "Operating Mode Monitoring",
+      "stage": "Detect"
+    },
+    "D3-OPM": {
+      "label": "Operational Process Monitoring",
+      "stage": "Detect"
+    },
+    "D3-OPR": {
+      "label": "Operating Mode Restriction",
+      "stage": "Isolate"
+    },
+    "D3-ORA": {
+      "label": "Operational Risk Assessment",
+      "stage": "Model"
+    },
+    "D3-OSM": {
+      "label": "Operating System Monitoring",
+      "stage": "Detect"
+    },
+    "D3-OTF": {
+      "label": "Outbound Traffic Filtering",
+      "stage": "Isolate"
+    },
+    "D3-OTP": {
+      "label": "One-time Password",
+      "stage": "Harden"
+    },
+    "D3-OVAR": {
+      "label": "OT Variable Access Restriction",
+      "stage": "Isolate"
+    },
+    "D3-PA": {
+      "label": "Process Analysis",
+      "stage": "Detect"
+    },
+    "D3-PAM": {
+      "label": "Physical Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-PAN": {
+      "label": "Pointer Authentication",
+      "stage": "Harden"
+    },
+    "D3-PBWSAM": {
+      "label": "Proxy-based Web Server Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-PCA": {
+      "label": "Passive Certificate Analysis",
+      "stage": "Detect"
+    },
+    "D3-PCSV": {
+      "label": "Process Code Segment Verification",
+      "stage": "Detect"
+    },
+    "D3-PE": {
+      "label": "Process Eviction",
+      "stage": "Evict"
+    },
+    "D3-PEH": {
+      "label": "Physical Enclosure Hardening",
+      "stage": "Harden"
+    },
+    "D3-PFV": {
+      "label": "Peripheral Firmware Verification",
+      "stage": "Detect"
+    },
+    "D3-PH": {
+      "label": "Platform Hardening",
+      "stage": "Harden"
+    },
+    "D3-PHAM": {
+      "label": "Physical Access Monitoring",
+      "stage": "Detect"
+    },
+    "D3-PHDURA": {
+      "label": "Per Host Download-Upload Ratio Analysis",
+      "stage": "Detect"
+    },
+    "D3-PLA": {
+      "label": "Process Lineage Analysis",
+      "stage": "Detect"
+    },
+    "D3-PLLM": {
+      "label": "Passive Logical Link Mapping",
+      "stage": "Model"
+    },
+    "D3-PLM": {
+      "label": "Physical Link Mapping",
+      "stage": "Model"
+    },
+    "D3-PM": {
+      "label": "Platform Monitoring",
+      "stage": "Detect"
+    },
+    "D3-PMAD": {
+      "label": "Protocol Metadata Anomaly Detection",
+      "stage": "Detect"
+    },
+    "D3-PR": {
+      "label": "Password Rotation",
+      "stage": "Harden"
+    },
+    "D3-PS": {
+      "label": "Process Suspension",
+      "stage": "Evict"
+    },
+    "D3-PSA": {
+      "label": "Process Spawn Analysis",
+      "stage": "Detect"
+    },
+    "D3-PSEP": {
+      "label": "Process Segment Execution Prevention",
+      "stage": "Harden"
+    },
+    "D3-PSM": {
+      "label": "Proximity Sensor Monitoring",
+      "stage": "Detect"
+    },
+    "D3-PSMD": {
+      "label": "Process Self-Modification Detection",
+      "stage": "Detect"
+    },
+    "D3-PT": {
+      "label": "Process Termination",
+      "stage": "Evict"
+    },
+    "D3-PUM": {
+      "label": "Platform Uptime Monitoring",
+      "stage": "Detect"
+    },
+    "D3-PV": {
+      "label": "Pointer Validation",
+      "stage": "Harden"
+    },
+    "D3-PWA": {
+      "label": "Password Authentication",
+      "stage": "Harden"
+    },
+    "D3-RA": {
+      "label": "Restore Access",
+      "stage": "Restore"
+    },
+    "D3-RAM": {
+      "label": "Routing Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-RAPA": {
+      "label": "Resource Access Pattern Analysis",
+      "stage": "Detect"
+    },
+    "D3-RC": {
+      "label": "Restore Configuration",
+      "stage": "Restore"
+    },
+    "D3-RD": {
+      "label": "Restore Database",
+      "stage": "Restore"
+    },
+    "D3-RDI": {
+      "label": "Restore Disk Image",
+      "stage": "Restore"
+    },
+    "D3-RE": {
+      "label": "Restore Email",
+      "stage": "Restore"
+    },
+    "D3-RF": {
+      "label": "Restore File",
+      "stage": "Restore"
+    },
+    "D3-RFAM": {
+      "label": "Remote File Access Mediation",
+      "stage": "Isolate"
+    },
+    "D3-RFS": {
+      "label": "RF Shielding",
+      "stage": "Harden"
+    },
+    "D3-RFUM": {
+      "label": "Remote Firmware Update Monitoring",
+      "stage": "Detect"
+    },
+    "D3-RH": {
+      "label": "Radiation Hardening",
+      "stage": "Harden"
+    },
+    "D3-RIC": {
+      "label": "Reissue Credential",
+      "stage": "Restore"
+    },
+    "D3-RKD": {
+      "label": "Registry Key Deletion",
+      "stage": "Evict"
+    },
+    "D3-RN": {
+      "label": "Reference Nullification",
+      "stage": "Harden"
+    },
+    "D3-RNA": {
+      "label": "Restore Network Access",
+      "stage": "Restore"
+    },
+    "D3-RO": {
+      "label": "Restore Object",
+      "stage": "Restore"
+    },
+    "D3-RPA": {
+      "label": "Relay Pattern Analysis",
+      "stage": "Detect"
+    },
+    "D3-RRID": {
+      "label": "Reverse Resolution IP Denylisting",
+      "stage": "Isolate"
+    },
+    "D3-RS": {
+      "label": "Restore Software",
+      "stage": "Restore"
+    },
+    "D3-RTA": {
+      "label": "RPC Traffic Analysis",
+      "stage": "Detect"
+    },
+    "D3-RTSD": {
+      "label": "Remote Terminal Session Detection",
+      "stage": "Detect"
+    },
+    "D3-RUAA": {
+      "label": "Restore User Account Access",
+      "stage": "Restore"
+    },
+    "D3-SAOR": {
+      "label": "Segment Address Offset Randomization",
+      "stage": "Harden"
+    },
+    "D3-SBV": {
+      "label": "Service Binary Verification",
+      "stage": "Detect"
+    },
+    "D3-SCA": {
+      "label": "System Call Analysis",
+      "stage": "Detect"
+    },
+    "D3-SCF": {
+      "label": "System Call Filtering",
+      "stage": "Isolate"
+    },
+    "D3-SCH": {
+      "label": "Source Code Hardening",
+      "stage": "Harden"
+    },
+    "D3-SCP": {
+      "label": "System Configuration Permissions",
+      "stage": "Harden"
+    },
+    "D3-SDA": {
+      "label": "Session Duration Analysis",
+      "stage": "Detect"
+    },
+    "D3-SDM": {
+      "label": "System Daemon Monitoring",
+      "stage": "Detect"
+    },
+    "D3-SEA": {
+      "label": "Script Execution Analysis",
+      "stage": "Detect"
+    },
+    "D3-SFA": {
+      "label": "System File Analysis",
+      "stage": "Detect"
+    },
+    "D3-SFCV": {
+      "label": "Stack Frame Canary Validation",
+      "stage": "Harden"
+    },
+    "D3-SFV": {
+      "label": "System Firmware Verification",
+      "stage": "Detect"
+    },
+    "D3-SHN": {
+      "label": "Standalone Honeynet",
+      "stage": "Deceive"
+    },
+    "D3-SICA": {
+      "label": "System Init Config Analysis",
+      "stage": "Detect"
+    },
+    "D3-SJA": {
+      "label": "Scheduled Job Analysis",
+      "stage": "Detect"
+    },
+    "D3-SMRA": {
+      "label": "Sender MTA Reputation Analysis",
+      "stage": "Detect"
+    },
+    "D3-SPP": {
+      "label": "Strong Password Policy",
+      "stage": "Harden"
+    },
+    "D3-SRA": {
+      "label": "Sender Reputation Analysis",
+      "stage": "Detect"
+    },
+    "D3-SSC": {
+      "label": "Shadow Stack Comparisons",
+      "stage": "Detect"
+    },
+    "D3-ST": {
+      "label": "Session Termination",
+      "stage": "Evict"
+    },
+    "D3-SU": {
+      "label": "Software Update",
+      "stage": "Harden"
+    },
+    "D3-SVCDM": {
+      "label": "Service Dependency Mapping",
+      "stage": "Model"
+    },
+    "D3-SWI": {
+      "label": "Software Inventory",
+      "stage": "Model"
+    },
+    "D3-SYSDM": {
+      "label": "System Dependency Mapping",
+      "stage": "Model"
+    },
+    "D3-SYSM": {
+      "label": "System Mapping",
+      "stage": "Model"
+    },
+    "D3-SYSVA": {
+      "label": "System Vulnerability Assessment",
+      "stage": "Model"
+    },
+    "D3-TAAN": {
+      "label": "Transfer Agent Authentication",
+      "stage": "Harden"
+    },
+    "D3-TB": {
+      "label": "Token Binding",
+      "stage": "Harden"
+    },
+    "D3-TBA": {
+      "label": "Token-based Authentication",
+      "stage": "Harden"
+    },
+    "D3-TBI": {
+      "label": "TPM Boot Integrity",
+      "stage": "Harden"
+    },
+    "D3-TL": {
+      "label": "Trusted Library",
+      "stage": "Harden"
+    },
+    "D3-UA": {
+      "label": "URL Analysis",
+      "stage": "Detect"
+    },
+    "D3-UAP": {
+      "label": "User Account Permissions",
+      "stage": "Isolate"
+    },
+    "D3-UBA": {
+      "label": "User Behavior Analysis",
+      "stage": "Detect"
+    },
+    "D3-UDTA": {
+      "label": "User Data Transfer Analysis",
+      "stage": "Detect"
+    },
+    "D3-UGLPA": {
+      "label": "User Geolocation Logon Pattern Analysis",
+      "stage": "Detect"
+    },
+    "D3-UGPH": {
+      "label": "User Group Permissions",
+      "stage": "Isolate"
+    },
+    "D3-ULA": {
+      "label": "Unlock Account",
+      "stage": "Restore"
+    },
+    "D3-URA": {
+      "label": "URL Reputation Analysis",
+      "stage": "Detect"
+    },
+    "D3-USICA": {
+      "label": "User Session Init Config Analysis",
+      "stage": "Detect"
+    },
+    "D3-VI": {
+      "label": "Variable Initialization",
+      "stage": "Harden"
+    },
+    "D3-VS": {
+      "label": "Video Surveillance",
+      "stage": "Detect"
+    },
+    "D3-VTV": {
+      "label": "Variable Type Validation",
+      "stage": "Harden"
+    },
+    "D3-WSAA": {
+      "label": "Web Session Activity Analysis",
+      "stage": "Detect"
+    },
+    "D3-WSAM": {
+      "label": "Web Session Access Mediation",
+      "stage": "Isolate"
+    }
+  }
+}
