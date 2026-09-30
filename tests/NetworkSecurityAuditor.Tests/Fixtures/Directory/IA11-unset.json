@@ -1,7 +1,4 @@
 {
-  "entries": {
-    "(domain)": {}
-  },
   "searches": [
     {
       "base": null,
@@ -11,7 +8,7 @@
           "$path": "LDAP://CN=krbtgt,CN=Users,DC=corp,DC=example",
           "sAMAccountName": "krbtgt",
           "pwdLastSet": {
-            "$fileTimeDaysAgo": 400
+            "$fileTimeDaysAgo": 30
           }
         }
       ]
@@ -24,6 +21,11 @@
           "$path": "LDAP://CN=DC01,OU=Domain Controllers,DC=corp,DC=example",
           "cn": "DC01",
           "dNSHostName": "dc01.corp.example"
+        },
+        {
+          "$path": "LDAP://CN=DC02,OU=Domain Controllers,DC=corp,DC=example",
+          "cn": "DC02",
+          "dNSHostName": "dc02.corp.example"
         }
       ]
     },
@@ -34,40 +36,51 @@
         {
           "$path": "LDAP://CN=svc_sql,OU=Service Accounts,DC=corp,DC=example",
           "sAMAccountName": "svc_sql",
-          "distinguishedName": "CN=svc_sql,OU=Service Accounts,DC=corp,DC=example",
           "userAccountControl": 66048,
           "msDS-SupportedEncryptionTypes": 24
         },
         {
-          "$path": "LDAP://CN=svc_backup,OU=Service Accounts,DC=corp,DC=example",
-          "sAMAccountName": "svc_backup",
-          "distinguishedName": "CN=svc_backup,OU=Service Accounts,DC=corp,DC=example",
-          "userAccountControl": 66048,
-          "msDS-SupportedEncryptionTypes": 4
-        },
-        {
-          "$path": "LDAP://CN=svc_legacy,OU=Service Accounts,DC=corp,DC=example",
-          "sAMAccountName": "svc_legacy",
-          "distinguishedName": "CN=svc_legacy,OU=Service Accounts,DC=corp,DC=example",
-          "userAccountControl": 2163200
-        },
-        {
-          "$path": "LDAP://CN=svc_print,OU=Service Accounts,DC=corp,DC=example",
-          "sAMAccountName": "svc_print",
-          "distinguishedName": "CN=svc_print,OU=Service Accounts,DC=corp,DC=example",
-          "userAccountControl": 512
+          "$path": "LDAP://CN=svc_app,OU=Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "svc_app",
+          "userAccountControl": 66048
         }
       ]
     },
     {
       "base": null,
       "filter": "(&(objectCategory=computer)(servicePrincipalName=*)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))",
-      "results": []
+      "results": [
+        {
+          "$path": "LDAP://CN=DC01,OU=Domain Controllers,DC=corp,DC=example",
+          "sAMAccountName": "DC01$",
+          "userAccountControl": 532480,
+          "msDS-SupportedEncryptionTypes": 28
+        },
+        {
+          "$path": "LDAP://CN=NAS01,OU=Servers,DC=corp,DC=example",
+          "sAMAccountName": "NAS01$",
+          "userAccountControl": 4096
+        }
+      ]
     },
     {
       "base": null,
       "filter": "(&(|(objectClass=msDS-GroupManagedServiceAccount)(objectClass=msDS-ManagedServiceAccount))(servicePrincipalName=*)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))",
-      "results": []
+      "results": [
+        {
+          "$path": "LDAP://CN=gmsa-web,CN=Managed Service Accounts,DC=corp,DC=example",
+          "sAMAccountName": "gmsa-web$",
+          "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "user",
+            "computer",
+            "msDS-GroupManagedServiceAccount"
+          ],
+          "userAccountControl": 4096
+        }
+      ]
     }
   ]
 }

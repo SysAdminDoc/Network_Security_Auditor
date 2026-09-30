@@ -3791,9 +3791,231 @@ $script:AutoChecks = @{
                 if (($enc -band 0x4) -ne 0) { [void]$parts.Add('RC4-HMAC') }
                 if (($enc -band 0x8) -ne 0) { [void]$parts.Add('AES128') }
                 if (($enc -band 0x10) -ne 0) { [void]$parts.Add('AES256') }
-                if (($enc -band 0x20) -ne 0) { [void]$parts.Add('FAST/compound identity/claims') }
-                if ($parts.Count -eq 0) { [void]$parts.Add('No recognized bits') }
+                if (($enc -band 0x20) -ne 0) { [void]$parts.Add('AES-SK (AES session keys)') }
+                if (($enc -band 0x40) -ne 0) { [void]$parts.Add('AES128-SHA256') }
+                if (($enc -band 0x80) -ne 0) { [void]$parts.Add('AES256-SHA384') }
+                if ($parts.Count -eq 0) { [void]$parts.Add('No recognized cipher bits') }
                 return ('0x{0:X} ({1})' -f $enc, ($parts -join ', '))
+            }
+            # Ticket cipher class of an account ([MS-KILE] 2.2.7). 0, or only flag bits such as 0x20, means the
+            # KDC default applies, so it is treated like unset.
+            function Get-KerberosEncClass {
+                param([object]$Value, [bool]$UseDesKeyOnly = $false)
+                $enc = 0
+                if (-not (Test-KerberosEncUnset $Value)) { $enc = [int]$Value }
+                if ($UseDesKeyOnly -or (($enc -band 0x3) -ne 0)) { return 'DES' }
+                if (($enc -band 0x1F) -eq 0) { return 'Unset' }
+                if (($enc -band 0x18) -ne 0) { return 'AES' }
+                return 'RC4Only'
+            }
+            # What a DC issues for accounts without msDS-SupportedEncryptionTypes (CVE-2026-20833). An explicit
+            # DefaultDomainSupportedEncTypes always applies. Otherwise RC4DefaultDisablementPhase 2 means 0x18, and
+            # 0 or 1 keeps 0x27 until the July 2026 update ignores it. With neither set the answer depends on the
+            # update level (0x18 from April 2026), which is not read, so 0x27 is assumed.
+            function Resolve-KerberosDcDefault {
+                param([string]$HostName, [bool]$Readable = $true, [object]$DefaultEncTypes = $null, [object]$Phase = $null, [string]$ErrorText = '')
+                $defaultValue = $null
+                if ($null -ne $DefaultEncTypes -and "$DefaultEncTypes" -ne '') { $defaultValue = [int]$DefaultEncTypes }
+                $phaseValue = $null
+                if ($null -ne $Phase -and "$Phase" -ne '') { $phaseValue = [int]$Phase }
+                $explicit = ($null -ne $defaultValue -and $defaultValue -gt 0)
+                if (-not $Readable) {
+                    $effective = 0x27; $assumed = $true; $basis = "Registry not readable ($ErrorText); assumed 0x27"
+                } elseif ($explicit) {
+                    $effective = $defaultValue; $assumed = $false; $basis = 'DefaultDomainSupportedEncTypes is set explicitly and always applies'
+                } elseif ($phaseValue -eq 2) {
+                    $effective = 0x18; $assumed = $false; $basis = 'RC4DefaultDisablementPhase=2 (enforcement)'
+                } elseif ($phaseValue -eq 0 -or $phaseValue -eq 1) {
+                    $effective = 0x27; $assumed = $false; $basis = "RC4DefaultDisablementPhase=$phaseValue keeps RC4 in the default until the July 2026 update, which ignores the value"
+                } else {
+                    $effective = 0x27; $assumed = $true; $basis = "Neither value is set: 0x18 with the April 2026 or later update, 0x27 before it; assumed 0x27 because the update level isn't read"
+                }
+                return [pscustomobject]@{
+                    Host = $HostName; Readable = $Readable; DefaultEncTypes = $defaultValue; Phase = $phaseValue
+                    Effective = [int]$effective; Assumed = $assumed; Explicit = ($Readable -and $explicit); Basis = $basis
+                }
+            }
+            function Get-KdcEventMeaning {
+                param([int]$Id)
+                switch ($Id) {
+                    201 { return 'RC4 issued for a service without msDS-SupportedEncryptionTypes because the client offers only legacy ciphers; blocked at enforcement' }
+                    202 { return 'RC4 issued for a service without msDS-SupportedEncryptionTypes because the service account has only legacy keys (reset its password); blocked at enforcement' }
+                    203 { return 'blocked: service without msDS-SupportedEncryptionTypes and a client that offers only legacy ciphers' }
+                    204 { return 'blocked: service without msDS-SupportedEncryptionTypes whose account has only legacy keys (reset its password)' }
+                    205 { return 'DefaultDomainSupportedEncTypes explicitly enables insecure ciphers' }
+                    206 { return "service set to AES-SHA1 only but the client doesn't offer AES-SHA1; blocked at enforcement" }
+                    207 { return 'service set to AES-SHA1 only but its account has no AES-SHA1 keys (reset its password); blocked at enforcement' }
+                    208 { return "denied: service set to AES-SHA1 only and the client doesn't offer AES-SHA1" }
+                    209 { return 'denied: service set to AES-SHA1 only and its account has no AES-SHA1 keys (reset its password)' }
+                }
+                return 'not a CVE-2026-20833 KDC event'
+            }
+            # Scores SPN accounts against the DC defaults and summarizes KDC events. Accounts carry Name, Kind
+            # (user, computer, gMSA, sMSA), Enc and UseDes; DC defaults come from Resolve-KerberosDcDefault; event
+            # sets carry Host, Readable, Error, Capped and Events (each with an Id).
+            function Measure-KerberosEncReadiness {
+                param([object[]]$Accounts = @(), [object[]]$DcDefaults = @(), [object[]]$EventSets = @(), [int]$EventDays = 30)
+                $lines = New-Object System.Collections.Generic.List[string]
+                $issues = 0
+                $warnings = 0
+                $Accounts = @($Accounts | Where-Object { $null -ne $_ })
+                $DcDefaults = @($DcDefaults | Where-Object { $null -ne $_ })
+                $EventSets = @($EventSets | Where-Object { $null -ne $_ })
+
+                [void]$lines.Add('DOMAIN CONTROLLER DEFAULT FOR ACCOUNTS WITHOUT msDS-SupportedEncryptionTypes:')
+                if ($DcDefaults.Count -eq 0) {
+                    [void]$lines.Add("  No domain controller was found in the directory. Assumed the pre-enforcement default $(ConvertTo-KerberosEncSummary 0x27), which allows RC4.")
+                }
+                foreach ($dc in $DcDefaults) {
+                    [void]$lines.Add("  $($dc.Host): $(ConvertTo-KerberosEncSummary $dc.Effective). $($dc.Basis).")
+                    if ($dc.Explicit -and (($dc.Effective -band 0x3) -ne 0)) {
+                        $issues++
+                        [void]$lines.Add(("  [DES-DEFAULT] {0} DefaultDomainSupportedEncTypes=0x{1:X} enables DES for every account without msDS-SupportedEncryptionTypes" -f $dc.Host, $dc.Effective))
+                    } elseif ($dc.Explicit -and (($dc.Effective -band 0x18) -eq 0)) {
+                        $issues++
+                        [void]$lines.Add(("  [LEGACY-DEFAULT] {0} DefaultDomainSupportedEncTypes=0x{1:X} has no AES, so accounts without msDS-SupportedEncryptionTypes get RC4 tickets" -f $dc.Host, $dc.Effective))
+                    }
+                }
+                if ($DcDefaults.Count -gt 0 -and @($DcDefaults | Where-Object { $_.Readable }).Count -eq 0) {
+                    [void]$lines.Add("  No domain controller's Kerberos settings could be read, so accounts without msDS-SupportedEncryptionTypes were evaluated against the pre-enforcement default 0x27, which allows RC4.")
+                }
+
+                $groups = @(
+                    @{ Heading = 'SERVICE ACCOUNT SPN ENCRYPTION TYPES'; Kinds = @('user') },
+                    @{ Heading = 'COMPUTER ACCOUNT ENCRYPTION TYPES'; Kinds = @('computer') },
+                    @{ Heading = 'MANAGED SERVICE ACCOUNT (gMSA/sMSA) ENCRYPTION TYPES'; Kinds = @('gMSA','sMSA') }
+                )
+                $classified = @(foreach ($a in $Accounts) {
+                    [pscustomobject]@{ Name = [string]$a.Name; Kind = [string]$a.Kind; Enc = $a.Enc; Class = (Get-KerberosEncClass -Value $a.Enc -UseDesKeyOnly ([bool]$a.UseDes)); UseDes = [bool]$a.UseDes }
+                })
+                foreach ($g in $groups) {
+                    $inGroup = @($classified | Where-Object { $g.Kinds -contains $_.Kind })
+                    [void]$lines.Add("`n$($g.Heading):")
+                    [void]$lines.Add("  Accounts inspected: $($inGroup.Count)")
+                    if ($inGroup.Count -gt 0) {
+                        $counts = foreach ($c in @('AES','RC4Only','DES','Unset')) { "${c}: $(@($inGroup | Where-Object { $_.Class -eq $c }).Count)" }
+                        [void]$lines.Add("  $($counts -join ' | ')")
+                    }
+                }
+
+                $des = @($classified | Where-Object { $_.Class -eq 'DES' })
+                $rc4Only = @($classified | Where-Object { $_.Class -eq 'RC4Only' })
+                $unset = @($classified | Where-Object { $_.Class -eq 'Unset' })
+                $aesWithRc4 = @($classified | Where-Object { $_.Class -eq 'AES' -and (([int]$_.Enc -band 0x4) -ne 0) })
+                if ($des.Count -gt 0 -or $rc4Only.Count -gt 0 -or $unset.Count -gt 0 -or $aesWithRc4.Count -gt 0) { [void]$lines.Add('') }
+                foreach ($a in ($des | Sort-Object Name | Select-Object -First 20)) {
+                    $summary = ConvertTo-KerberosEncSummary $a.Enc
+                    if ($a.UseDes) { $summary = "USE_DES_KEY_ONLY, $summary" }
+                    [void]$lines.Add("  [DES] $($a.Name) [$($a.Kind)] | $summary")
+                }
+                $issues += $des.Count
+                foreach ($a in ($rc4Only | Sort-Object Name | Select-Object -First 20)) {
+                    [void]$lines.Add("  [RC4-ONLY] $($a.Name) [$($a.Kind)] | $(ConvertTo-KerberosEncSummary $a.Enc)")
+                }
+                $issues += $rc4Only.Count
+                if (@($rc4Only | Where-Object { ([int]$_.Enc -band 0x20) -ne 0 }).Count -gt 0) {
+                    [void]$lines.Add('  The 0x20 flag gives AES session keys only; the service ticket is still RC4-encrypted.')
+                }
+                if ($unset.Count -gt 0) {
+                    if ($DcDefaults.Count -eq 0) {
+                        $rc4Text = '0x27 assumed, no DC found'
+                    } else {
+                        $rc4Text = (@($DcDefaults | Where-Object { ($_.Effective -band 0x4) -ne 0 } | ForEach-Object {
+                            $note = if ($_.Assumed) { ', assumed' } else { '' }
+                            ('0x{0:X} on {1}{2}' -f $_.Effective, $_.Host, $note)
+                        }) -join ', ')
+                    }
+                    if ($rc4Text) {
+                        $warnings += $unset.Count
+                        [void]$lines.Add("  [DEFAULT-DEPENDENT] $($unset.Count) account(s) have no msDS-SupportedEncryptionTypes, and a DC default still allows RC4 ($rc4Text). Set AES (0x18) on them, or set DefaultDomainSupportedEncTypes to 0x18 on every DC.")
+                        foreach ($a in ($unset | Sort-Object Name | Select-Object -First 20)) { [void]$lines.Add("    $($a.Name) [$($a.Kind)]") }
+                    } else {
+                        $values = @($DcDefaults | ForEach-Object { $_.Effective } | Sort-Object -Unique)
+                        $defaultText = if ($values.Count -eq 1) { ConvertTo-KerberosEncSummary $values[0] } else { (@($DcDefaults | ForEach-Object { '0x{0:X} on {1}' -f $_.Effective, $_.Host }) -join ', ') }
+                        [void]$lines.Add("  [OK] $($unset.Count) account(s) without msDS-SupportedEncryptionTypes get the DC default $defaultText.")
+                    }
+                }
+                if ($aesWithRc4.Count -gt 0) {
+                    [void]$lines.Add("  [INFO] $($aesWithRc4.Count) AES account(s) also allow RC4, so a client can still ask for an RC4 ticket. Remove RC4 once nothing needs it.")
+                }
+
+                [void]$lines.Add("`nKDC EVENTS 201-209 (System log, Kdcsvc, last $EventDays days):")
+                if ($DcDefaults.Count -eq 0) { [void]$lines.Add('  Not read: no domain controller was found.') }
+                foreach ($set in $EventSets) {
+                    if (-not $set.Readable) {
+                        [void]$lines.Add("  $($set.Host): not readable ($($set.Error))")
+                        continue
+                    }
+                    $found = @($set.Events | Where-Object { $null -ne $_ })
+                    if ($found.Count -eq 0) {
+                        [void]$lines.Add("  $($set.Host): none [OK]")
+                        continue
+                    }
+                    $warnings++
+                    $atLeast = if ($set.Capped) { 'at least ' } else { '' }
+                    $byId = @($found | Group-Object -Property Id | Sort-Object { [int]$_.Name })
+                    [void]$lines.Add("  $($set.Host): $atLeast$($found.Count) event(s): $((@($byId | ForEach-Object { "$($_.Name) x$($_.Count)" })) -join ', ')")
+                    foreach ($grp in $byId) { [void]$lines.Add("    $($grp.Name): $(Get-KdcEventMeaning ([int]$grp.Name))") }
+                }
+
+                return [pscustomobject]@{ Issues = $issues; Warnings = $warnings; Lines = @($lines) }
+            }
+            function Test-KerberosLocalHost {
+                param([string]$HostName)
+                return (($HostName.Split('.')[0]) -eq $env:COMPUTERNAME)
+            }
+            # The provider's own message, without the "Exception calling ..." wrapper, on one line.
+            function Get-KerberosErrorText {
+                param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+                $ex = $ErrorRecord.Exception
+                if ($ex -is [System.Management.Automation.MethodInvocationException] -and $ex.InnerException) { $ex = $ex.InnerException }
+                return (($ex.Message -replace '\s+', ' ').Trim())
+            }
+            function Read-KerberosDcDefault {
+                param([string]$HostName)
+                $hklm = $null
+                try {
+                    if (Test-KerberosLocalHost $HostName) {
+                        $hklm = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Default)
+                    } else {
+                        $hklm = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, $HostName)
+                    }
+                    $defaultEnc = $null
+                    $phase = $null
+                    $kdcKey = $hklm.OpenSubKey('SYSTEM\CurrentControlSet\Services\Kdc')
+                    if ($kdcKey) { $defaultEnc = $kdcKey.GetValue('DefaultDomainSupportedEncTypes'); $kdcKey.Close() }
+                    $policyKey = $hklm.OpenSubKey('SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters')
+                    if ($policyKey) { $phase = $policyKey.GetValue('RC4DefaultDisablementPhase'); $policyKey.Close() }
+                    return (Resolve-KerberosDcDefault -HostName $HostName -DefaultEncTypes $defaultEnc -Phase $phase)
+                } catch {
+                    return (Resolve-KerberosDcDefault -HostName $HostName -Readable $false -ErrorText (Get-KerberosErrorText $_))
+                } finally {
+                    if ($hklm) { $hklm.Close() }
+                }
+            }
+            function Read-KdcEventSet {
+                param([string]$HostName, [int]$Days = 30, [int]$MaxEvents = 200)
+                $filter = @{ LogName='System'; ProviderName='Kdcsvc'; Id=@(201,202,203,204,205,206,207,208,209); StartTime=(Get-Date).AddDays(-$Days) }
+                try {
+                    if (Test-KerberosLocalHost $HostName) {
+                        $found = @(Get-WinEvent -FilterHashtable $filter -MaxEvents $MaxEvents -EA Stop)
+                    } else {
+                        $found = @(Get-WinEvent -ComputerName $HostName -FilterHashtable $filter -MaxEvents $MaxEvents -EA Stop)
+                    }
+                    return [pscustomobject]@{ Host=$HostName; Readable=$true; Error=''; Capped=($found.Count -ge $MaxEvents); Events=$found }
+                } catch {
+                    # Get-WinEvent reports "no events" as an error.
+                    if ("$($_.FullyQualifiedErrorId)" -like 'NoMatchingEventsFound*') {
+                        return [pscustomobject]@{ Host=$HostName; Readable=$true; Error=''; Capped=$false; Events=@() }
+                    }
+                    return [pscustomobject]@{ Host=$HostName; Readable=$false; Error=(Get-KerberosErrorText $_); Capped=$false; Events=@() }
+                }
+            }
+            function ConvertTo-KerberosAccount {
+                param([object]$Object, [string]$Kind)
+                $uac = 0
+                if ($null -ne $Object.userAccountControl) { $uac = [int]$Object.userAccountControl }
+                return [pscustomobject]@{ Name=[string]$Object.sAMAccountName; Kind=$Kind; Enc=$Object.'msDS-SupportedEncryptionTypes'; UseDes=(($uac -band 0x200000) -ne 0) }
             }
 
             $sb = [System.Text.StringBuilder]::new()
@@ -3801,7 +4023,7 @@ $script:AutoChecks = @{
             $warnings = 0
             $domain = Get-ADDomain -EA Stop
             [void]$sb.AppendLine("Domain: $($domain.DNSRoot)")
-            [void]$sb.AppendLine("Kerberos encryption flags: DES=0x1/0x2, RC4=0x4, AES128=0x8, AES256=0x10")
+            [void]$sb.AppendLine("Kerberos encryption flags: DES=0x1/0x2, RC4=0x4, AES128=0x8, AES256=0x10, AES session keys=0x20")
 
             try {
                 $krbtgt = Get-ADUser 'krbtgt' -Properties 'msDS-SupportedEncryptionTypes',PasswordLastSet -EA Stop
@@ -3826,37 +4048,32 @@ $script:AutoChecks = @{
                 [void]$sb.AppendLine("`nKRBTGT ENCRYPTION READINESS: could not query krbtgt account ($($_.Exception.Message))")
             }
 
-            $spnAccounts = @(Get-ADUser -LDAPFilter '(servicePrincipalName=*)' -Properties 'msDS-SupportedEncryptionTypes',PasswordLastSet,PasswordNeverExpires,ServicePrincipalName,Enabled -EA Stop)
-            $legacyUsers = @($spnAccounts | Where-Object { Test-KerberosEncLegacyOnly $_.'msDS-SupportedEncryptionTypes' })
-            $defaultUsers = @($spnAccounts | Where-Object { Test-KerberosEncUnset $_.'msDS-SupportedEncryptionTypes' })
-            $legacyEnabledUsers = @($legacyUsers | Where-Object { $_.Enabled })
-            if ($legacyEnabledUsers.Count -gt 0) { $issues += $legacyEnabledUsers.Count }
-            if ($defaultUsers.Count -gt 0) { $warnings += $defaultUsers.Count }
+            # Every DC's KDC default, then enabled users (krbtgt is reviewed above), computers (DCs included, their
+            # LDAP/CIFS/GC SPNs take tickets too) and gMSA/sMSA accounts that have SPNs.
+            $enabledOnly = '(!(userAccountControl:1.2.840.113556.1.4.803:=2))'
+            $accountProps = @('sAMAccountName','msDS-SupportedEncryptionTypes','userAccountControl')
+            $dcObjects = @(Get-ADObject -LDAPFilter '(&(objectCategory=computer)(|(userAccountControl:1.2.840.113556.1.4.803:=8192)(primaryGroupID=521)))' -Properties dNSHostName,cn -EA Stop)
+            $dcHosts = @($dcObjects | ForEach-Object { if ($_.dNSHostName) { [string]$_.dNSHostName } else { [string]$_.cn } } | Where-Object { $_ } | Sort-Object -Unique)
+            $dcDefaults = @(foreach ($h in $dcHosts) { Read-KerberosDcDefault -HostName $h })
+            $eventSets = @(foreach ($h in $dcHosts) { Read-KdcEventSet -HostName $h })
 
-            [void]$sb.AppendLine("`nSERVICE ACCOUNT SPN ENCRYPTION TYPES:")
-            [void]$sb.AppendLine("  SPN accounts inspected: $($spnAccounts.Count)")
-            [void]$sb.AppendLine("  Legacy-only enabled accounts: $($legacyEnabledUsers.Count)")
-            [void]$sb.AppendLine("  Unset/default-dependent accounts: $($defaultUsers.Count)")
-            foreach ($u in ($legacyEnabledUsers | Sort-Object SamAccountName | Select-Object -First 20)) {
-                $age = if ($u.PasswordLastSet) { ((Get-Date) - $u.PasswordLastSet).Days } else { 'Unknown' }
-                [void]$sb.AppendLine("  [LEGACY-ONLY] $($u.SamAccountName) | $(ConvertTo-KerberosEncSummary $u.'msDS-SupportedEncryptionTypes') | Password age: ${age}d")
+            $accounts = New-Object System.Collections.Generic.List[object]
+            foreach ($o in @(Get-ADObject -LDAPFilter "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*)(!(sAMAccountName=krbtgt))$enabledOnly)" -Properties $accountProps -ResultPageSize 1000 -EA Stop)) {
+                [void]$accounts.Add((ConvertTo-KerberosAccount $o 'user'))
             }
-            foreach ($u in ($defaultUsers | Sort-Object SamAccountName | Select-Object -First 10)) {
-                [void]$sb.AppendLine("  [DEFAULT-DEPENDENT] $($u.SamAccountName) | set AES flags and reset password if the service supports AES")
+            foreach ($o in @(Get-ADObject -LDAPFilter "(&(objectCategory=computer)(servicePrincipalName=*)$enabledOnly)" -Properties $accountProps -ResultPageSize 1000 -EA Stop)) {
+                [void]$accounts.Add((ConvertTo-KerberosAccount $o 'computer'))
+            }
+            foreach ($o in @(Get-ADObject -LDAPFilter "(&(|(objectClass=msDS-GroupManagedServiceAccount)(objectClass=msDS-ManagedServiceAccount))(servicePrincipalName=*)$enabledOnly)" -Properties $accountProps -ResultPageSize 1000 -EA Stop)) {
+                $kind = if ($o.ObjectClass -eq 'msDS-GroupManagedServiceAccount') { 'gMSA' } else { 'sMSA' }
+                [void]$accounts.Add((ConvertTo-KerberosAccount $o $kind))
             }
 
-            $computers = @(Get-ADComputer -Filter * -Properties 'msDS-SupportedEncryptionTypes',OperatingSystem,Enabled -EA SilentlyContinue)
-            $legacyComputers = @($computers | Where-Object { $_.Enabled -and (Test-KerberosEncLegacyOnly $_.'msDS-SupportedEncryptionTypes') })
-            $defaultComputers = @($computers | Where-Object { $_.Enabled -and (Test-KerberosEncUnset $_.'msDS-SupportedEncryptionTypes') })
-            if ($legacyComputers.Count -gt 0) { $issues += $legacyComputers.Count }
-            if ($defaultComputers.Count -gt 0) { $warnings += [math]::Min($defaultComputers.Count, 25) }
-            [void]$sb.AppendLine("`nCOMPUTER ACCOUNT ENCRYPTION TYPES:")
-            [void]$sb.AppendLine("  Computers inspected: $($computers.Count)")
-            [void]$sb.AppendLine("  Legacy-only enabled computers: $($legacyComputers.Count)")
-            [void]$sb.AppendLine("  Unset/default-dependent computers: $($defaultComputers.Count)")
-            foreach ($c in ($legacyComputers | Sort-Object Name | Select-Object -First 20)) {
-                [void]$sb.AppendLine("  [LEGACY-ONLY] $($c.Name) | $(ConvertTo-KerberosEncSummary $c.'msDS-SupportedEncryptionTypes') | $($c.OperatingSystem)")
-            }
+            $readiness = Measure-KerberosEncReadiness -Accounts @($accounts) -DcDefaults $dcDefaults -EventSets $eventSets
+            $issues += $readiness.Issues
+            $warnings += $readiness.Warnings
+            [void]$sb.AppendLine('')
+            foreach ($line in $readiness.Lines) { [void]$sb.AppendLine($line) }
 
             $trusts = @(Get-ADObject -LDAPFilter '(objectClass=trustedDomain)' -SearchBase "CN=System,$($domain.DistinguishedName)" -Properties 'msDS-SupportedEncryptionTypes',flatName,trustPartner -EA SilentlyContinue)
             $legacyTrusts = @($trusts | Where-Object { Test-KerberosEncLegacyOnly $_.'msDS-SupportedEncryptionTypes' })
@@ -3872,49 +4089,8 @@ $script:AutoChecks = @{
                 [void]$sb.AppendLine("  [LEGACY-ONLY] $trustName | $(ConvertTo-KerberosEncSummary $t.'msDS-SupportedEncryptionTypes')")
             }
 
-            try {
-                $os = Get-CimInstance Win32_OperatingSystem -EA Stop
-                if ($os.ProductType -eq 2) {
-                    $eventIds = @(201,202,203,204,205,206,207,208,209)
-                    $since = (Get-Date).AddDays(-30)
-                    $events = @(Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Kdcsvc'; Id=$eventIds; StartTime=$since} -MaxEvents 20 -EA Stop)
-                    if ($events.Count -gt 0) {
-                        $issues += $events.Count
-                        [void]$sb.AppendLine("`nKDC RC4/DES EVENT IDS 201-209 (last 30 days): $($events.Count)+")
-                        foreach ($evt in $events) {
-                            [void]$sb.AppendLine("  Event $($evt.Id) | $($evt.TimeCreated.ToString('yyyy-MM-dd HH:mm')) | $($evt.ProviderName)")
-                        }
-                    } else {
-                        [void]$sb.AppendLine("`nKDC RC4/DES events 201-209 (last 30 days): none found locally [OK]")
-                    }
-                } else {
-                    $warnings++
-                    [void]$sb.AppendLine("`nKDC event review: local host is not a domain controller; review System/Kdcsvc Event IDs 201-209 on DCs")
-                }
-            } catch {
-                $warnings++
-                [void]$sb.AppendLine("`nKDC event review: could not query local System/Kdcsvc Event IDs 201-209 ($($_.Exception.Message))")
-            }
-
-            try {
-                $kerbRegPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters'
-                $kerbReg = Get-ItemProperty -Path $kerbRegPath -EA Stop
-                $defaultEnc = $kerbReg.DefaultDomainSupportedEncTypes
-                $phase = $kerbReg.RC4DefaultDisablementPhase
-                [void]$sb.AppendLine("`nLOCAL KERBEROS POLICY REGISTRY:")
-                [void]$sb.AppendLine("  DefaultDomainSupportedEncTypes: $(ConvertTo-KerberosEncSummary $defaultEnc)")
-                [void]$sb.AppendLine("  RC4DefaultDisablementPhase: $(if($null -ne $phase){$phase}else{'Not configured'})")
-                if ($null -ne $defaultEnc -and (Test-KerberosEncLegacyOnly $defaultEnc)) {
-                    $issues++
-                    [void]$sb.AppendLine("  [LEGACY-ONLY] DefaultDomainSupportedEncTypes permits only DES/RC4 without AES")
-                }
-            } catch {
-                $warnings++
-                [void]$sb.AppendLine("`nLocal Kerberos policy registry: not configured or not readable")
-            }
-
             [void]$sb.AppendLine("`nREMEDIATION SUMMARY:")
-            [void]$sb.AppendLine("  1. Enable AES128/AES256 on affected users, computers, and trusts.")
+            [void]$sb.AppendLine("  1. Enable AES128/AES256 on affected users, computers, managed service accounts, and trusts.")
             [void]$sb.AppendLine("  2. Reset passwords for affected service/computer accounts so AES keys are generated.")
             [void]$sb.AppendLine("  3. Remove DES/RC4 flags after dependent applications are validated.")
             [void]$sb.AppendLine("  4. Review temporary RC4 exceptions and KDC Event IDs 201-209 before enforcement windows.")

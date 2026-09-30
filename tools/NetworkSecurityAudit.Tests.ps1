@@ -2472,6 +2472,169 @@ Describe 'IA12 BadSuccessor helpers (nested check helpers via AST)' {
     }
 }
 
+Describe 'IA11 Kerberos RC4 enforcement (nested check helpers via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in @('Test-KerberosEncUnset','ConvertTo-KerberosEncSummary','Get-KerberosEncClass','Resolve-KerberosDcDefault','Get-KdcEventMeaning','Measure-KerberosEncReadiness')) {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        $script:Ia11Block = Get-Block -Text $script:Text -Start "'IA11' = @\{ Type='AD'" -End "'IA12' = @\{"
+        function New-KerbAccount { param([string]$Name, [string]$Kind = 'user', [object]$Enc = $null, [bool]$UseDes = $false) [pscustomobject]@{ Name = $Name; Kind = $Kind; Enc = $Enc; UseDes = $UseDes } }
+        function New-KerbEventSet { param([string]$HostName, [int[]]$Ids = @(), [bool]$Readable = $true, [string]$ErrorText = '') [pscustomobject]@{ Host = $HostName; Readable = $Readable; Error = $ErrorText; Capped = $false; Events = @($Ids | ForEach-Object { [pscustomobject]@{ Id = $_ } }) } }
+        # The same accounts as the C# IA11-unset and IA11-rc4 fixtures.
+        $script:UnsetAccounts = @(
+            (New-KerbAccount 'svc_sql' 'user' 0x18),
+            (New-KerbAccount 'svc_app' 'user'),
+            (New-KerbAccount 'DC01$' 'computer' 0x1C),
+            (New-KerbAccount 'NAS01$' 'computer'),
+            (New-KerbAccount 'gmsa-web$' 'gMSA')
+        )
+    }
+
+    It 'classifies ticket cipher bits: <Enc> (DES key only <UseDes>) is <Expected>' -ForEach @(
+        @{ Enc = $null; UseDes = $false; Expected = 'Unset' },
+        @{ Enc = 0; UseDes = $false; Expected = 'Unset' },
+        @{ Enc = 0x20; UseDes = $false; Expected = 'Unset' },
+        @{ Enc = 0x4; UseDes = $false; Expected = 'RC4Only' },
+        @{ Enc = 0x24; UseDes = $false; Expected = 'RC4Only' },
+        @{ Enc = 0x18; UseDes = $false; Expected = 'AES' },
+        @{ Enc = 0x1C; UseDes = $false; Expected = 'AES' },
+        @{ Enc = 0x3; UseDes = $false; Expected = 'DES' },
+        @{ Enc = 0x1B; UseDes = $false; Expected = 'DES' },
+        @{ Enc = 0x18; UseDes = $true; Expected = 'DES' }
+    ) {
+        Get-KerberosEncClass -Value $Enc -UseDesKeyOnly $UseDes | Should -Be $Expected
+    }
+
+    It 'resolves the DC default from the explicit value, then the phase, and says when it assumed' -ForEach @(
+        @{ Default = $null; Phase = $null; Effective = 0x27; Assumed = $true },
+        @{ Default = $null; Phase = 0; Effective = 0x27; Assumed = $false },
+        @{ Default = $null; Phase = 1; Effective = 0x27; Assumed = $false },
+        @{ Default = $null; Phase = 2; Effective = 0x18; Assumed = $false },
+        @{ Default = $null; Phase = 7; Effective = 0x27; Assumed = $true },
+        @{ Default = 0x18; Phase = 1; Effective = 0x18; Assumed = $false },
+        @{ Default = 0x24; Phase = 2; Effective = 0x24; Assumed = $false },
+        @{ Default = 0; Phase = 2; Effective = 0x18; Assumed = $false }
+    ) {
+        $resolved = Resolve-KerberosDcDefault -HostName 'dc01' -DefaultEncTypes $Default -Phase $Phase
+        $resolved.Effective | Should -Be $Effective
+        $resolved.Assumed | Should -Be $Assumed
+    }
+
+    It 'assumes 0x27 for an unreadable DC and names the error' {
+        $resolved = Resolve-KerberosDcDefault -HostName 'dc02' -Readable $false -ErrorText 'The network path was not found.'
+        $resolved.Effective | Should -Be 0x27
+        $resolved.Assumed | Should -BeTrue
+        $resolved.Explicit | Should -BeFalse
+        $resolved.Basis | Should -Match 'The network path was not found'
+    }
+
+    It 'passes unset accounts when every DC enforces AES' {
+        $dcs = @((Resolve-KerberosDcDefault -HostName 'dc01' -Phase 2), (Resolve-KerberosDcDefault -HostName 'dc02' -Phase 2))
+        $result = Measure-KerberosEncReadiness -Accounts $script:UnsetAccounts -DcDefaults $dcs -EventSets @((New-KerbEventSet 'dc01'), (New-KerbEventSet 'dc02'))
+        $result.Issues | Should -Be 0
+        $result.Warnings | Should -Be 0
+        ($result.Lines -join "`n") | Should -Match '\[OK\] 3 account\(s\) without msDS-SupportedEncryptionTypes get the DC default 0x18 \(AES128, AES256\)'
+    }
+
+    It 'leaves unset accounts as follow-ups when a DC still allows RC4 by default' {
+        $dcs = @((Resolve-KerberosDcDefault -HostName 'dc01' -Phase 1), (Resolve-KerberosDcDefault -HostName 'dc02' -Phase 2))
+        $result = Measure-KerberosEncReadiness -Accounts $script:UnsetAccounts -DcDefaults $dcs
+        $text = $result.Lines -join "`n"
+        $result.Issues | Should -Be 0
+        $result.Warnings | Should -Be 3
+        $text | Should -Match '\[DEFAULT-DEPENDENT\] 3 account\(s\) have no msDS-SupportedEncryptionTypes, and a DC default still allows RC4 \(0x27 on dc01\)'
+        $text | Should -Match 'NAS01\$ \[computer\]'
+        $text | Should -Match 'gmsa-web\$ \[gMSA\]'
+    }
+
+    It 'names an unreadable DC and the default it assumed' {
+        $dcs = @((Resolve-KerberosDcDefault -HostName 'dc01' -Phase 2), (Resolve-KerberosDcDefault -HostName 'dc02' -Readable $false -ErrorText 'Access is denied.'))
+        $text = (Measure-KerberosEncReadiness -Accounts $script:UnsetAccounts -DcDefaults $dcs).Lines -join "`n"
+        $text | Should -Match 'dc02: 0x27 .*Registry not readable \(Access is denied\.\); assumed 0x27'
+        $text | Should -Match '\(0x27 on dc02, assumed\)'
+        $text | Should -Not -Match "No domain controller's Kerberos settings could be read"
+        $none = (Measure-KerberosEncReadiness -Accounts $script:UnsetAccounts -DcDefaults @($dcs[1])).Lines -join "`n"
+        $none | Should -Match "No domain controller's Kerberos settings could be read, so accounts without msDS-SupportedEncryptionTypes were evaluated against the pre-enforcement default 0x27"
+    }
+
+    It 'says which default it assumed when no DC is in the directory' {
+        $result = Measure-KerberosEncReadiness -Accounts @((New-KerbAccount 'svc_app' 'user'))
+        $text = $result.Lines -join "`n"
+        $result.Warnings | Should -Be 1
+        $text | Should -Match 'No domain controller was found in the directory\. Assumed the pre-enforcement default 0x27'
+        $text | Should -Match '\(0x27 assumed, no DC found\)'
+        $text | Should -Match 'Not read: no domain controller was found'
+    }
+
+    It 'fails an explicit DC default without AES or with DES' {
+        $noAes = Measure-KerberosEncReadiness -Accounts $script:UnsetAccounts -DcDefaults @((Resolve-KerberosDcDefault -HostName 'dc01' -DefaultEncTypes 0x24))
+        $noAes.Issues | Should -Be 1
+        ($noAes.Lines -join "`n") | Should -Match '\[LEGACY-DEFAULT\] dc01 DefaultDomainSupportedEncTypes=0x24 has no AES'
+        $des = Measure-KerberosEncReadiness -Accounts $script:UnsetAccounts -DcDefaults @((Resolve-KerberosDcDefault -HostName 'dc01' -DefaultEncTypes 0x27))
+        $des.Issues | Should -Be 1
+        ($des.Lines -join "`n") | Should -Match '\[DES-DEFAULT\] dc01 DefaultDomainSupportedEncTypes=0x27 enables DES'
+        $rc4AndAes = Measure-KerberosEncReadiness -Accounts $script:UnsetAccounts -DcDefaults @((Resolve-KerberosDcDefault -HostName 'dc01' -DefaultEncTypes 0x3C))
+        $rc4AndAes.Issues | Should -Be 0
+        $rc4AndAes.Warnings | Should -Be 3
+    }
+
+    It 'fails RC4-only and DES accounts of every kind by name' {
+        $accounts = @(
+            (New-KerbAccount 'svc_web' 'user' 0x1C),
+            (New-KerbAccount 'svc_legacy' 'user' $null $true),
+            (New-KerbAccount 'NAS02$' 'computer' 0x4),
+            (New-KerbAccount 'gmsa-legacy$' 'gMSA' 0x24),
+            (New-KerbAccount 'msa-old$' 'sMSA' 0x1B)
+        )
+        $result = Measure-KerberosEncReadiness -Accounts $accounts -DcDefaults @((Resolve-KerberosDcDefault -HostName 'dc01' -Phase 2))
+        $text = $result.Lines -join "`n"
+        $result.Issues | Should -Be 4
+        $result.Warnings | Should -Be 0
+        $text | Should -Match '\[RC4-ONLY\] NAS02\$ \[computer\] \| 0x4 \(RC4-HMAC\)'
+        $text | Should -Match '\[RC4-ONLY\] gmsa-legacy\$ \[gMSA\] \| 0x24 \(RC4-HMAC, AES-SK \(AES session keys\)\)'
+        $text | Should -Match 'the service ticket is still RC4-encrypted'
+        $text | Should -Match '\[DES\] msa-old\$ \[sMSA\]'
+        $text | Should -Match '\[DES\] svc_legacy \[user\] \| USE_DES_KEY_ONLY'
+        $text | Should -Match '\[INFO\] 1 AES account\(s\) also allow RC4'
+    }
+
+    It 'summarizes KDC events 201-209 per DC as follow-ups and names unreadable logs' {
+        $dcs = @((Resolve-KerberosDcDefault -HostName 'dc01' -Phase 2), (Resolve-KerberosDcDefault -HostName 'dc02' -Phase 2))
+        $sets = @((New-KerbEventSet 'dc01' @(201, 205, 201)), (New-KerbEventSet 'dc02' -Readable $false -ErrorText 'The RPC server is unavailable.'))
+        $result = Measure-KerberosEncReadiness -Accounts @((New-KerbAccount 'svc_sql' 'user' 0x18)) -DcDefaults $dcs -EventSets $sets
+        $text = $result.Lines -join "`n"
+        $result.Issues | Should -Be 0
+        $result.Warnings | Should -Be 1
+        $text | Should -Match 'dc01: 3 event\(s\): 201 x2, 205 x1'
+        $text | Should -Match '201: RC4 issued for a service without msDS-SupportedEncryptionTypes'
+        $text | Should -Match 'dc02: not readable \(The RPC server is unavailable\.\)'
+    }
+
+    It 'has a meaning for every KDC event from 201 to 209' {
+        foreach ($id in 201..209) { Get-KdcEventMeaning $id | Should -Not -Match 'not a CVE-2026-20833' }
+    }
+
+    It 'labels 0x20 as AES session keys, not FAST' {
+        ConvertTo-KerberosEncSummary 0x24 | Should -Be '0x24 (RC4-HMAC, AES-SK (AES session keys))'
+    }
+
+    It 'reads each DC remotely at the documented registry paths and KDC event source' {
+        $script:Ia11Block | Should -Match "OpenSubKey\('SYSTEM\\CurrentControlSet\\Services\\Kdc'\)"
+        $script:Ia11Block | Should -Match "GetValue\('DefaultDomainSupportedEncTypes'\)"
+        $script:Ia11Block | Should -Match "OpenSubKey\('SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Kerberos\\Parameters'\)"
+        $script:Ia11Block | Should -Match "GetValue\('RC4DefaultDisablementPhase'\)"
+        $script:Ia11Block | Should -Match 'OpenRemoteBaseKey'
+        $script:Ia11Block | Should -Match "Get-WinEvent -ComputerName \`$HostName -FilterHashtable"
+        $script:Ia11Block | Should -Match "ProviderName='Kdcsvc'"
+        $script:Ia11Block | Should -Match 'NoMatchingEventsFound'
+        $script:Ia11Block | Should -Match 'primaryGroupID=521'
+        $script:Ia11Block | Should -Match 'objectClass=msDS-GroupManagedServiceAccount\)\(objectClass=msDS-ManagedServiceAccount'
+        $script:Ia11Block | Should -Not -Match 'Get-ItemProperty'
+    }
+}
+
 Describe 'Lint cleanliness (PSScriptAnalyzer)' {
     It 'has zero analyzer findings under the project settings' -Skip:(-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
         $settings = Join-Path $script:RepoRoot 'PSScriptAnalyzerSettings.psd1'
