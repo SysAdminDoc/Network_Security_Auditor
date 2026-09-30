@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text.RegularExpressions;
+using NetworkSecurityAuditor.Theme;
 
 namespace NetworkSecurityAuditor.Tests;
 
@@ -31,10 +33,22 @@ public sealed partial class ThemeContrastTests
     {
         var themePath = Path.Combine(FindRepoRoot(), "src", "NetworkSecurityAuditor", "Theme", "Themes.xaml");
         var xaml = File.ReadAllText(themePath);
-        return BrushRegex().Matches(xaml).ToDictionary(
+        var colors = BrushRegex().Matches(xaml).ToDictionary(
             match => match.Groups["key"].Value,
             match => Parse(match.Groups["hex"].Value),
             StringComparer.Ordinal);
+
+        // Some brushes source their Color from the shared NetworkSecurityAuditor.Theme.DesignTokens
+        // class instead of a literal hex value, so the report CSS and the GUI never drift apart.
+        foreach (Match match in TokenBrushRegex().Matches(xaml))
+        {
+            var field = typeof(DesignTokens).GetField(match.Groups["field"].Value, BindingFlags.Public | BindingFlags.Static)
+                ?? throw new MissingFieldException(nameof(DesignTokens), match.Groups["field"].Value);
+            var color = (System.Windows.Media.Color)field.GetValue(null)!;
+            colors[match.Groups["key"].Value] = new Rgb(color.R, color.G, color.B);
+        }
+
+        return colors;
     }
 
     private static Rgb Parse(string value) => new(
@@ -72,4 +86,7 @@ public sealed partial class ThemeContrastTests
 
     [GeneratedRegex("<SolidColorBrush\\s+x:Key=\\\"(?<key>[^\\\"]+)\\\"\\s+Color=\\\"(?<hex>#[0-9A-Fa-f]{6})\\\"\\s*/>")]
     private static partial Regex BrushRegex();
+
+    [GeneratedRegex("<SolidColorBrush\\s+x:Key=\\\"(?<key>[^\\\"]+)\\\"\\s+Color=\\\"\\{x:Static tokens:DesignTokens\\.(?<field>\\w+)\\}\\\"\\s*/>")]
+    private static partial Regex TokenBrushRegex();
 }

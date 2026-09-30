@@ -4,6 +4,7 @@ using System.Text;
 using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Theme;
 using NetworkSecurityAuditor.ViewModels;
 
 namespace NetworkSecurityAuditor.Export;
@@ -175,7 +176,7 @@ public static class HtmlReportGenerator
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(ransomwareGrade)}\">{ransomwareGrade}</div><div class=\"score-value\">{ransomwareScore}/100</div><div class=\"score-label\">{EscapeHtml(UiText.ReportRansomwareReadiness)}</div></div>");
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{GradeColor(domainMaturityGrade)}\">{domainMaturityGrade}</div><div class=\"score-value\">{domainMaturityScore}/100</div><div class=\"score-label\">{EscapeHtml(UiText.ReportDomainMaturity)}</div></div>");
 
-        var sprsColor = sprsScore >= 88 ? "#a6e3a1" : sprsScore >= 50 ? "#f9e2af" : "#f38ba8";
+        var sprsColor = sprsScore >= 88 ? DesignTokens.StatusPassHex : sprsScore >= 50 ? DesignTokens.StatusPartialHex : DesignTokens.StatusFailHex;
         sb.AppendLine($"<div class=\"score-card\"><div class=\"score-grade\" style=\"color:{sprsColor};font-size:48px\">{sprsScore}</div><div class=\"score-value\">{EscapeHtml(UiText.ReportOf110)}</div><div class=\"score-label\">{EscapeHtml(UiText.Format(nameof(UiText.ReportSprsScoreFormat), sprsConf))}</div></div>");
 
         sb.AppendLine("<div class=\"score-card\">");
@@ -290,7 +291,7 @@ public static class HtmlReportGenerator
                 else if (st == CheckStatus.Fail) fwFail++;
             }
             var pct = fwAssessed > 0 ? Math.Round((double)fwMet / fwAssessed * 100) : 0;
-            var color = pct >= 80 ? "#a6e3a1" : pct >= 60 ? "#f9e2af" : "#f38ba8";
+            var color = pct >= 80 ? DesignTokens.StatusPassHex : pct >= 60 ? DesignTokens.StatusPartialHex : DesignTokens.StatusFailHex;
             sb.AppendLine($"<tr><td>{EscapeHtml(fwName)}</td><td>{mapped.Count}</td><td class=\"pass-cell\">{fwMet}</td><td class=\"partial-cell\">{fwPartial}</td><td class=\"fail-cell\">{fwFail}</td><td>{fwNotAssessed}</td><td style=\"color:{color};font-weight:600\">{pct}%</td></tr>");
         }
         AppendTableEnd(sb);
@@ -474,11 +475,11 @@ public static class HtmlReportGenerator
 
     private static string GradeColor(string grade) => grade switch
     {
-        "A" => "#a6e3a1",
-        "B" => "#94e2d5",
-        "C" => "#f9e2af",
-        "D" => "#fab387",
-        "F" => "#f38ba8",
+        "A" => DesignTokens.GradeAHex,
+        "B" => DesignTokens.GradeBHex,
+        "C" => DesignTokens.GradeCHex,
+        "D" => DesignTokens.GradeDHex,
+        "F" => DesignTokens.GradeFHex,
         _ => "#9399b2"
     };
 
@@ -541,7 +542,7 @@ public static class HtmlReportGenerator
         }
     }
 
-    private static string GetCss() => """
+    private static string GetCss() => $$"""
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
         body {
@@ -600,12 +601,12 @@ public static class HtmlReportGenerator
             display: inline-block; width: 10px; height: 10px;
             border-radius: 50%; margin-right: 8px;
         }
-        .dot.pass { background: #a6e3a1; }
-        .dot.partial { background: #f9e2af; }
-        .dot.fail { background: #f38ba8; }
+        .dot.pass { background: {{DesignTokens.StatusPassHex}}; }
+        .dot.partial { background: {{DesignTokens.StatusPartialHex}}; }
+        .dot.fail { background: {{DesignTokens.StatusFailHex}}; }
         .dot.na { background: #585b70; }
         .dot.notassessed { background: #45475a; }
-        .dot.error { background: #fab387; }
+        .dot.error { background: {{DesignTokens.StatusErrorHex}}; }
         table {
             width: 100%; border-collapse: collapse;
             background: #313244; border-radius: 8px; overflow: hidden;
@@ -623,25 +624,25 @@ public static class HtmlReportGenerator
         td { padding: 10px 14px; border-top: 1px solid #45475a; font-size: 14px; }
         tr:hover { background: #3b3d50; }
         .id-cell { font-family: 'Cascadia Code', monospace; color: #cba6f7; font-weight: 600; }
-        .pass-cell { color: #a6e3a1; font-weight: 600; }
-        .partial-cell { color: #f9e2af; font-weight: 600; }
-        .fail-cell { color: #f38ba8; font-weight: 600; }
+        .pass-cell { color: {{DesignTokens.StatusPassHex}}; font-weight: 600; }
+        .partial-cell { color: {{DesignTokens.StatusPartialHex}}; font-weight: 600; }
+        .fail-cell { color: {{DesignTokens.StatusFailHex}}; font-weight: 600; }
         .findings-cell, .evidence-cell { max-width: 300px; word-wrap: break-word; font-size: 13px; color: #b5bcd6; }
         .mitre-cell { max-width: 200px; font-size: 11px; }
         .badge {
             display: inline-block; padding: 2px 10px; border-radius: 6px;
             font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
         }
-        .severity-critical { background: rgba(243,139,168,0.2); color: #f38ba8; }
-        .severity-high { background: rgba(250,179,135,0.2); color: #fab387; }
-        .severity-medium { background: rgba(249,226,175,0.2); color: #f9e2af; }
-        .severity-low { background: rgba(166,227,161,0.2); color: #a6e3a1; }
-        .status-pass { background: rgba(166,227,161,0.2); color: #a6e3a1; }
-        .status-partial { background: rgba(249,226,175,0.2); color: #f9e2af; }
-        .status-fail { background: rgba(243,139,168,0.2); color: #f38ba8; }
-        .status-na { background: rgba(147,153,178,0.2); color: #9399b2; }
+        .severity-critical { background: rgba(243,139,168,0.2); color: {{DesignTokens.SeverityCriticalHex}}; }
+        .severity-high { background: rgba(250,179,135,0.2); color: {{DesignTokens.SeverityHighHex}}; }
+        .severity-medium { background: rgba(249,226,175,0.2); color: {{DesignTokens.SeverityMediumHex}}; }
+        .severity-low { background: rgba(166,227,161,0.2); color: {{DesignTokens.SeverityLowHex}}; }
+        .status-pass { background: rgba(166,227,161,0.2); color: {{DesignTokens.StatusPassHex}}; }
+        .status-partial { background: rgba(249,226,175,0.2); color: {{DesignTokens.StatusPartialHex}}; }
+        .status-fail { background: rgba(243,139,168,0.2); color: {{DesignTokens.StatusFailHex}}; }
+        .status-na { background: rgba(147,153,178,0.2); color: {{DesignTokens.StatusNaHex}}; }
         .status-notassessed { background: rgba(88,91,112,0.35); color: #cdd6f4; }
-        .status-error { background: rgba(250,179,135,0.2); color: #fab387; }
+        .status-error { background: rgba(250,179,135,0.2); color: {{DesignTokens.StatusErrorHex}}; }
         .footer {
             text-align: center; padding: 24px; color: #585b70;
             font-size: 12px; margin-top: 32px;

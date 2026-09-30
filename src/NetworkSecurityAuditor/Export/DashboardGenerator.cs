@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using NetworkSecurityAuditor.Localization;
 using NetworkSecurityAuditor.Services;
+using NetworkSecurityAuditor.Theme;
 
 namespace NetworkSecurityAuditor.Export;
 
@@ -496,7 +497,7 @@ public static class DashboardGenerator
         sb.AppendLine("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
         sb.AppendLine($"<title>{Esc(UiText.DashboardDocumentTitle)}</title>");
         sb.AppendLine("<style>");
-        sb.AppendLine("""
+        sb.AppendLine($$"""
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; padding: 32px; }
             h1 { color: #cba6f7; margin-bottom: 8px; } h2 { margin: 24px 0 10px; font-size: 18px; }
@@ -511,9 +512,9 @@ public static class DashboardGenerator
             th { background: #45475a; color: #cba6f7; text-align: left; padding: 10px 14px; font-size: 13px; text-transform: uppercase; }
             td { padding: 10px 14px; border-top: 1px solid #45475a; font-size: 14px; vertical-align: middle; }
             tr:hover { background: #3b3d50; }
-            .grade-a { color: #a6e3a1; } .grade-b { color: #94e2d5; } .grade-c { color: #f9e2af; }
-            .grade-d { color: #fab387; } .grade-f { color: #f38ba8; }
-            .stale { color: #f38ba8; font-weight: 600; }
+            .grade-a { color: {{DesignTokens.GradeAHex}}; } .grade-b { color: {{DesignTokens.GradeBHex}}; } .grade-c { color: {{DesignTokens.GradeCHex}}; }
+            .grade-d { color: {{DesignTokens.GradeDHex}}; } .grade-f { color: {{DesignTokens.GradeFHex}}; }
+            .stale { color: {{DesignTokens.StatusFailHex}}; font-weight: 600; }
             .trend { width: 96px; height: 24px; overflow: visible; margin-right: 6px; vertical-align: middle; }
             .trend-line { fill: none; stroke: #89b4fa; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
             .trend-data { color: #a6adc8; font-size: 12px; white-space: nowrap; }
@@ -579,7 +580,7 @@ public static class DashboardGenerator
                 sb.AppendLine($"<td>{Esc(c.Client)}</td><td>{Esc(c.Host)} <span style=\"font-size:11px;color:#a6adc8\">{Esc(c.OS)}</span></td>");
                 sb.AppendLine($"<td>{c.OverallScore}%</td><td class=\"{GradeCssClass(c.Grade)}\" style=\"font-size:20px;font-weight:700\">{Esc(c.Grade)}</td>");
                 sb.AppendLine($"<td>{BuildTrendSparkline(c.Trend)}</td><td>{c.RansomwareScore}%</td>");
-                sb.AppendLine($"<td style=\"color:{(c.CriticalCount > 0 ? "#f38ba8" : "#a6e3a1")}\">{c.CriticalCount}</td><td>{c.FailCount}</td>");
+                sb.AppendLine($"<td style=\"color:{(c.CriticalCount > 0 ? DesignTokens.StatusFailHex : DesignTokens.StatusPassHex)}\">{c.CriticalCount}</td><td>{c.FailCount}</td>");
                 sb.AppendLine($"<td>{c.ScanTime.UtcDateTime:yyyy-MM-dd}{staleFlag}</td><td>{reportLink}</td></tr>");
             }
             sb.AppendLine("</tbody></table>");
@@ -595,7 +596,7 @@ public static class DashboardGenerator
     {
         if (data.DuplicateFiles.Count > 0)
         {
-            sb.AppendLine($"<p style=\"color:#f9e2af;margin-top:16px;font-size:13px\">{Esc(UiText.Format(nameof(UiText.DashboardOlderDuplicatesFormat), data.DuplicateFiles.Count))}</p><ul>");
+            sb.AppendLine($"<p style=\"color:{DesignTokens.StatusPartialHex};margin-top:16px;font-size:13px\">{Esc(UiText.Format(nameof(UiText.DashboardOlderDuplicatesFormat), data.DuplicateFiles.Count))}</p><ul>");
             foreach (var duplicate in data.DuplicateFiles.OrderBy(d => d.FileName, StringComparer.OrdinalIgnoreCase))
                 sb.AppendLine($"<li>{Esc(UiText.Format(nameof(UiText.DashboardLatestDuplicateFormat), duplicate.FileName, duplicate.StableKey, duplicate.LatestFileName))}</li>");
             sb.AppendLine("</ul>");
@@ -603,7 +604,7 @@ public static class DashboardGenerator
 
         if (data.SkippedAssets.Count > 0)
         {
-            sb.AppendLine($"<p style=\"color:#f9e2af;margin-top:16px;font-size:13px\">{Esc(UiText.Format(nameof(UiText.DashboardExcludedAssetsFormat), data.SkippedAssets.Count))}</p><ul>");
+            sb.AppendLine($"<p style=\"color:{DesignTokens.StatusPartialHex};margin-top:16px;font-size:13px\">{Esc(UiText.Format(nameof(UiText.DashboardExcludedAssetsFormat), data.SkippedAssets.Count))}</p><ul>");
             foreach (var skipped in data.SkippedAssets.OrderBy(s => s.FileName, StringComparer.OrdinalIgnoreCase))
                 sb.AppendLine($"<li>{Esc(skipped.FileName)}: {Esc(skipped.Reason)}</li>");
             sb.AppendLine("</ul>");
@@ -611,7 +612,7 @@ public static class DashboardGenerator
 
         if (data.FailedFiles.Count > 0)
         {
-            sb.AppendLine($"<p style=\"color:#f38ba8;margin-top:16px;font-size:13px\">{Esc(UiText.Format(nameof(UiText.DashboardFailedFilesFormat), data.FailedFiles.Count))}</p><ul>");
+            sb.AppendLine($"<p style=\"color:{DesignTokens.StatusFailHex};margin-top:16px;font-size:13px\">{Esc(UiText.Format(nameof(UiText.DashboardFailedFilesFormat), data.FailedFiles.Count))}</p><ul>");
             foreach (var failed in data.FailedFiles.OrderBy(s => s.FileName, StringComparer.OrdinalIgnoreCase))
                 sb.AppendLine($"<li>{Esc(failed.FileName)}: {Esc(failed.Reason)}</li>");
             sb.AppendLine("</ul>");

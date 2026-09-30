@@ -11,7 +11,7 @@ using NetworkSecurityAuditor.Services;
 using NetworkSecurityAuditor.ViewModels;
 
 [Collection(NonParallelTestCollection.Name)]
-public sealed class HighContrastThemeTests
+public sealed partial class HighContrastThemeTests
 {
     [Fact]
     public void High_Contrast_Overrides_Every_Semantic_Brush_With_Dynamic_System_Colors()
@@ -242,7 +242,16 @@ public sealed class HighContrastThemeTests
 
     private static ResourceDictionary LoadDictionary(string path)
     {
-        using var stream = File.OpenRead(path);
+        // The shipped XAML uses a bare "clr-namespace:NetworkSecurityAuditor.Theme" mapping (no
+        // ;assembly=), which the project's own MSBuild markup compile resolves as "this project" but
+        // which a raw XamlReader.Load in a test host cannot resolve on its own. Qualify it here, in
+        // the test only, so DesignTokens-backed brushes still load outside the compiled app.
+        var xaml = File.ReadAllText(path);
+        xaml = TokensNamespaceRegex().Replace(xaml, "clr-namespace:NetworkSecurityAuditor.Theme;assembly=NetworkSecurityAuditor\"");
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xaml));
         return Assert.IsType<ResourceDictionary>(XamlReader.Load(stream));
     }
+
+    [GeneratedRegex("clr-namespace:NetworkSecurityAuditor\\.Theme\"")]
+    private static partial Regex TokensNamespaceRegex();
 }

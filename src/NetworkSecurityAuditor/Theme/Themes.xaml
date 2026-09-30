@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+                    xmlns:tokens="clr-namespace:NetworkSecurityAuditor.Theme">
 
     <!-- Catppuccin Mocha-inspired premium dark surface system -->
     <SolidColorBrush x:Key="WindowBg" Color="#08111a" />
@@ -33,11 +34,26 @@
     <SolidColorBrush x:Key="AccentPressed" Color="#06b6d4" />
     <SolidColorBrush x:Key="AccentSoft" Color="#103647" />
     <SolidColorBrush x:Key="InfoAccent" Color="#60a5fa" />
-    <SolidColorBrush x:Key="GradeB" Color="#5eead4" />
-    <SolidColorBrush x:Key="SeverityHigh" Color="#fab387" />
-    <SolidColorBrush x:Key="ProgressGood" Color="#a6e3a1" />
-    <SolidColorBrush x:Key="ProgressMid" Color="#f9e2af" />
-    <SolidColorBrush x:Key="ProgressBad" Color="#f38ba8" />
+    <!-- Severity, status and grade colors are shared with the HTML/CMMC report CSS through
+         Theme/DesignTokens.cs so the GUI and the exported reports never drift apart. -->
+    <SolidColorBrush x:Key="GradeA" Color="{x:Static tokens:DesignTokens.GradeAColor}" />
+    <SolidColorBrush x:Key="GradeB" Color="{x:Static tokens:DesignTokens.GradeBColor}" />
+    <SolidColorBrush x:Key="GradeC" Color="{x:Static tokens:DesignTokens.GradeCColor}" />
+    <SolidColorBrush x:Key="GradeD" Color="{x:Static tokens:DesignTokens.GradeDColor}" />
+    <SolidColorBrush x:Key="GradeF" Color="{x:Static tokens:DesignTokens.GradeFColor}" />
+    <SolidColorBrush x:Key="SeverityCritical" Color="{x:Static tokens:DesignTokens.SeverityCriticalColor}" />
+    <SolidColorBrush x:Key="SeverityHigh" Color="{x:Static tokens:DesignTokens.SeverityHighColor}" />
+    <SolidColorBrush x:Key="SeverityMedium" Color="{x:Static tokens:DesignTokens.SeverityMediumColor}" />
+    <SolidColorBrush x:Key="SeverityLow" Color="{x:Static tokens:DesignTokens.SeverityLowColor}" />
+    <SolidColorBrush x:Key="StatusPass" Color="{x:Static tokens:DesignTokens.StatusPassColor}" />
+    <SolidColorBrush x:Key="StatusPartial" Color="{x:Static tokens:DesignTokens.StatusPartialColor}" />
+    <SolidColorBrush x:Key="StatusFail" Color="{x:Static tokens:DesignTokens.StatusFailColor}" />
+    <SolidColorBrush x:Key="StatusNa" Color="{x:Static tokens:DesignTokens.StatusNaColor}" />
+    <SolidColorBrush x:Key="StatusNotAssessed" Color="{x:Static tokens:DesignTokens.StatusNotAssessedColor}" />
+    <SolidColorBrush x:Key="StatusError" Color="{x:Static tokens:DesignTokens.StatusErrorColor}" />
+    <SolidColorBrush x:Key="ProgressGood" Color="{x:Static tokens:DesignTokens.StatusPassColor}" />
+    <SolidColorBrush x:Key="ProgressMid" Color="{x:Static tokens:DesignTokens.StatusPartialColor}" />
+    <SolidColorBrush x:Key="ProgressBad" Color="{x:Static tokens:DesignTokens.StatusFailColor}" />
     <SolidColorBrush x:Key="ErrorBorder" Color="#f38ba8" />
     <SolidColorBrush x:Key="ConsoleBg" Color="#09151f" />
     <SolidColorBrush x:Key="CommandBg" Color="#0c1b27" />
