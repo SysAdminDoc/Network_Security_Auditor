@@ -1,5 +1,6 @@
 using System.Management;
 using System.Security.Principal;
+using NetworkSecurityAuditor.Data;
 using NetworkSecurityAuditor.Models;
 
 namespace NetworkSecurityAuditor.Services;
@@ -30,7 +31,7 @@ public static class PreflightChecker
             Passed = env.IsDomainJoined,
             Detail = env.IsDomainJoined
                 ? $"Domain: {env.DomainName} ({env.JoinType})"
-                : "Not domain-joined. AD checks (IA01-IA12, CF01, CF04) will be skipped."
+                : $"Not domain-joined. AD checks ({AdCheckIds()}) will be skipped."
         });
 
         results.Add(new PreflightResult
@@ -70,4 +71,8 @@ public static class PreflightChecker
 
         return results;
     }
+
+    // Built from the catalog, so the list can't fall behind when an AD check is added or a check's type changes.
+    internal static string AdCheckIds() => string.Join(", ", CheckCatalog.All.Values
+        .Where(c => c.Type == CheckType.AD).Select(c => c.Id).Order(StringComparer.Ordinal));
 }

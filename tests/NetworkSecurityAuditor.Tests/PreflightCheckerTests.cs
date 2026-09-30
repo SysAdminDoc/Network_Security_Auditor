@@ -35,6 +35,24 @@ public class PreflightCheckerTests
     }
 
     [Fact]
+    public void Run_NonDomain_Names_Exactly_The_Checks_That_Are_Skipped()
+    {
+        var detail = PreflightChecker.Run(new EnvironmentInfo { IsDomainJoined = false })
+            .First(r => r.Name == "Domain Membership").Detail;
+
+        foreach (var check in NetworkSecurityAuditor.Data.CheckCatalog.All.Values)
+        {
+            if (check.Type == CheckType.AD)
+                Assert.Contains(check.Id, detail);
+            else
+                Assert.DoesNotContain(check.Id, detail);
+        }
+        // IA03 and IA09 read only the local registry, so a workgroup host runs them.
+        Assert.DoesNotContain("IA03", detail);
+        Assert.DoesNotContain("IA09", detail);
+    }
+
+    [Fact]
     public void Run_DomainJoined_ShowsDomainName()
     {
         var env = new EnvironmentInfo { IsDomainJoined = true, DomainName = "CORP.LOCAL", JoinType = "AD" };
