@@ -415,7 +415,7 @@ The C# rewrite does not score fabricated sequential STIG V-IDs. Until genuine ru
 
 ### MITRE ATT&CK Mapping
 
-All 70 checks map to ATT&CK Enterprise techniques (v19.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.
+All 70 checks map to ATT&CK Enterprise techniques (v19.2) with tactic and technique IDs, including v19's Stealth and Defense Impairment tactics. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps. The app and the script share one map, and the tests check every technique and tactic in it against a pinned copy of the v19.2 release, so a revoked or misfiled ID fails the build. `tools/Update-AttackReference.ps1` refreshes that copy when MITRE ships a new version.
 
 ### MITRE D3FEND Mapping
 
@@ -536,7 +536,7 @@ Automatic platform detection and field population:
 | Compliance Summary | `*_summary.json` | Compact RMM dashboard payload |
 | ATT&CK Navigator | `*_navigator.json` | MITRE ATT&CK Navigator v4.5 layer with technique scoring |
 | OCSF | `*_ocsf.jsonl` | OCSF v1.8.0 Security Finding events for vendor-neutral SIEM/MDR |
-| OSCAL | `*_oscal.json` | NIST OSCAL v1.2.2 assessment results for GRC and FedRAMP |
+| OSCAL | `*_oscal.json` | NIST OSCAL v1.2.3 assessment results for GRC and FedRAMP |
 | OSCAL POA&M | `*_oscal_poam.json` | OSCAL plan of action and milestones risks/tasks linked to finding UUIDs, waiver status, owner, due date, and remediation text |
 
 Machine-readable contract schemas for JSON, JSONL, OCSF, OSCAL, OSCAL POA&M,
@@ -675,7 +675,7 @@ review dates, supported OS/builds, check coverage, and stale-review windows.
 -ExportPDF           Also export PDF via Edge/Chrome headless
 -ExportNavigator     Also export MITRE ATT&CK Navigator layer JSON
 -ExportOCSF          Also export OCSF v1.8.0 security finding JSONL
--ExportOSCAL         Also export NIST OSCAL v1.2.2 assessment results JSON
+-ExportOSCAL         Also export NIST OSCAL v1.2.3 assessment results JSON
 -PrivacyMode         Redact hostnames, IPs, and identities in all exports
 -CloudAssessmentPath Path(s) to Maester or CISA ScubaGear JSON results
                      to import and include in reports
@@ -855,6 +855,7 @@ PSScriptAnalyzerSettings.psd1               # Lint rule set (correctness/securit
 tools/Test-NetworkSecurityAudit.ps1         # Static validation gate
 tools/NetworkSecurityAudit.Tests.ps1        # Pester v5 quality-gate suite
 tools/Test-ThemeContrast.ps1                # WCAG 2.2 AA theme contrast validation
+tools/Update-AttackReference.ps1           # Pins the ATT&CK Enterprise release the mapping tests use
 tools/Test-DependencyHealth.ps1             # Package inventory/advisory/freshness release gate
 tools/dependency-health-exceptions.json      # Exact-version, dated dependency drift exceptions
 tools/Publish-CSharpRelease.ps1             # Local C# zip/checksum/signing artifact flow

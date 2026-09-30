@@ -165,13 +165,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P1
 
-- [ ] P1 — NSA-075 Revalidate ATT&CK mappings for the v19 tactic split and correct external version constants
-  Why: ATT&CK v19 (2026-04-28) split Defense Evasion into Stealth (TA0005) and Defense Impairment (TA0112); the mappings reference TA0005 in 14 places and claim version "19.1", which MITRE's versions page doesn't list (current is v19.2); OSCAL 1.2.3 (2026-08-07) is the current patch.
-  Evidence: `src/NetworkSecurityAuditor/Export/ExternalVersions.cs`; `Data/MitreMappings.cs`; PS1 `$script:MitreMap`; https://attack.mitre.org/resources/updates/updates-april-2026/; https://attack.mitre.org/resources/versions/; https://github.com/usnistgov/OSCAL/releases.
-  Touches: `Data/MitreMappings.cs`, PS1 ATT&CK map, `ExternalVersions.cs`, Navigator exporter, golden export fixtures.
-  Acceptance: every technique ID resolves in the v19.2 Enterprise STIX bundle and its tactic matches the v19 Stealth/Defense Impairment assignment in MITRE's machine-readable changelog; `AttackEnterprise` reads "19.2" and `Oscal` reads "1.2.3"; a test fails if a mapped technique is deprecated or revoked in the pinned bundle.
-  Complexity: M
-
 - [ ] P1 — NSA-076 Update IA11 for Kerberos RC4 enforcement (CVE-2026-20833)
   Why: accounts without `msDS-SupportedEncryptionTypes` fall back to the DC default, which changed in 2026, but IA11 counts them without failing, reads the domain object's etype attribute as if meaningful, and skips computer and gMSA accounts.
   Evidence: `src/NetworkSecurityAuditor/Checks/IdentityAccess/IA11_KerberosEncryptionCheck.cs:123-156`; https://www.microsoft.com/en-us/windows-server/blog/2025/12/03/beyond-rc4-for-windows-authentication/; https://4sysops.com/archives/windows-kerberos-rc4-deprecation-what-will-break-in-active-directory-and-how-to-fix-it/.

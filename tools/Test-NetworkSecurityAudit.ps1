@@ -204,12 +204,12 @@ foreach ($evk in $evKeys) {
     }
 }
 $expectedExternalVersions = [ordered]@{
-    AttackEnterprise = '19.1'
+    AttackEnterprise = '19.2'
     AttackNavigator = '4.5'
     AttackNavigatorApp = '5.3.2'
     D3FEND = '1.4.0'
     OCSF = '1.8.0'
-    OSCAL = '1.2.2'
+    OSCAL = '1.2.3'
 }
 foreach ($evk in $expectedExternalVersions.Keys) {
     $expectedExternalVersion = [regex]::Escape($expectedExternalVersions[$evk])

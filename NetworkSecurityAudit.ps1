@@ -308,19 +308,19 @@ $script:ProductShortName = 'NetworkSecurityAudit'
 $script:ProductVersion = '4.12.0'
 $script:SchemaVersion = '2.1'
 $script:ExternalVersions = [ordered]@{
-    AttackEnterprise = '19.1'
+    AttackEnterprise = '19.2'
     AttackNavigator  = '4.5'
     AttackNavigatorApp = '5.3.2'
     D3FEND          = '1.4.0'
     OCSF            = '1.8.0'
-    OSCAL           = '1.2.2'
+    OSCAL           = '1.2.3'
 }
 $script:ExternalVersionSources = [ordered]@{
     AttackEnterprise = [ordered]@{
-        SourceVersion = 'v19.1'
-        SourceUrl = 'https://github.com/mitre-attack/attack-stix-data/releases/tag/v19.1'
-        ReleaseDate = '2026-05-12'
-        ReviewedOn = '2026-06-16'
+        SourceVersion = 'v19.2'
+        SourceUrl = 'https://github.com/mitre-attack/attack-stix-data/releases/tag/v19.2'
+        ReleaseDate = '2026-08-05'
+        ReviewedOn = '2026-09-30'
     }
     AttackNavigator = [ordered]@{
         SourceVersion = 'layer-format-v4.5'
@@ -347,10 +347,10 @@ $script:ExternalVersionSources = [ordered]@{
         ReviewedOn = '2026-06-16'
     }
     OSCAL = [ordered]@{
-        SourceVersion = 'v1.2.2'
-        SourceUrl = 'https://github.com/usnistgov/OSCAL/releases/tag/v1.2.2'
-        ReleaseDate = '2026-04-30'
-        ReviewedOn = '2026-06-16'
+        SourceVersion = 'v1.2.3'
+        SourceUrl = 'https://github.com/usnistgov/OSCAL/releases/tag/v1.2.3'
+        ReleaseDate = '2026-08-07'
+        ReviewedOn = '2026-09-30'
     }
 }
 function Get-ExternalVersionManifest {
@@ -8803,87 +8803,88 @@ function Get-FrameworkScores {
 # ── End Phase 3A ─────────────────────────────────────────────────────────────
 
 # ── Phase 4A: MITRE ATT&CK Mapping ──────────────────────────────────────────
-# Maps all 70 checks to ATT&CK Enterprise techniques (v19.1)
+# Maps all 70 checks to ATT&CK Enterprise techniques (v19.2). Kept identical to the C# MitreMappings;
+# the C# tests check both against the pinned v19.2 bundle.
 # Format: CheckID -> @{ Tactics=@('TA00xx',...); Techniques=@('T1xxx',...); Desc='short attack context' }
 $script:MitreMap = @{
     # ── Identity & Access ──
-    'IA01' = @{ Tactics=@('TA0004','TA0003'); Techniques=@('T1078.002','T1078.001','T1098'); Desc='Compromised or delegable privileged accounts expand CVE-2025-33073 blast radius, domain-wide persistence, and privilege escalation' }
+    'IA01' = @{ Tactics=@('TA0004','TA0003'); Techniques=@('T1078.002','T1078.001','T1098'); Desc='Compromised privileged accounts expand blast radius and privilege escalation' }
     'IA02' = @{ Tactics=@('TA0006','TA0004'); Techniques=@('T1558.003','T1558.004','T1078.002'); Desc='Service accounts with SPNs are Kerberoastable; stale passwords make cracking trivial' }
-    'IA03' = @{ Tactics=@('TA0001','TA0006'); Techniques=@('T1078','T1110.001','T1110.003','T1556'); Desc='Missing MFA allows credential stuffing, password spraying, and phishing-to-access' }
-    'IA04' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078.002','T1078.001'); Desc='Stale accounts from terminated employees are prime targets for unauthorized access' }
-    'IA05' = @{ Tactics=@('TA0006','TA0001'); Techniques=@('T1110.001','T1110.002','T1110.003'); Desc='Weak password policy enables brute force, dictionary attacks, and credential spraying' }
-    'IA06' = @{ Tactics=@('TA0004','TA0003','TA0006'); Techniques=@('T1078.002','T1550.002','T1550.003'); Desc='Without PAM/LAPS, lateral movement via pass-the-hash and golden ticket attacks' }
-    'IA07' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1078','T1078.001'); Desc='Shared accounts eliminate attribution and enable insider threat denial' }
+    'IA03' = @{ Tactics=@('TA0001','TA0006'); Techniques=@('T1078','T1110.001','T1110.003','T1556'); Desc='Missing MFA allows credential stuffing and password spraying' }
+    'IA04' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078.002','T1078.001'); Desc='Stale accounts are prime targets for unauthorized access' }
+    'IA05' = @{ Tactics=@('TA0006'); Techniques=@('T1110.001','T1110.002','T1110.003'); Desc='Weak password policy enables brute force and credential spraying' }
+    'IA06' = @{ Tactics=@('TA0004','TA0003','TA0008'); Techniques=@('T1078.002','T1550.002','T1550.003'); Desc='Without PAM/LAPS, pass-the-hash and golden ticket attacks' }
+    'IA07' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1078','T1078.001'); Desc='Shared accounts eliminate attribution' }
     'IA08' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078','T1199'); Desc='Vendor accounts with persistent access enable trusted relationship attacks' }
-    'IA09' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1078.004','T1556.006'); Desc='Unmanaged remote access and RMM tools allow credentialed access from untrusted devices or locations' }
-    'IA10' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078','T1078.002'); Desc='Stale accounts expand the attack surface for credential-based initial access' }
-    'IA11' = @{ Tactics=@('TA0006','TA0008'); Techniques=@('T1558.003','T1550.003'); Desc='RC4/DES Kerberos dependencies keep service tickets crackable and weaken pass-the-ticket resistance' }
-    'IA12' = @{ Tactics=@('TA0004','TA0003','TA0006'); Techniques=@('T1098','T1078.002','T1550.003'); Desc='BadSuccessor/dMSA abuse can turn delegated OU rights into domain privilege escalation and persistence' }
+    'IA09' = @{ Tactics=@('TA0001','TA0005','TA0006'); Techniques=@('T1078.004','T1556.006'); Desc='Unmanaged remote access allows credentialed access from untrusted devices' }
+    'IA10' = @{ Tactics=@('TA0001','TA0003'); Techniques=@('T1078','T1078.002'); Desc='Stale accounts expand attack surface' }
+    'IA11' = @{ Tactics=@('TA0006','TA0008'); Techniques=@('T1558.003','T1550.003'); Desc='RC4/DES Kerberos keeps service tickets crackable' }
+    'IA12' = @{ Tactics=@('TA0004','TA0003','TA0008'); Techniques=@('T1098','T1078.002','T1550.003'); Desc='BadSuccessor/dMSA abuse turns delegated OU rights into domain privilege escalation' }
     # ── Endpoint Security ──
-    'EP01' = @{ Tactics=@('TA0005','TA0002'); Techniques=@('T1562.001','T1562.004','T1059'); Desc='Disabled/misconfigured AV allows malware execution, defense evasion, and payload delivery' }
-    'EP02' = @{ Tactics=@('TA0005','TA0002'); Techniques=@('T1486','T1059'); Desc='Missing encryption exposes data at rest; enables theft on stolen/decommissioned devices' }
-    'EP03' = @{ Tactics=@('TA0006','TA0008','TA0005'); Techniques=@('T1557.001','T1040','T1570','T1187'); Desc='SMB/NTLM misconfig enables CVE-2025-33073 reflection, relay attacks, credential capture, and lateral tool transfer' }
-    'EP04' = @{ Tactics=@('TA0001','TA0002'); Techniques=@('T1190','T1203','T1210'); Desc='Unpatched systems, including missing CVE-2025-33073 remediation, enable exploitation of public-facing apps, client-side vulns, and remote services' }
-    'EP05' = @{ Tactics=@('TA0004','TA0003','TA0002'); Techniques=@('T1574.009','T1574.001','T1547.001','T1053'); Desc='Unquoted service paths, AlwaysInstallElevated, cached creds enable local privesc and persistence' }
-    'EP06' = @{ Tactics=@('TA0005','TA0011'); Techniques=@('T1562.004','T1071','T1048'); Desc='Firewall gaps allow C2 communication, data exfiltration, and inbound exploitation' }
-    'EP07' = @{ Tactics=@('TA0002','TA0005'); Techniques=@('T1059','T1204.002','T1137','T1221'); Desc='Missing AppLocker/WDAC and unrestricted macros enable arbitrary code execution and initial access via documents' }
-    'EP08' = @{ Tactics=@('TA0006','TA0005','TA0004'); Techniques=@('T1003.001','T1003.004','T1003.005','T1547.008'); Desc='Missing Credential Guard/LSA Protection enables LSASS dumping, DCSync, and credential theft' }
-    'EP09' = @{ Tactics=@('TA0005','TA0003'); Techniques=@('T1562.001','T1112'); Desc='Misconfigured systems expand attack surface through unnecessary services and weak defaults' }
+    'EP01' = @{ Tactics=@('TA0112','TA0002'); Techniques=@('T1685','T1686.003','T1059'); Desc='Disabled AV allows malware execution' }
+    'EP02' = @{ Tactics=@('TA0009','TA0006'); Techniques=@('T1005','T1025','T1552.001'); Desc='Missing encryption exposes data and stored credentials on lost or stolen devices and drives' }
+    'EP03' = @{ Tactics=@('TA0006','TA0008'); Techniques=@('T1557.001','T1040','T1570','T1187'); Desc='SMB/NTLM misconfig enables relay attacks and credential capture' }
+    'EP04' = @{ Tactics=@('TA0001','TA0002','TA0008'); Techniques=@('T1190','T1203','T1210'); Desc='Unpatched systems enable exploitation of public-facing apps' }
+    'EP05' = @{ Tactics=@('TA0004','TA0003','TA0002'); Techniques=@('T1574.009','T1574.001','T1547.001','T1053'); Desc='Unquoted service paths and cached creds enable local privesc' }
+    'EP06' = @{ Tactics=@('TA0112','TA0011','TA0010'); Techniques=@('T1686.003','T1071','T1048'); Desc='Firewall gaps allow C2 and data exfiltration' }
+    'EP07' = @{ Tactics=@('TA0002','TA0005','TA0003'); Techniques=@('T1059','T1204.002','T1137','T1221'); Desc='Missing AppLocker/WDAC enables arbitrary code execution' }
+    'EP08' = @{ Tactics=@('TA0006','TA0004'); Techniques=@('T1003.001','T1003.004','T1003.005','T1547.008'); Desc='Missing Credential Guard enables LSASS dumping' }
+    'EP09' = @{ Tactics=@('TA0001','TA0008','TA0010'); Techniques=@('T1091','T1052.001'); Desc='AutoRun and unrestricted removable media let malware spread and data leave on USB drives' }
     'EP10' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1210'); Desc='End-of-life operating systems expose public and internal services to known exploitation' }
-    'EP11' = @{ Tactics=@('TA0003','TA0005'); Techniques=@('T1542.003'); Desc='A device still trusting only the 2011 Secure Boot certificates cannot receive boot manager revocations, leaving it open to bootkits such as BlackLotus' }
+    'EP11' = @{ Tactics=@('TA0003','TA0005'); Techniques=@('T1542.003'); Desc='A device still trusting only the 2011 Secure Boot certificates can''t receive boot manager revocations, leaving it open to bootkits such as BlackLotus' }
     # ── Logging & Monitoring ──
-    'LM01' = @{ Tactics=@('TA0005'); Techniques=@('T1562.002','T1070.001'); Desc='Inadequate audit policy creates blind spots; attackers operate undetected' }
-    'LM02' = @{ Tactics=@('TA0005','TA0040'); Techniques=@('T1562.002','T1485'); Desc='No SIEM means no correlation, alerting, or forensic capability during active compromise' }
-    'LM03' = @{ Tactics=@('TA0002','TA0005'); Techniques=@('T1059.001','T1059.003','T1562.002','T1070'); Desc='Missing PS logging/auditing allows script-based attacks to execute without trace' }
-    'LM04' = @{ Tactics=@('TA0005','TA0011'); Techniques=@('T1562.002','T1071'); Desc='No firewall/IDS logging means network-based attacks go undetected' }
-    'LM05' = @{ Tactics=@('TA0005'); Techniques=@('T1562.002','T1070.001','T1070.002'); Desc='Logs without integrity protection can be tampered with to cover tracks' }
-    'LM06' = @{ Tactics=@('TA0005'); Techniques=@('T1070.001','T1562.002'); Desc='Missing log review means alerts are generated but never acted upon' }
-    'LM07' = @{ Tactics=@('TA0005'); Techniques=@('T1070.001','T1562.002'); Desc='Small log sizes cause critical events to be overwritten before detection' }
-    'LM08' = @{ Tactics=@('TA0005','TA0011'); Techniques=@('T1562.002','T1071'); Desc='Missing alerting means real-time attacks proceed without response' }
+    'LM01' = @{ Tactics=@('TA0011'); Techniques=@('T1071.004','T1568'); Desc='Missing DNS logging hides DNS-based C2 and dynamic resolution' }
+    'LM02' = @{ Tactics=@('TA0112','TA0040'); Techniques=@('T1685.001','T1485'); Desc='No SIEM means no correlation or alerting' }
+    'LM03' = @{ Tactics=@('TA0002','TA0112','TA0005'); Techniques=@('T1059.001','T1059.003','T1685.001','T1070'); Desc='Missing PS logging allows script-based attacks without trace' }
+    'LM04' = @{ Tactics=@('TA0112','TA0011'); Techniques=@('T1685.001','T1071'); Desc='No firewall logging means network attacks go undetected' }
+    'LM05' = @{ Tactics=@('TA0006','TA0001'); Techniques=@('T1110','T1078'); Desc='Unmonitored failed logons hide brute-force and password-guessing attempts' }
+    'LM06' = @{ Tactics=@('TA0112','TA0005'); Techniques=@('T1685','T1070.004'); Desc='Missing file integrity monitoring lets defense tampering and file deletion go unnoticed' }
+    'LM07' = @{ Tactics=@('TA0112'); Techniques=@('T1685.005','T1685.001'); Desc='Small log sizes cause critical events to be overwritten' }
+    'LM08' = @{ Tactics=@('TA0112','TA0011'); Techniques=@('T1685.001','T1071'); Desc='Missing alerting means attacks proceed without response' }
     # ── Network Architecture ──
-    'NA01' = @{ Tactics=@('TA0008'); Techniques=@('T1021','T1570','T1210'); Desc='Flat networks enable unrestricted lateral movement after initial compromise' }
-    'NA02' = @{ Tactics=@('TA0008','TA0011'); Techniques=@('T1021','T1071'); Desc='Missing segmentation between client/server tiers enables lateral movement to high-value targets' }
-    'NA03' = @{ Tactics=@('TA0008','TA0011'); Techniques=@('T1021','T1071','T1048'); Desc='No DMZ exposes internal services directly and enables pivot from compromised public services' }
-    'NA04' = @{ Tactics=@('TA0008','TA0011'); Techniques=@('T1021','T1071'); Desc='Missing wireless segmentation enables network pivot from compromised WiFi clients' }
-    'NA05' = @{ Tactics=@('TA0001','TA0011'); Techniques=@('T1133','T1071'); Desc='VPN without segmentation grants full network access on compromise' }
-    'NA06' = @{ Tactics=@('TA0008','TA0040'); Techniques=@('T1021','T1570','T1210'); Desc='Missing IDS/monitoring means lateral movement and exploitation go undetected' }
-    'NA07' = @{ Tactics=@('TA0011','TA0010'); Techniques=@('T1071','T1048','T1568'); Desc='Missing DNS filtering allows C2 channels, data exfil via DNS, and drive-by downloads' }
+    'NA01' = @{ Tactics=@('TA0008'); Techniques=@('T1021','T1570','T1210'); Desc='Flat networks enable unrestricted lateral movement' }
+    'NA02' = @{ Tactics=@('TA0008','TA0011'); Techniques=@('T1021','T1071'); Desc='Missing segmentation enables lateral movement to high-value targets' }
+    'NA03' = @{ Tactics=@('TA0001','TA0008','TA0006'); Techniques=@('T1078','T1557','T1021'); Desc='Weak wireless controls allow unauthorized network access and lateral movement from WiFi' }
+    'NA04' = @{ Tactics=@('TA0007'); Techniques=@('T1016','T1046'); Desc='Stale network diagrams and inventories hide exposed attack paths from defenders' }
+    'NA05' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1200','T1078','T1021'); Desc='Missing 802.1X or NAC allows rogue devices to join internal networks' }
+    'NA06' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1133','T1021','T1210'); Desc='Exposed management interfaces give attackers direct administrative paths' }
+    'NA07' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1200','T1021','T1210'); Desc='Poor guest network isolation lets untrusted devices reach internal systems' }
     # ── Network Perimeter ──
-    'NP01' = @{ Tactics=@('TA0005','TA0011'); Techniques=@('T1562.004','T1071'); Desc='Weak firewall rules expose attack surface and allow C2/exfil channels' }
-    'NP02' = @{ Tactics=@('TA0001','TA0043'); Techniques=@('T1190','T1046'); Desc='Open ports expose services to exploitation and enable reconnaissance' }
-    'NP03' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1133','T1021.001'); Desc='Exposed RDP/remote access enables brute force and RDP-based ransomware delivery' }
-    'NP04' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1190','T1562.004'); Desc='WAF/edge protection gaps allow web app exploitation and injection attacks' }
-    'NP05' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1210'); Desc='Permissive ACLs expose internal services to external exploitation' }
-    'NP06' = @{ Tactics=@('TA0001','TA0011'); Techniques=@('T1190','T1071.001'); Desc='Missing SSL inspection allows encrypted C2, malware delivery, and data exfiltration' }
-    'NP07' = @{ Tactics=@('TA0005','TA0011'); Techniques=@('T1071','T1568','T1562.004'); Desc='No IDS/IPS means network-level attacks bypass perimeter undetected' }
-    'NP08' = @{ Tactics=@('TA0006','TA0009'); Techniques=@('T1557','T1040','T1552.001'); Desc='Weak TLS/SSL enables credential interception, MitM, and data collection from encrypted channels' }
-    'NP09' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1021'); Desc='Unnecessary NAT/port forwards expose internal hosts to direct exploitation' }
-    'NP10' = @{ Tactics=@('TA0001','TA0002'); Techniques=@('T1190','T1210'); Desc='Unpatched perimeter firmware contains known exploitable vulnerabilities' }
+    'NP01' = @{ Tactics=@('TA0112','TA0011'); Techniques=@('T1686.003','T1071'); Desc='Weak firewall rules expose attack surface' }
+    'NP02' = @{ Tactics=@('TA0001','TA0007'); Techniques=@('T1190','T1046'); Desc='Open ports expose services to exploitation' }
+    'NP03' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1133','T1021.001'); Desc='Exposed RDP enables brute force and ransomware delivery' }
+    'NP04' = @{ Tactics=@('TA0011'); Techniques=@('T1071.004','T1568'); Desc='Missing DNS filtering allows DNS-based C2 and dynamic resolution' }
+    'NP05' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1210'); Desc='Permissive ACLs expose internal services' }
+    'NP06' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1133','T1021','T1210'); Desc='Temporary firewall rules leave forgotten remote-service exposure' }
+    'NP07' = @{ Tactics=@('TA0112','TA0011'); Techniques=@('T1071','T1568','T1686.003'); Desc='No IDS/IPS means network attacks bypass perimeter' }
+    'NP08' = @{ Tactics=@('TA0006','TA0009'); Techniques=@('T1557','T1040','T1552.001'); Desc='Weak TLS enables credential interception and MitM' }
+    'NP09' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1021'); Desc='Unnecessary NAT/port forwards expose internal hosts' }
+    'NP10' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1210'); Desc='Unpatched perimeter firmware contains known exploitable vulnerabilities' }
     # ── Backup & Recovery ──
-    'BR01' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490','T1485'); Desc='No backup means ransomware encryption is catastrophic with no recovery path' }
-    'BR02' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490'); Desc='Backups without offsite/immutable copies are destroyed alongside primary in ransomware attacks' }
-    'BR03' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490','T1485'); Desc='No DR plan means extended downtime and uncoordinated recovery during incidents' }
-    'BR04' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490'); Desc='Untested backups may fail during actual recovery, extending downtime' }
-    'BR05' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1489'); Desc='No documented RTO/RPO means no recovery time expectations or prioritization' }
-    'BR06' = @{ Tactics=@('TA0040'); Techniques=@('T1490','T1486'); Desc='Unmonitored backup failures mean data loss is discovered only during recovery attempt' }
-    'BR07' = @{ Tactics=@('TA0040','TA0010'); Techniques=@('T1486','T1048'); Desc='Unencrypted backups expose sensitive data if storage is compromised or stolen' }
+    'BR01' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490','T1485'); Desc='No backup means ransomware encryption is catastrophic' }
+    'BR02' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490'); Desc='Backups without offsite copies are destroyed alongside primary' }
+    'BR03' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490'); Desc='Untested backups may fail during actual restore and recovery' }
+    'BR04' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490','T1489'); Desc='Undefined RTO/RPO leaves responders without recovery targets' }
+    'BR05' = @{ Tactics=@('TA0010','TA0040'); Techniques=@('T1048','T1486'); Desc='Unencrypted backups expose data if backup storage is compromised' }
+    'BR06' = @{ Tactics=@('TA0040'); Techniques=@('T1490','T1486'); Desc='Unmonitored backup failures mean data loss discovered only during recovery' }
+    'BR07' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490','T1485'); Desc='No DR plan means extended downtime during incidents' }
     'BR08' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1490','T1561'); Desc='Missing backup for critical systems means targeted destruction is irrecoverable' }
     # ── Common Findings ──
-    'CF01' = @{ Tactics=@('TA0006','TA0004','TA0003'); Techniques=@('T1558.003','T1078.002','T1098'); Desc='DA service accounts, missing LAPS, GPP passwords, ADCS vulns enable domain compromise chains' }
-    'CF02' = @{ Tactics=@('TA0008','TA0005'); Techniques=@('T1021.002','T1570'); Desc='SMBv1 and legacy protocols enable EternalBlue-class exploits and relay attacks' }
-    'CF03' = @{ Tactics=@('TA0001','TA0043'); Techniques=@('T1566.001','T1566.002','T1598'); Desc='Untrained users fall for phishing, social engineering, and credential harvesting campaigns' }
-    'CF04' = @{ Tactics=@('TA0009','TA0010'); Techniques=@('T1005','T1039','T1048'); Desc='Excessive permissions enable data collection from shared drives and data exfiltration' }
-    'CF05' = @{ Tactics=@('TA0009','TA0010'); Techniques=@('T1039','T1005','T1048'); Desc='Open shares expose sensitive data for collection and enable lateral data access' }
-    'CF06' = @{ Tactics=@('TA0008','TA0011'); Techniques=@('T1021.001','T1071'); Desc='Unrestricted remote access enables lateral movement and persistent C2 channels' }
-    'CF07' = @{ Tactics=@('TA0004','TA0008'); Techniques=@('T1078.001','T1021'); Desc='Excessive local admin rights enable privilege escalation and lateral movement' }
-    'CF08' = @{ Tactics=@('TA0001','TA0005'); Techniques=@('T1190','T1211','T1562.001'); Desc='Missing vulnerability management leaves known CVEs exploitable across the environment' }
+    'CF01' = @{ Tactics=@('TA0006','TA0004','TA0003'); Techniques=@('T1558.003','T1078.002','T1098'); Desc='DA service accounts, missing LAPS, GPP passwords enable domain compromise' }
+    'CF02' = @{ Tactics=@('TA0011','TA0010'); Techniques=@('T1071','T1041','T1105'); Desc='Missing egress filtering allows outbound C2, tool transfer, and exfiltration' }
+    'CF03' = @{ Tactics=@('TA0001','TA0043'); Techniques=@('T1566.001','T1566.002','T1598'); Desc='Untrained users fall for phishing and social engineering' }
+    'CF04' = @{ Tactics=@('TA0003','TA0004','TA0005'); Techniques=@('T1078.002','T1098'); Desc='Active former employee accounts remain valid domain access paths' }
+    'CF05' = @{ Tactics=@('TA0009','TA0010'); Techniques=@('T1039','T1005','T1048'); Desc='Open shares expose sensitive data' }
+    'CF06' = @{ Tactics=@('TA0008'); Techniques=@('T1021','T1570','T1210'); Desc='Flat networks enable unrestricted lateral movement' }
+    'CF07' = @{ Tactics=@('TA0004','TA0008'); Techniques=@('T1078.003','T1021'); Desc='Excessive local admin rights enable privilege escalation' }
+    'CF08' = @{ Tactics=@('TA0011'); Techniques=@('T1071.004','T1568'); Desc='Unfiltered DNS resolvers allow DNS C2 and dynamic resolution' }
     # ── Policies & Standards ──
-    'PS01' = @{ Tactics=@('TA0001','TA0042'); Techniques=@('T1078','T1595'); Desc='Missing security policies leave the organization without defined security posture or baselines' }
-    'PS02' = @{ Tactics=@('TA0042'); Techniques=@('T1595','T1589'); Desc='No AUP means no policy enforcement for acceptable behavior and security expectations' }
-    'PS03' = @{ Tactics=@('TA0040','TA0042'); Techniques=@('T1486','T1489','T1485'); Desc='Missing IR plan means uncoordinated, delayed response to active breaches' }
-    'PS04' = @{ Tactics=@('TA0042'); Techniques=@('T1595'); Desc='No compliance monitoring means security drift goes undetected over time' }
-    'PS05' = @{ Tactics=@('TA0042','TA0043'); Techniques=@('T1595','T1592'); Desc='Missing risk assessment leaves unknown vulnerabilities and threat vectors unaddressed' }
-    'PS06' = @{ Tactics=@('TA0001','TA0043'); Techniques=@('T1566','T1598','T1204'); Desc='Without ongoing training, users remain the weakest link for phishing and social engineering' }
+    'PS01' = @{ Tactics=@('TA0001','TA0043'); Techniques=@('T1078','T1595'); Desc='Missing security policies leave no defined security posture' }
+    'PS02' = @{ Tactics=@('TA0043'); Techniques=@('T1595','T1589'); Desc='No AUP means no policy enforcement' }
+    'PS03' = @{ Tactics=@('TA0040'); Techniques=@('T1486','T1489','T1485'); Desc='Missing IR plan means uncoordinated response to breaches' }
+    'PS04' = @{ Tactics=@('TA0043'); Techniques=@('T1595'); Desc='No compliance monitoring means security drift goes undetected' }
+    'PS05' = @{ Tactics=@('TA0043'); Techniques=@('T1595','T1592'); Desc='Missing risk assessment leaves unknown vulnerabilities unaddressed' }
+    'PS06' = @{ Tactics=@('TA0001','TA0043','TA0002'); Techniques=@('T1566','T1598','T1204'); Desc='Without ongoing training users remain the weakest link' }
 }
 
 # MITRE D3FEND defensive technique mapping (v1.4.0)
@@ -9014,13 +9015,14 @@ $script:MitreTactics = [ordered]@{
     'TA0002' = @{ Name='Execution'; Short='Execution'; Color='#f97316' }
     'TA0003' = @{ Name='Persistence'; Short='Persist'; Color='#eab308' }
     'TA0004' = @{ Name='Privilege Escalation'; Short='PrivEsc'; Color='#84cc16' }
-    'TA0005' = @{ Name='Defense Evasion'; Short='DefEvade'; Color='#22c55e' }
+    'TA0005' = @{ Name='Stealth'; Short='Stealth'; Color='#22c55e' }
+    'TA0112' = @{ Name='Defense Impairment'; Short='DefImpair'; Color='#10b981' }
     'TA0006' = @{ Name='Credential Access'; Short='CredAccess'; Color='#14b8a6' }
     'TA0007' = @{ Name='Discovery'; Short='Discovery'; Color='#06b6d4' }
     'TA0008' = @{ Name='Lateral Movement'; Short='LatMove'; Color='#3b82f6' }
     'TA0009' = @{ Name='Collection'; Short='Collection'; Color='#6366f1' }
+    'TA0011' = @{ Name='Command and Control'; Short='C2'; Color='#a855f7' }
     'TA0010' = @{ Name='Exfiltration'; Short='Exfil'; Color='#8b5cf6' }
-    'TA0011' = @{ Name='Command & Control'; Short='C2'; Color='#a855f7' }
     'TA0040' = @{ Name='Impact'; Short='Impact'; Color='#ec4899' }
 }
 
@@ -9058,7 +9060,7 @@ function Get-AttackPaths {
     if ('IA03' -in $failedIds) { $chain1 += @{ID='IA03';Step='Phishing reaches remote access without local strong-auth evidence (T1566)'} }
     if ('CF03' -in $failedIds) { $chain1 += @{ID='CF03';Step='Untrained users click malicious links (T1204)'} }
     if ('EP07' -in $failedIds) { $chain1 += @{ID='EP07';Step='Malicious macro executes payload (T1059, T1204.002)'} }
-    if ('EP01' -in $failedIds) { $chain1 += @{ID='EP01';Step='AV fails to detect/block payload (T1562.001)'} }
+    if ('EP01' -in $failedIds) { $chain1 += @{ID='EP01';Step='AV fails to detect/block payload (T1685)'} }
     if ('EP08' -in $failedIds) { $chain1 += @{ID='EP08';Step='Credentials dumped from LSASS (T1003.001)'} }
     if ('IA01' -in $failedIds) { $chain1 += @{ID='IA01';Step='Stolen DA creds grant domain admin (T1078.002)'} }
     if ('CF01' -in $failedIds) { $chain1 += @{ID='CF01';Step='ADCS/LDAP vulns enable persistence (T1098)'} }
@@ -9068,7 +9070,7 @@ function Get-AttackPaths {
     if ('NA01' -in $failedIds) { $chain2 += @{ID='NA01';Step='Flat network enables unrestricted movement (T1021)'} }
     if ('EP03' -in $failedIds) { $chain2 += @{ID='EP03';Step='SMB/NTLM relay enables credential theft (T1557.001)'} }
     if ('CF07' -in $failedIds) { $chain2 += @{ID='CF07';Step='Excessive local admin enables lateral spread (T1078.001)'} }
-    if ('LM02' -in $failedIds) { $chain2 += @{ID='LM02';Step='No SIEM - lateral movement goes undetected (T1562.002)'} }
+    if ('LM02' -in $failedIds) { $chain2 += @{ID='LM02';Step='No SIEM - lateral movement goes undetected (T1685.001)'} }
     if ('BR01' -in $failedIds -or 'BR02' -in $failedIds) { $chain2 += @{ID=$(if('BR01' -in $failedIds){'BR01'}else{'BR02'});Step='No backup recovery path - ransomware is catastrophic (T1486)'} }
     if ($chain2.Count -ge 3) { $paths += @{ Name='Lateral Movement to Ransomware'; Severity='CRITICAL'; Steps=$chain2 } }
     # Chain 2B: CVE-2025-33073 NTLM Reflection
@@ -9084,14 +9086,14 @@ function Get-AttackPaths {
     if ('NP03' -in $failedIds) { $chain3 += @{ID='NP03';Step='RDP exposed - brute force or BlueKeep (T1021.001)'} }
     if ('CF05' -in $failedIds) { $chain3 += @{ID='CF05';Step='Open shares expose sensitive data (T1039)'} }
     if ('EP06' -in $failedIds) { $chain3 += @{ID='EP06';Step='Firewall gaps allow data exfiltration (T1048)'} }
-    if ('NA07' -in $failedIds) { $chain3 += @{ID='NA07';Step='No DNS filtering - C2 via DNS tunneling (T1071)'} }
+    if ('NP04' -in $failedIds) { $chain3 += @{ID='NP04';Step='No DNS filtering - C2 via DNS tunneling (T1071.004)'} }
     if ($chain3.Count -ge 3) { $paths += @{ Name='External Exploitation to Data Exfiltration'; Severity='HIGH'; Steps=$chain3 } }
     # Chain 4: Insider Threat / Credential Abuse
     $chain4 = @()
     if ('IA04' -in $failedIds) { $chain4 += @{ID='IA04';Step='Terminated employee accounts still active (T1078)'} }
     if ('IA07' -in $failedIds) { $chain4 += @{ID='IA07';Step='Shared accounts eliminate attribution (T1078.001)'} }
-    if ('LM01' -in $failedIds) { $chain4 += @{ID='LM01';Step='Inadequate auditing hides insider activity (T1562.002)'} }
-    if ('CF04' -in $failedIds) { $chain4 += @{ID='CF04';Step='Excessive permissions enable data theft (T1005)'} }
+    if ('LM03' -in $failedIds) { $chain4 += @{ID='LM03';Step='Inadequate auditing hides insider activity (T1685.001)'} }
+    if ('CF04' -in $failedIds) { $chain4 += @{ID='CF04';Step='Former employee accounts keep domain access (T1078.002)'} }
     if ($chain4.Count -ge 3) { $paths += @{ Name='Insider Threat / Credential Abuse'; Severity='HIGH'; Steps=$chain4 } }
     # Chain 5: Kerberoasting -> Domain Compromise
     $chain5 = @()
@@ -9106,7 +9108,7 @@ function Get-AttackPaths {
     if ('CF01' -in $failedIds) { $chain6 += @{ID='CF01';Step='ADCS ESC1/ESC6 templates allow SAN specification (T1649)'} }
     if ('IA03' -in $failedIds) { $chain6 += @{ID='IA03';Step='No local strong-auth evidence for certificate/admin workflows (T1556)'} }
     if ('EP03' -in $failedIds) { $chain6 += @{ID='EP03';Step='NTLM relay to web enrollment endpoint (T1557.001)'} }
-    if ('LM02' -in $failedIds) { $chain6 += @{ID='LM02';Step='No SIEM - certificate abuse goes undetected (T1562.002)'} }
+    if ('LM02' -in $failedIds) { $chain6 += @{ID='LM02';Step='No SIEM - certificate abuse goes undetected (T1685.001)'} }
     if ($chain6.Count -ge 3) { $paths += @{ Name='ADCS Abuse to Persistent Access'; Severity='CRITICAL'; Steps=$chain6 } }
     return $paths
 }

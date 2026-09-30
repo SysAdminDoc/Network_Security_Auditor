@@ -20,7 +20,7 @@
   "evidence_truncated": false,
   "cis": "10.1",
   "nist": "3.14.1",
-  "mitre_tactics": ["TA0005"],
-  "mitre_techniques": ["T1562"],
+  "mitre_tactics": ["TA0112"],
+  "mitre_techniques": ["T1685"],
   "duration_ms": 12.3
 }

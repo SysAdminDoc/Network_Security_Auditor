@@ -228,12 +228,12 @@ Describe 'Version surface consistency' {
 Describe 'External export version contracts' {
     It 'pins current external taxonomy and schema versions' {
         $expected = [ordered]@{
-            AttackEnterprise = '19.1'
+            AttackEnterprise = '19.2'
             AttackNavigator = '4.5'
             AttackNavigatorApp = '5.3.2'
             D3FEND = '1.4.0'
             OCSF = '1.8.0'
-            OSCAL = '1.2.2'
+            OSCAL = '1.2.3'
         }
         foreach ($key in $expected.Keys) {
             $script:Text | Should -Match "(?m)^\s*$key\s*=\s*'$([regex]::Escape($expected[$key]))'" -Because "$key export contract drifted"

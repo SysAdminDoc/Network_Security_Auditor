@@ -7,7 +7,7 @@ using NetworkSecurityAuditor.ViewModels;
 namespace NetworkSecurityAuditor.Export;
 
 /// <summary>
-/// NIST OSCAL v1.2.2 Assessment Results exporter.
+/// NIST OSCAL v1.2.3 Assessment Results exporter.
 /// Produces observations, findings, and risks per the OSCAL assessment-results model.
 /// </summary>
 public static class OscalExporter
