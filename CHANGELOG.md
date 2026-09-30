@@ -4,6 +4,10 @@ All notable changes to Network_Security_Auditor will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+- The release dependency gate passes again. The System.DirectoryServices, System.Management and ServiceController packages moved to 10.0.12 (the September .NET servicing release), the test SDK to 18.10.1 and coverlet to 10.1.0, which also brings Newtonsoft.Json up to 13.0.4. The only deferrals left are the two xunit v3-line packages, with owned exceptions that run to 2026-12-31.
+- Dependency exceptions now match on package and resolved version. The latest version seen when an exception was written is kept as `observed_latest_version` for reference. If upstream ships something newer, the gate keeps honoring the exception and lists the change under `decision.warnings`. Before this, the next upstream patch silently voided every exception and failed the gate weeks ahead of the expiry date.
+
 ### Docs
 - The README no longer asks a visitor to paste an `Invoke-WebRequest` fetch-and-run block. Getting
   the script is now a download link followed by local-only commands (`Unblock-File`, `Get-FileHash`,

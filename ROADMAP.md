@@ -170,13 +170,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P0
 
-- [ ] P0 — NSA-065 Restore a passing release dependency gate
-  Why: `tools/Test-DependencyHealth.ps1 -Release` exits 3 on 2026-09-29, so `Publish-CSharpRelease.ps1` can't produce a release; the exceptions pin an exact `latest_version`, so they stopped matching as soon as upstream shipped the next patch, before their 2026-09-30 expiry.
-  Evidence: local gate run 2026-09-29 (16 outdated, 1 exception matching); `tools/dependency-health-exceptions.json`; .NET 10.0.12 servicing (2026-09-08, 7 CVEs) https://devblogs.microsoft.com/dotnet/dotnet-and-dotnet-framework-september-2026-servicing-updates/.
-  Touches: `src/NetworkSecurityAuditor/NetworkSecurityAuditor.csproj`, `tests/NetworkSecurityAuditor.Tests/NetworkSecurityAuditor.Tests.csproj`, `tools/dependency-health-exceptions.json`, `tools/Test-DependencyHealth.ps1`, `tests/.../DependencyHealthToolingTests.cs`.
-  Acceptance: System.* packages move to 10.0.12, Microsoft.NET.Test.Sdk to 18.10.x, coverlet.collector to 10.1.0, Newtonsoft.Json resolves to 13.0.4; xunit.runner.visualstudio 4.x and xunit.analyzers 2.x stay on dated, owned exceptions until NSA-100; exceptions match on package and resolved version and record the observed latest as information, so a newer upstream patch shows as a warning instead of silently voiding the exception; `-Release` exits 0 and the full test suite passes.
-  Complexity: S
-
 - [ ] P0 — NSA-066 Stop LM02 from passing on inbox Windows services
   Why: the SIEM agent list includes `EventLog`, `Wecsvc` and `Sense`, which exist on every Windows host, so LM02 passes everywhere.
   Evidence: `src/NetworkSecurityAuditor/Checks/LoggingMonitoring/LM02_SiemCheck.cs:30-35,91`.

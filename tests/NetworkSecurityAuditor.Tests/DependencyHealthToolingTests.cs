@@ -87,8 +87,9 @@ public sealed class DependencyHealthToolingTests
             name: "approved-drift-package-patch",
             packageId: "Drift.Package",
             resolvedVersion: "4.2.1",
-            latestVersion: "4.2.2",
-            expiresOn: "2026-09-01");
+            observedLatestVersion: "4.2.2",
+            expiresOn: "2026-09-01",
+            observedField: "latest_version");
         var approvedRelease = fixture.Run(release: true);
 
         Assert.Equal(0, approvedRelease.ExitCode);
@@ -97,6 +98,139 @@ public sealed class DependencyHealthToolingTests
         Assert.Equal(
             "approved-drift-package-patch",
             approvedRelease.Report["summary"]!["used_exception_names"]![0]!.GetValue<string>());
+        Assert.Equal(0, approvedRelease.Report["summary"]!["upstream_changed_exception_occurrences"]!.GetValue<int>());
+        Assert.Empty(approvedRelease.Report["decision"]!["warnings"]!.AsArray());
+    }
+
+    [Fact]
+    public void Dependency_Gate_Keeps_Exception_And_Warns_When_Upstream_Publishes_A_Newer_Version()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = DependencyFixture.Create();
+        fixture.WriteInventory(topLevel: [Package("Drift.Package", "4.2.1")]);
+        fixture.WriteCleanVulnerabilityReport();
+        fixture.WriteOutdatedReport(Package("Drift.Package", "4.2.1", latest: "4.2.3"));
+        fixture.WriteException(
+            name: "approved-drift-package-patch",
+            packageId: "Drift.Package",
+            resolvedVersion: "4.2.1",
+            observedLatestVersion: "4.2.2",
+            expiresOn: "2026-09-01");
+
+        var release = fixture.Run(release: true);
+
+        Assert.Equal(0, release.ExitCode);
+        Assert.Equal("PassWithExceptions", release.Report["decision"]!["status"]!.GetValue<string>());
+        Assert.Equal(1, release.Report["summary"]!["approved_exception_occurrences"]!.GetValue<int>());
+        Assert.Equal(1, release.Report["summary"]!["upstream_changed_exception_occurrences"]!.GetValue<int>());
+        var exception = release.Report["packages"]![0]!["exception"]!;
+        Assert.Equal("4.2.2", exception["observed_latest_version"]!.GetValue<string>());
+        Assert.Equal("4.2.3", exception["current_latest_version"]!.GetValue<string>());
+        Assert.True(exception["upstream_changed"]!.GetValue<bool>());
+        var warning = Assert.Single(release.Report["decision"]!["warnings"]!.AsArray())!.GetValue<string>();
+        Assert.Contains("Drift.Package 4.2.1", warning);
+        Assert.Contains("4.2.3", warning);
+        Assert.Contains("2026-09-01", warning);
+    }
+
+    [Fact]
+    public void Dependency_Gate_Release_Ignores_Exception_For_A_Different_Resolved_Version()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = DependencyFixture.Create();
+        fixture.WriteInventory(topLevel: [Package("Drift.Package", "4.2.1")]);
+        fixture.WriteCleanVulnerabilityReport();
+        fixture.WriteOutdatedReport(Package("Drift.Package", "4.2.1", latest: "4.2.2"));
+        fixture.WriteException(
+            name: "approved-older-resolved-version",
+            packageId: "Drift.Package",
+            resolvedVersion: "4.2.0",
+            observedLatestVersion: "4.2.2",
+            expiresOn: "2026-09-01");
+
+        var release = fixture.Run(release: true);
+
+        Assert.Equal(3, release.ExitCode);
+        Assert.Equal("Fail", release.Report["decision"]!["status"]!.GetValue<string>());
+        Assert.Null(release.Report["packages"]![0]!["exception"]);
+    }
+
+    [Fact]
+    public void Dependency_Gate_Release_Fails_Expired_Exception()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = DependencyFixture.Create();
+        fixture.WriteInventory(topLevel: [Package("Drift.Package", "4.2.1")]);
+        fixture.WriteCleanVulnerabilityReport();
+        fixture.WriteOutdatedReport(Package("Drift.Package", "4.2.1", latest: "4.2.2"));
+        fixture.WriteException(
+            name: "expired-drift-package-patch",
+            packageId: "Drift.Package",
+            resolvedVersion: "4.2.1",
+            observedLatestVersion: "4.2.2",
+            expiresOn: "2026-08-11");
+
+        var release = fixture.Run(release: true);
+
+        Assert.Equal(3, release.ExitCode);
+        Assert.Equal("Expired", release.Report["packages"]![0]!["exception"]!["status"]!.GetValue<string>());
+        Assert.Equal(1, release.Report["summary"]!["unapproved_outdated_occurrences"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Dependency_Gate_Rejects_Exception_Without_Observed_Latest_Version()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = DependencyFixture.Create();
+        fixture.WriteInventory(topLevel: [Package("Drift.Package", "4.2.1")]);
+        fixture.WriteCleanVulnerabilityReport();
+        fixture.WriteCleanOutdatedReport();
+        fixture.WriteException(
+            name: "missing-observed-latest",
+            packageId: "Drift.Package",
+            resolvedVersion: "4.2.1",
+            observedLatestVersion: null,
+            expiresOn: "2026-09-01");
+
+        var (exitCode, output) = fixture.RunWithoutReport(release: true);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("observed_latest_version", output);
+    }
+
+    [Fact]
+    public void Repository_Dependency_Exceptions_Record_Owner_Expiry_And_Observed_Latest()
+    {
+        var document = JsonNode.Parse(
+            File.ReadAllText(Path.Combine(FindRepoRoot(), "tools", "dependency-health-exceptions.json")))!.AsObject();
+
+        Assert.Equal("1.0", document["schema_version"]!.GetValue<string>());
+        foreach (var exception in document["exceptions"]!.AsArray())
+        {
+            var entry = exception!.AsObject();
+            var name = entry["name"]!.GetValue<string>();
+            Assert.False(string.IsNullOrWhiteSpace(entry["owner"]?.GetValue<string>()), $"{name} needs an owner.");
+            Assert.False(string.IsNullOrWhiteSpace(entry["reason"]?.GetValue<string>()), $"{name} needs a reason.");
+            Assert.False(string.IsNullOrWhiteSpace(entry["resolved_version"]?.GetValue<string>()), $"{name} needs a resolved version.");
+            Assert.False(string.IsNullOrWhiteSpace(entry["observed_latest_version"]?.GetValue<string>()), $"{name} needs observed_latest_version.");
+            Assert.False(entry.ContainsKey("latest_version"), $"{name} should use observed_latest_version, not the legacy latest_version field.");
+            Assert.True(
+                DateTime.TryParseExact(
+                    entry["expires_on"]!.GetValue<string>(),
+                    "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out _),
+                $"{name} needs a yyyy-MM-dd expiry.");
+        }
     }
 
     [Fact]
@@ -176,25 +310,39 @@ public sealed class DependencyHealthToolingTests
             string name,
             string packageId,
             string resolvedVersion,
-            string latestVersion,
-            string expiresOn) =>
-            WriteExceptions(
-            [
-                new JsonObject
-                {
-                    ["name"] = name,
-                    ["package_id"] = packageId,
-                    ["resolved_version"] = resolvedVersion,
-                    ["latest_version"] = latestVersion,
-                    ["owner"] = "Dependency owner",
-                    ["reason"] = "Scheduled for the next validated dependency refresh.",
-                    ["expires_on"] = expiresOn,
-                },
-            ]);
+            string? observedLatestVersion,
+            string expiresOn,
+            string observedField = "observed_latest_version")
+        {
+            var exception = new JsonObject
+            {
+                ["name"] = name,
+                ["package_id"] = packageId,
+                ["resolved_version"] = resolvedVersion,
+                ["owner"] = "Dependency owner",
+                ["reason"] = "Scheduled for the next validated dependency refresh.",
+                ["expires_on"] = expiresOn,
+            };
+            if (observedLatestVersion is not null)
+                exception[observedField] = observedLatestVersion;
+            WriteExceptions([exception]);
+        }
 
         public GateResult Run(bool release)
         {
             var outputPath = Path.Combine(root, $"result-{++reportSequence}.json");
+            var (exitCode, output) = Launch(release, outputPath);
+            Assert.True(File.Exists(outputPath), $"Dependency health gate did not write a report. Output: {output}");
+            var report = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Dependency health result was not a JSON object.");
+            return new GateResult(exitCode, report, output);
+        }
+
+        public (int ExitCode, string Output) RunWithoutReport(bool release) =>
+            Launch(release, Path.Combine(root, $"result-{++reportSequence}.json"));
+
+        private (int ExitCode, string Output) Launch(bool release, string outputPath)
+        {
             var repoRoot = FindRepoRoot();
             using var process = new Process
             {
@@ -228,10 +376,7 @@ public sealed class DependencyHealthToolingTests
             Assert.True(process.Start(), "Failed to launch dependency health gate.");
             Assert.True(process.WaitForExit(20_000), "Dependency health gate timed out.");
             var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-            Assert.True(File.Exists(outputPath), $"Dependency health gate did not write a report. Output: {output}");
-            var report = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
-                ?? throw new InvalidOperationException("Dependency health result was not a JSON object.");
-            return new GateResult(process.ExitCode, report, output);
+            return (process.ExitCode, output);
         }
 
         public void Dispose()

@@ -2,94 +2,22 @@
   "schema_version": "1.0",
   "exceptions": [
     {
-      "name": "defer-dotnet-servicing-packages-2026-08",
-      "package_id": "System.DirectoryServices.AccountManagement",
-      "resolved_version": "10.0.9",
-      "latest_version": "10.0.11",
+      "name": "defer-xunit-runner-v3-line-2026-09",
+      "package_id": "xunit.runner.visualstudio",
+      "resolved_version": "3.1.5",
+      "observed_latest_version": "4.0.0",
       "owner": "SysAdminDoc",
-      "reason": "Apply the servicing update in a dedicated dependency refresh with Windows and domain regression coverage.",
-      "expires_on": "2026-09-30"
+      "reason": "4.x belongs to the xunit v3 line and can't run under xunit 2.9.3; it moves with the xunit v3 migration (NSA-100).",
+      "expires_on": "2026-12-31"
     },
     {
-      "name": "defer-directory-protocols-servicing-2026-08",
-      "package_id": "System.DirectoryServices.Protocols",
-      "resolved_version": "10.0.9",
-      "latest_version": "10.0.11",
-      "owner": "SysAdminDoc",
-      "reason": "Apply the servicing update in a dedicated dependency refresh with Windows and domain regression coverage.",
-      "expires_on": "2026-09-30"
-    },
-    {
-      "name": "defer-system-management-servicing-2026-08",
-      "package_id": "System.Management",
-      "resolved_version": "10.0.9",
-      "latest_version": "10.0.11",
-      "owner": "SysAdminDoc",
-      "reason": "Apply the servicing update in a dedicated dependency refresh with Windows and domain regression coverage.",
-      "expires_on": "2026-09-30"
-    },
-    {
-      "name": "defer-service-controller-servicing-2026-08",
-      "package_id": "System.ServiceProcess.ServiceController",
-      "resolved_version": "10.0.9",
-      "latest_version": "10.0.11",
-      "owner": "SysAdminDoc",
-      "reason": "Apply the servicing update in a dedicated dependency refresh with Windows and service-control regression coverage.",
-      "expires_on": "2026-09-30"
-    },
-    {
-      "name": "defer-test-sdk-refresh-2026-08",
-      "package_id": "Microsoft.NET.Test.Sdk",
-      "resolved_version": "18.7.0",
-      "latest_version": "18.8.1",
-      "owner": "SysAdminDoc",
-      "reason": "Refresh the test platform as one validated tooling batch so runner and coverage packages remain aligned.",
-      "expires_on": "2026-09-30"
-    },
-    {
-      "name": "defer-test-host-refresh-2026-08",
-      "package_id": "Microsoft.TestPlatform.TestHost",
-      "resolved_version": "18.7.0",
-      "latest_version": "18.8.1",
-      "owner": "SysAdminDoc",
-      "reason": "Refresh the test platform as one validated tooling batch so runner and coverage packages remain aligned.",
-      "expires_on": "2026-09-30"
-    },
-    {
-      "name": "defer-test-object-model-refresh-2026-08",
-      "package_id": "Microsoft.TestPlatform.ObjectModel",
-      "resolved_version": "18.7.0",
-      "latest_version": "18.8.1",
-      "owner": "SysAdminDoc",
-      "reason": "Refresh the test platform as one validated tooling batch so runner and coverage packages remain aligned.",
-      "expires_on": "2026-09-30"
-    },
-    {
-      "name": "defer-code-coverage-refresh-2026-08",
-      "package_id": "Microsoft.CodeCoverage",
-      "resolved_version": "18.7.0",
-      "latest_version": "18.8.1",
-      "owner": "SysAdminDoc",
-      "reason": "Refresh the test platform as one validated tooling batch so runner and coverage packages remain aligned.",
-      "expires_on": "2026-09-30"
-    },
-    {
-      "name": "defer-newtonsoft-patch-2026-08",
-      "package_id": "Newtonsoft.Json",
-      "resolved_version": "13.0.3",
-      "latest_version": "13.0.4",
-      "owner": "SysAdminDoc",
-      "reason": "Apply the transitive patch through its owning dependency during the scheduled dependency refresh.",
-      "expires_on": "2026-09-30"
-    },
-    {
-      "name": "defer-xunit-analyzers-refresh-2026-08",
+      "name": "defer-xunit-analyzers-v3-line-2026-09",
       "package_id": "xunit.analyzers",
       "resolved_version": "1.18.0",
-      "latest_version": "1.27.0",
+      "observed_latest_version": "2.1.0",
       "owner": "SysAdminDoc",
-      "reason": "Adopt the transitive analyzer update with the planned xUnit tooling refresh and warning review.",
-      "expires_on": "2026-09-30"
+      "reason": "2.x analyzes xunit v3 APIs and arrives transitively with the xunit v3 migration (NSA-100).",
+      "expires_on": "2026-12-31"
     }
   ]
 }

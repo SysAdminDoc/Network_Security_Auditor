@@ -114,22 +114,31 @@ function Get-OptionalPropertyText {
     return ''
 }
 
+function Get-ObservedLatestVersion {
+    param($Exception)
+    # observed_latest_version is informational; latest_version is the pre-2026-09-30 spelling of the same field.
+    return Get-OptionalPropertyText $Exception @('observed_latest_version','latest_version')
+}
+
 function Get-MatchingDependencyException {
     param($Package, [object[]]$Exceptions, [datetime]$Date)
     foreach ($exception in $Exceptions) {
         if (-not ([string]$exception.package_id).Equals([string]$Package.id, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
         if ([string]$exception.resolved_version -ne [string]$Package.resolved_version) { continue }
-        if ([string]$exception.latest_version -ne [string]$Package.latest_version) { continue }
         if ($exception.PSObject.Properties['project'] -and [string]$exception.project -and [string]$exception.project -ne '*' -and
             -not ([string]$exception.project).Equals([string]$Package.project, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
         $expires = [datetime]::MinValue
         Assert-DependencyCondition ([datetime]::TryParseExact([string]$exception.expires_on, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$expires)) "Dependency exception '$($exception.name)' has an invalid expires_on date."
+        $observedLatest = Get-ObservedLatestVersion $exception
         return [ordered]@{
             name = [string]$exception.name
             owner = [string]$exception.owner
             reason = [string]$exception.reason
             expires_on = $expires.ToString('yyyy-MM-dd')
             status = if ($expires.Date -ge $Date.Date) { 'Active' } else { 'Expired' }
+            observed_latest_version = $observedLatest
+            current_latest_version = [string]$Package.latest_version
+            upstream_changed = ($observedLatest -ne [string]$Package.latest_version)
         }
     }
     return $null
@@ -154,9 +163,10 @@ try {
     $exceptions = @($exceptionDocument.exceptions)
     $exceptionNames = @{}
     foreach ($exception in $exceptions) {
-        foreach ($field in 'name','package_id','resolved_version','latest_version','owner','reason','expires_on') {
+        foreach ($field in 'name','package_id','resolved_version','owner','reason','expires_on') {
             Assert-DependencyCondition ($exception.PSObject.Properties[$field] -and -not [string]::IsNullOrWhiteSpace([string]$exception.$field)) "Dependency exception is missing required field '$field'."
         }
+        Assert-DependencyCondition (-not [string]::IsNullOrWhiteSpace((Get-ObservedLatestVersion $exception))) "Dependency exception '$($exception.name)' is missing required field 'observed_latest_version'."
         $normalizedName = ([string]$exception.name).ToUpperInvariant()
         Assert-DependencyCondition (-not $exceptionNames.ContainsKey($normalizedName)) "Dependency exception name '$($exception.name)' is duplicated."
         $exceptionNames[$normalizedName] = $true
@@ -240,20 +250,24 @@ try {
     $outdatedPackages = @($packages | Where-Object { $_.outdated })
     $approvedOutdated = @($outdatedPackages | Where-Object { $_.exception -and $_.exception.status -eq 'Active' })
     $unapprovedOutdated = @($outdatedPackages | Where-Object { -not $_.exception -or $_.exception.status -ne 'Active' })
+    $upstreamChanged = @($approvedOutdated | Where-Object { $_.exception.upstream_changed })
 
-    $decisionStatus = 'Pass'; $exitCode = 0; $reasons = @()
+    $decisionStatus = 'Pass'; $exitCode = 0; $reasons = @(); $warnings = @()
+    foreach ($package in $upstreamChanged) {
+        $warnings += "$($package.id) $($package.resolved_version) in $($package.project): exception '$($package.exception.name)' recorded latest $($package.exception.observed_latest_version), upstream now reports $($package.latest_version); review before $($package.exception.expires_on)."
+    }
     if ($vulnerablePackages.Count -gt 0) {
         $decisionStatus = 'Fail'; $exitCode = 2
         $reasons += "$($vulnerablePackages.Count) package occurrence(s) have $vulnerabilityCount vulnerability advisory record(s)."
     }
     if ($Release -and $unapprovedOutdated.Count -gt 0) {
         $decisionStatus = 'Fail'; if ($exitCode -eq 0) { $exitCode = 3 }
-        $reasons += "$($unapprovedOutdated.Count) outdated package occurrence(s) lack an active exact-version exception."
+        $reasons += "$($unapprovedOutdated.Count) outdated package occurrence(s) lack an active exception for their resolved version."
     }
     elseif ($outdatedPackages.Count -gt 0 -and $decisionStatus -eq 'Pass') {
         $decisionStatus = if ($Release) { 'PassWithExceptions' } else { 'Warning' }
         if ($Release) {
-            $reasons += "$($outdatedPackages.Count) outdated package occurrence(s) are covered by active exact-version exceptions."
+            $reasons += "$($outdatedPackages.Count) outdated package occurrence(s) are covered by active resolved-version exceptions."
         }
         else {
             $reasons += "$($outdatedPackages.Count) outdated package occurrence(s) were detected; local mode is warning-only."
@@ -289,14 +303,16 @@ try {
             outdated_package_occurrences = $outdatedPackages.Count
             approved_exception_occurrences = $approvedOutdated.Count
             unapproved_outdated_occurrences = $unapprovedOutdated.Count
+            upstream_changed_exception_occurrences = $upstreamChanged.Count
             used_exception_names = @($approvedOutdated | ForEach-Object { $_.exception.name } | Sort-Object -Unique)
         }
-        decision = [ordered]@{ status=$decisionStatus; exit_code=$exitCode; reasons=$reasons }
+        decision = [ordered]@{ status=$decisionStatus; exit_code=$exitCode; reasons=$reasons; warnings=$warnings }
     }
 
     Write-DependencyReport -Report $report -Path $OutputPath
+    foreach ($warning in $warnings) { Write-Warning $warning }
     if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
-        Write-Information "Dependency health: $decisionStatus - $($packages.Count) package occurrence(s), $($vulnerablePackages.Count) vulnerable, $($outdatedPackages.Count) outdated, $($approvedOutdated.Count) excepted." -InformationAction Continue
+        Write-Information "Dependency health: $decisionStatus - $($packages.Count) package occurrence(s), $($vulnerablePackages.Count) vulnerable, $($outdatedPackages.Count) outdated, $($approvedOutdated.Count) excepted, $($upstreamChanged.Count) with newer upstream." -InformationAction Continue
     }
     exit $exitCode
 }

@@ -168,13 +168,7 @@ The stable JSON result lists each direct/transitive occurrence, resolved/latest
 versions, advisories, patch/minor/major drift, data-source behavior, and the final
 policy decision.
 
-Vulnerabilities always fail. Drift is warning-only for local checks and fails
-`-Release` unless `tools/dependency-health-exceptions.json` contains a named,
-owned, reasoned, unexpired exception matching the exact package, resolved
-version, latest version, and optional project. A changed latest version therefore
-invalidates the exception instead of silently broadening it. The publisher accepts
-`-DependencyReportsDirectory` when release validation must consume precomputed
-offline reports.
+Vulnerabilities always fail. Drift is warning-only for local checks and fails `-Release` unless `tools/dependency-health-exceptions.json` contains a named, owned, reasoned, unexpired exception matching the package, the resolved version you ship, and optionally the project. Each exception also records the `observed_latest_version` seen when it was written. That value doesn't affect matching. When upstream publishes something newer, the gate still honors the exception and adds a warning to `decision.warnings`, so a new patch can't quietly void an approved deferral before its expiry date. The publisher accepts `-DependencyReportsDirectory` when release validation must consume precomputed offline reports.
 
 The release tool cleans `artifacts/csharp-release`, applies that dependency gate,
 runs the xUnit suite,
