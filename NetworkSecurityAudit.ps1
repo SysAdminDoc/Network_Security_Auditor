@@ -12223,25 +12223,59 @@ function Compare-AuditSnapshot {
 }
 
 # Carries first-seen timestamps forward for findings that are still failing so an
-# exposure window survives across runs. $Now/$NowIso are passed in to keep the
+# exposure window survives across runs. A run that couldn't assess a finding
+# (error, skipped, not permitted) keeps its open window with the last confirmed
+# last_seen and days and evidence_stale = $true, so the next Fail continues the same
+# window instead of starting at zero. $Now/$NowIso are passed in to keep the
 # function deterministic and testable.
 function Update-ExposureWindows {
     param($PrevExposure, $CurrentSnapshot, [datetime]$Now, [string]$NowIso)
+    $unavailable = @('N/A','Not Assessed','Skipped','Unavailable','NotLicensed','NotPermitted','NotConfigured','Error','')
     $getEntry = { param($map, $key) if ($null -eq $map) { $null } elseif ($map -is [System.Collections.IDictionary]) { $map[$key] } elseif ($map.PSObject.Properties[$key]) { $map.$key } else { $null } }
+    # PowerShell 7's ConvertFrom-Json turns ISO strings into DateTime; [string] would then write a US-format date without its offset.
+    $isoOf = { param($value) if ($value -is [datetime]) { $value.ToString('o') } else { [string]$value } }
     $findings = if ($CurrentSnapshot -and $CurrentSnapshot.findings) { $CurrentSnapshot.findings } else { @{} }
     $keys = if ($findings -is [System.Collections.IDictionary]) { @($findings.Keys) } else { @($findings.PSObject.Properties.Name) }
     $exposure = [ordered]@{}
     foreach ($id in $keys) {
         $f = & $getEntry $findings $id
-        if ([string]$f.status -ne 'Fail') { continue }
-        $firstSeen = $NowIso
+        $status = [string]$f.status
         $pe = & $getEntry $PrevExposure $id
-        if ($pe -and $pe.first_seen) { $firstSeen = [string]$pe.first_seen }
-        $days = 0
-        try { $days = [math]::Max(0, [math]::Round(($Now - [datetime]$firstSeen).TotalDays)) } catch { $days = 0 }
-        $exposure[$id] = [ordered]@{ first_seen = $firstSeen; last_seen = $NowIso; days = $days; severity = [string]$f.severity }
+        if ($status -eq 'Fail') {
+            $firstSeen = $NowIso
+            if ($pe -and $pe.first_seen) { $firstSeen = & $isoOf $pe.first_seen }
+            $days = 0
+            try { $days = [math]::Max(0, [math]::Round(($Now - [datetime]$firstSeen).TotalDays)) } catch { $days = 0 }
+            $exposure[$id] = [ordered]@{ first_seen = $firstSeen; last_seen = $NowIso; days = $days; severity = [string]$f.severity; evidence_stale = $false }
+        } elseif ($pe -and $pe.first_seen -and ($unavailable -contains $status)) {
+            $severity = if ($f.severity) { [string]$f.severity } else { [string]$pe.severity }
+            $lastSeen = if ($pe.last_seen) { & $isoOf $pe.last_seen } else { & $isoOf $pe.first_seen }
+            $exposure[$id] = [ordered]@{ first_seen = (& $isoOf $pe.first_seen); last_seen = $lastSeen; days = [int]$pe.days; severity = $severity; evidence_stale = $true }
+        }
     }
     return $exposure
+}
+
+# Closes the exposure window of each finding that had one and passes in this run,
+# so the delta and history record when it was resolved and how long it was open.
+function Get-ResolvedExposureWindows {
+    param($PrevExposure, $CurrentSnapshot, [datetime]$Now, [string]$NowIso)
+    $getEntry = { param($map, $key) if ($null -eq $map) { $null } elseif ($map -is [System.Collections.IDictionary]) { $map[$key] } elseif ($map.PSObject.Properties[$key]) { $map.$key } else { $null } }
+    $findings = if ($CurrentSnapshot -and $CurrentSnapshot.findings) { $CurrentSnapshot.findings } else { @{} }
+    $prevKeys = if ($null -eq $PrevExposure) { @() } elseif ($PrevExposure -is [System.Collections.IDictionary]) { @($PrevExposure.Keys) } else { @($PrevExposure.PSObject.Properties.Name) }
+    $isoOf = { param($value) if ($value -is [datetime]) { $value.ToString('o') } else { [string]$value } }
+    $resolved = [ordered]@{}
+    foreach ($id in $prevKeys) {
+        $pe = & $getEntry $PrevExposure $id
+        $f = & $getEntry $findings $id
+        if (-not $pe -or -not $pe.first_seen -or -not $f -or [string]$f.status -ne 'Pass') { continue }
+        $days = 0
+        $firstSeen = & $isoOf $pe.first_seen
+        try { $days = [math]::Max(0, [math]::Round(($Now - [datetime]$firstSeen).TotalDays)) } catch { $days = 0 }
+        $severity = if ($f.severity) { [string]$f.severity } else { [string]$pe.severity }
+        $resolved[$id] = [ordered]@{ first_seen = $firstSeen; last_seen = $(if ($pe.last_seen) { & $isoOf $pe.last_seen } else { $firstSeen }); resolved_at = $NowIso; days = $days; severity = $severity }
+    }
+    return $resolved
 }
 
 # Builds a preview alert payload (never sent). Suitable for a webhook body.
@@ -12358,6 +12392,8 @@ function Invoke-AuditHistory {
 
     $delta = if ($baseline -and $schemaOk -and $identityOk) { Compare-AuditSnapshot -Previous $baseline -Current $snapshot } else { $null }
     $exposure = Update-ExposureWindows -PrevExposure $prevExposure -CurrentSnapshot $snapshot -Now $now -NowIso $nowIso
+    $resolvedExposure = Get-ResolvedExposureWindows -PrevExposure $prevExposure -CurrentSnapshot $snapshot -Now $now -NowIso $nowIso
+    if ($delta) { $delta['resolved_exposure'] = $resolvedExposure }
     $snapshot['exposure'] = $exposure
     $snapshot['previous_run_id'] = if ($baseline -and $schemaOk -and $identityOk) { $baseline.run_id } else { $null }
     $payload = Get-AuditAlertPayload -Delta $delta -CurrentSnapshot $snapshot -Exposure $exposure -NowIso $nowIso
@@ -12395,6 +12431,7 @@ function Invoke-AuditHistory {
         counts = if ($delta) { $delta.counts } else { $null }
         worst_exposure_days = $payload.worst_exposure_days
         worst_critical_exposure_days = $payload.worst_critical_exposure_days
+        resolved_exposure = $resolvedExposure
         executive_kpis = $historyKpis
         baseline_age_days = $baselineAgeDays
         identity_compatible = $identityOk

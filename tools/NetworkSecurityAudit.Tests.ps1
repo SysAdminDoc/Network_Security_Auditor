@@ -1143,7 +1143,7 @@ Describe 'Fleet orchestration safeguards' {
 Describe 'Continuous delta engine (real functions via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        foreach ($nm in 'Test-AuditSnapshotIdentity','Compare-AuditSnapshot','Update-ExposureWindows','Get-AuditAlertPayload') {
+        foreach ($nm in 'Test-AuditSnapshotIdentity','Compare-AuditSnapshot','Update-ExposureWindows','Get-ResolvedExposureWindows','Get-AuditAlertPayload') {
             $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
             . ([scriptblock]::Create($fn.Extent.Text))
         }
@@ -1193,6 +1193,38 @@ Describe 'Continuous delta engine (real functions via AST)' {
         $exp.Keys | Should -Be @('IA01')                    # IA02 passing -> no exposure
         $exp.IA01.first_seen | Should -Be '2026-06-01T00:00:00.0000000'
         $exp.IA01.days | Should -Be 10                       # 10 days of exposure carried forward
+    }
+    It 'keeps first_seen and cumulative days across a run that could not assess the finding' {
+        # Fail, Unavailable, Fail. Each baseline goes through JSON the way Invoke-AuditHistory reads it back.
+        $roundTrip = { param($value) $value | ConvertTo-Json -Depth 6 | ConvertFrom-Json }
+        $day1 = [datetime]'2026-06-01T00:00:00'; $day5 = [datetime]'2026-06-05T00:00:00'; $day11 = [datetime]'2026-06-11T00:00:00'
+        $run1 = Update-ExposureWindows -PrevExposure $null -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Fail' 'Critical' 'x') } }) -Now $day1 -NowIso $day1.ToString('o')
+        $run2 = Update-ExposureWindows -PrevExposure (& $roundTrip $run1) -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Error' 'Critical' '') } }) -Now $day5 -NowIso $day5.ToString('o')
+        $run2.IA01.first_seen | Should -Be $day1.ToString('o')
+        $run2.IA01.last_seen | Should -Be $day1.ToString('o')
+        $run2.IA01.evidence_stale | Should -BeTrue
+        foreach ($status in 'Skipped','NotPermitted','Not Assessed') {
+            (Update-ExposureWindows -PrevExposure (& $roundTrip $run1) -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F $status 'Critical' '') } }) -Now $day5 -NowIso $day5.ToString('o')).Keys | Should -Contain 'IA01'
+        }
+        $run3 = Update-ExposureWindows -PrevExposure (& $roundTrip $run2) -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Fail' 'Critical' 'x') } }) -Now $day11 -NowIso $day11.ToString('o')
+        $run3.IA01.first_seen | Should -Be $day1.ToString('o')
+        $run3.IA01.days | Should -Be 10
+        $run3.IA01.evidence_stale | Should -BeFalse
+        # Partial and Pass still end the open window.
+        (Update-ExposureWindows -PrevExposure (& $roundTrip $run1) -CurrentSnapshot ([ordered]@{ findings=[ordered]@{ IA01=(F 'Pass' 'Critical' 'y') } }) -Now $day5 -NowIso $day5.ToString('o')).Keys | Should -Not -Contain 'IA01'
+    }
+    It 'records resolved_at and the final exposure window when a failing finding passes' {
+        $prevExp = @{ IA01 = @{ first_seen='2026-06-01T00:00:00.0000000'; last_seen='2026-06-08T00:00:00.0000000'; days=7; severity='Critical' }; IA02 = @{ first_seen='2026-06-01T00:00:00.0000000'; days=7; severity='High' } } | ConvertTo-Json -Depth 4 | ConvertFrom-Json
+        $snap = [ordered]@{ findings=[ordered]@{ IA01=(F 'Pass' 'Critical' 'x'); IA02=(F 'Fail' 'High' 'y') } }
+        $now = [datetime]'2026-06-11T00:00:00'
+        $resolved = Get-ResolvedExposureWindows -PrevExposure $prevExp -CurrentSnapshot $snap -Now $now -NowIso $now.ToString('o')
+        $resolved.Keys | Should -Be @('IA01')
+        $resolved.IA01.resolved_at | Should -Be $now.ToString('o')
+        $resolved.IA01.first_seen | Should -Be '2026-06-01T00:00:00.0000000'
+        $resolved.IA01.last_seen | Should -Be '2026-06-08T00:00:00.0000000'
+        $resolved.IA01.days | Should -Be 10
+        $resolved.IA01.severity | Should -Be 'Critical'
+        (Get-ResolvedExposureWindows -PrevExposure $null -CurrentSnapshot $snap -Now $now -NowIso 'n').Count | Should -Be 0
     }
     It 'builds an alert payload with worst critical exposure (never sent)' {
         $exp = @{ IA01=@{days=10;severity='Critical'}; IA02=@{days=40;severity='High'} }
@@ -1252,6 +1284,67 @@ Describe 'History persistence helpers (real functions via AST)' {
             ($lines | ForEach-Object { ($_ | ConvertFrom-Json).run }) | Should -Be @(1,2)
         }
         finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
+}
+
+Describe 'Exposure windows through Invoke-AuditHistory (real functions via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in 'Invoke-AuditHistory','Test-AuditSnapshotIdentity','Compare-AuditSnapshot','Update-ExposureWindows','Get-ResolvedExposureWindows',
+                        'Get-AuditAlertPayload','Get-MspExecutiveKpis','Write-HistoryJsonFile','Append-HistoryLine','Get-StringSha256') {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        # Stands in for the GUI-state converter; each run reports the status in $script:NextStatus.
+        function script:Convert-AuditStateToSnapshot {
+            param($RunId, $SnapshotId, $TimestampIso, $Client, $Target)
+            [ordered]@{ schema_version='2.1'; run_id=$RunId; timestamp=$TimestampIso; client=$Client; target=$Target; catalog_hash='c'; policy_hash='p'
+                score=[ordered]@{ overall=70; grade='C'; ransomware=60 }
+                findings=[ordered]@{ IA01=[ordered]@{ status=$script:NextStatus; severity='Critical'; fingerprint=$script:NextStatus } } }
+        }
+    }
+
+    It 'keeps the window through an errored run and writes resolved_at to the delta and history record' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('nsa-exposure-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        $saved = @{ NoHistory=$script:CliNoHistory; HistoryPath=$script:CliHistoryPath; BaselinePath=$script:CliBaselinePath; Retention=$script:CliHistoryRetentionDays }
+        try {
+            $script:CliNoHistory = $false; $script:CliHistoryPath = $root; $script:CliBaselinePath = $null; $script:CliHistoryRetentionDays = 0
+            $firstSeen = (Get-Date).AddDays(-10).ToString('o')
+            $baselineDir = Join-Path $root 'baselines'
+            New-Item -ItemType Directory -Path $baselineDir -Force | Out-Null
+            [ordered]@{ schema_version='2.1'; run_id='R0'; timestamp=$firstSeen; client='Acme'; target='DC'; score=@{ overall=60; grade='D'; ransomware=50 }
+                findings=@{ IA01=@{ status='Fail'; severity='Critical'; fingerprint='Fail' } }
+                exposure=@{ IA01=@{ first_seen=$firstSeen; last_seen=$firstSeen; days=0; severity='Critical'; evidence_stale=$false } } } |
+                ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $baselineDir 'latest.snapshot.json') -Encoding UTF8
+
+            $script:NextStatus = 'Error'
+            $errored = Invoke-AuditHistory -Client 'Acme' -Target 'DC' -OutputDir $root -RunId 'R1'
+            $errored.exposure.IA01.first_seen | Should -Be $firstSeen
+            $errored.exposure.IA01.evidence_stale | Should -BeTrue
+
+            $script:NextStatus = 'Fail'
+            $failing = Invoke-AuditHistory -Client 'Acme' -Target 'DC' -OutputDir $root -RunId 'R2'
+            $failing.exposure.IA01.first_seen | Should -Be $firstSeen
+            $failing.exposure.IA01.days | Should -Be 10
+
+            $script:NextStatus = 'Pass'
+            $passing = Invoke-AuditHistory -Client 'Acme' -Target 'DC' -OutputDir $root -RunId 'R3'
+            $passing.exposure.Keys | Should -Not -Contain 'IA01'
+            $passing.delta.resolved_exposure.IA01.first_seen | Should -Be $firstSeen
+            $passing.delta.resolved_exposure.IA01.days | Should -Be 10
+            $passing.delta.resolved_exposure.IA01.resolved_at | Should -Not -BeNullOrEmpty
+            $record = Get-Content -LiteralPath (Join-Path $root 'history.jsonl') | Select-Object -Last 1 | ConvertFrom-Json
+            $record.run_id | Should -Be 'R3'
+            $iso = { param($value) if ($value -is [datetime]) { $value.ToString('o') } else { [string]$value } }   # pwsh 7 reads ISO strings back as DateTime
+            & $iso $record.resolved_exposure.IA01.first_seen | Should -Be $firstSeen
+            & $iso $record.resolved_exposure.IA01.resolved_at | Should -Be $passing.delta.resolved_exposure.IA01.resolved_at
+            $record.resolved_exposure.IA01.days | Should -Be 10
+        }
+        finally {
+            $script:CliNoHistory = $saved.NoHistory; $script:CliHistoryPath = $saved.HistoryPath; $script:CliBaselinePath = $saved.BaselinePath; $script:CliHistoryRetentionDays = $saved.Retention
             if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
         }
     }

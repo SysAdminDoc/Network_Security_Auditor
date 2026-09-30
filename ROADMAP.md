@@ -12,13 +12,6 @@ Working rules:
 
 The 2026-09-29 verification pass removed 234 stale lines from this file (already shipped, reference links, principles, or duplicates of Roadmap_Blocked.md). These items are the remaining open work, rewritten so each stands alone.
 
-- [ ] P1 — NSA-043 Keep PS1 exposure windows correct across unavailable runs and record resolution time
-  Why: `Update-ExposureWindows` carries only Fail entries forward, so one errored, skipped or not-permitted run resets a finding's exposure age to zero, and resolved findings never get a `resolved_at`.
-  Evidence: `NetworkSecurityAudit.ps1:11596` (Update-ExposureWindows), `:11510` (Compare-AuditSnapshot); Guerrilla comparison semantics cited in RESEARCH.md.
-  Touches: `Update-ExposureWindows`, `Compare-AuditSnapshot`, snapshot JSON, history fixtures in `tools/NetworkSecurityAudit.Tests.ps1`.
-  Acceptance: a Fail, Unavailable, Fail snapshot sequence keeps the original `first_seen` and cumulative exposure days; Fail then Pass writes `resolved_at` and the final exposure window into the delta and history records; Pester covers both sequences.
-  Complexity: M
-
 - [ ] P2 — NSA-044 Add the standard envelope to JSONL and CSV exports and validate PS1 output against the committed schemas
   Why: C# JSONL lacks `schema_version`, client and auditor; the C# CSV comment line carries only host, score and timestamp; PS1 JSONL uses `source_version` with no `schema_version`; PS1 CSV has no metadata; PS1 output is never validated against `schemas/exports/`.
   Evidence: `src/NetworkSecurityAuditor/Export/JsonlExporter.cs:49`, `Export/CsvExporter.cs`, `NetworkSecurityAudit.ps1:13533` (Export-FindingsJSONL), `:13938` (Export-FindingsCSV), `schemas/exports/`.
