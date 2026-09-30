@@ -4,7 +4,7 @@ using NetworkSecurityAuditor.Models;
 namespace NetworkSecurityAuditor.Data;
 
 /// <summary>
-/// Static catalog of all 69 security checks with metadata, severity, compliance mappings, and auditor hints.
+/// Static catalog of all 70 security checks with metadata, severity, compliance mappings, and auditor hints.
 /// </summary>
 public static class CheckCatalog
 {
@@ -14,7 +14,7 @@ public static class CheckCatalog
 
     private static FrozenDictionary<string, CheckMetadata> BuildCatalog()
     {
-        var checks = new Dictionary<string, CheckMetadata>(69, StringComparer.OrdinalIgnoreCase);
+        var checks = new Dictionary<string, CheckMetadata>(70,StringComparer.OrdinalIgnoreCase);
 
         // ── Identity & Access (IA01-IA12) ───────────────────────────────────
         Add(checks, new CheckMetadata
@@ -197,7 +197,7 @@ public static class CheckCatalog
             RemediationUrl = "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/delegated-managed-service-accounts/delegated-managed-service-accounts-overview"
         });
 
-        // ── Endpoint Security (EP01-EP10) ───────────────────────────────────
+        // ── Endpoint Security (EP01-EP11) ───────────────────────────────────
         Add(checks, new CheckMetadata
         {
             Id = "EP01",
@@ -346,6 +346,21 @@ public static class CheckCatalog
             Compliance = "NIST CSF PR.IP-12, ID.AM-2 | CIS Control 2.1, 2.2 | HIPAA 164.308(a)(5)(ii)(B)",
             EvidenceMode = EvidenceMode.Automated,
             RemediationUrl = "https://learn.microsoft.com/en-us/lifecycle/products/"
+        });
+
+        Add(checks, new CheckMetadata
+        {
+            Id = "EP11",
+            Category = "Endpoint Security",
+            Label = "Secure Boot 2023 certificates",
+            Hint = "Checks whether Windows has moved this device to the 2023 Secure Boot certificates (UEFICA2023Status, WindowsUEFICA2023Capable, AvailableUpdates and TPM-WMI events 1801/1808). Windows Production PCA 2011 expires 2026-10-19; a device still on it stops getting boot manager and DBX security fixes. Record the OEM firmware version for any device stuck on a firmware error.",
+            Severity = Severity.High,
+            Weight = 7,
+            Type = CheckType.Local,
+            RiskTier = RiskTier.ReadOnly,
+            Compliance = "NIST CSF PR.DS-6, PR.IP-12 | CIS Control 4.1, 7.3 | HIPAA 164.308(a)(5)(ii)(B)",
+            EvidenceMode = EvidenceMode.Automated,
+            RemediationUrl = "https://support.microsoft.com/en-us/topic/windows-secure-boot-certificate-expiration-and-ca-updates-7ff40d33-95dc-4c3c-8725-a9b95457578e"
         });
 
         // ── Logging & Monitoring (LM01-LM08) ────────────────────────────────
@@ -1073,7 +1088,7 @@ public static class CheckCatalog
 
             var benchmark = id switch
             {
-                "EP01" or "EP02" or "EP03" or "EP04" or "EP05" or "EP06" or "EP07" or "EP08" or "EP09" or "EP10"
+                "EP01" or "EP02" or "EP03" or "EP04" or "EP05" or "EP06" or "EP07" or "EP08" or "EP09" or "EP10" or "EP11"
                     => cisWindowsBenchmark,
                 "LM03" or "LM04" or "LM05" or "LM07"
                     => cisWindowsBenchmark,

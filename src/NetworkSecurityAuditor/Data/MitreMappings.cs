@@ -4,7 +4,7 @@ using NetworkSecurityAuditor.Models;
 namespace NetworkSecurityAuditor.Data;
 
 /// <summary>
-/// MITRE ATT&amp;CK Enterprise v19 mappings for all 69 security checks.
+/// MITRE ATT&amp;CK Enterprise v19 mappings for all 70 security checks.
 /// v19 split Defense Evasion into Stealth (TA0005) and Defense Impairment (TA0112).
 /// Maps each check ID to its relevant tactics, techniques, and a threat description.
 /// </summary>
@@ -152,6 +152,12 @@ public static class MitreMappings
                 Tactics = ["TA0001", "TA0008"],
                 Techniques = ["T1190", "T1210"],
                 Description = "End-of-life operating systems expose public and internal services to known exploitation"
+            },
+            ["EP11"] = new AttackMapping
+            {
+                Tactics = ["TA0003", "TA0005"],
+                Techniques = ["T1542.003"],
+                Description = "A device still trusting only the 2011 Secure Boot certificates can't receive boot manager revocations, leaving it open to bootkits such as BlackLotus"
             },
 
             // ── Logging & Monitoring ───────────────────────────────────────

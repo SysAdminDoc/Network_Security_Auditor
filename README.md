@@ -1,6 +1,6 @@
 # Network Security Auditor
 
-Windows security assessment tooling for MSPs, consultants, and internal administrators. The production artifact is `NetworkSecurityAudit.ps1`, a single-file PowerShell 5.1 tool with 69 automated checks, 11 compliance frameworks, MITRE ATT&CK and MITRE D3FEND mappings, multi-tier reports, and RMM-friendly headless deployment.
+Windows security assessment tooling for MSPs, consultants, and internal administrators. The production artifact is `NetworkSecurityAudit.ps1`, a single-file PowerShell 5.1 tool with 70 automated checks, 11 compliance frameworks, MITRE ATT&CK and MITRE D3FEND mappings, multi-tier reports, and RMM-friendly headless deployment.
 
 The repo also contains an active .NET 10/WPF C# rewrite under `src/NetworkSecurityAuditor`. The rewrite is locally buildable and test-covered, but the PowerShell script remains the production path for workflows not yet ported to C#.
 
@@ -245,7 +245,7 @@ pruned past `-HistoryRetentionDays`; `-NoHistory` turns the whole feature off.
 
 ## Features
 
-### 69 Automated Security Checks
+### 70 Automated Security Checks
 
 Every check runs in an isolated runspace with timeout protection. Results include findings text, evidence collection, severity rating, and compliance mapping.
 
@@ -288,6 +288,7 @@ imports or future Graph-backed checks for tenant proof.
 | EP08 | Hardware Security (VBS, Credential Guard, LSA, TPM, Secure Boot) | High |
 | EP09 | AutoRun / AutoPlay | Low |
 | EP10 | End-of-Life OS and Server Software (lifecycle table, Windows 10 ESU) | High |
+| EP11 | Secure Boot 2023 Certificate Transition | High |
 
 </details>
 
@@ -392,27 +393,27 @@ Every check maps to one or more controls across 11 frameworks. Framework-specifi
 
 | Framework | Standard | Profile checks |
 |-----------|----------|----------|
-| **CIS** | Controls v8.1 | 69 checks |
-| **NIST** | SP 800-171 Rev 3 | 69 checks |
-| **CMMC** | Level 2 (v2.0) | 69 checks |
-| **HIPAA** | Security Rule | 49 checks |
-| **PCI-DSS** | v4.0.1 | 51 checks |
+| **CIS** | Controls v8.1 | 70 checks |
+| **NIST** | SP 800-171 Rev 3 | 70 checks |
+| **CMMC** | Level 2 (v2.0) | 70 checks |
+| **HIPAA** | Security Rule | 50 checks |
+| **PCI-DSS** | v4.0.1 | 52 checks |
 | **ACSC Essential Eight** | Maturity Model | 28 checks |
-| **Cyber Essentials** | UK NCSC v3.3 | 37 checks |
-| **SOC 2** | Type II (Trust Criteria) | 67 checks |
-| **ISO 27001** | :2022 (Annex A) | 69 checks |
-| **DISA STIG** | Windows Server/Client | 69 checks |
-| **FedRAMP** | Moderate (NIST 800-53 Rev 5) | 69 checks |
+| **Cyber Essentials** | UK NCSC v3.3 | 38 checks |
+| **SOC 2** | Type II (Trust Criteria) | 68 checks |
+| **ISO 27001** | :2022 (Annex A) | 70 checks |
+| **DISA STIG** | Windows Server/Client | 70 checks |
+| **FedRAMP** | Moderate (NIST 800-53 Rev 5) | 70 checks |
 
 The C# rewrite does not score fabricated sequential STIG V-IDs. Until genuine rule IDs are sourced, its STIG profile is limited to the IA11/IA12 prose-backed readiness checks.
 
 ### MITRE ATT&CK Mapping
 
-All 69 checks map to ATT&CK Enterprise techniques (v19.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.
+All 70 checks map to ATT&CK Enterprise techniques (v19.1) with tactic and technique IDs. The HTML report includes a visual heatmap showing coverage across the ATT&CK matrix and identifying gaps.
 
 ### MITRE D3FEND Mapping
 
-All 69 checks also map to MITRE D3FEND defensive techniques (v1.4.0). Reports show D3FEND stage coverage for Model, Harden, Detect, Isolate, Deceive, Evict, and Restore, while JSON, JSONL, CSV, and SARIF exports include D3FEND technique fields for downstream GRC, SIEM, and MSP analytics.
+All 70 checks also map to MITRE D3FEND defensive techniques (v1.4.0). Reports show D3FEND stage coverage for Model, Harden, Detect, Isolate, Deceive, Evict, and Restore, while JSON, JSONL, CSV, and SARIF exports include D3FEND technique fields for downstream GRC, SIEM, and MSP analytics.
 
 ### CISA KEV Cross-Reference
 
@@ -560,7 +561,7 @@ console evidence.
 
 Optional for full coverage:
 - **RSAT / Active Directory module**: required for AD-type checks (IA01-IA08, IA10-IA12, CF01, CF04) and for EP10's sweep of AD computer objects. The tool auto-offers to install RSAT on first run.
-- **Domain-joined machine**: non-domain machines skip AD checks automatically and run all 56 local checks. EP10 still judges the local OS and installed server software there.
+- **Domain-joined machine**: non-domain machines skip AD checks automatically and run all 57 local checks. EP10 still judges the local OS and installed server software there.
 
 ---
 
@@ -643,7 +644,7 @@ review dates, supported OS/builds, check coverage, and stale-review windows.
 -ScanProfile         Quick | Standard | Full | ADOnly | LocalOnly |
                      Cloud | HIPAA | PCI | CMMC | E8 | CyberEssentials |
                      SOC2 | ISO27001 | STIG | FedRAMP
-                     Default: Full (all 69 checks)
+                     Default: Full (all 70 checks)
 -OutputPath          Report output path. Default: Desktop
 -ReportTier          Executive | Management | Technical | All
                      Default: All
@@ -741,20 +742,20 @@ so a cloud scan cannot be mistaken for endpoint/domain coverage.
 | Profile | Checks | Time | Use Case |
 |---------|--------|------|----------|
 | **Quick** | ~22 | ~15 min | Critical-only field triage |
-| **Standard** | ~52 | ~30 min | Routine assessment |
-| **Full** | 69 | ~60 min | Comprehensive audit |
+| **Standard** | ~53 | ~30 min | Routine assessment |
+| **Full** | 70 | ~60 min | Comprehensive audit |
 | **ADOnly** | ~14 | ~10 min | Domain-focused checks only |
-| **LocalOnly** | ~55 | ~45 min | Endpoint-only (no AD required) |
+| **LocalOnly** | ~57 | ~45 min | Endpoint-only (no AD required) |
 | **Cloud** | PowerShell: 3 live / 12 manifest; C#: disabled until CLxx checks land | ~5 min | Microsoft Graph cloud assessment |
-| **HIPAA** | 49 | ~30 min | Healthcare compliance |
-| **PCI** | 51 | ~35 min | Payment card compliance |
-| **CMMC** | 69 | ~60 min | Defense contractor compliance |
+| **HIPAA** | 50 | ~30 min | Healthcare compliance |
+| **PCI** | 52 | ~35 min | Payment card compliance |
+| **CMMC** | 70 | ~60 min | Defense contractor compliance |
 | **E8** | PowerShell: 28; C#: 25 | ~25 min | ACSC Essential Eight maturity indicators |
-| **CyberEssentials** | PowerShell: 37; C#: 35 | ~35 min | UK NCSC Cyber Essentials technical controls |
-| **SOC 2** | 67 | ~50 min | Service organization compliance |
-| **ISO 27001** | 69 | ~60 min | International standard compliance |
-| **STIG** | 69 | ~60 min | DISA STIG for DoD/government |
-| **FedRAMP** | 69 | ~60 min | FedRAMP Moderate for federal cloud |
+| **CyberEssentials** | PowerShell: 38; C#: 36 | ~35 min | UK NCSC Cyber Essentials technical controls |
+| **SOC 2** | 68 | ~50 min | Service organization compliance |
+| **ISO 27001** | 70 | ~60 min | International standard compliance |
+| **STIG** | 70 | ~60 min | DISA STIG for DoD/government |
+| **FedRAMP** | 70 | ~60 min | FedRAMP Moderate for federal cloud |
 
 ---
 
@@ -804,7 +805,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Tools\NetworkSecurit
 
 ### Overall Security Score
 
-Each of the 69 checks has a severity weight (Critical=10, High=7, Medium=5, Low=3). Each category also has a weight reflecting its relative importance. The score is calculated as:
+Each of the 70 checks has a severity weight (Critical=10, High=7, Medium=5, Low=3). Each category also has a weight reflecting its relative importance. The score is calculated as:
 
 ```
 Per-category:  (earned points / max points) * 100

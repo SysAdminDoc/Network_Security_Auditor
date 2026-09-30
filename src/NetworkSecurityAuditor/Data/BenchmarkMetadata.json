@@ -36,6 +36,7 @@
         "EP08",
         "EP09",
         "EP10",
+        "EP11",
         "LM03",
         "LM04",
         "LM05",
@@ -147,16 +148,20 @@
     {
       "id": "microsoft-windows-lifecycle",
       "name": "Microsoft Windows lifecycle",
-      "source_version": "Windows Server 2025 lifecycle page reviewed 2026-07-08",
+      "source_version": "Microsoft lifecycle pages for Windows, Windows Server, SQL Server, Office and Exchange reviewed 2026-09-30 (Data/LifecycleTable.cs)",
       "format": "mapping-only metadata; source text is not bundled",
-      "source_url": "https://learn.microsoft.com/en-us/lifecycle/products/windows-server-2025",
-      "reviewed_on": "2026-07-08",
+      "source_url": "https://learn.microsoft.com/en-us/lifecycle/products/",
+      "reviewed_on": "2026-09-30",
       "stale_after_days": 180,
       "supported_os": [
-        "Windows Server 2025"
+        "Windows 10",
+        "Windows 11",
+        "Windows Server 2012 through 2025"
       ],
       "supported_builds": [
-        "Windows Server 2025 / 10.0.26100+"
+        "Windows 10 / 10.0.14393+",
+        "Windows 11 / 10.0.22000+",
+        "Windows Server / 6.2.9200+"
       ],
       "catalog_label": "Microsoft Windows lifecycle",
       "license_status": "reference-only",
@@ -165,6 +170,31 @@
       "verification_status": "reference-only",
       "covered_check_ids": [
         "EP10"
+      ]
+    },
+    {
+      "id": "microsoft-secure-boot-ca-2023",
+      "name": "Microsoft Secure Boot certificate expiration and CA updates",
+      "source_version": "Secure Boot CA 2023 guidance, registry key updates and troubleshooting guide reviewed 2026-09-30",
+      "format": "mapping-only metadata; source text is not bundled",
+      "source_url": "https://support.microsoft.com/en-us/topic/windows-secure-boot-certificate-expiration-and-ca-updates-7ff40d33-95dc-4c3c-8725-a9b95457578e",
+      "reviewed_on": "2026-09-30",
+      "stale_after_days": 180,
+      "supported_os": [
+        "Windows 10",
+        "Windows 11",
+        "Windows Server 2016 through 2025"
+      ],
+      "supported_builds": [
+        "UEFI devices with Secure Boot servicing registry values"
+      ],
+      "catalog_label": "Microsoft Secure Boot CA 2023",
+      "license_status": "reference-only",
+      "redistribution_status": "source text not bundled",
+      "content_sha256": "",
+      "verification_status": "reference-only",
+      "covered_check_ids": [
+        "EP11"
       ]
     },
     {

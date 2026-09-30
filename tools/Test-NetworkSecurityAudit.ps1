@@ -119,8 +119,8 @@ $d3fendBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:D3FendM
 $d3fendIds = @(Get-UniqueMatches -Text $d3fendBlock -Pattern "(?m)^\s*'([A-Z]{2}\d{2})'\s*=\s*@\{")
 $cloudManifestBlock = Get-TextBetween -Text $scriptText -StartPattern '\$script:CloudCheckManifest\s*=\s*\[ordered\]@\{' -EndPattern 'function Convert-CloudAssessmentStatus'
 
-if (@($catalogIds).Count -ne 69) { Add-Failure "Expected 69 audit catalog IDs, found $(@($catalogIds).Count)" }
-if (@($autoCheckIds).Count -ne 69) { Add-Failure "Expected 69 auto-check IDs, found $(@($autoCheckIds).Count)" }
+if (@($catalogIds).Count -ne 70) { Add-Failure "Expected 70 audit catalog IDs, found $(@($catalogIds).Count)" }
+if (@($autoCheckIds).Count -ne 70) { Add-Failure "Expected 70 auto-check IDs, found $(@($autoCheckIds).Count)" }
 Compare-Set -Expected $catalogIds -Actual $autoCheckIds -Name 'AutoChecks'
 Compare-Set -Expected $catalogIds -Actual $frameworkIds -Name 'FrameworkMap'
 Compare-Set -Expected $catalogIds -Actual $riskIds -Name 'RiskTiers'
@@ -266,8 +266,11 @@ if ($scriptText -notmatch 'CVE-2025-33073 NTLM REFLECTION BLAST RADIUS' -or
     $scriptText -notmatch 'June 10 2025') {
     Add-Failure 'CVE-2025-33073 correlation must cover IA01 delegation blast radius, EP03 SMB/NTLM exposure, EP04 patch evidence, and attack-path output.'
 }
-if ($scriptText -notmatch 'UEFICA2023Status' -or $scriptText -notmatch 'KB5025885') {
-    Add-Failure 'EP08 must check Secure Boot 2023 CA status and reference KB5025885.'
+if ($scriptText -notmatch 'UEFICA2023Status' -or $scriptText -notmatch 'KB5025885' -or $scriptText -notmatch "'NotStarted'" -or $scriptText -notmatch "'InProgress'" -or $scriptText -notmatch 'WindowsUEFICA2023Capable' -or $scriptText -notmatch 'Microsoft-Windows-TPM-WMI') {
+    Add-Failure 'EP11 must read the documented Secure Boot 2023 servicing states, the DB flag and TPM-WMI events, and reference KB5025885.'
+}
+if ($scriptText -match "Servicing\\WindowsUEFICA2023'" -or $scriptText -match "0 \{'Not applied'\} 1 \{'Applied - DB updated") {
+    Add-Failure 'Secure Boot 2023 status must not be read as integers or from the Servicing\WindowsUEFICA2023 key.'
 }
 if ($scriptText -notmatch 'ESU Enrollment' -or $scriptText -notmatch 'SoftwareLicensingProduct' -or $scriptText -notmatch 'f520e45e-7413-4a34-a497-d2765967d094') {
     Add-Failure 'EP10 must detect Windows 10 ESU enrollment from the documented ESU add-on license activation IDs.'

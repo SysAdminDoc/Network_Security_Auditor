@@ -17,7 +17,7 @@
 .PARAMETER ScanProfile
     Scan profile to use: Quick, Standard, Full, ADOnly, LocalOnly, Cloud,
     HIPAA, PCI, CMMC, E8, CyberEssentials, SOC2, ISO27001, STIG.
-    Default: Full (all 69 checks). Quick runs ~22 critical checks.
+    Default: Full (all 70 checks). Quick runs ~22 critical checks.
     Framework profiles run checks mapped to that compliance framework.
 .PARAMETER OutputPath
     Path for report output. Default: Desktop\SecurityAudit_<client>_<date>.html
@@ -3231,8 +3231,14 @@ $script:AuditCategories = [ordered]@{
             @{
                 ID='EP10'; Severity='High'; Weight=7
                 Text='End-of-life operating systems identified and documented with migration plan'
-                Hint='Run: Get-ADComputer -Filter {Enabled -eq $true} -Properties OperatingSystem,OperatingSystemVersion | Group OperatingSystem | Select Count,Name. Flag any: Windows 7, Windows 8/8.1, Windows Server 2008/R2, Server 2012/R2, any "Windows XP" or "Windows Vista". These no longer receive security patches and are actively targeted. Even Server 2012 R2 reached end of extended support in October 2023. For each EOL system, document: hostname, purpose, why it has not been upgraded (legacy app?), and compensating controls in place (network isolation, restricted access). If a system is EOL because of a legacy application, recommend virtualizing and isolating it on its own VLAN with strict firewall rules.'
+                Hint='The automated check judges this host (OS, SQL Server, Office 2016/2019, Exchange) against a dated Microsoft lifecycle table and, on a domain member with RSAT, every enabled AD computer: Get-ADComputer -Filter {Enabled -eq $true} -Properties OperatingSystem,OperatingSystemVersion | Group OperatingSystem | Select Count,Name. Windows 10 22H2 ended 2025-10-14 and is only covered with an Extended Security Updates license (Year 1 runs to 2026-10-13); Windows 11 23H2 Home/Pro ended 2025-11-11; Server 2012/R2 ESU ends 2026-10-13. For each end-of-life system, document: hostname, purpose, why it has not been upgraded (legacy app?), and compensating controls in place (network isolation, restricted access). If a system is EOL because of a legacy application, recommend virtualizing and isolating it on its own VLAN with strict firewall rules.'
                 Compliance='NIST CSF PR.IP-12, ID.AM-2 | CIS Control 2.1, 2.2 | HIPAA 164.308(a)(5)(ii)(B)'
+            }
+            @{
+                ID='EP11'; Severity='High'; Weight=7
+                Text='Secure Boot moved to the 2023 Microsoft certificates before the 2011 certificates expire'
+                Hint='The 2011 Microsoft Secure Boot certificates expire in 2026: KEK CA 2011 on 2026-06-24, UEFI CA 2011 on 2026-06-27 and Windows Production PCA 2011 on 2026-10-19. A device that stays on them stops getting boot manager and DBX security fixes. Check without elevation: Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\Servicing shows UEFICA2023Status (NotStarted, InProgress, Updated), UEFICA2023Error (0 on success) and WindowsUEFICA2023Capable (2 means the 2023 certificate is in the DB and the device boots the 2023-signed boot manager). System log events from Microsoft-Windows-TPM-WMI: 1808 means the new certificates are applied, 1801 means they are not, 1795 means the firmware rejected an update and 1803 means the OEM has not supplied a PK-signed KEK. Managed devices can be moved by setting HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\AvailableUpdates to 0x5944. Record the OEM firmware version for any device stuck on a firmware error.'
+                Compliance='NIST CSF PR.DS-6, PR.IP-12 | CIS Control 4.1, 7.3 | HIPAA 164.308(a)(5)(ii)(B)'
             }
         )
     }
@@ -5045,6 +5051,116 @@ $script:AutoChecks = @{
     }
 
     # ── Logging & Monitoring ─────────────────────────────────────────────────
+    'EP11' = @{ Type='Local'; Label='Scan Secure Boot 2023 Certificate Transition'
+        Script = {
+            # Defined inside the check so it survives fresh runspaces and Invoke-Command.
+            # Same bits and wording as EP11_SecureBootCertificateCheck. 0x5944 requests the full 2023 transition;
+            # it reads 0x4100 until the new boot manager is in place after a restart, then 0x4000.
+            function ConvertFrom-Ep11AvailableUpdates {
+                param([int]$Value)
+                $bits = @(
+                    ,@(0x0004, "apply a Key Exchange Key signed by the device's Platform Key (Microsoft Corporation KEK 2K CA 2023)")
+                    ,@(0x0040, 'add Windows UEFI CA 2023 to the DB')
+                    ,@(0x0080, 'add Windows Production PCA 2011 to the DBX')
+                    ,@(0x0100, 'install the boot manager signed by Windows UEFI CA 2023')
+                    ,@(0x0200, 'apply the Secure Version Number update to the firmware')
+                    ,@(0x0800, 'add Microsoft Option ROM UEFI CA 2023 to the DB')
+                    ,@(0x1000, 'add Microsoft UEFI CA 2023 to the DB')
+                    ,@(0x4000, 'apply 0x0800 and 0x1000 only where Microsoft UEFI CA 2011 is already trusted')
+                )
+                $lines = @(); $known = 0
+                foreach ($b in $bits) {
+                    $known = $known -bor $b[0]
+                    if ($Value -band $b[0]) { $lines += ('0x{0:X4}: {1}' -f $b[0], $b[1]) }
+                }
+                $unknown = $Value -band (-bnot $known)
+                if ($unknown) { $lines += ('0x{0:X4}: bits Microsoft doesn''t document' -f $unknown) }
+                if ($Value -eq 0x4000) { $lines += 'Only the 0x4000 modifier is left, so every requested update has been applied.' }
+                $lines
+            }
+            # TPM-WMI System log events with documented meanings.
+            function Get-Ep11EventMeaning {
+                param([int]$Id)
+                switch ($Id) {
+                    1795 { 'the firmware rejected a Secure Boot variable update' }
+                    1799 { 'the boot manager signed by Windows UEFI CA 2023 was installed' }
+                    1801 { "the updated Secure Boot certificates haven't been applied to the firmware" }
+                    1803 { "the KEK update can't be authorized because the OEM hasn't supplied a Platform Key-signed KEK" }
+                    1808 { 'the device has the new Secure Boot certificates in its firmware' }
+                    default { 'unrecognized event' }
+                }
+            }
+            # Decision shared with the app: Updated passes, InProgress is Partial, NotStarted or an error fails,
+            # legacy BIOS and Secure Boot off are N/A. Events are newest first.
+            function Get-Ep11Assessment {
+                param([string]$Firmware = 'Unknown', $SecureBootEnabled, [string]$Status, $ErrorCode, $ErrorEvent, $Capable, $AvailableUpdates, [object[]]$Events = @(), [datetime]$Today = (Get-Date))
+                $pcaExpires = [datetime]'2026-10-19'
+                $daysLeft = ($pcaExpires - $Today.Date).Days
+                $deadline = if ($daysLeft -ge 0) { "Windows Production PCA 2011 expires 2026-10-19 ($daysLeft days)" } else { 'Windows Production PCA 2011 expired 2026-10-19' }
+                $latest = @($Events | Where-Object { $_.Id -in @(1801, 1808) }) | Select-Object -First 1
+                $fw = @($Events | Where-Object { $_.Id -in @(1795, 1803) }) | Select-Object -First 1
+                $fwHint = if ($fw) { " Event $($fw.Id) ($(([datetime]$fw.Time).ToString('yyyy-MM-dd'))): $(Get-Ep11EventMeaning $fw.Id). Check the OEM for a firmware update." } else { '' }
+                $latestLine = if ($latest) { "Latest certificate event: $($latest.Id) on $(([datetime]$latest.Time).ToString('yyyy-MM-dd')) ($(Get-Ep11EventMeaning $latest.Id))." } else { $null }
+                $pending = if ($null -ne $AvailableUpdates -and ([int]$AvailableUpdates -band 0x0100) -and -not ([int]$AvailableUpdates -band (-bnot 0x4100))) { ' (the new boot manager is waiting for a restart)' } else { '' }
+                $r = { param($s, $h) @{ Status=$s; Headline=$h; Latest=$latestLine } }
+
+                if ($Firmware -eq 'Bios') { return & $r 'N/A' "N/A: This device boots in legacy BIOS mode, so Secure Boot certificates don't apply." }
+                if ($null -eq $SecureBootEnabled -and [string]::IsNullOrEmpty($Status) -and $null -eq $Capable) { return & $r 'N/A' "N/A: This device doesn't report Secure Boot support, so the 2023 certificate transition doesn't apply." }
+                if ($null -ne $SecureBootEnabled -and [int]$SecureBootEnabled -eq 0) { return & $r 'N/A' "N/A: Secure Boot is off, so the certificate transition protects nothing yet (EP08 reports Secure Boot being off). Transition status: $(if ($Status) { $Status } else { 'not reported' })." }
+                if ($null -ne $ErrorCode -and [int]$ErrorCode -ne 0) {
+                    return & $r 'Fail' ("FAIL: The Secure Boot certificate update stopped with error 0x{0:X4}{1}. {2}.{3}" -f [int]$ErrorCode, $(if ($null -ne $ErrorEvent) { " (event $ErrorEvent)" } else { '' }), $deadline, $fwHint)
+                }
+                if ($Status) {
+                    switch ($Status.Trim()) {
+                        'Updated'    { return & $r 'Pass' "Secure Boot 2023 certificates: Updated$(if ($null -ne $Capable -and [int]$Capable -eq 2) { ', booting from the boot manager signed by Windows UEFI CA 2023' })." }
+                        'InProgress' { return & $r 'Partial' "PARTIAL: The move to the 2023 Secure Boot certificates is in progress$pending. $deadline.$fwHint" }
+                        'NotStarted' { return & $r 'Fail' "FAIL: The move to the 2023 Secure Boot certificates hasn't started. $deadline. Install the current cumulative update, or set AvailableUpdates to 0x5944 on managed devices (KB5025885 covers the related boot manager revocations).$fwHint" }
+                        default      { return & $r 'Partial' "PARTIAL: UEFICA2023Status reads `"$($Status.Trim())`", which isn't a documented state (NotStarted, InProgress, Updated). $deadline." }
+                    }
+                }
+                # Older servicing builds don't write UEFICA2023Status; fall back to the certificate events and the DB flag.
+                if (($latest -and $latest.Id -eq 1808) -or ($null -ne $Capable -and [int]$Capable -eq 2)) {
+                    return & $r 'Pass' "Secure Boot 2023 certificates: applied ($(if ($latest -and $latest.Id -eq 1808) { 'event 1808' } else { 'WindowsUEFICA2023Capable = 2' })), although Windows doesn't report UEFICA2023Status."
+                }
+                if ($null -ne $Capable -and [int]$Capable -eq 1) { return & $r 'Partial' "PARTIAL: Windows UEFI CA 2023 is in the DB, but the device still starts from the boot manager signed with the 2011 certificate. $deadline.$fwHint" }
+                return & $r 'Fail' "FAIL: Windows hasn't reported moving this device to the 2023 Secure Boot certificates$(if ($latest -and $latest.Id -eq 1801) { " and event 1801 says they aren't applied" }). $deadline. Install the current cumulative update.$fwHint"
+            }
+
+            $sb = [System.Text.StringBuilder]::new()
+            $sbKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot'
+            $state = Get-ItemProperty -LiteralPath "$sbKey\State" -EA SilentlyContinue
+            $servicing = Get-ItemProperty -LiteralPath "$sbKey\Servicing" -EA SilentlyContinue
+            $root = Get-ItemProperty -LiteralPath $sbKey -EA SilentlyContinue
+            $firmware = switch ($env:firmware_type) { 'UEFI' { 'Uefi' } 'Legacy' { 'Bios' } default { 'Unknown' } }
+            $events = @(); $eventError = $null
+            try {
+                $events = @(Get-WinEvent -FilterHashtable @{ LogName='System'; ProviderName='Microsoft-Windows-TPM-WMI'; Id=1795,1799,1801,1803,1808 } -MaxEvents 50 -EA Stop |
+                    ForEach-Object { @{ Id=[int]$_.Id; Time=$_.TimeCreated } })
+            } catch {
+                # "No events were found" is an empty result, not a read failure.
+                if ($_.FullyQualifiedErrorId -notmatch 'NoMatchingEventsFound') { $eventError = $_.Exception.Message.Trim() }
+            }
+            $au = if ($null -ne $root.AvailableUpdates) { [int]$root.AvailableUpdates } else { $null }
+            $result = Get-Ep11Assessment -Firmware $firmware -SecureBootEnabled $state.UEFISecureBootEnabled -Status ([string]$servicing.UEFICA2023Status) -ErrorCode $servicing.UEFICA2023Error -ErrorEvent $servicing.UEFICA2023ErrorEvent -Capable $servicing.WindowsUEFICA2023Capable -AvailableUpdates $au -Events $events
+            [void]$sb.AppendLine($result.Headline)
+            if ($result.Latest) { [void]$sb.AppendLine($result.Latest) }
+            [void]$sb.AppendLine("`nSECURE BOOT STATE:")
+            [void]$sb.AppendLine("  Firmware                 : $firmware")
+            [void]$sb.AppendLine("  UEFISecureBootEnabled    : $(if ($null -ne $state.UEFISecureBootEnabled) { $state.UEFISecureBootEnabled } else { '(not set)' })")
+            [void]$sb.AppendLine("  UEFICA2023Status         : $(if ($servicing.UEFICA2023Status) { $servicing.UEFICA2023Status } else { '(not set)' })")
+            [void]$sb.AppendLine("  UEFICA2023Error          : $(if ($null -ne $servicing.UEFICA2023Error) { '0x{0:X4}' -f [int]$servicing.UEFICA2023Error } else { '(not set)' })")
+            if ($null -ne $servicing.UEFICA2023ErrorEvent) { [void]$sb.AppendLine("  UEFICA2023ErrorEvent     : $($servicing.UEFICA2023ErrorEvent)") }
+            [void]$sb.AppendLine("  WindowsUEFICA2023Capable : $(if ($null -ne $servicing.WindowsUEFICA2023Capable) { $servicing.WindowsUEFICA2023Capable } else { '(not set)' })")
+            [void]$sb.AppendLine("  AvailableUpdates         : $(if ($null -ne $au) { '0x{0:X4}' -f $au } else { '(not set)' })")
+            foreach ($line in (ConvertFrom-Ep11AvailableUpdates -Value ([int]$au))) { [void]$sb.AppendLine("    $line") }
+            [void]$sb.AppendLine("`nTPM-WMI EVENTS (System log):")
+            if ($eventError) { [void]$sb.AppendLine("  Couldn't read: $eventError") }
+            elseif ($events.Count -eq 0) { [void]$sb.AppendLine('  None of events 1795, 1799, 1801, 1803 or 1808 are in the log.') }
+            foreach ($ev in ($events | Select-Object -First 10)) { [void]$sb.AppendLine("  $(([datetime]$ev.Time).ToString('yyyy-MM-dd HH:mm'))  $($ev.Id): $(Get-Ep11EventMeaning $ev.Id)") }
+            @{ Status=$result.Status; Findings=$sb.ToString().Trim(); Evidence="Secure Boot servicing registry + TPM-WMI events @ $(Get-Date -f 'yyyy-MM-dd HH:mm') on $env:COMPUTERNAME" }
+        }
+    }
+
     'LM03' = @{ Type='Local'; Label='Scan Audit Policy + PowerShell Logging'
         Script = {
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
@@ -6279,23 +6395,16 @@ $script:AutoChecks = @{
     'EP08' = @{ Type='Local'; Label='Scan Hardware Security (UEFI/TPM/VBS)'
         Script = {
             $sb = [System.Text.StringBuilder]::new(); $issues = 0
-            # Secure Boot
+            # Secure Boot. Confirm-SecureBootUEFI needs elevation; the State value is readable by any user.
+            # The 2023 certificate transition is EP11's job.
             try {
                 $sb2 = Confirm-SecureBootUEFI -EA Stop
                 [void]$sb.AppendLine("Secure Boot     : $(if($sb2){'ENABLED [OK]'}else{'DISABLED [!]'; $issues++})")
-            } catch { [void]$sb.AppendLine("Secure Boot     : Not supported or inaccessible"); $issues++ }
-            # Secure Boot 2023 CA and DBX transition readiness
-            try {
-                $sbServicing = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\Servicing' -EA SilentlyContinue
-                $uefiCa2023 = if ($sbServicing) { $sbServicing.UEFICA2023Status } else { $null }
-                $ca2023Desc = switch ($uefiCa2023) { 0 {'Not applied'} 1 {'Applied - DB updated [OK]'} 2 {'Applied - pending reboot'} default {'Unknown/not present'} }
-                [void]$sb.AppendLine("  2023 CA Status  : $ca2023Desc $(if($uefiCa2023 -ne 1 -and $sb2){'[!] Microsoft 2011 certs expire 2026 - apply KB5025885 update'})")
-                if ($uefiCa2023 -ne 1 -and $sb2) { $issues++ }
-                $windowsUefi = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\Servicing\WindowsUEFICA2023' -EA SilentlyContinue
-                if ($windowsUefi -and $windowsUefi.AvailableUpdates) {
-                    [void]$sb.AppendLine("  Pending Updates : AvailableUpdates=$($windowsUefi.AvailableUpdates)")
-                }
-            } catch {}
+            } catch {
+                $sbState = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -EA SilentlyContinue).UEFISecureBootEnabled
+                if ($null -ne $sbState) { [void]$sb.AppendLine("Secure Boot     : $(if($sbState -eq 1){'ENABLED [OK]'}else{'DISABLED [!]'; $issues++}) (from UEFISecureBootEnabled)") }
+                else { [void]$sb.AppendLine("Secure Boot     : Not supported or inaccessible"); $issues++ }
+            }
             # TPM with version check
             try {
                 $tpm = Get-Tpm -EA Stop
@@ -7703,8 +7812,8 @@ foreach ($k in $script:AutoChecks.Keys) { $script:AutoCheckIDs.Add($k) | Out-Nul
 
 # ── Scan Profiles ────────────────────────────────────────────────────────────
 # Quick: ~22 critical/high checks - fast field assessment (15 min)
-# Standard: ~52 checks - solid audit without the deep dives (30 min)
-# Full: all 69 checks - comprehensive compliance audit (45-60 min)
+# Standard: ~53 checks - solid audit without the deep dives (30 min)
+# Full: all 70 checks - comprehensive compliance audit (45-60 min)
 # ADOnly / LocalOnly: type-filtered subsets
 $script:ScanProfiles = @{
     Quick = @{
@@ -7720,12 +7829,12 @@ $script:ScanProfiles = @{
         )
     }
     Standard = @{
-        Label = 'Standard Audit (~52 checks, ~30 min)'
+        Label = 'Standard Audit (~53 checks, ~30 min)'
         Description = 'All critical/high plus key medium checks. Covers most compliance needs.'
         IDs = @(
             'NP01','NP02','NP03','NP04','NP05','NP07','NP08','NP09','NP10'
             'IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12'
-            'EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08'
+            'EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP11'
             'LM01','LM02','LM03','LM04','LM06','LM08'
             'BR01','BR02','BR03','BR05','BR06','BR08'
             'CF01','CF02','CF03','CF04','CF05'
@@ -7734,7 +7843,7 @@ $script:ScanProfiles = @{
         )
     }
     Full = @{
-        Label = 'Full Compliance Audit (69 checks, ~60 min)'
+        Label = 'Full Compliance Audit (70 checks, ~60 min)'
         Description = 'All checks across all categories. Complete NIST/CIS/HIPAA coverage.'
         IDs = @()  # Empty = all checks
     }
@@ -7756,17 +7865,17 @@ $script:ScanProfiles = @{
     }
     # ── Framework-Specific Profiles ──
     HIPAA = @{
-        Label = 'HIPAA Assessment (49 checks)'
+        Label = 'HIPAA Assessment (50 checks)'
         Description = 'Checks mapped to HIPAA Security Rule (164.3xx) requirements for healthcare compliance.'
-        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
+        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','EP11','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
     }
     PCI = @{
-        Label = 'PCI-DSS 4.0.1 Scan (51 checks)'
+        Label = 'PCI-DSS 4.0.1 Scan (52 checks)'
         Description = 'Checks mapped to PCI-DSS 4.0.1 requirements for payment card data environments.'
-        IDs = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
+        IDs = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP11','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
     }
     CMMC = @{
-        Label = 'CMMC 2.0 Level 2 (all 69 checks)'
+        Label = 'CMMC 2.0 Level 2 (all 70 checks)'
         Description = 'CMMC 2.0 Level 2 maps to NIST 800-171 - full audit coverage required for DoD contractors.'
         IDs = @()  # All checks apply
     }
@@ -7776,27 +7885,27 @@ $script:ScanProfiles = @{
         IDs = @('EP01','EP04','EP07','EP09','EP10','IA01','IA02','IA03','IA06','IA09','IA10','IA12','CF01','CF03','CF07','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','LM02','LM03','LM08','NP03','NP10')
     }
     CyberEssentials = @{
-        Label = 'Cyber Essentials (37 checks)'
+        Label = 'Cyber Essentials (38 checks)'
         Description = 'Checks mapped to UK NCSC Cyber Essentials technical controls.'
-        IDs = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
+        IDs = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','EP11','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
     }
     SOC2 = @{
-        Label = 'SOC 2 Type II (67 checks)'
+        Label = 'SOC 2 Type II (68 checks)'
         Description = 'Checks mapped to SOC 2 Trust Services Criteria (CC/A1) for service organization audits.'
-        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
+        IDs = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP11','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
     }
     ISO27001 = @{
-        Label = 'ISO 27001:2022 (all 69 checks)'
+        Label = 'ISO 27001:2022 (all 70 checks)'
         Description = 'Full coverage for ISO 27001:2022 Annex A controls with specific clause mapping.'
         IDs = @()  # All checks apply
     }
     STIG = @{
-        Label = 'DISA STIG (all 69 checks)'
+        Label = 'DISA STIG (all 70 checks)'
         Description = 'DISA Security Technical Implementation Guide compliance for DoD/government environments.'
         IDs = @()  # All checks apply
     }
     FedRAMP = @{
-        Label = 'FedRAMP Moderate (all 69 checks)'
+        Label = 'FedRAMP Moderate (all 70 checks)'
         Description = 'FedRAMP Moderate baseline (NIST 800-53 Rev 5) for US federal cloud service provider compliance.'
         IDs = @()  # All checks apply
     }
@@ -7813,7 +7922,7 @@ $script:RiskTiers = @{
     'IA06' = 0; 'IA07' = 0; 'IA08' = 0; 'IA09' = 0; 'IA10' = 0; 'IA11' = 0; 'IA12' = 0
     # ── Endpoint Security (Tier 0: local reads) ──
     'EP01' = 0; 'EP02' = 0; 'EP03' = 0; 'EP04' = 0; 'EP05' = 0
-    'EP06' = 0; 'EP07' = 0; 'EP08' = 0; 'EP09' = 0; 'EP10' = 0
+    'EP06' = 0; 'EP07' = 0; 'EP08' = 0; 'EP09' = 0; 'EP10' = 0; 'EP11' = 0
     # ── Logging & Monitoring (Tier 0: event log reads) ──
     'LM01' = 0; 'LM02' = 0; 'LM03' = 0; 'LM04' = 0; 'LM05' = 0
     'LM06' = 0; 'LM07' = 0; 'LM08' = 0
@@ -7864,7 +7973,8 @@ $script:CheckEvidenceManifest = @{
     'EP07' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostPolicy'; DataSources=@('AppLocker policy','WDAC indicators','Office macro policy'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate production allowlist coverage before enforcement.' }
     'EP08' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('Credential Guard state','LSA protection','Secure Boot/TPM indicators'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm hardware readiness and exception groups.' }
     'EP09' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('AutoRun policy','removable media policy','USB/storage indicators'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Validate business exceptions for removable media workflows.' }
-    'EP10' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostAndDirectory'; DataSources=@('OS version','lifecycle table','ESU indicators','domain computer inventory'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm ESU enrollment and application upgrade blockers.' }
+    'EP10' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostAndDirectory'; DataSources=@('OS version','lifecycle table','ESU license','installed SQL Server/Office/Exchange','domain computer inventory'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm consumer ESU enrollment and application upgrade blockers.' }
+    'EP11' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHost'; DataSources=@('Secure Boot servicing registry','TPM-WMI System events','firmware type'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Record OEM firmware versions for devices stuck on a firmware error.' }
 
     # Logging & Monitoring
     'LM01' = @{ EvidenceMode='Automated'; AuthorityLevel='LocalHostPolicy'; DataSources=@('Audit policy','Security event log settings'); InternetRequired=$false; WritesPossible=$false; DefaultRiskTier=0; ManualFollowUp='Confirm domain GPO source for audited categories.' }
@@ -7956,7 +8066,7 @@ $script:CategoryWeights = @{
 }
 
 # ── Phase 3: Compliance Framework Integration ────────────────────────────────
-# Structured mapping of all 69 checks across 10 compliance frameworks with specific control IDs.
+# Structured mapping of all 70 checks across 10 compliance frameworks with specific control IDs.
 # CIS and HIPAA coverage is represented through built-in compliance strings and framework profiles.
 # This table adds structured control IDs for NIST 800-171 Rev 3, CMMC 2.0, PCI-DSS 4.0.1, ACSC Essential Eight, Cyber Essentials, SOC 2, ISO 27001:2022, and DISA STIG.
 $script:ComplianceTarget = 'All'   # Active framework filter: All, CIS, NIST, CMMC, HIPAA, PCI, E8, CyberEssentials, SOC2, ISO27001, STIG
@@ -8001,7 +8111,8 @@ $script:FrameworkMap = @{
     'EP07' = @{ 'NIST'='3.4.6, 3.4.8'; 'CMMC'='CM.L2-3.4.6, CM.L2-3.4.8'; 'PCI'='2.2.4, 6.3.2'; 'SOC2'='CC6.8, CC7.1'; 'ISO27001'='A.8.7, A.8.19' }
     'EP08' = @{ 'NIST'='3.13.11, 3.14.1'; 'CMMC'='SC.L2-3.13.11, SI.L2-3.14.1'; 'PCI'='9.4.1, 2.2.1'; 'SOC2'='CC6.1, CC6.7'; 'ISO27001'='A.8.1, A.8.24' }
     'EP09' = @{ 'NIST'='3.4.1, 3.4.2'; 'CMMC'='CM.L2-3.4.1, CM.L2-3.4.2'; 'PCI'='2.2.1, 2.2.2'; 'SOC2'='CC6.1, CC8.1'; 'ISO27001'='A.8.9, A.8.19' }
-    'EP10' = @{ 'NIST'='3.8.9'; 'CMMC'='MP.L2-3.8.9'; 'PCI'='9.4.1, 9.4.5'; 'SOC2'='CC6.7'; 'ISO27001'='A.7.9, A.8.1' }
+    'EP10' = @{ 'NIST'='3.4.1, 3.14.1, 3.14.2'; 'CMMC'='CM.L2-3.4.1, SI.L2-3.14.1, SI.L2-3.14.2'; 'PCI'='6.3.1, 6.3.3'; 'SOC2'='CC7.1, CC8.1'; 'ISO27001'='A.8.8, A.8.19' }
+    'EP11' = @{ 'NIST'='3.4.2, 3.14.1'; 'CMMC'='CM.L2-3.4.2, SI.L2-3.14.1'; 'PCI'='2.2.1, 6.3.3'; 'SOC2'='CC6.8, CC7.1'; 'ISO27001'='A.8.8, A.8.9' }
     # ── Logging & Monitoring ──
     'LM01' = @{ 'NIST'='3.3.1, 3.3.2'; 'CMMC'='AU.L2-3.3.1, AU.L2-3.3.2'; 'PCI'='10.2.1, 10.2.2'; 'SOC2'='CC7.2, CC7.3'; 'ISO27001'='A.8.15, A.8.16' }
     'LM02' = @{ 'NIST'='3.3.1, 3.3.4'; 'CMMC'='AU.L2-3.3.1, AU.L2-3.3.4'; 'PCI'='10.3.1, 10.3.3'; 'SOC2'='CC7.2, CC7.3'; 'ISO27001'='A.8.15, A.8.16' }
@@ -8064,7 +8175,7 @@ $stigMap = @{
     'IA09'='V-254261,V-254262'; 'IA10'='V-254263'; 'IA11'='Kerberos encryption type policy / RC4 deprecation readiness'; 'IA12'='Windows Server 2025 dMSA / BadSuccessor delegated service account migration exposure'
     'EP01'='V-254264,V-254265,V-254266'; 'EP02'='V-254267,V-254268'; 'EP03'='V-254269,V-254270,V-254271'
     'EP04'='V-254272,V-254273'; 'EP05'='V-254274,V-254275'; 'EP06'='V-254276,V-254277'
-    'EP07'='V-254278,V-254279'; 'EP08'='V-254280,V-254281,V-254282'; 'EP09'='V-254283'; 'EP10'='V-254284'
+    'EP07'='V-254278,V-254279'; 'EP08'='V-254280,V-254281,V-254282'; 'EP09'='V-254283'; 'EP10'='V-254284'; 'EP11'='No STIG rule yet; Microsoft Secure Boot CA 2023 guidance (KB5025885)'
     'LM01'='V-254285,V-254286'; 'LM02'='V-254287'; 'LM03'='V-254288,V-254289,V-254290'
     'LM04'='V-254291'; 'LM05'='V-254292'; 'LM06'='V-254293'; 'LM07'='V-254294,V-254295'; 'LM08'='V-254296'
     'NA01'='V-254297'; 'NA02'='V-254298'; 'NA03'='V-254299'; 'NA04'='V-254300'
@@ -8150,6 +8261,7 @@ $cyberEssentialsMap = @{
     'EP08'='Cyber Essentials v3.3: Secure configuration'
     'EP09'='Cyber Essentials v3.3: Secure configuration'
     'EP10'='Cyber Essentials v3.3: Security update management'
+    'EP11'='Cyber Essentials v3.3: Security update management'
     'CF01'='Cyber Essentials v3.3: User access control'
     'CF02'='Cyber Essentials v3.3: Secure configuration; Firewalls'
     'CF04'='Cyber Essentials v3.3: Secure configuration'
@@ -8171,7 +8283,7 @@ $fedRampMap = @{
     'EP01'='SI-3,SI-4,SI-7'; 'EP02'='SC-28,SC-28(1),MP-5'; 'EP03'='AC-17(2),SC-8,SC-23'
     'EP04'='RA-5,SI-2,SI-5'; 'EP05'='AC-6,CM-5,CM-7'; 'EP06'='SC-7,SC-7(5),SC-7(8)'
     'EP07'='CM-7,CM-7(2),CM-7(5)'; 'EP08'='SI-7,SI-7(1),SC-13'; 'EP09'='CM-6,CM-7,SC-18'
-    'EP10'='MA-3,MA-5,PE-16'
+    'EP10'='SI-2,CM-8'; 'EP11'='SI-2,SI-7(9)'
     'LM01'='AU-2,AU-3,AU-12'; 'LM02'='AU-2,AU-3(1),AU-12'; 'LM03'='AU-2,AU-3,AU-6'
     'LM04'='AU-2,SC-7(4)'; 'LM05'='AU-6,AU-7,AU-9'; 'LM06'='AU-9,AU-9(4),AU-11'
     'LM07'='AU-4,AU-5,AU-11'; 'LM08'='AU-6(1),IR-4,SI-4'
@@ -8198,11 +8310,11 @@ $script:FrameworkChecks = @{
     'CIS'      = @($script:FrameworkMap.Keys)  # CIS covers all checks
     'NIST'     = @($script:FrameworkMap.Keys | Where-Object { $script:FrameworkMap[$_].NIST })
     'CMMC'     = @($script:FrameworkMap.Keys | Where-Object { $script:FrameworkMap[$_].CMMC })
-    'HIPAA'    = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
-    'PCI'      = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
+    'HIPAA'    = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','EP11','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF05','CF07','NP01','NP02','NP08','PS01','PS03','PS04')
+    'PCI'      = @('NP01','NP02','NP03','NP04','NP05','NP08','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP11','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA04','BR01','BR02','BR03','BR05','CF01','CF02','CF04','CF05','PS01','PS03','PS04','PS05','PS06')
     'E8'       = @('EP01','EP04','EP07','EP09','EP10','IA01','IA02','IA03','IA06','IA09','IA10','IA12','CF01','CF03','CF07','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','LM02','LM03','LM08','NP03','NP10')
-    'CyberEssentials' = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
-    'SOC2'     = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
+    'CyberEssentials' = @('NP01','NP02','NP03','NP04','NP05','NP06','NP09','NP10','IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP10','EP11','CF01','CF02','CF04','CF05','CF06','CF07','CF08')
+    'SOC2'     = @('IA01','IA02','IA03','IA04','IA05','IA06','IA07','IA08','IA09','IA10','IA11','IA12','EP01','EP02','EP03','EP04','EP05','EP06','EP07','EP08','EP09','EP11','LM01','LM02','LM03','LM04','LM05','LM06','LM07','LM08','NA01','NA02','NA03','NA04','NA05','NA06','NP01','NP02','NP03','NP04','NP05','NP06','NP07','NP08','NP09','NP10','BR01','BR02','BR03','BR04','BR05','BR06','BR07','BR08','CF01','CF02','CF03','CF04','CF05','CF06','CF07','CF08','PS01','PS02','PS03','PS04','PS05','PS06')
     'ISO27001' = @($script:FrameworkMap.Keys)  # ISO 27001 covers all checks
     'STIG'     = @($script:FrameworkMap.Keys)  # DISA STIG covers all checks
     'FedRAMP'  = @($script:FrameworkMap.Keys)  # FedRAMP Moderate covers all checks
@@ -8313,7 +8425,7 @@ function Get-FrameworkScores {
 # ── End Phase 3A ─────────────────────────────────────────────────────────────
 
 # ── Phase 4A: MITRE ATT&CK Mapping ──────────────────────────────────────────
-# Maps all 69 checks to ATT&CK Enterprise techniques (v19.1)
+# Maps all 70 checks to ATT&CK Enterprise techniques (v19.1)
 # Format: CheckID -> @{ Tactics=@('TA00xx',...); Techniques=@('T1xxx',...); Desc='short attack context' }
 $script:MitreMap = @{
     # ── Identity & Access ──
@@ -8340,6 +8452,7 @@ $script:MitreMap = @{
     'EP08' = @{ Tactics=@('TA0006','TA0005','TA0004'); Techniques=@('T1003.001','T1003.004','T1003.005','T1547.008'); Desc='Missing Credential Guard/LSA Protection enables LSASS dumping, DCSync, and credential theft' }
     'EP09' = @{ Tactics=@('TA0005','TA0003'); Techniques=@('T1562.001','T1112'); Desc='Misconfigured systems expand attack surface through unnecessary services and weak defaults' }
     'EP10' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1210'); Desc='End-of-life operating systems expose public and internal services to known exploitation' }
+    'EP11' = @{ Tactics=@('TA0003','TA0005'); Techniques=@('T1542.003'); Desc='A device still trusting only the 2011 Secure Boot certificates cannot receive boot manager revocations, leaving it open to bootkits such as BlackLotus' }
     # ── Logging & Monitoring ──
     'LM01' = @{ Tactics=@('TA0005'); Techniques=@('T1562.002','T1070.001'); Desc='Inadequate audit policy creates blind spots; attackers operate undetected' }
     'LM02' = @{ Tactics=@('TA0005','TA0040'); Techniques=@('T1562.002','T1485'); Desc='No SIEM means no correlation, alerting, or forensic capability during active compromise' }
@@ -8423,6 +8536,7 @@ $script:D3FendMap = @{
     'EP08' = @{ Stages=@('Harden'); Techniques=@('D3-CH','D3-HBPI','D3-TBI'); Labels=@('Credential Hardening','Hardware-based Process Isolation','TPM Boot Integrity'); Desc='Uses hardware-backed isolation and boot integrity to protect credentials' }
     'EP09' = @{ Stages=@('Detect','Isolate'); Techniques=@('D3-SICA','D3-OPR','D3-IOPR'); Labels=@('System Init Config Analysis','Operating Mode Restriction','IO Port Restriction'); Desc='Restricts AutoRun/AutoPlay and removable-media execution paths' }
     'EP10' = @{ Stages=@('Model','Harden'); Techniques=@('D3-AI','D3-SWI','D3-SU'); Labels=@('Asset Inventory','Software Inventory','Software Update'); Desc='Identifies unsupported operating systems and upgrade/ESU gaps' }
+    'EP11' = @{ Stages=@('Harden'); Techniques=@('D3-BA','D3-SU'); Labels=@('Bootloader Authentication','Software Update'); Desc='Moves Secure Boot trust to the 2023 certificates so boot manager revocations keep applying' }
 
     # Logging & Monitoring
     'LM01' = @{ Stages=@('Detect'); Techniques=@('D3-OSM','D3-DAM','D3-AET'); Labels=@('Operating System Monitoring','Domain Account Monitoring','Authentication Event Thresholding'); Desc='Validates audit policy and authentication event visibility' }

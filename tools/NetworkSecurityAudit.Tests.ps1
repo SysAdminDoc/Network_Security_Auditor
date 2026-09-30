@@ -55,7 +55,7 @@ BeforeAll {
     $script:FwChkBlock   = Get-Block $script:Text '\$script:FrameworkChecks\s*=\s*@\{' '# Helper: Get formatted compliance string'
     $script:FwChkIds     = Get-IdSet $script:FwChkBlock "'([A-Z]{2}\d{2})'"
 
-    $script:ExpectedCheckCount = 69
+    $script:ExpectedCheckCount = 70
 }
 
 Describe 'Parser health' {
@@ -127,7 +127,7 @@ $choice = New-UiChoice 'Pass' 'Gui.StatusPass'
 }
 
 Describe 'Check catalog consistency' {
-    It "defines exactly <ExpectedCheckCount> unique audit IDs" -TestCases @(@{ ExpectedCheckCount = 69 }) {
+    It "defines exactly <ExpectedCheckCount> unique audit IDs" -TestCases @(@{ ExpectedCheckCount = 70 }) {
         @($script:CatalogIds).Count | Should -Be $ExpectedCheckCount
     }
     It 'has exactly one auto-check per catalog ID' {
@@ -1716,6 +1716,72 @@ Describe 'EP04 hotpatch-aware patch recency (nested check helpers via AST)' {
         (Get-Ep04LatestOsUpdate -Hotfixes $fixes -History @(@{ Title='2026-09 .NET Framework Security Update (KB5126052)'; Date=[datetime]'2026-09-20' }) -OsBuild 26200).Date | Should -Be ([datetime]'2026-06-10')
         (Get-Ep04LatestOsUpdate -Hotfixes $fixes -History $null -OsBuild 26200).Label | Should -Be 'KB5051987 (hotfix list)'
         Get-Ep04LatestOsUpdate -Hotfixes @() -History $null -OsBuild 26200 | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'EP11 Secure Boot 2023 certificate transition (nested check helpers via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        foreach ($nm in @('ConvertFrom-Ep11AvailableUpdates','Get-Ep11EventMeaning','Get-Ep11Assessment')) {
+            $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $nm }, $true)[0]
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+        $today = [datetime]'2026-09-30'
+        function Invoke-Uefi { param($Status, $Capable = $null, $AvailableUpdates = 0, $ErrorCode = 0, $ErrorEvent = $null, [object[]]$Events = @())
+            Get-Ep11Assessment -Firmware 'Uefi' -SecureBootEnabled 1 -Status $Status -ErrorCode $ErrorCode -ErrorEvent $ErrorEvent -Capable $Capable -AvailableUpdates $AvailableUpdates -Events $Events -Today $today
+        }
+    }
+
+    It 'passes Updated and names the latest 1808 event' {
+        $r = Invoke-Uefi -Status 'Updated' -Capable 2 -Events @(@{ Id=1808; Time=[datetime]'2026-09-27' })
+        $r.Status | Should -Be 'Pass'
+        $r.Headline | Should -Be 'Secure Boot 2023 certificates: Updated, booting from the boot manager signed by Windows UEFI CA 2023.'
+        $r.Latest | Should -Match 'Latest certificate event: 1808 on 2026-09-27'
+    }
+    It 'treats InProgress as Partial and NotStarted as Fail' {
+        $progress = Invoke-Uefi -Status 'InProgress' -Capable 1 -AvailableUpdates 0x4100
+        $progress.Status | Should -Be 'Partial'
+        $progress.Headline | Should -Match 'waiting for a restart'
+        $progress.Headline | Should -Match 'expires 2026-10-19 \(19 days\)'
+        (Invoke-Uefi -Status 'NotStarted' -Capable 0).Status | Should -Be 'Fail'
+        (Invoke-Uefi -Status 'Pending').Status | Should -Be 'Partial'
+    }
+    It 'fails on a servicing error and points at the firmware' {
+        $r = Invoke-Uefi -Status 'InProgress' -Capable 1 -AvailableUpdates 0x5944 -ErrorCode ([int]-2147024875) -ErrorEvent 1795 -Events @(@{ Id=1795; Time=[datetime]'2026-09-28' })
+        $r.Status | Should -Be 'Fail'
+        $r.Headline | Should -Match 'stopped with error 0x80070015 \(event 1795\)'
+        $r.Headline | Should -Match 'Check the OEM for a firmware update'
+    }
+    It 'returns N/A for legacy BIOS, no Secure Boot support and Secure Boot off' {
+        (Get-Ep11Assessment -Firmware 'Bios' -Today $today).Status | Should -Be 'N/A'
+        (Get-Ep11Assessment -Firmware 'Unknown' -Today $today).Status | Should -Be 'N/A'
+        $off = Get-Ep11Assessment -Firmware 'Uefi' -SecureBootEnabled 0 -Status 'NotStarted' -Today $today
+        $off.Status | Should -Be 'N/A'
+        $off.Headline | Should -Match 'Secure Boot is off'
+    }
+    It 'falls back to the events and the DB flag when no status is written' {
+        (Invoke-Uefi -Status '' -AvailableUpdates $null -ErrorCode $null -Events @(@{ Id=1808; Time=[datetime]'2026-09-01' })).Status | Should -Be 'Pass'
+        (Invoke-Uefi -Status '' -Capable 1 -AvailableUpdates $null -ErrorCode $null).Status | Should -Be 'Partial'
+        $none = Invoke-Uefi -Status '' -Capable 0 -AvailableUpdates $null -ErrorCode $null -Events @(@{ Id=1801; Time=[datetime]'2026-09-01' })
+        $none.Status | Should -Be 'Fail'
+        $none.Headline | Should -Match "event 1801 says they aren't applied"
+    }
+    It 'decodes the AvailableUpdates bitmask the same way as the app' {
+        $full = ConvertFrom-Ep11AvailableUpdates -Value 0x5944
+        $full.Count | Should -Be 6
+        $full | Should -Contain '0x0040: add Windows UEFI CA 2023 to the DB'
+        $full | Should -Contain '0x0100: install the boot manager signed by Windows UEFI CA 2023'
+        ConvertFrom-Ep11AvailableUpdates -Value 0x4000 | Should -Contain 'Only the 0x4000 modifier is left, so every requested update has been applied.'
+        ConvertFrom-Ep11AvailableUpdates -Value 0x0042 | Should -Contain "0x0002: bits Microsoft doesn't document"
+        @(ConvertFrom-Ep11AvailableUpdates -Value 0).Count | Should -Be 0
+    }
+    It 'reads AvailableUpdates from the SecureBoot key and leaves the 2023 status out of EP08' {
+        $ep11 = Get-Block -Text $script:Text -Start "'EP11' = @\{ Type='Local'" -End "'LM03' = @\{"
+        $ep11 | Should -Match "Get-ItemProperty -LiteralPath \`$sbKey -EA SilentlyContinue"
+        $ep11 | Should -Match "ProviderName='Microsoft-Windows-TPM-WMI'"
+        $ep08 = Get-Block -Text $script:Text -Start "'EP08' = @\{ Type='Local'" -End "'EP09' = @\{"
+        $ep08 | Should -Not -Match 'UEFICA2023Status'
+        $ep08 | Should -Match 'UEFISecureBootEnabled'
     }
 }
 

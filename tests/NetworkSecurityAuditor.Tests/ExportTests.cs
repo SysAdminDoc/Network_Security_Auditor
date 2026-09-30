@@ -860,16 +860,16 @@ public class ExportTests
             DomainName = "FULL.LOCAL"
         };
 
-        Assert.Equal(69, checks.Count);
+        Assert.Equal(70, checks.Count);
 
         var json = JsonExporter.Export(checks, env, 30, "F", 20, "F", ScanProfileType.Full, 10, "F");
         Assert.True(json.Length > 1000);
         var jsonDoc = JsonDocument.Parse(json);
-        Assert.Equal(69, jsonDoc.RootElement.GetProperty("findings").GetArrayLength());
+        Assert.Equal(70, jsonDoc.RootElement.GetProperty("findings").GetArrayLength());
 
         var csv = CsvExporter.Export(checks, env, 30, "F");
         var csvLines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(71, csvLines.Length); // 1 comment + 1 header + 69 data rows
+        Assert.Equal(72, csvLines.Length); // 1 comment + 1 header + 70 data rows
 
         var html = HtmlReportGenerator.Generate(checks, env, 30, "F", 20, "F", 10, "F");
         Assert.Contains("Detailed Findings", html);
@@ -877,7 +877,7 @@ public class ExportTests
 
         var jsonl = JsonlExporter.Export(checks, env, 30, "F", ScanProfileType.Full);
         var jsonlLines = jsonl.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(69, jsonlLines.Length);
+        Assert.Equal(70, jsonlLines.Length);
 
         var sarif = SarifExporter.Export(checks, env);
         Assert.True(sarif.Length > 1000);

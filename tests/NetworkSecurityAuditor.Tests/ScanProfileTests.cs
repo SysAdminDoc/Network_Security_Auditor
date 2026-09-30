@@ -31,10 +31,10 @@ public class ScanProfileTests
     }
 
     [Fact]
-    public void Full_Profile_Contains_All_69_Checks()
+    public void Full_Profile_Contains_All_70_Checks()
     {
         var ids = ScanProfiles.Resolve(ScanProfileType.Full);
-        Assert.Equal(69, ids.Length);
+        Assert.Equal(70, ids.Length);
     }
 
     [Fact]

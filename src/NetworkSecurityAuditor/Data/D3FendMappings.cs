@@ -4,7 +4,7 @@ using NetworkSecurityAuditor.Models;
 namespace NetworkSecurityAuditor.Data;
 
 /// <summary>
-/// MITRE D3FEND countermeasure mappings for all 69 security checks.
+/// MITRE D3FEND countermeasure mappings for all 70 security checks.
 /// Maps each check ID to defensive stages, techniques, labels, and descriptions.
 /// </summary>
 public static class D3FendMappings
@@ -173,6 +173,13 @@ public static class D3FendMappings
                 Techniques = ["D3-AM", "D3-SU", "D3-PH"],
                 Labels = ["Access Modeling", "Software Update", "Platform Hardening"],
                 Description = "Tracks and retires end-of-life operating systems before known exploitation"
+            },
+            ["EP11"] = new DefendMapping
+            {
+                Stages = ["Harden"],
+                Techniques = ["D3-BA", "D3-SU"],
+                Labels = ["Bootloader Authentication", "Software Update"],
+                Description = "Moves Secure Boot trust to the 2023 certificates so boot manager revocations keep applying"
             },
 
             // ── Logging & Monitoring ───────────────────────────────────────

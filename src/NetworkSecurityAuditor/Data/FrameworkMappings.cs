@@ -289,6 +289,18 @@ public static class FrameworkMappings
                 CyberEssentials = "Cyber Essentials v3.3: Security update management",
                 FedRAMP = "SI-2, CM-8",
             },
+            ["EP11"] = new()
+            {
+                CIS = "4.1, 7.3",
+                NIST = "3.4.2, 3.14.1",
+                CMMC = "CM.L2-3.4.2, SI.L2-3.14.1",
+                HIPAA = "164.308(a)(5)(ii)(B)",
+                PCI = "2.2.1, 6.3.3",
+                SOC2 = "CC6.8, CC7.1",
+                ISO27001 = "A.8.8, A.8.9",
+                CyberEssentials = "Cyber Essentials v3.3: Security update management",
+                FedRAMP = "SI-2, SI-7(9)",
+            },
 
             // ──────────────────────────────────────────────
             //  Logging & Monitoring (LM01 – LM08)

@@ -7,9 +7,9 @@ namespace NetworkSecurityAuditor.Tests;
 public class CheckCatalogTests
 {
     [Fact]
-    public void Catalog_Contains_69_Checks()
+    public void Catalog_Contains_70_Checks()
     {
-        Assert.Equal(69, CheckCatalog.All.Count);
+        Assert.Equal(70, CheckCatalog.All.Count);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class CheckCatalogTests
 
     [Theory]
     [InlineData("Identity & Access", 12)]
-    [InlineData("Endpoint Security", 10)]
+    [InlineData("Endpoint Security", 11)]
     [InlineData("Logging & Monitoring", 8)]
     [InlineData("Network Architecture", 7)]
     [InlineData("Network Perimeter", 10)]

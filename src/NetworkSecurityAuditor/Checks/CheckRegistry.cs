@@ -33,6 +33,7 @@ public static class CheckRegistry
         Register(checks, new EP08_CredentialGuardCheck());
         Register(checks, new EP09_AutoRunCheck());
         Register(checks, new EP10_EolOsCheck());
+        Register(checks, new EP11_SecureBootCertificateCheck());
 
         // Logging & Monitoring
         Register(checks, new LM01_DnsLoggingCheck());

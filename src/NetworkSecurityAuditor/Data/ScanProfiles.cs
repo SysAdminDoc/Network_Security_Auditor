@@ -34,7 +34,7 @@ public static class ScanProfiles
             {
                 "NP01", "NP02", "NP03", "NP04", "NP05", "NP07", "NP08", "NP09", "NP10",
                 "IA01", "IA02", "IA03", "IA04", "IA05", "IA06", "IA07", "IA08", "IA09", "IA10", "IA11", "IA12",
-                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08",
+                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08", "EP11",
                 "LM01", "LM02", "LM03", "LM04", "LM06", "LM08",
                 "BR01", "BR02", "BR03", "BR05", "BR06", "BR08",
                 "CF01", "CF02", "CF03", "CF04", "CF05",
@@ -56,7 +56,7 @@ public static class ScanProfiles
             [ScanProfileType.HIPAA] = new[]
             {
                 "IA01", "IA02", "IA03", "IA04", "IA05", "IA06", "IA07", "IA08", "IA09", "IA10", "IA11", "IA12",
-                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08", "EP09", "EP10",
+                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08", "EP09", "EP10", "EP11",
                 "LM01", "LM02", "LM03", "LM04", "LM05", "LM06", "LM07", "LM08",
                 "BR01", "BR02", "BR03", "BR04", "BR05", "BR06", "BR07", "BR08",
                 "CF01", "CF02", "CF03", "CF05", "CF07",
@@ -68,7 +68,7 @@ public static class ScanProfiles
             {
                 "NP01", "NP02", "NP03", "NP04", "NP05", "NP08", "NP09", "NP10",
                 "IA01", "IA02", "IA03", "IA04", "IA05", "IA06", "IA07", "IA08", "IA09", "IA11", "IA12",
-                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08",
+                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08", "EP11",
                 "LM01", "LM02", "LM03", "LM04", "LM05", "LM06", "LM07", "LM08",
                 "NA01", "NA02", "NA04",
                 "BR01", "BR02", "BR03", "BR05",
@@ -93,14 +93,14 @@ public static class ScanProfiles
             {
                 "NP01", "NP02", "NP03", "NP04", "NP05", "NP06", "NP09", "NP10",
                 "IA03", "IA04", "IA05", "IA06", "IA07", "IA08", "IA09", "IA10", "IA11", "IA12",
-                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08", "EP09", "EP10",
+                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08", "EP09", "EP10", "EP11",
                 "CF01", "CF02", "CF04", "CF05", "CF06", "CF07", "CF08"
             },
 
             [ScanProfileType.SOC2] = new[]
             {
                 "IA01", "IA02", "IA03", "IA04", "IA05", "IA06", "IA07", "IA08", "IA09", "IA10", "IA11", "IA12",
-                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08", "EP09",
+                "EP01", "EP02", "EP03", "EP04", "EP05", "EP06", "EP07", "EP08", "EP09", "EP11",
                 "LM01", "LM02", "LM03", "LM04", "LM05", "LM06", "LM07", "LM08",
                 "NA01", "NA02", "NA03", "NA04", "NA05", "NA06",
                 "NP01", "NP02", "NP03", "NP04", "NP05", "NP06", "NP07", "NP08", "NP09", "NP10",

@@ -170,13 +170,6 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
 
 ### P0
 
-- [ ] P0 — NSA-071 Add a correct Secure Boot 2023 certificate transition check on both surfaces
-  Why: Windows Production PCA 2011 expires 2026-10-19 (KEK CA 2011 and UEFI CA 2011 expired 2026-06-24 and 2026-06-27); the PS1 switches `UEFICA2023Status` on integers although Microsoft documents string states and reads `AvailableUpdates` from the wrong key; C# has no check.
-  Evidence: `NetworkSecurityAudit.ps1:5996-6005`; https://support.microsoft.com/en-us/servicing/os/secure-boot/2025/06/windows-secure-boot-certificate-expiration-and-ca-updates; https://techcommunity.microsoft.com/blog/windows-itpro-blog/secure-boot-playbook-for-certificates-expiring-in-2026/4469235.
-  Touches: a new EP11 check in `Checks/EndpointSecurity/`, catalog and mappings, the PS1 block above, tests with registry fixtures.
-  Acceptance: the check reports Secure Boot state (`Confirm-SecureBootUEFI` or `HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\State\UEFISecureBootEnabled`), `Servicing\UEFICA2023Status` as NotStarted/InProgress/Updated, `UEFICA2023Error` when present, `HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\AvailableUpdates` as a decoded bitmask, and the latest System event 1808 or 1801; Updated passes, InProgress is Partial, NotStarted or an error fails on Secure Boot hosts; non-UEFI hosts return NA; fixtures cover each state. Needs live validation on one updated and one pending device.
-  Complexity: M
-
 ### P1
 
 - [ ] P1 — NSA-072 Separate unanswered, errored and timed-out checks from scored results
@@ -240,6 +233,13 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Evidence: `NetworkSecurityAudit.ps1` EP04 block, the `$msKevHits` filter and `$kevRansomware` status line; live run 2026-09-30.
   Touches: PS1 EP04 KEV matching and status, Pester fixtures with a recorded feed; NSA-079 must not port the same logic to C#.
   Acceptance: a KEV entry counts against the host only when its dateAdded falls after the newest installed OS update (or the entry names a product the host runs outside Windows servicing); a host patched inside 30 days with no such entries passes EP04; "overdue" means the due date has passed and the host's newest OS update predates the KEV entry; Pester covers a patched host, a host that missed the fixing month, and a ransomware-linked entry.
+  Complexity: S
+
+- [ ] P1 — NSA-109 Stop PS1 EP08 failing standard users on TPM data it can't read
+  Why: `Get-Tpm` returns empty properties without elevation, so the PS1 EP08 prints "TPM Present : | Ready:", counts an issue and labels the TPM "1.2 - upgrade recommended" because `Win32_Tpm.SpecVersion` is unreadable too. A standard user on a TPM 2.0 machine gets Fail.
+  Evidence: `NetworkSecurityAudit.ps1` EP08 block, TPM section; live run 2026-09-30 on a Windows 11 25H2 PC with a TPM 2.0, non-elevated.
+  Touches: PS1 EP08 TPM section, Pester; compare with the C# EP08 TPM path.
+  Acceptance: unreadable TPM data reports "couldn't be read without elevation" and doesn't count as an issue or claim TPM 1.2; an elevated run keeps today's checks; a Pester test covers the empty `Get-Tpm` object.
   Complexity: S
 
 - [ ] P1 — NSA-080 Port the PS1 AD attack-indicator checks to C#
@@ -390,6 +390,20 @@ The 2026-09-29 verification pass removed 234 stale lines from this file (already
   Touches: a PS1 `Write-AuditFileAtomic` helper (temp file plus `[IO.File]::Replace`), every export function, save-state.
   Acceptance: all PS1 exports go through the helper; a Pester test writes to a path containing `[x]` and verifies no partial file remains after a simulated failure.
   Complexity: S
+
+- [ ] P2 — NSA-110 Fix the D3FEND "Backup" mappings that use D3-BA
+  Why: the C# D3FEND table maps BR01, BR02, BR03, BR05, BR06, BR07 and BR08 to D3-BA labeled "Backup". In D3FEND, D3-BA is Bootloader Authentication, and EP11 now uses it correctly, so reports show one technique ID with two meanings.
+  Evidence: `src/NetworkSecurityAuditor/Data/D3FendMappings.cs` BR entries; https://d3fend.mitre.org/technique/d3f:BootloaderAuthentication/.
+  Touches: C# and PS1 D3FEND tables for the BR checks, CheckCatalogTests label assertions.
+  Acceptance: no check maps a D3FEND ID to a label that D3FEND doesn't give it; the BR checks use D3FEND Restore techniques that exist in the pinned version; a test fails when one technique ID carries two labels.
+  Complexity: S
+
+- [ ] P2 — NSA-111 Verify or replace the PS1 DISA STIG V-IDs
+  Why: the PS1 `$stigMap` gives most checks sequential IDs (V-254247 through V-254300), which don't look like real rule IDs from one STIG. IA11, IA12 and EP11 already use plain descriptions instead.
+  Evidence: `NetworkSecurityAudit.ps1` `$stigMap`; `BenchmarkMetadata.json` source `disa-windows-server-2025-stig` covers only IA11 and IA12.
+  Touches: PS1 `$stigMap`, the C# STIG mapping if one exists, README STIG row, tests.
+  Acceptance: every STIG reference names a real rule from a named STIG release (checked against the published XCCDF) or says plainly that no rule maps; a test pins the source release.
+  Complexity: M
 
 ### P3
 
