@@ -6464,7 +6464,32 @@ $script:AutoChecks = @{
 
     'EP08' = @{ Type='Local'; Label='Scan Hardware Security (UEFI/TPM/VBS)'
         Script = {
-            $sb = [System.Text.StringBuilder]::new(); $issues = 0
+            # TPM lines from whatever this account can read. The PnP device is visible to any user:
+            # compatible ID MSFT0101 is a TPM 2.0 and PNP0C31 a TPM 1.2. Only an elevated Get-Tpm
+            # says whether it's ready, so an unreadable TPM is reported, not counted as an issue.
+            function Get-Ep08TpmAssessment {
+                param($Tpm, [string]$SpecVersion, [string[]]$PnpCompatibleIds, [string]$PnpStatus, [bool]$PnpQueryOk = $true)
+                $lines = @(); $issue = $false
+                $readable = ($null -ne $Tpm) -and ($Tpm -isnot [string]) -and ($null -ne $Tpm.TpmPresent)
+                $pnpTpm = @($PnpCompatibleIds | Where-Object { $_ -match '^(ACPI\\)?(MSFT0101|PNP0C31)$' })
+                $version = if ($SpecVersion) { ($SpecVersion -split ',')[0].Trim() }
+                    elseif (@($pnpTpm | Where-Object { $_ -match 'MSFT0101' }).Count -gt 0) { '2.0' }
+                    elseif ($pnpTpm.Count -gt 0) { '1.2' } else { '' }
+                if ($readable) {
+                    $lines += "TPM Present     : $($Tpm.TpmPresent) | Ready: $($Tpm.TpmReady) | Enabled: $($Tpm.TpmEnabled)"
+                    if (-not $Tpm.TpmPresent -or -not $Tpm.TpmReady) { $issue = $true }
+                } elseif ($pnpTpm.Count -gt 0) {
+                    $lines += "TPM Present     : True (device status $(if ($PnpStatus) { $PnpStatus } else { 'unknown' })); readiness couldn't be read without elevation"
+                } elseif ($PnpQueryOk) {
+                    $lines += "TPM Present     : no TPM device found [!]"
+                    $issue = $true
+                } else {
+                    $lines += "TPM             : couldn't be read without elevation"
+                }
+                if ($version) { $lines += "TPM Version     : $version $(if ($version -match '^2\.') { '[TPM 2.0 OK]' } else { '[TPM 1.2 - upgrade recommended]' })" }
+                elseif ($readable -and $Tpm.TpmPresent) { $lines += "TPM Version     : couldn't be read" }
+                @{ Lines = $lines; Issue = $issue }
+            }            $sb = [System.Text.StringBuilder]::new(); $issues = 0
             # Secure Boot. Confirm-SecureBootUEFI needs elevation; the State value is readable by any user.
             # The 2023 certificate transition is EP11's job.
             try {
@@ -6475,15 +6500,15 @@ $script:AutoChecks = @{
                 if ($null -ne $sbState) { [void]$sb.AppendLine("Secure Boot     : $(if($sbState -eq 1){'ENABLED [OK]'}else{'DISABLED [!]'; $issues++}) (from UEFISecureBootEnabled)") }
                 else { [void]$sb.AppendLine("Secure Boot     : Not supported or inaccessible"); $issues++ }
             }
-            # TPM with version check
-            try {
-                $tpm = Get-Tpm -EA Stop
-                [void]$sb.AppendLine("TPM Present     : $($tpm.TpmPresent) | Ready: $($tpm.TpmReady) | Enabled: $($tpm.TpmEnabled)")
-                $tpmSpec = (Get-CimInstance -Namespace 'root\cimv2\Security\MicrosoftTpm' -ClassName Win32_Tpm -EA SilentlyContinue).SpecVersion
-                $tpm2 = $tpmSpec -match '^2\.'
-                [void]$sb.AppendLine("TPM Version     : $tpmSpec $(if($tpm2){'[TPM 2.0 OK]'}else{'[TPM 1.2 - upgrade recommended]'})")
-                if (-not $tpm.TpmPresent -or -not $tpm.TpmReady) { $issues++ }
-            } catch { [void]$sb.AppendLine("TPM: Could not query"); $issues++ }
+            # TPM with version check. Get-Tpm and Win32_Tpm need elevation; for a standard user Get-Tpm
+            # returns an "Administrator privilege is required" string instead of a TPM object.
+            $tpm = $null; try { $tpm = Get-Tpm -EA Stop } catch { $tpm = $null }
+            $tpmSpec = (Get-CimInstance -Namespace 'root\cimv2\Security\MicrosoftTpm' -ClassName Win32_Tpm -EA SilentlyContinue).SpecVersion
+            $tpmPnpOk = $true; $tpmPnp = @()
+            try { $tpmPnp = @(Get-CimInstance Win32_PnPEntity -Filter "PNPClass='SecurityDevices'" -EA Stop | Where-Object { @($_.CompatibleID) -match '^(ACPI\\)?(MSFT0101|PNP0C31)$' }) } catch { $tpmPnpOk = $false }
+            $tpmAssessment = Get-Ep08TpmAssessment -Tpm $tpm -SpecVersion ([string]$tpmSpec) -PnpCompatibleIds @($tpmPnp | ForEach-Object { @($_.CompatibleID) }) -PnpStatus ([string]($tpmPnp | Select-Object -First 1).Status) -PnpQueryOk $tpmPnpOk
+            foreach ($line in $tpmAssessment.Lines) { [void]$sb.AppendLine($line) }
+            if ($tpmAssessment.Issue) { $issues++ }
             # Boot mode / firmware type
             try {
                 $firmwareType = if (Test-Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot') {'UEFI'} else {'Legacy BIOS'}

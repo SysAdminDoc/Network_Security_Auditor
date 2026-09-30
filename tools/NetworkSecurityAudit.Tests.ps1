@@ -2019,6 +2019,42 @@ Describe 'EP04 CISA KEV matching against installed updates (nested check helpers
     }
 }
 
+Describe 'EP08 TPM reporting without elevation (nested check helper via AST)' {
+    BeforeAll {
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
+        $fn = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Ep08TpmAssessment' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+    }
+    It 'reports a standard user TPM 2.0 from its PnP device without counting an issue' {
+        # What Get-Tpm hands a standard user: a message string, not a TPM object.
+        $a = Get-Ep08TpmAssessment -Tpm 'Administrator privilege is required to execute this command.' -SpecVersion '' -PnpCompatibleIds @('ACPI\MSFT0101','MSFT0101') -PnpStatus 'OK'
+        $a.Issue | Should -BeFalse
+        $a.Lines | Should -Contain "TPM Present     : True (device status OK); readiness couldn't be read without elevation"
+        $a.Lines | Should -Contain 'TPM Version     : 2.0 [TPM 2.0 OK]'
+        ($a.Lines -join "`n") | Should -Not -Match '1\.2'
+    }
+    It 'says the TPM could not be read instead of claiming TPM 1.2 when nothing is readable' {
+        $empty = [pscustomobject]@{ TpmPresent=$null; TpmReady=$null; TpmEnabled=$null }
+        $a = Get-Ep08TpmAssessment -Tpm $empty -SpecVersion '' -PnpCompatibleIds @() -PnpStatus '' -PnpQueryOk $false
+        $a.Issue | Should -BeFalse
+        $a.Lines | Should -Be @("TPM             : couldn't be read without elevation")
+    }
+    It 'keeps the elevated checks' {
+        $ready = Get-Ep08TpmAssessment -Tpm ([pscustomobject]@{ TpmPresent=$true; TpmReady=$true; TpmEnabled=$true }) -SpecVersion '2.0, 0, 1.38' -PnpCompatibleIds @('MSFT0101') -PnpStatus 'OK'
+        $ready.Issue | Should -BeFalse
+        $ready.Lines | Should -Contain 'TPM Present     : True | Ready: True | Enabled: True'
+        $ready.Lines | Should -Contain 'TPM Version     : 2.0 [TPM 2.0 OK]'
+        (Get-Ep08TpmAssessment -Tpm ([pscustomobject]@{ TpmPresent=$true; TpmReady=$false; TpmEnabled=$true }) -SpecVersion '2.0, 0, 1.38' -PnpCompatibleIds @() -PnpStatus '').Issue | Should -BeTrue
+        (Get-Ep08TpmAssessment -Tpm ([pscustomobject]@{ TpmPresent=$true; TpmReady=$true; TpmEnabled=$true }) -SpecVersion '1.2, 2, 3' -PnpCompatibleIds @() -PnpStatus '').Lines | Should -Contain 'TPM Version     : 1.2 [TPM 1.2 - upgrade recommended]'
+    }
+    It 'counts a missing TPM when the device list was readable and shows none' {
+        $a = Get-Ep08TpmAssessment -Tpm 'Administrator privilege is required to execute this command.' -SpecVersion '' -PnpCompatibleIds @() -PnpStatus '' -PnpQueryOk $true
+        $a.Issue | Should -BeTrue
+        $a.Lines | Should -Contain 'TPM Present     : no TPM device found [!]'
+        (Get-Ep08TpmAssessment -Tpm 'x' -SpecVersion '' -PnpCompatibleIds @('ACPI\PNP0C31') -PnpStatus 'OK').Lines | Should -Contain 'TPM Version     : 1.2 [TPM 1.2 - upgrade recommended]'
+    }
+}
+
 Describe 'EP11 Secure Boot 2023 certificate transition (nested check helpers via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
