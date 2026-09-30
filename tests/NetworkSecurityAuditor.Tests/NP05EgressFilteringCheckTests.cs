@@ -94,6 +94,8 @@ public sealed class NP05EgressFilteringCheckTests
         Assert.Contains("ANY/ANY ALLOW OUT: Wide open out", result.Evidence);
         Assert.DoesNotContain("ANY/ANY ALLOW OUT: Google Chrome", result.Evidence);
         Assert.Contains("NOTE: Rule filters couldn't be read", result.Findings);
+        Assert.Equal(CheckStatus.Partial, result.Status);
+        Assert.Contains("Group Policy and service-added rules weren't checked, so this is Partial.", result.Findings);
     }
 
     [Fact]

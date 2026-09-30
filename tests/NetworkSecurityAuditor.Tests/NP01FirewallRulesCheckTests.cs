@@ -91,6 +91,22 @@ public sealed class NP01FirewallRulesCheckTests
     }
 
     // Recorded from netsh on Windows 11 25H2 (English), trimmed to three rules.
+    [Fact]
+    public async Task Local_Only_Read_Without_Any_Any_Rules_Is_Partial()
+    {
+        var wideOpen = NetshInboundVerbose.IndexOf("Rule Name:                            Wide open", StringComparison.Ordinal);
+        var check = new NP01_FirewallRulesCheck(
+            (_, _) => throw new ManagementException("Access denied"),
+            (_, _, _) => NetshInboundVerbose[..wideOpen]);
+
+        var result = await check.ExecuteAsync(new EnvironmentInfo(), new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(CheckStatus.Partial, result.Status);
+        Assert.Contains("Inbound firewall rules: 2 total", result.Findings);
+        Assert.Contains("Group Policy and service-added rules weren't checked, so this is Partial.", result.Findings);
+        Assert.DoesNotContain("PASS:", result.Findings);
+    }
+
     private const string NetshInboundVerbose = """
         Rule Name:                            Google Chrome (mDNS-In)
         ----------------------------------------------------------------------

@@ -37,6 +37,7 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
             var sb = new StringBuilder();
             var evidence = new StringBuilder();
             bool hasIssue = false;
+            bool localStoreOnly = false;
 
             evidence.AppendLine("[Windows Firewall Rules Analysis - active store (local, Group Policy and service rules)]");
 
@@ -79,6 +80,7 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
                 evidence.AppendLine($"  WMI error: {ex.Message}");
                 evidence.AppendLine("  netsh reads the local store only; Group Policy and service-added rules aren't included.");
                 sb.AppendLine("NOTE: Rule filters couldn't be read (run elevated to include them), so this covers local rules only, not Group Policy or service-added ones.");
+                localStoreOnly = true;
                 QueryViaNetsh(sb, evidence, ref totalInbound, ref inboundAllow, ref anyAnyRules, anyAnyNames, ct);
             }
 
@@ -102,9 +104,12 @@ public sealed class NP01_FirewallRulesCheck : ISecurityCheck
             }
 
             if (!hasIssue)
-                sb.AppendLine("PASS: No unrestricted (any/any) inbound allow rules detected.");
+                sb.AppendLine(localStoreOnly
+                    ? "No unrestricted (any/any) inbound allow rules among the local rules. Group Policy and service-added rules weren't checked, so this is Partial."
+                    : "PASS: No unrestricted (any/any) inbound allow rules detected.");
 
-            var status = hasIssue ? CheckStatus.Fail : CheckStatus.Pass;
+            // A local-only read can't clear the rules a Group Policy pushes.
+            var status = hasIssue ? CheckStatus.Fail : localStoreOnly ? CheckStatus.Partial : CheckStatus.Pass;
 
             return Task.FromResult(new CheckResult
             {

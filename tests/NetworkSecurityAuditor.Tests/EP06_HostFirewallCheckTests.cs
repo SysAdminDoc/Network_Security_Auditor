@@ -160,14 +160,26 @@ public class EP06_HostFirewallCheckTests
     }
 
     [Fact]
-    public async Task Unreadable_Listeners_Are_Evidence_Only()
+    public async Task Unreadable_Listeners_Are_Partial_And_Say_So()
     {
         var check = new EP06_HostFirewallCheck(HealthyProfiles, NoCommands, _ => new PortSnapshot { ListenerError = "The parameter is incorrect" });
 
         var result = await check.ExecuteAsync(new EnvironmentInfo(), new AuditOptions(), CancellationToken.None);
 
-        Assert.Equal(CheckStatus.Pass, result.Status);
+        Assert.Equal(CheckStatus.Partial, result.Status);
         Assert.Contains("Listeners couldn't be read: The parameter is incorrect", result.Evidence);
+        Assert.Contains("REVIEW: Listening ports couldn't be read", result.Findings);
+    }
+
+    [Fact]
+    public async Task Listener_Read_Exception_Is_Partial()
+    {
+        var check = new EP06_HostFirewallCheck(HealthyProfiles, NoCommands, _ => throw new InvalidOperationException("GetExtendedTcpTable failed"));
+
+        var result = await check.ExecuteAsync(new EnvironmentInfo(), new AuditOptions(), CancellationToken.None);
+
+        Assert.Equal(CheckStatus.Partial, result.Status);
+        Assert.Contains("Listener read failed: GetExtendedTcpTable failed", result.Evidence);
     }
 
     [Fact]

@@ -201,6 +201,7 @@ public sealed class EnglishTextResourceProvider : ITextResourceProvider
             [nameof(UiText.StatusNotApplicable)] = "N/A",
             [nameof(UiText.StatusError)] = "Error",
             [nameof(UiText.StatusTimedOut)] = "Timed out",
+            [nameof(UiText.ReportNotScored)] = "Not assessed or error",
             [nameof(UiText.StateMigratedFormat)] = "Updated {0} check statuses from a schema {1} audit state: errors and timeouts now show as Error, and questionnaire checks without a note as Not assessed.",
             [nameof(UiText.ReportLimitationsHeading)] = "Limitations",
             [nameof(UiText.ReportLimitationsIntroFormat)] = "These checks couldn't run, so they aren't scored. Coverage: {0} of {1} checks produced a scored result.",
@@ -633,6 +634,7 @@ public static class UiText
     public static string StatusNotApplicable => Get(nameof(StatusNotApplicable));
     public static string StatusError => Get(nameof(StatusError));
     public static string StatusTimedOut => Get(nameof(StatusTimedOut));
+    public static string ReportNotScored => Get(nameof(ReportNotScored));
     public static string StateMigratedFormat => Get(nameof(StateMigratedFormat));
     public static string ReportLimitationsHeading => Get(nameof(ReportLimitationsHeading));
     public static string ReportLimitationsIntroFormat => Get(nameof(ReportLimitationsIntroFormat));

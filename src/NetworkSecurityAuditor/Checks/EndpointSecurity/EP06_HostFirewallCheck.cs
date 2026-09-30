@@ -391,6 +391,13 @@ public sealed class EP06_HostFirewallCheck : ISecurityCheck
     /// Insecure listeners and role ports a Public-profile network can reach fail; sensitive services
     /// beyond loopback are a warning. Default role ports on a private or domain network are evidence only.
     /// </summary>
+    // Half the check didn't run, so it can't pass on the profiles alone.
+    private static void ListenersNotChecked(StringBuilder sb, ref bool hasWarning)
+    {
+        hasWarning = true;
+        sb.AppendLine("REVIEW: Listening ports couldn't be read, so high-risk listeners weren't checked.");
+    }
+
     private void CheckListeners(StringBuilder sb, StringBuilder evidence, ref bool hasFailure, ref bool hasWarning, CancellationToken ct)
     {
         evidence.AppendLine("\n[High-Risk Listeners (IP Helper API)]");
@@ -400,14 +407,16 @@ public sealed class EP06_HostFirewallCheck : ISecurityCheck
         {
             snapshot = _portSnapshotProvider(ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             evidence.AppendLine($"  Listener read failed: {ex.Message}");
+            ListenersNotChecked(sb, ref hasWarning);
             return;
         }
         if (snapshot.ListenerError is not null)
         {
             evidence.AppendLine($"  Listeners couldn't be read: {snapshot.ListenerError}");
+            ListenersNotChecked(sb, ref hasWarning);
             return;
         }
 

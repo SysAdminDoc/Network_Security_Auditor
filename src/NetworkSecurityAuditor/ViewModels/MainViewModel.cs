@@ -1636,11 +1636,12 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// A questionnaire check has no automated answer, so a rescan keeps the status the operator set.
+    /// A questionnaire check has no automated answer, so a rescan keeps the status the operator set, including
+    /// when the scan's hint gathering for it errors or times out.
     /// </summary>
     internal static CheckStatus MergeScanStatus(string checkId, CheckStatus current, CheckStatus scanned)
     {
-        var keepOperatorAnswer = scanned == CheckStatus.NotAssessed &&
+        var keepOperatorAnswer = scanned is CheckStatus.NotAssessed or CheckStatus.Error &&
             current is not (CheckStatus.NotAssessed or CheckStatus.Error) &&
             Data.CheckCatalog.QuestionnaireIds.Contains(checkId);
         return keepOperatorAnswer ? current : scanned;

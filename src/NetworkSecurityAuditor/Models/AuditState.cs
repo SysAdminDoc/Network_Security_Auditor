@@ -43,7 +43,8 @@ public sealed class AuditState
     /// <summary>
     /// Brings a 1.0 state (v5.4.0) up to the current schema and returns how many checks changed.
     /// Errors and timeouts were saved as NA and become Error. Questionnaire checks were saved with the
-    /// scan's automatic Partial; one with no operator note is taken as unanswered and becomes NotAssessed.
+    /// scan's automatic Partial; one the operator never touched is taken as unanswered and becomes NotAssessed.
+    /// A note, assignee or due date counts as the operator's touch, and keeps the saved status in both cases.
     /// </summary>
     public int MigrateToCurrent()
     {
@@ -53,6 +54,12 @@ public sealed class AuditState
         var changed = 0;
         foreach (var check in Checks)
         {
+            var operatorTouched = !string.IsNullOrWhiteSpace(check.Notes) ||
+                !string.IsNullOrWhiteSpace(check.RemediationAssignee) ||
+                !string.IsNullOrWhiteSpace(check.RemediationDueDate);
+            if (operatorTouched)
+                continue;
+
             if (check.Status == CheckStatus.NA &&
                 (CheckResult.IsErrorEvidence(check.Evidence) || CheckResult.IsTimeoutEvidence(check.Evidence)))
             {
@@ -60,8 +67,7 @@ public sealed class AuditState
                 changed++;
             }
             else if (check.Status == CheckStatus.Partial &&
-                Data.CheckCatalog.QuestionnaireIds.Contains(check.Id) &&
-                string.IsNullOrWhiteSpace(check.Notes))
+                Data.CheckCatalog.QuestionnaireIds.Contains(check.Id))
             {
                 check.Status = CheckStatus.NotAssessed;
                 changed++;

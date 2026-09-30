@@ -1792,13 +1792,12 @@ Describe 'NP01, NP05 and NP06 read the active store (nested check helper via AST
     }
 }
 
-Describe 'EP06 listener findings (nested check helper via AST)' {
+Describe 'EP06 listener findings (nested check helpers via AST)' {
     BeforeAll {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)
-        $fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in @('Get-Ep06ListenerFindings','Get-Np02PortAssessment') }, $true)
-        $script:Ep06Fn = @($fns | Where-Object Name -eq 'Get-Ep06ListenerFindings')[0]
-        $script:Np02Fn = @($fns | Where-Object Name -eq 'Get-Np02PortAssessment')[0]
-        . ([scriptblock]::Create($script:Ep06Fn.Extent.Text))
+        $script:Ep06Block = Get-Block -Text $script:Text -Start "'EP06' = @\{ Type='Local'" -End "'EP09' = @\{ Type='Local'"
+        $script:HelperDefs = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in @('Get-Np02PortAssessment','Get-Np02ExposureInputs') }, $true))
+        . ([scriptblock]::Create(@($script:HelperDefs | Where-Object Name -eq 'Get-Np02PortAssessment')[0].Extent.Text))
         $script:StockListeners = @(
             @{ Protocol='TCP'; Address='0.0.0.0'; Port=135 }, @{ Protocol='TCP'; Address='::'; Port=135 },
             @{ Protocol='TCP'; Address='192.168.1.20'; Port=139 },
@@ -1808,11 +1807,19 @@ Describe 'EP06 listener findings (nested check helper via AST)' {
         )
     }
 
+    It 'carries verbatim copies of both NP02 helpers' {
+        foreach ($name in @('Get-Np02PortAssessment','Get-Np02ExposureInputs')) {
+            $defs = @($script:HelperDefs | Where-Object Name -eq $name)
+            $defs.Count | Should -Be 2
+            $defs[0].Extent.Text | Should -BeExactly $defs[1].Extent.Text
+            $script:Ep06Block | Should -Match "function $name \{"
+        }
+    }
     It 'lists default role ports on a stock workstation without raising anything' {
-        $result = Get-Ep06ListenerFindings -Listeners $script:StockListeners
+        $result = Get-Np02PortAssessment -Listeners $script:StockListeners
         @($result.Failures).Count | Should -Be 0
         @($result.Reviews).Count | Should -Be 0
-        ($result.Info -join "`n") | Should -Match 'TCP 445 \(SMB\) on 0\.0\.0\.0 \(all interfaces\), :: \(all interfaces\); default Windows role port'
+        ($result.Info -join "`n") | Should -Match 'TCP 445 \(SMB\) on 0\.0\.0\.0 \(all interfaces\), :: \(all interfaces\); default Windows role port, not exposed'
     }
     It 'fails an insecure listener and reviews a sensitive one, but not on loopback' {
         $listeners = $script:StockListeners + @(
@@ -1820,23 +1827,26 @@ Describe 'EP06 listener findings (nested check helper via AST)' {
             @{ Protocol='TCP'; Address='10.0.0.5'; Port=3389 },
             @{ Protocol='TCP'; Address='127.0.0.1'; Port=6379 }
         )
-        $result = Get-Ep06ListenerFindings -Listeners $listeners
+        $result = Get-Np02PortAssessment -Listeners $listeners
         @($result.Failures) | Should -Be @('TCP 23 (Telnet) listening on 0.0.0.0 (all interfaces)')
         @($result.Reviews) | Should -Be @('TCP 3389 (RDP) listening on 10.0.0.5')
         ($result.Info -join "`n") | Should -Match 'TCP 6379 \(Redis \(no auth by default\)\) on loopback only'
     }
-    It 'uses the same port classes as NP02' {
-        $tableOf = { param($fn) ([regex]::Match($fn.Extent.Text, '(?s)\$classes = @\{(.*?)\r?\n\s*\}')).Groups[1].Value -replace '\s+', ' ' }
-        $ep06 = & $tableOf $script:Ep06Fn
-        $ep06 | Should -Match "'TCP:23'=@\('Telnet','Insecure'\)"
-        $ep06 | Should -Be (& $tableOf $script:Np02Fn)
+    It 'fails SMB that a Public-profile network can reach, the same as the app' {
+        $result = Get-Np02PortAssessment -Listeners $script:StockListeners -PublicAddresses @('203.0.113.7') -PublicFirewallEnabled $false
+        ($result.Failures -join "`n") | Should -Match 'TCP 445 \(SMB\) reachable from a Public-profile network via the Public firewall profile being off'
     }
-    It 'reads listeners through Get-NetTCPConnection, not netstat or per-port rule filters' {
-        $block = Get-Block -Text $script:Text -Start "'EP06' = @\{ Type='Local'" -End "'EP09' = @\{ Type='Local'"
-        $block | Should -Match 'Get-NetTCPConnection -State Listen'
-        $block | Should -Not -Match 'netstat'
-        $block | Should -Not -Match 'riskyPorts'
-        $block | Should -Match "if \(\`$ports -and \`$ports.Failures.Count\) \{'Fail'\}"
+    It 'reads listeners through Get-NetTCPConnection and exposure through the shared helpers' {
+        $script:Ep06Block | Should -Match 'Get-NetTCPConnection -State Listen'
+        $script:Ep06Block | Should -Not -Match 'netstat'
+        $script:Ep06Block | Should -Not -Match 'Get-Ep06ListenerFindings'
+        $script:Ep06Block | Should -Match '\$x = Get-Np02ExposureInputs'
+        $script:Ep06Block | Should -Match '\$ports = Get-Np02PortAssessment -Listeners \$endpoints @x'
+        $script:Ep06Block | Should -Match "if \(\`$ports -and \`$ports.Failures.Count\) \{'Fail'\}"
+    }
+    It "doesn't pass when the listeners can't be read" {
+        $script:Ep06Block | Should -Match "\`$listenerError = \`$_.Exception.Message.Trim\(\)"
+        $script:Ep06Block | Should -Match "elseif \(\`$issues -eq 0 -and -not \`$listenerError -and"
     }
 }
 
@@ -2113,6 +2123,23 @@ Describe 'EP04 CISA KEV matching against installed updates (nested check helpers
         $stale[0].Ransomware | Should -BeTrue
         # The year rule never hides a current-year entry added after the last update.
         @(Get-Ep04KevHits -Entries $script:KevFeed.vulnerabilities -Families @('Windows') -UpdateDates @{} -LatestOsDate ([datetime]'2026-08-11') -Today $script:KevToday).CveId | Should -Contain 'CVE-2026-40001'
+    }
+    It 'uses SQL Server update titles only when there is a single instance' {
+        $block = Get-Block -Text $script:Text -Start "'EP04' = @\{ Type='Local'" -End "'EP05' = @\{ Type='Local'"
+        $block | Should -Match '\$sqlTitled = if \(\$sqlInstances\.Count -eq 1\) \{ Get-Ep04NewestTitledDate'
+        $block | Should -Match "\`$updateDates\['SQL Server'\] = & \`$newerOf \(& \`$serviceExeDate @\('MSSQLSERVER','MSSQL\`$\*'\)\) \`$sqlTitled"
+    }
+    It 'needs its exclusions to keep drivers and Store packages from dating a product' {
+        $fn = ([System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)).FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Ep04NewestTitledDate' }, $true)[0]
+        . ([scriptblock]::Create($fn.Extent.Text))
+        $history = @(
+            @{ Title='2026-08 Security Update for SQL Server 2019 Native Client (KB5099001)'; Date=[datetime]'2026-08-20' },
+            @{ Title='9WZDNCRFJ3PT-Microsoft.NET 8.0 Desktop Runtime'; Date=[datetime]'2026-09-01' },
+            @{ Title='Security Update for SQL Server 2019 RTM GDR (KB5046859)'; Date=[datetime]'2025-01-15' },
+            @{ Title='2026-06 Security Update for .NET Framework 4.8.1 (KB5099002)'; Date=[datetime]'2026-06-10' }
+        )
+        (Get-Ep04NewestTitledDate -History $history -Family 'SQL Server') | Should -Be ([datetime]'2025-01-15')
+        (Get-Ep04NewestTitledDate -History $history -Family '.NET') | Should -Be ([datetime]'2026-06-10')
     }
     It 'dates products from their own update titles, not Store packages or SQL client drivers' {
         $fn = ([System.Management.Automation.Language.Parser]::ParseInput($script:Text, [ref]$null, [ref]$null)).FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-Ep04NewestTitledDate' }, $true)[0]

@@ -96,7 +96,9 @@ public class StatusModelTests
     [InlineData("PS01", CheckStatus.Fail, CheckStatus.NotAssessed, CheckStatus.Fail)]
     [InlineData("PS01", CheckStatus.NA, CheckStatus.NotAssessed, CheckStatus.NA)]
     [InlineData("PS01", CheckStatus.Error, CheckStatus.NotAssessed, CheckStatus.NotAssessed)]
-    [InlineData("PS01", CheckStatus.Pass, CheckStatus.Error, CheckStatus.Error)]
+    [InlineData("PS01", CheckStatus.Pass, CheckStatus.Error, CheckStatus.Pass)]
+    [InlineData("PS01", CheckStatus.NotAssessed, CheckStatus.Error, CheckStatus.Error)]
+    [InlineData("EP01", CheckStatus.Pass, CheckStatus.Error, CheckStatus.Error)]
     [InlineData("EP01", CheckStatus.Pass, CheckStatus.NotAssessed, CheckStatus.NotAssessed)]
     [InlineData("EP01", CheckStatus.Pass, CheckStatus.Fail, CheckStatus.Fail)]
     public void Rescan_Keeps_An_Operator_Answer_Only_On_Questionnaire_Checks(
@@ -168,6 +170,17 @@ public class StatusModelTests
         Assert.Contains(">Timed out</span>", section);
         Assert.Contains(">Error</span>", section);
         Assert.DoesNotContain(">EP01<", section);
+    }
+
+    [Fact]
+    public void Html_Category_Table_Keeps_Not_Applicable_Apart_From_Unscored_Checks()
+    {
+        var checks = CreateChecks(("EP01", CheckStatus.Pass), ("EP02", CheckStatus.NA), ("EP03", CheckStatus.Error), ("EP05", CheckStatus.NotAssessed));
+
+        var html = HtmlReportGenerator.Generate(checks, new EnvironmentInfo(), 85, "B", 70, "C", tier: ReportTier.Management);
+
+        Assert.Contains("<th scope=\"col\">Not assessed or error</th>", html);
+        Assert.Matches(@"<tr><td>Endpoint Security</td><td class=""pass-cell"">1</td><td class=""partial-cell"">0</td><td class=""fail-cell"">0</td><td>1</td><td>2</td></tr>", html);
     }
 
     [Fact]

@@ -142,7 +142,10 @@ public class AuditStateTests
                 new CheckState { Id = "PS01", Status = CheckStatus.Partial },
                 new CheckState { Id = "PS02", Status = CheckStatus.Partial, Notes = "Signed AUPs on file." },
                 new CheckState { Id = "PS03", Status = CheckStatus.Pass },
-                new CheckState { Id = "EP01", Status = CheckStatus.Partial }
+                new CheckState { Id = "EP01", Status = CheckStatus.Partial },
+                new CheckState { Id = "PS04", Status = CheckStatus.Partial, RemediationAssignee = "IT manager" },
+                new CheckState { Id = "BR02", Status = CheckStatus.Partial, RemediationDueDate = "2026-12-31" },
+                new CheckState { Id = "EP08", Status = CheckStatus.NA, Evidence = "Error @ 2026-09-01 12:00 UTC", Notes = "No TPM on this VM." }
             ]
         };
 
@@ -151,7 +154,8 @@ public class AuditStateTests
         Assert.Equal(3, changed);
         Assert.Equal(AuditState.CurrentSchemaVersion, state.SchemaVersion);
         Assert.Equal(
-            [CheckStatus.Error, CheckStatus.Error, CheckStatus.NA, CheckStatus.NotAssessed, CheckStatus.Partial, CheckStatus.Pass, CheckStatus.Partial],
+            [CheckStatus.Error, CheckStatus.Error, CheckStatus.NA, CheckStatus.NotAssessed, CheckStatus.Partial, CheckStatus.Pass, CheckStatus.Partial,
+             CheckStatus.Partial, CheckStatus.Partial, CheckStatus.NA],
             state.Checks.Select(c => c.Status));
     }
 

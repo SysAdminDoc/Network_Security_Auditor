@@ -44,6 +44,7 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
             var sb = new StringBuilder();
             var evidence = new StringBuilder();
             bool hasIssue = false;
+            bool localStoreOnly = false;
 
             int totalOutbound = 0;
             int outboundAllow = 0;
@@ -93,6 +94,7 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
                 evidence.AppendLine($"  WMI error: {ex.Message}");
                 evidence.AppendLine("  netsh reads the local store only; Group Policy and service-added rules aren't included.");
                 sb.AppendLine("NOTE: Rule filters couldn't be read (run elevated to include them), so the rule counts cover local rules only, not Group Policy or service-added ones.");
+                localStoreOnly = true;
                 QueryOutboundViaNetsh(evidence, ref totalOutbound, ref outboundAllow, ref outboundBlock, ref anyAnyAllow, ct);
             }
 
@@ -116,9 +118,12 @@ public sealed class NP05_EgressFilteringCheck : ISecurityCheck
             }
 
             if (!hasIssue)
-                sb.AppendLine("Egress filtering appears configured with outbound block rules.");
+                sb.AppendLine(localStoreOnly
+                    ? "Egress filtering appears configured among the local rules. Group Policy and service-added rules weren't checked, so this is Partial."
+                    : "Egress filtering appears configured with outbound block rules.");
 
-            var status = hasIssue ? CheckStatus.Fail : CheckStatus.Pass;
+            // A local-only read can't clear the rules a Group Policy pushes.
+            var status = hasIssue ? CheckStatus.Fail : localStoreOnly ? CheckStatus.Partial : CheckStatus.Pass;
 
             return Task.FromResult(new CheckResult
             {

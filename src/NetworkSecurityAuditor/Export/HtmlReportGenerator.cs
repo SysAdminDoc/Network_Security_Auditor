@@ -190,14 +190,15 @@ public static class HtmlReportGenerator
     {
         sb.AppendLine($"<h2>{EscapeHtml(UiText.ReportScoreByCategory)}</h2>");
         AppendTableHeader(sb, "category-table", UiText.ReportScoreByCategoryCaption,
-            [UiText.TableCategory, UiText.StatusPass, UiText.StatusPartial, UiText.StatusFail, UiText.StatusNotApplicable]);
+            [UiText.TableCategory, UiText.StatusPass, UiText.StatusPartial, UiText.StatusFail, UiText.StatusNotApplicable, UiText.ReportNotScored]);
         foreach (var group in checkList.GroupBy(c => c.Category).OrderBy(g => g.Key))
         {
             var gPass = group.Count(c => c.Status == CheckStatus.Pass);
             var gPartial = group.Count(c => c.Status == CheckStatus.Partial);
             var gFail = group.Count(c => c.Status == CheckStatus.Fail);
-            var gNa = group.Count(c => !c.Status.IsScored());
-            sb.AppendLine($"<tr><td>{EscapeHtml(group.Key)}</td><td class=\"pass-cell\">{gPass}</td><td class=\"partial-cell\">{gPartial}</td><td class=\"fail-cell\">{gFail}</td><td>{gNa}</td></tr>");
+            var gNa = group.Count(c => c.Status == CheckStatus.NA);
+            var gNotScored = group.Count(c => c.Status is CheckStatus.NotAssessed or CheckStatus.Error);
+            sb.AppendLine($"<tr><td>{EscapeHtml(group.Key)}</td><td class=\"pass-cell\">{gPass}</td><td class=\"partial-cell\">{gPartial}</td><td class=\"fail-cell\">{gFail}</td><td>{gNa}</td><td>{gNotScored}</td></tr>");
         }
         AppendTableEnd(sb);
 
