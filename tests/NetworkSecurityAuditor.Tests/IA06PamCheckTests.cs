@@ -205,6 +205,11 @@ public class IA06PamCheckTests
         Assert.True(snapshot.WindowsLapsSchema);
         Assert.False(snapshot.LegacyLapsSchema);
         Assert.Null(snapshot.SchemaError);
+        // The schema lookups bind on the domain's server; the computer search stays on the domain root.
+        Assert.All(directory.Queries.Where(q => q.SearchBase?.StartsWith("CN=Schema", StringComparison.OrdinalIgnoreCase) == true),
+            q => Assert.True(q.OnDomainServer));
+        Assert.Equal(2, directory.Queries.Count(q => q.OnDomainServer));
+        Assert.Contains(directory.Queries, q => q.SearchBase is null && !q.OnDomainServer);
         Assert.Null(snapshot.SearchError);
         Assert.Equal(20, snapshot.Computers!.Count);
         Assert.Equal(19, snapshot.Computers.Count(c => c.WindowsLaps));

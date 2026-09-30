@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.DirectoryServices;
 using System.Globalization;
 using System.Security.AccessControl;
@@ -57,6 +58,12 @@ public sealed record DirectoryQuery(string Filter, IReadOnlyList<string> Propert
     public SearchScope Scope { get; init; } = SearchScope.Subtree;
     public int SizeLimit { get; init; }
     public int PageSize { get; init; } = 1000;
+
+    /// <summary>
+    /// Bind <see cref="SearchBase"/> on the machine domain's server (<c>LDAP://domain/DN</c>) rather than serverless.
+    /// A serverless DN goes to the signed-in user's DC, which may be in another forest and not hold this partition.
+    /// </summary>
+    public bool OnDomainServer { get; init; }
 }
 
 /// <summary>
@@ -131,8 +138,9 @@ public sealed class DirectoryRecord
 public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
 {
     // The domain root and RootDSE bind to the machine's domain. A DN binds serverless, as the checks always
-    // did, so a member DN from another domain in the forest still resolves.
-    private string Bind(string? distinguishedName)
+    // did, so a member DN from another domain in the forest still resolves, unless the caller asks for the
+    // domain's server (the schema search, which the old code bound there).
+    internal string Bind(string? distinguishedName, bool onDomainServer = false)
     {
         var server = string.IsNullOrWhiteSpace(domainName) ? "" : domainName.Trim();
         return distinguishedName switch
@@ -140,6 +148,7 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
             null => "LDAP://" + server,
             DirectoryReader.RootDseServerless => "LDAP://RootDSE",
             DirectoryReader.RootDse => server.Length == 0 ? "LDAP://RootDSE" : $"LDAP://{server}/RootDSE",
+            _ when onDomainServer && server.Length > 0 => $"LDAP://{server}/{DirectoryReader.EscapeDn(distinguishedName)}",
             _ => "LDAP://" + DirectoryReader.EscapeDn(distinguishedName)
         };
     }
@@ -155,7 +164,7 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
 
     public IReadOnlyList<DirectoryRecord> Search(DirectoryQuery query, CancellationToken ct)
     {
-        using var root = new DirectoryEntry(Bind(query.SearchBase));
+        using var root = new DirectoryEntry(Bind(query.SearchBase, query.OnDomainServer));
         using var searcher = CreateSearcher(root, query);
 
         var records = new List<DirectoryRecord>();
@@ -273,14 +282,20 @@ public sealed class LdapDirectoryReader(string domainName) : IDirectoryReader
     }
 
     // Same display as GetAccessRules(NTAccount): the account name, or the SID when it doesn't resolve.
-    private static string AccountName(SecurityIdentifier sid)
+    private static string AccountName(SecurityIdentifier sid) =>
+        AccountName(sid, s => s.Translate(typeof(NTAccount)).Value);
+
+    internal static string AccountName(SecurityIdentifier sid, Func<SecurityIdentifier, string> translate)
     {
         try
         {
-            return sid.Translate(typeof(NTAccount)).Value;
+            return translate(sid);
         }
-        // Translate throws IdentityNotMappedException, or a plain SystemException for a Win32 lookup error.
-        catch (SystemException ex) when (ex is IdentityNotMappedException || ex.GetType() == typeof(SystemException))
+        // Translate throws IdentityNotMappedException for an unknown SID. An LSA lookup failure (a trust that's down,
+        // say) is a Win32Exception on .NET 10 and a plain SystemException on older runtimes. One SID that won't
+        // translate mustn't fail the whole ACL read, so each of these falls back to the SID string.
+        catch (SystemException ex) when (ex is IdentityNotMappedException or Win32Exception or UnauthorizedAccessException
+                                         || ex.GetType() == typeof(SystemException))
         {
             return sid.Value;
         }

@@ -206,7 +206,9 @@ public class EP10EolOsCheckTests(ITestOutputHelper output)
         Assert.Contains(computers, c => c.Name == "LEGACY01" && c.OperatingSystem == "Windows 7 Professional" && c.OperatingSystemVersion == "6.1 (7601)");
         Assert.Contains(computers, c => c.Name == "NAS01" && c.OperatingSystem is null && c.OperatingSystemVersion is null);
         var query = Assert.Single(directory.Queries);
+        Assert.Equal(new string?[] { NetworkSecurityAuditor.Services.DirectoryReader.RootDseServerless }, directory.EntryReads);
         Assert.Equal("DC=corp,DC=example", query.SearchBase);
+        Assert.False(query.OnDomainServer);
         Assert.Equal(EP10_EolOsCheck.AdComputerFilter, query.Filter);
         Assert.Equal(new[] { "name", "operatingSystem", "operatingSystemVersion" }, query.Properties);
     }

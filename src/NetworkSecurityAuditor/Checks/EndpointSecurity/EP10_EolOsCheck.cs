@@ -251,7 +251,8 @@ public sealed class EP10_EolOsCheck : ISecurityCheck
 
     internal static List<AdComputer> QueryAdComputers(IDirectoryReader directory, CancellationToken ct)
     {
-        var rootDse = directory.ReadEntry(DirectoryReader.RootDse, ["defaultNamingContext"], ct);
+        // Serverless, as before the reader seam: it follows the signed-in user's DC.
+        var rootDse = directory.ReadEntry(DirectoryReader.RootDseServerless, ["defaultNamingContext"], ct);
         var defaultNamingContext = rootDse.String("defaultNamingContext");
         if (string.IsNullOrEmpty(defaultNamingContext))
             throw new InvalidOperationException("RootDSE returned no defaultNamingContext.");

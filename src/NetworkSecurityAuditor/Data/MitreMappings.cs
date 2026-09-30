@@ -97,7 +97,7 @@ public static class MitreMappings
             ["EP01"] = new AttackMapping
             {
                 Tactics = ["TA0112", "TA0002"],
-                Techniques = ["T1685", "T1686.003", "T1059"],
+                Techniques = ["T1685", "T1059"],
                 Description = "Disabled AV allows malware execution"
             },
             ["EP02"] = new AttackMapping
@@ -294,8 +294,8 @@ public static class MitreMappings
             },
             ["NP07"] = new AttackMapping
             {
-                Tactics = ["TA0112", "TA0011"],
-                Techniques = ["T1071", "T1568", "T1686.003"],
+                Tactics = ["TA0011"],
+                Techniques = ["T1071", "T1568", "T1572"],
                 Description = "No IDS/IPS means network attacks bypass perimeter"
             },
             ["NP08"] = new AttackMapping

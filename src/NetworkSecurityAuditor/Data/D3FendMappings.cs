@@ -404,9 +404,9 @@ public static class D3FendMappings
             ["BR06"] = new DefendMapping
             {
                 Stages = ["Detect", "Restore"],
-                Techniques = ["D3-PM", "D3-RA", "D3-RC"],
-                Labels = ["Platform Monitoring", "Restore Access", "Restore Configuration"],
-                Description = "Monitors backup jobs and raises failures before a restore is needed"
+                Techniques = ["D3-PM", "D3-RF", "D3-RDI"],
+                Labels = ["Platform Monitoring", "Restore File", "Restore Disk Image"],
+                Description = "Monitors backup jobs so the file and image restores they promise are there when needed"
             },
             ["BR07"] = new DefendMapping
             {
@@ -418,9 +418,9 @@ public static class D3FendMappings
             ["BR08"] = new DefendMapping
             {
                 Stages = ["Restore"],
-                Techniques = ["D3-RS", "D3-RE", "D3-RD"],
-                Labels = ["Restore Software", "Restore Email", "Restore Database"],
-                Description = "Gives SaaS and cloud workloads restore paths for software, email and databases"
+                Techniques = ["D3-RE", "D3-RF", "D3-RO"],
+                Labels = ["Restore Email", "Restore File", "Restore Object"],
+                Description = "Gives SaaS mail, files and other workload data a restore path outside the provider"
             },
 
             // ── Common Findings ────────────────────────────────────────────

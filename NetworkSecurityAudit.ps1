@@ -9515,7 +9515,7 @@ $script:MitreMap = @{
     'IA11' = @{ Tactics=@('TA0006','TA0008'); Techniques=@('T1558.003','T1550.003'); Desc='RC4/DES Kerberos keeps service tickets crackable' }
     'IA12' = @{ Tactics=@('TA0004','TA0003','TA0008'); Techniques=@('T1098','T1078.002','T1550.003'); Desc='BadSuccessor/dMSA abuse turns delegated OU rights into domain privilege escalation' }
     # ── Endpoint Security ──
-    'EP01' = @{ Tactics=@('TA0112','TA0002'); Techniques=@('T1685','T1686.003','T1059'); Desc='Disabled AV allows malware execution' }
+    'EP01' = @{ Tactics=@('TA0112','TA0002'); Techniques=@('T1685','T1059'); Desc='Disabled AV allows malware execution' }
     'EP02' = @{ Tactics=@('TA0009','TA0006'); Techniques=@('T1005','T1025','T1552.001'); Desc='Missing encryption exposes data and stored credentials on lost or stolen devices and drives' }
     'EP03' = @{ Tactics=@('TA0006','TA0008'); Techniques=@('T1557.001','T1040','T1570','T1187'); Desc='SMB/NTLM misconfig enables relay attacks and credential capture' }
     'EP04' = @{ Tactics=@('TA0001','TA0002','TA0008'); Techniques=@('T1190','T1203','T1210'); Desc='Unpatched systems enable exploitation of public-facing apps' }
@@ -9550,7 +9550,7 @@ $script:MitreMap = @{
     'NP04' = @{ Tactics=@('TA0011'); Techniques=@('T1071.004','T1568'); Desc='Missing DNS filtering allows DNS-based C2 and dynamic resolution' }
     'NP05' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1210'); Desc='Permissive ACLs expose internal services' }
     'NP06' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1133','T1021','T1210'); Desc='Temporary firewall rules leave forgotten remote-service exposure' }
-    'NP07' = @{ Tactics=@('TA0112','TA0011'); Techniques=@('T1071','T1568','T1686.003'); Desc='No IDS/IPS means network attacks bypass perimeter' }
+    'NP07' = @{ Tactics=@('TA0011'); Techniques=@('T1071','T1568','T1572'); Desc='No IDS/IPS means network attacks bypass perimeter' }
     'NP08' = @{ Tactics=@('TA0006','TA0009'); Techniques=@('T1557','T1040','T1552.001'); Desc='Weak TLS enables credential interception and MitM' }
     'NP09' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1021'); Desc='Unnecessary NAT/port forwards expose internal hosts' }
     'NP10' = @{ Tactics=@('TA0001','TA0008'); Techniques=@('T1190','T1210'); Desc='Unpatched perimeter firmware contains known exploitable vulnerabilities' }
@@ -9649,9 +9649,9 @@ $script:D3FendMap = @{
     'BR03' = @{ Stages=@('Restore'); Techniques=@('D3-RF','D3-RDI','D3-RO'); Labels=@('Restore File','Restore Disk Image','Restore Object'); Desc='Confirms that restore procedures actually bring back files, images and objects' }
     'BR04' = @{ Stages=@('Model','Restore'); Techniques=@('D3-ODM','D3-ORA','D3-RC'); Labels=@('Operational Dependency Mapping','Operational Risk Assessment','Restore Configuration'); Desc='Documents RTO/RPO targets and the dependencies that set recovery order' }
     'BR05' = @{ Stages=@('Harden','Restore'); Techniques=@('D3-FE','D3-MENCR','D3-RF'); Labels=@('File Encryption','Message Encryption','Restore File'); Desc='Protects backup data with encryption at rest and in transit' }
-    'BR06' = @{ Stages=@('Detect','Restore'); Techniques=@('D3-PM','D3-RA','D3-RC'); Labels=@('Platform Monitoring','Restore Access','Restore Configuration'); Desc='Monitors backup jobs and raises failures before a restore is needed' }
+    'BR06' = @{ Stages=@('Detect','Restore'); Techniques=@('D3-PM','D3-RF','D3-RDI'); Labels=@('Platform Monitoring','Restore File','Restore Disk Image'); Desc='Monitors backup jobs so the file and image restores they promise are there when needed' }
     'BR07' = @{ Stages=@('Model','Restore'); Techniques=@('D3-RC','D3-RA','D3-ORA'); Labels=@('Restore Configuration','Restore Access','Operational Risk Assessment'); Desc='Keeps a DR plan with the configuration and access needed to recover' }
-    'BR08' = @{ Stages=@('Restore'); Techniques=@('D3-RS','D3-RE','D3-RD'); Labels=@('Restore Software','Restore Email','Restore Database'); Desc='Gives SaaS and cloud workloads restore paths for software, email and databases' }
+    'BR08' = @{ Stages=@('Restore'); Techniques=@('D3-RE','D3-RF','D3-RO'); Labels=@('Restore Email','Restore File','Restore Object'); Desc='Gives SaaS mail, files and other workload data a restore path outside the provider' }
 
     # Common Findings
     'CF01' = @{ Stages=@('Harden','Isolate'); Techniques=@('D3-CH','D3-CRO','D3-UAP'); Labels=@('Credential Hardening','Credential Rotation','User Account Permissions'); Desc='Hardens privileged service-account credentials and certificate services exposure' }

@@ -73,7 +73,7 @@ internal sealed class FixtureDirectoryReader : IDirectoryReader
                     continue;
                 ThrowIfError(search);
                 var records = search.GetProperty("results").EnumerateArray()
-                    .Select(result => ToRecord(result, "LDAP://" + (query.SearchBase ?? DomainKey)))
+                    .Select(result => Requested(ToRecord(result, "LDAP://" + (query.SearchBase ?? DomainKey)), query.Properties))
                     .ToList();
                 return query.SizeLimit > 0 ? records.Take(query.SizeLimit).ToList() : records;
             }
@@ -133,6 +133,19 @@ internal sealed class FixtureDirectoryReader : IDirectoryReader
                 rules);
         }
         return new DirectoryAcl(null, null, rules);
+    }
+
+    // A real search returns only the attributes it loaded (plus adspath, which it always returns), so a check that
+    // reads an attribute its query didn't request must fail here as it would against a DC. No properties loads all.
+    private static DirectoryRecord Requested(DirectoryRecord record, IReadOnlyList<string> properties)
+    {
+        if (properties.Count == 0)
+            return record;
+        var requested = properties.Append("adspath")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(name => record.Has(name))
+            .ToDictionary(name => name, name => record.Values(name), StringComparer.OrdinalIgnoreCase);
+        return new DirectoryRecord(record.Path, requested);
     }
 
     private static bool Matches(JsonElement search, DirectoryQuery query)

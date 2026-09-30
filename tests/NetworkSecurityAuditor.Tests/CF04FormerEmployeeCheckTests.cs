@@ -89,4 +89,18 @@ public class CF04FormerEmployeeCheckTests
 
         Assert.Equal(CheckStatus.Error, result.Status);
     }
+
+    [Fact]
+    public async Task Stale_Search_Uses_A_90_Day_Threshold()
+    {
+        var directory = FixtureDirectoryReader.Load("CF04-pass.json");
+        var before = DateTime.UtcNow.AddDays(-90).ToFileTimeUtc();
+
+        await new CF04_FormerEmployeeCheck(_ => directory).ExecuteAsync(FixtureDirectoryReader.DomainMember, new AuditOptions(), CancellationToken.None);
+
+        var threshold = directory.Queries
+            .Select(q => System.Text.RegularExpressions.Regex.Match(q.Filter, @"lastLogonTimestamp<=(\d+)"))
+            .Single(m => m.Success);
+        Assert.InRange(long.Parse(threshold.Groups[1].Value), before, DateTime.UtcNow.AddDays(-90).ToFileTimeUtc());
+    }
 }

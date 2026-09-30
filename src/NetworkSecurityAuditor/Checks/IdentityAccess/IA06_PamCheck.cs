@@ -290,6 +290,9 @@ public sealed class IA06_PamCheck : ISecurityCheck
             SearchBase = schemaNc,
             Scope = SearchScope.OneLevel,
             PageSize = 0,
+            // Bound on the domain's server, as before the reader seam: across a forest trust the user's own DC
+            // doesn't hold this forest's schema.
+            OnDomainServer = true,
         };
         return directory.Search(query, ct).Count > 0;
     }
