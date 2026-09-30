@@ -1,0 +1,28 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filterPattern": "\\(&\\(objectCategory=person\\)\\(objectClass=user\\)\\(!\\(userAccountControl:1\\.2\\.840\\.113556\\.1\\.4\\.803:=2\\)\\)\\(lastLogonTimestamp<=\\d+\\)\\)",
+      "results": [
+        {
+          "sAMAccountName": "old.admin",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 400
+          },
+          "memberOf": [
+            "CN=Domain Admins,CN=Users,DC=corp,DC=example",
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example"
+          ],
+          "distinguishedName": "CN=Old Admin,OU=Staff,DC=corp,DC=example"
+        },
+        {
+          "sAMAccountName": "j.doe",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 120
+          },
+          "distinguishedName": "CN=Jane Doe,OU=Staff,DC=corp,DC=example"
+        }
+      ]
+    }
+  ]
+}

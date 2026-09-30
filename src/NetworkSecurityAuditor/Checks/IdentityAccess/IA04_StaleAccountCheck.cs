@@ -1,8 +1,8 @@
 namespace NetworkSecurityAuditor.Checks.IdentityAccess;
 
-using System.DirectoryServices;
 using System.Text;
 using NetworkSecurityAuditor.Models;
+using NetworkSecurityAuditor.Services;
 
 /// <summary>
 /// IA04 - Stale Account Review: Enabled AD users with LastLogonDate > 90 days.
@@ -11,6 +11,12 @@ using NetworkSecurityAuditor.Models;
 public sealed class IA04_StaleAccountCheck : ISecurityCheck
 {
     public string Id => "IA04";
+
+    private readonly Func<EnvironmentInfo, IDirectoryReader> _directory;
+
+    public IA04_StaleAccountCheck() : this(env => new LdapDirectoryReader(env.DomainName)) { }
+
+    internal IA04_StaleAccountCheck(Func<EnvironmentInfo, IDirectoryReader> directory) => _directory = directory;
 
     private static readonly string[] PrivilegedGroupCNs =
     [
@@ -35,50 +41,42 @@ public sealed class IA04_StaleAccountCheck : ISecurityCheck
             var sb = new StringBuilder();
             var evidence = new StringBuilder();
 
-            using var rootEntry = new DirectoryEntry("LDAP://" + env.DomainName);
-            using var searcher = new DirectorySearcher(rootEntry) { PageSize = 1000 };
+            var directory = _directory(env);
 
             // Find enabled user accounts
             // ADS_UF_ACCOUNTDISABLE = 0x2; we want enabled, so NOT disabled
             // lastLogonTimestamp < 90 days ago in FILETIME
             long staleThresholdFt = DateTime.UtcNow.AddDays(-90).ToFileTimeUtc();
 
-            searcher.Filter = $"(&(objectCategory=person)(objectClass=user)" +
-                              $"(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
-                              $"(lastLogonTimestamp<={staleThresholdFt}))";
-            searcher.PropertiesToLoad.Clear();
-            searcher.PropertiesToLoad.AddRange(["sAMAccountName", "lastLogonTimestamp",
-                "memberOf", "distinguishedName", "pwdLastSet"]);
+            var query = new DirectoryQuery(
+                $"(&(objectCategory=person)(objectClass=user)" +
+                $"(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
+                $"(lastLogonTimestamp<={staleThresholdFt}))",
+                ["sAMAccountName", "lastLogonTimestamp", "memberOf", "distinguishedName", "pwdLastSet"]);
 
             ct.ThrowIfCancellationRequested();
             evidence.AppendLine("[Stale Accounts (>90 days, enabled)]");
 
             var staleAccounts = new List<(string Sam, DateTime LastLogon, bool IsPrivileged, string Groups)>();
 
-            using var results = searcher.FindAll();
-            foreach (SearchResult sr in results)
+            foreach (var sr in directory.Search(query, ct))
             {
                 ct.ThrowIfCancellationRequested();
-                string sam = sr.Properties["sAMAccountName"][0]?.ToString() ?? "";
+                string sam = sr.String("sAMAccountName") ?? "";
 
-                long ts = sr.Properties["lastLogonTimestamp"].Count > 0
-                    ? (long)sr.Properties["lastLogonTimestamp"][0] : 0;
+                long ts = sr.Long("lastLogonTimestamp");
                 DateTime lastLogon = ts > 0 ? DateTime.FromFileTimeUtc(ts) : DateTime.MinValue;
 
                 // Check privileged group membership
                 var privGroups = new List<string>();
-                if (sr.Properties["memberOf"] != null)
+                foreach (var gStr in sr.Strings("memberOf"))
                 {
-                    foreach (var g in sr.Properties["memberOf"])
+                    foreach (var pg in PrivilegedGroupCNs)
                     {
-                        string gStr = g?.ToString() ?? "";
-                        foreach (var pg in PrivilegedGroupCNs)
+                        if (gStr.Contains($"CN={pg}", StringComparison.OrdinalIgnoreCase))
                         {
-                            if (gStr.Contains($"CN={pg}", StringComparison.OrdinalIgnoreCase))
-                            {
-                                privGroups.Add(pg);
-                                break;
-                            }
+                            privGroups.Add(pg);
+                            break;
                         }
                     }
                 }

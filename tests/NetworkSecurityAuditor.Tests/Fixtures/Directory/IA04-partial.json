@@ -1,0 +1,20 @@
+{
+  "searches": [
+    {
+      "base": null,
+      "filterPattern": "\\(&\\(objectCategory=person\\)\\(objectClass=user\\)\\(!\\(userAccountControl:1\\.2\\.840\\.113556\\.1\\.4\\.803:=2\\)\\)\\(lastLogonTimestamp<=\\d+\\)\\)",
+      "results": [
+        {
+          "sAMAccountName": "j.doe",
+          "lastLogonTimestamp": {
+            "$fileTimeDaysAgo": 120
+          },
+          "memberOf": [
+            "CN=VPN Users,OU=Groups,DC=corp,DC=example"
+          ],
+          "distinguishedName": "CN=Jane Doe,OU=Staff,DC=corp,DC=example"
+        }
+      ]
+    }
+  ]
+}
